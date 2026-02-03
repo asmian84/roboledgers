@@ -4,6 +4,7 @@ import { Polarity, TransactionStatus } from '../types/transaction.ts';
 import type { CanonicalTransaction } from '../types/transaction.ts';
 import { generateTxSig } from '../ledger/txsig.ts';
 import { ParserAdapter } from '../parsers/adapter.ts';
+import { LedgerService } from './ledger.ts';
 
 /**
  * RoboLedgers: Ingestion Service
@@ -19,9 +20,26 @@ export class IngestionService {
         raw: RawParsedTransaction,
         account_id: string,
         currency: string = 'CAD'
-    ): CanonicalTransaction {
+    ): CanonicalTransaction | null {
+        // 0. Idempotency Check (Operational Hardening)
+        // Normalize once to get the data needed for the txsig check
+        const normalizedForSigCheck = ParserAdapter.adapt(raw, currency);
+        const txsigForCheck = generateTxSig({
+            account_id,
+            date: normalizedForSigCheck.date,
+            amount_cents: normalizedForSigCheck.amount_cents,
+            currency: normalizedForSigCheck.currency,
+            raw_description: normalizedForSigCheck.raw_description,
+            source_locator: normalizedForSigCheck.source_locator
+        });
+
+        if (LedgerService.existsBySig(txsigForCheck)) {
+            console.log(`[INGEST] SKIP: Duplicate txsig detected ${txsigForCheck}`);
+            return null; // Idempotent return
+        }
 
         // 1. Normalize through the Firewall (ParserAdapter)
+        // (We already did this for sig, but keeping structure for clarity or potential refactor)
         const normalized = ParserAdapter.adapt(raw, currency);
 
         // 2. Generate Truth-Layer Fingerprint (txsig)
@@ -30,7 +48,8 @@ export class IngestionService {
             date: normalized.date,
             amount_cents: normalized.amount_cents,
             currency: normalized.currency,
-            raw_description: normalized.raw_description
+            raw_description: normalized.raw_description,
+            source_locator: normalized.source_locator
         });
 
         const now = new Date().toISOString();
@@ -46,6 +65,7 @@ export class IngestionService {
             raw_description: normalized.raw_description,
             txsig,
             source_system: normalized.source_id,
+            source_locator: normalized.source_locator,
             created_at: now,
             updated_at: now,
             version: 1,

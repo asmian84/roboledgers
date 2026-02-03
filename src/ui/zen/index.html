@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboLedgers | Zen Feed</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="zen-container">
+        <header>
+            <div class="title-area">
+                <h1>Your Money Flow</h1>
+                <p>This month at a glance</p>
+            </div>
+
+            <div class="zen-prompt">
+                <span class="icon">✨</span>
+                3 transactions need your quick look
+            </div>
+
+            <div class="summary-cards">
+                <div class="summary-card in">
+                    <div class="label">Money In <span class="badge reconciled">Reconciled</span></div>
+                    <div class="amount">$4,250.00</div>
+                </div>
+                <div class="summary-card out">
+                    <div class="label">Money Out <span class="badge predicted">Predicted</span></div>
+                    <div class="amount">$2,812.42</div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="stream-header">
+                <h2>Recent Activity</h2>
+            </div>
+
+            <div id="transaction-stream" class="transaction-list">
+                <!-- Will be populated by app.js -->
+                <div class="transaction-item">
+                    <div class="tx-info">
+                        <span class="tx-merchant">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="zen-footer">
+            <div class="freshness">
+                <span class="dot"
+                    style="width: 6px; height: 6px; background: var(--positive); border-radius: 50%;"></span>
+                Last updated just now
+            </div>
+            <div class="mode-indicator">
+                Zen Mode
+            </div>
+        </footer>
+    </div>
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboLedgers | Professional Workspace</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header">RoboLedgers</div>
+        <nav>
+            <div id="nav-bookkeeper" class="nav-item active">
+                <span class="icon">📋</span>
+                Bookkeeper Lens
+            </div>
+            <div id="nav-accountant" class="nav-item">
+                <span class="icon">⚖️</span>
+                Accountant Lens
+            </div>
+            <div id="nav-cfo" class="nav-item">
+                <span class="icon">📊</span>
+                CFO Intelligence
+            </div>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <div id="view-title" style="font-weight: 600; font-size: 1.1rem;">Transaction Verification</div>
+            <div class="user-meta" style="font-size: 0.85rem; color: var(--text-dim);">
+                Mode: <strong id="current-mode">BOOKKEEPER</strong>
+            </div>
+        </header>
+
+        <section class="view-container">
+            <!-- Lens Content Injected Here -->
+            <div id="lens-root">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Account</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tx-body">
+                        <!-- Transactions -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>

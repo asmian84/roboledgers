@@ -18,6 +18,12 @@ import {
 import { runRBACEnforcementTests } from '../tests/rbac_enforcement.test.ts';
 import { runAuthorityLifecycleTests } from '../tests/authority_lifecycle.test.ts';
 import { runAJETests } from '../tests/aje_invariants.test.ts';
+import { runUIProjectionTests } from '../tests/ui_projection.test.ts';
+import { runZenUIInvariantTests } from '../tests/zen_ui_invariants.test.ts';
+import { runThemeInvariantTests } from '../tests/theme_invariants.test.ts';
+import { runBookkeeperInvariantTests } from '../tests/bookkeeper_invariants.test.ts';
+import { runAccountantInvariantTests } from '../tests/accountant_invariants.test.ts';
+import { runMultiEntityInvariantTests } from '../tests/multi_entity_invariants.test.ts';
 
 /**
  * RoboLedgers: Master Test Runner
@@ -48,6 +54,20 @@ async function runAllTests() {
         await runRBACEnforcementTests();
         await runAuthorityLifecycleTests();
         await runAJETests();
+        await runUIProjectionTests();
+        await runZenUIInvariantTests();
+        await runThemeInvariantTests();
+        await runBookkeeperInvariantTests();
+        await runAccountantInvariantTests();
+        await runMultiEntityInvariantTests();
+        const { runTxSigCollisionTests } = await import('../tests/txsig_collision.test.ts');
+        await runTxSigCollisionTests();
+        const { runMetricInvariantsTests } = await import('../tests/metrics_invariants.test.ts');
+        await runMetricInvariantsTests();
+        const { runForecastInvariantTests } = await import('../tests/forecast_invariants.test.ts');
+        await runForecastInvariantTests();
+        const { runResilienceTests } = await import('../tests/resilience.test.ts');
+        await runResilienceTests();
 
         console.log('\n==========================================');
         console.log('   ALL INVARIANT TESTS PASSED SUCCESS    ');

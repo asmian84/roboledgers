@@ -58,7 +58,7 @@ export async function runAJETests() {
     }, 'AJE_LOCKED_PERIOD_REQUIRED');
 
     // Lock the period and retry
-    PeriodLifecycleController.lock('P_2024_01', { id: 'acc_01', role: Role.ACCOUNTANT }, { variance_cents: 0, proof_hash: 'abc' } as any);
+    PeriodLifecycleController.lock('P_2024_01', { id: 'acc_01', role: Role.ACCOUNTANT, allowed_entities: ['*'] }, { variance_cents: 0, proof_hash: 'abc' } as any);
     AJEPeriodRules.assertLockRequirement(aje as any); // Should pass now
 
     // 3. Restatement Versioning

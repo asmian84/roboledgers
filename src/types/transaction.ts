@@ -33,6 +33,10 @@ export interface CanonicalTransaction {
     readonly raw_description: string;
     readonly txsig: string;          // SHA-256
     readonly source_system: string;
+    readonly source_locator?: {      // New Forensic Field
+        page: number;
+        y_coord: number;
+    };
     readonly created_at: string;     // RFC-3339
 
     // VERSIONED

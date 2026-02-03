@@ -76,6 +76,7 @@ export interface AccountMetadata {
 
 export interface ChartOfAccountEntry {
     readonly account_code: string; // "1000" - "9999"
+    readonly entity_id: string;    // Bind to specific entity
     readonly name: string;
     readonly metadata: AccountMetadata;
 }

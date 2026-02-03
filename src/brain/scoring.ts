@@ -1,3 +1,4 @@
+import { SystemGuard } from '../core/system_guard.ts';
 import type { TCV } from './tcv.ts';
 import { CanonicalAccountClass } from '../types/coa.ts';
 
@@ -21,6 +22,10 @@ export class ScoringEngine {
      * Returns a value between 0.0 and 1.0.
      */
     static calculate(tcv: TCV, candidate: CanonicalAccountClass): number {
+        if (!SystemGuard.isBrainEnabled()) {
+            console.warn('[BRAIN] Categorization disabled by global kill-switch.');
+            return 0; // Safe degradation: no confidence
+        }
         const breakdown = this.getBreakdown(tcv, candidate);
 
         // Normalize to 0.0 - 1.0 (Total max positive score is 400)

@@ -1,3 +1,4 @@
+import { SystemGuard } from './system_guard.ts';
 import type { CanonicalTransaction } from '../types/transaction.ts';
 import { TransactionStatus } from '../types/transaction.ts';
 import { InvariantViolationError } from './errors.ts';
@@ -12,10 +13,18 @@ export class LedgerService {
     private static sigIndex: Map<string, string> = new Map();
 
     /**
+     * Checks if a transaction signature already exists.
+     */
+    static existsBySig(txsig: string): boolean {
+        return this.sigIndex.has(txsig);
+    }
+
+    /**
      * Posts a new transaction to the ledger.
      * MANDATE: Enforces txsig uniqueness and Core Immutability.
      */
     static post(tx: CanonicalTransaction): void {
+        SystemGuard.assertWritable();
         // 1. Duplicate Detection (txsig)
         if (this.sigIndex.has(tx.txsig)) {
             throw new InvariantViolationError(
@@ -37,6 +46,7 @@ export class LedgerService {
      * MANDATE: Original records are NEVER deleted.
      */
     static void(tx_id: string, actor_id: string): void {
+        SystemGuard.assertWritable();
         const tx = this.transactions.get(tx_id);
         if (!tx) {
             throw new InvariantViolationError('TX_NOT_FOUND', `Transaction ${tx_id} does not exist`);
@@ -66,7 +76,7 @@ export class LedgerService {
         if (!existing) return;
 
         const immutableFields: (keyof CanonicalTransaction)[] = [
-            'tx_id', 'account_id', 'date', 'amount_cents', 'currency', 'polarity', 'raw_description', 'txsig'
+            'tx_id', 'account_id', 'date', 'amount_cents', 'currency', 'polarity', 'raw_description', 'txsig', 'source_locator'
         ];
 
         for (const field of immutableFields) {

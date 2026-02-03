@@ -12,6 +12,10 @@ export interface NormalizedTransaction {
     raw_description: string;
     amount_cents: number;   // Integer
     currency: string;
+    source_locator?: {
+        page: number;
+        y_coord: number;
+    };
 }
 
 export class ParserAdapter {
@@ -19,13 +23,22 @@ export class ParserAdapter {
      * Adapts a raw transaction from any parser into a normalized form.
      */
     static adapt(raw: RawParsedTransaction, currency: string = 'CAD'): NormalizedTransaction {
-        return {
+        const normalized: NormalizedTransaction = {
             source_id: raw.source_id,
             date: this.normalizeDate(raw.raw_date),
             raw_description: raw.raw_description.trim(),
             amount_cents: this.parseAmount(raw.raw_amount),
             currency: currency.toUpperCase()
         };
+
+        if (raw.page !== undefined && raw.y_coord !== undefined) {
+            normalized.source_locator = {
+                page: raw.page,
+                y_coord: raw.y_coord
+            };
+        }
+
+        return normalized;
     }
 
     /**

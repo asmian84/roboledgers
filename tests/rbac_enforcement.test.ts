@@ -6,8 +6,8 @@ import { Role } from '../src/authority/roles.ts';
 export async function runRBACEnforcementTests() {
     console.log('\n--- Running RBAC Enforcement Tests ---');
 
-    const zen: User = { id: 'u1', role: Role.ZEN };
-    const accountant: User = { id: 'u2', role: Role.ACCOUNTANT };
+    const zen: User = { id: 'u1', role: Role.ZEN, allowed_entities: ['*'] };
+    const accountant: User = { id: 'u2', role: Role.ACCOUNTANT, allowed_entities: ['*'] };
 
     // 1. Authorized Action
     AuthorityGuard.assertCapability(accountant, Capability.CAP_LOCK_PERIOD);

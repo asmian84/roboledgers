@@ -1,0 +1,262 @@
+/* 
+ * RoboLedgers: Zen Mode Design System
+ * Focus: Calm, high-fidelity, abstraction-oriented.
+ */
+
+:root {
+    /* HSL Color Tokens - Ocean, Slate, Sage */
+    --bg-primary: hsl(210, 20%, 98%);
+    /* Cool Slate */
+    --bg-secondary: hsl(0, 0%, 100%);
+    --text-primary: hsl(210, 30%, 20%);
+    /* Deep Ocean */
+    --text-secondary: hsl(210, 10%, 45%);
+
+    --accent-primary: hsl(190, 40%, 45%);
+    /* Muted Ocean */
+    --accent-soft: hsl(190, 50%, 97%);
+
+    --positive: hsl(150, 30%, 45%);
+    /* Sage Green */
+    --negative: hsl(0, 30%, 60%);
+    /* Muted Coral */
+
+    /* Truth Badges - Low Saturation */
+    --badge-raw: hsl(210, 10%, 70%);
+    --badge-predicted: hsl(40, 40%, 60%);
+    --badge-reconciled: hsl(150, 30%, 50%);
+    --badge-locked: hsl(250, 20%, 60%);
+
+    /* Shadows & Radius */
+    --shadow-sm: 0 4px 12px hsla(210, 20%, 0%, 0.05%);
+    --radius-lg: 16px;
+    --radius-md: 8px;
+
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    overflow-x: hidden;
+}
+
+.zen-container {
+    max-width: 600px;
+    width: 100%;
+    padding: 40px 20px;
+}
+
+/* Header Sections */
+header {
+    margin-bottom: 48px;
+}
+
+.title-area {
+    margin-bottom: 24px;
+}
+
+.title-area h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.title-area p {
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.summary-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.summary-card {
+    background: var(--bg-secondary);
+    padding: 24px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid hsla(0, 0%, 0%, 0.02);
+    transition: transform 0.3s ease;
+}
+
+/* Footer / Status Bar */
+.zen-footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid hsla(210, 20%, 0%, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.freshness {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mode-indicator {
+    font-weight: 600;
+    color: var(--accent-primary);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.summary-card .label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.summary-card .amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.summary-card.in .amount {
+    color: var(--positive);
+}
+
+.summary-card.out .amount {
+    color: var(--text-primary);
+}
+
+/* Transaction Stream */
+.stream-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.stream-header h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.transaction-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.transaction-item {
+    background: var(--bg-secondary);
+    padding: 16px 20px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: slideIn 0.5s ease backwards;
+    cursor: pointer;
+}
+
+.transaction-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px hsla(210, 20%, 0%, 0.1);
+}
+
+.transaction-item:active {
+    transform: scale(0.98);
+}
+
+.tx-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.tx-merchant {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.tx-meta {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.tx-amount-area {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.tx-amount {
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+/* Badges */
+.badge {
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    color: white;
+    letter-spacing: 0.02em;
+    transition: all 0.2s ease;
+}
+
+.badge.raw {
+    background: var(--badge-raw);
+}
+
+.badge.predicted {
+    background: var(--badge-predicted);
+}
+
+.badge.reconciled {
+    background: var(--badge-reconciled);
+}
+
+.badge.locked {
+    background: var(--badge-locked);
+}
+
+/* Prompt */
+.zen-prompt {
+    background: var(--accent-soft);
+    color: var(--accent-primary);
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

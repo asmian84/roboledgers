@@ -35,15 +35,13 @@ export async function runLedgerCoreTests() {
     // Documentation says "trimmed, leading/trailing whitespace removed".
     assert(sig1.length === 64, 'txsig must be 64 chars hex');
 
-    // 2. Duplicate Rejection
+    // 2. Duplicate Rejection (Idempotent Skip)
     LedgerService.clear();
-    const canonical = IngestionService.transform(rawTx, accountId);
+    const canonical = IngestionService.transform(rawTx, accountId)!;
     LedgerService.post(canonical);
 
-    assertThrows(() => {
-        const duplicate = IngestionService.transform(rawTx, accountId);
-        LedgerService.post(duplicate);
-    }, 'TXSIG_DUPLICATE');
+    const duplicate = IngestionService.transform(rawTx, accountId);
+    assert(duplicate === null, 'Ingestion should return null for duplicates (Idempotent)');
 
     // 3. Immutability
     assertThrows(() => {

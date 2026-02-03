@@ -10,8 +10,8 @@ export async function runAuthorityLifecycleTests() {
     PeriodLifecycleController.clear();
     CertificationService.clear();
 
-    const accountant: User = { id: 'acc_01', role: Role.ACCOUNTANT };
-    const zen: User = { id: 'zen_01', role: Role.ZEN };
+    const accountant: User = { id: 'acc_01', role: Role.ACCOUNTANT, allowed_entities: ['*'] };
+    const zen: User = { id: 'zen_01', role: Role.ZEN, allowed_entities: ['*'] };
     const validProof = { variance_cents: 0, proof_hash: 'hash123' } as any;
 
     // 1. Valid Lock
