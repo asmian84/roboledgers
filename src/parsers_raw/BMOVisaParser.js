@@ -1,0 +1,172 @@
+/**
+ * BMO Visa Parser
+ * Regex-based parser for BMO Visa credit card statements
+ * NOTE: Account numbers are often masked (XXX XXXX XXXX 3277)
+ * Detection relies on "Visa®" text, not IIN
+ */
+class BMOVisaParser extends BaseBankParser {
+    constructor() {
+        const formatRules = `
+BMO VISA FORMAT:
+- Date format: Dec 5, Dec 6 (MMM D)
+- Credit card: Debit = charges, Credit = payments/refunds
+- Account often masked: XXX XXXX XXXX 3277
+- Detection: "Visa®" keyword (IIN not visible)
+- Transaction types: PAYMENT, PURCHASE, CASH ADVANCE, INTEREST, FEE
+    `;
+        super('BMO', 'Visa', formatRules);
+    }
+
+    async parse(statementText, metadata = null, lineMetadata = []) {
+        this.lastLineMetadata = lineMetadata;
+        console.warn('⚡ [EXTREME-BMO-VISA] Starting metadata extraction for BMO Visa...');
+        console.error('📄 [DEBUG-BMO-VISA] First 1000 characters (RED for visibility):');
+        console.log(statementText.substring(0, 1000));
+
+        const lines = statementText.split('\n');
+        const transactions = [];
+
+        // Extract opening balance
+        let openingBalance = 0;
+        const previousBalanceMatch = statementText.match(/(?:Previous\s+balance|Opening\s+Balance).*?(\d+[\d,]*\.\d{2})/i);
+        if (previousBalanceMatch) {
+            openingBalance = parseFloat(previousBalanceMatch[1].replace(/,/g, ''));
+            console.log(`[BMO-VISA] Extracted opening balance: ${openingBalance}`);
+        }
+
+        // EXTRACT METADATA - Account may be masked: "XXX XXXX XXXX 3277"
+        const acctMatch = statementText.match(/(?:Card\s+number|Account).*?([X\d]{3,4}\s+[X\d]{4}\s+[X\d]{4}\s+\d{4})/i);
+        const parsedMetadata = {
+            _inst: '001', // BMO Institution Code
+            _transit: '-----',
+            _acct: acctMatch ? acctMatch[1].replace(/\s/g, '') : '-----',
+            institutionCode: '001',
+            transit: '-----',
+            accountNumber: acctMatch ? acctMatch[1].replace(/\s/g, '') : '-----',
+            _brand: 'BMO',
+            _bank: 'BMO Visa',
+            _tag: 'Visa'
+        };
+        console.warn('🏁 [BMO-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
+
+        const yearMatch = statementText.match(/20\d{2}/);
+        const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
+
+        // Date regex: "Dec 5 Dec 6" or just "Dec 6"
+        const dateRegex = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})/i;
+        const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+
+        let pendingDescription = '';
+        let pendingRawLines = [];
+        let pendingAuditLines = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.match(/Opening Balance|Previous Balance|Page \d/i)) continue;
+
+            const dateMatch = trimmed.match(dateRegex);
+            if (dateMatch) {
+                const month = dateMatch[1].toLowerCase();
+                const day = dateMatch[2];
+                const isoDate = `${currentYear}-${monthMap[month]}-${day.padStart(2, '0')}`;
+
+                const remainder = trimmed.substring(dateMatch[0].length).trim();
+
+                const extracted = this.extractTransaction(remainder, isoDate, line);
+                if (extracted && extracted.amount) {
+                    if (pendingDescription) {
+                        extracted.description = pendingDescription + ' ' + extracted.description;
+                        extracted.rawText = [...pendingRawLines, extracted.rawText].join('\n');
+                        if (extracted.audit) {
+                            extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, extracted.audit]);
+                        }
+                    }
+                    transactions.push(extracted);
+                    pendingDescription = '';
+                    pendingRawLines = [];
+                    pendingAuditLines = [];
+                } else {
+                    pendingDescription = remainder;
+                    pendingRawLines = [line];
+                    pendingAuditLines = [this.getSpatialMetadata(line)];
+                }
+            } else if (pendingDescription && trimmed.length > 3) {
+                const extracted = this.extractTransaction(trimmed, '', line);
+                if (extracted && extracted.amount) {
+                    extracted.date = transactions[transactions.length - 1]?.date || '1900-01-01';
+                    extracted.description = pendingDescription + ' ' + extracted.description;
+                    extracted.rawText = [...pendingRawLines, line].join('\n');
+                    extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, this.getSpatialMetadata(line)]);
+                    transactions.push(extracted);
+                    pendingDescription = '';
+                    pendingRawLines = [];
+                    pendingAuditLines = [];
+                } else {
+                    pendingDescription += ' ' + trimmed;
+                    pendingRawLines.push(line);
+                    pendingAuditLines.push(this.getSpatialMetadata(line));
+                }
+            }
+        }
+
+        console.log(`[BMO-VISA] Parsed ${transactions.length} transactions`);
+        return { transactions, metadata: parsedMetadata, openingBalance };
+    };
+
+    extractTransaction(text, isoDate, originalLine) {
+        const amounts = text.match(/([\d,]+\.\d{2})/g);
+        if (!amounts || amounts.length < 1) return null;
+
+        const firstAmtIdx = text.search(/[\d,]+\.\d{2}/);
+        let description = text.substring(0, firstAmtIdx).trim();
+
+        description = this.cleanCreditDescription(description, [
+            "PAYMENT", "PAYMENT RECEIVED", "PURCHASE", "CASH ADVANCE",
+            "INTEREST", "ANNUAL FEE", "FEE", "FOREIGN TRANSACTION FEE"
+        ]);
+
+        const amount = parseFloat(amounts[0].replace(/,/g, ''));
+        const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
+        const isPayment = /payment|credit|refund/i.test(description);
+
+        return {
+            date: isoDate,
+            description,
+            amount,
+            debit: isPayment ? 0 : amount,
+            credit: isPayment ? amount : 0,
+            balance,
+            rawText: this.cleanRawText(originalLine),
+            audit: this.getSpatialMetadata(originalLine)
+        };
+    }
+
+    cleanCreditDescription(desc, prefixes) {
+        desc = desc.replace(/\s+/g, ' ').trim();
+        desc = desc.replace(/\b\d{6,}\b/gi, '');
+
+        const descUpper = desc.toUpperCase();
+        for (const type of prefixes) {
+            if (descUpper.startsWith(type + ' ')) {
+                const name = desc.substring(type.length).trim();
+                if (name) desc = `${name}, ${type.charAt(0) + type.slice(1).toLowerCase()}`;
+                break;
+            }
+        }
+
+        if (!desc.includes(',') && desc.includes(' - ')) {
+            const parts = desc.split(' - ');
+            if (parts.length > 1 && parts[1].trim()) {
+                desc = `${parts[1].trim()}, ${parts[0].trim()}`;
+            } else if (parts[0]) {
+                desc = parts[0].trim();
+            }
+        }
+
+        return desc.replace(/,\s*,/g, ',').trim();
+    }
+}
+
+window.BMOVisaParser = BMOVisaParser;
+window.bmoVisaParser = new BMOVisaParser();
