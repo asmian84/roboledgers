@@ -28,8 +28,7 @@ window.RoboLedger = (function () {
         transactions: {}, // tx_id -> tx
         sigIndex: {},    // txsig -> tx_id
         accounts: [
-            { id: 'ACC-001', name: 'RBC Royal Bank', type: 'CHECKING', balance: 12500.50, inst: '003', transit: '12345', account_num: '8822991', ref: 'CHQ1' },
-            { id: 'ACC-002', name: 'BMO Bank of Montreal', type: 'CHECKING', balance: 4200.00, inst: '001', transit: '55443', account_num: '1100223', ref: 'CHQ2' }
+            { id: 'ACC-001', name: 'RBC Royal Bank', type: 'CHECKING', balance: 12500.50, openingBalance: 12500.50, inst: '003', transit: '12345', accountNumber: '8822991', ref: 'CHQ1' }
         ],
         coa: {},         // account_code -> entry
         categoryPredictions: {}, // raw_desc -> account_code
@@ -233,6 +232,11 @@ window.RoboLedger = (function () {
             return false;
         },
 
+        save: function () {
+            save();
+            return true;
+        },
+
         swapPolarity: function (tx_id) {
             const tx = state.transactions[tx_id];
             if (tx) {
@@ -293,10 +297,18 @@ window.RoboLedger = (function () {
                 acc.inst = metadata.id || acc.inst;
                 acc.transit = metadata.transit || acc.transit;
                 acc.name = metadata.name || acc.name;
-                acc.accountNumber = metadata.accountNumber || acc.accountNumber;
+                acc.accountNumber = metadata.accountNumber || acc.accountNumber || metadata.account_num;
                 acc.accountType = metadata.accountType || acc.accountType;
                 acc.period = metadata.period || acc.period;
                 acc.holder = metadata.holder || acc.holder;
+                acc.brand = metadata.brand || acc.brand;
+                save();
+            }
+        },
+        setOpeningBalance: function (id, amountCents) {
+            const acc = this.get(id);
+            if (acc) {
+                acc.openingBalance = amountCents / 100;
                 save();
             }
         },
@@ -425,6 +437,26 @@ window.RoboLedger = (function () {
          * Institutional Fingerprinting (Transit/Inst/Account Detection)
          */
         detectInstitution: function (text) {
+            const up = text.toUpperCase();
+
+            // IIN / Brand Intelligence
+            const brands = [
+                { name: 'VISA', pattern: /4\d{3}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/, digits: 16 },
+                { name: 'MASTERCARD', pattern: /5[1-5]\d{2}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/, digits: 16 },
+                { name: 'AMEX', pattern: /3[47]\d{2}[\s-]?\d{6}[\s-]?\d{5}/, digits: 15 }
+            ];
+
+            let matchedBrand = null;
+            let matchedAcc = null;
+            for (const b of brands) {
+                const match = text.match(b.pattern);
+                if (match) {
+                    matchedBrand = b.name;
+                    matchedAcc = match[0].replace(/[\s-]/g, '');
+                    break;
+                }
+            }
+
             const markers = {
                 '003': { name: 'RBC Royal Bank', anchors: ['ROYAL BANK', 'RBC', 'Transit'], transitRegex: /TRANSIT\s*(\d{5})/i },
                 '001': { name: 'BMO Bank of Montreal', anchors: ['BMO', 'MONTREAL'], transitRegex: /TRANSIT\s*(\d{5})/i },
@@ -432,20 +464,42 @@ window.RoboLedger = (function () {
             };
 
             for (const [id, info] of Object.entries(markers)) {
-                const foundAnchor = info.anchors.some(a => text.toUpperCase().includes(a));
+                const foundAnchor = info.anchors.some(a => up.includes(a));
                 if (foundAnchor || text.includes(`INSTITUTION ${id}`)) {
                     const transitMatch = text.match(info.transitRegex);
+
+                    let finalName = info.name;
+                    if (matchedBrand) {
+                        // Advanced Branding Logic
+                        if (up.includes('AVION')) finalName = `${info.name} AVION ${matchedBrand}`;
+                        else if (up.includes('PASSPORT')) finalName = `${info.name} PASSPORT ${matchedBrand}`;
+                        else finalName = `${info.name} ${matchedBrand}`;
+                    }
+
                     return {
                         id,
-                        name: info.name,
+                        name: finalName,
+                        brand: matchedBrand,
+                        accountNumber: matchedAcc,
                         transit: transitMatch ? transitMatch[1] : 'UNKNOWN'
                     };
                 }
             }
+
+            if (matchedBrand) {
+                return { id: 'CC', name: matchedBrand, brand: matchedBrand, accountNumber: matchedAcc, transit: 'N/A' };
+            }
+
             return { id: '000', name: 'GENERIC PARSER', transit: 'UNKNOWN' };
         },
 
         processUpload: async function (file, account_id) {
+            // Fix Ingestion Routing (Resolve 'ALL' to primary account)
+            if (account_id === 'ALL') {
+                const primary = Accounts.getAll()[0];
+                account_id = primary ? primary.id : 'ACC-001';
+            }
+
             let rows = [];
             let metadata = { name: 'CSV File', transit: 'N/A' };
 
@@ -496,6 +550,21 @@ window.RoboLedger = (function () {
                 const predicted_code = Brain.predict(clean_description); // Predict based on clean name
                 const category = predicted_code ? COA.get(predicted_code) : null;
 
+                // SMARTER POLARITY DETECTION (V5.2.19 AUDIT)
+                // 1. Check sign first
+                let polarity = amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
+
+                // 2. Keyword Heuristic (Fallback for statements without signs)
+                const upperDesc = raw_description.toUpperCase();
+                const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE'];
+                const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND'];
+
+                if (amount_cents > 0) {
+                    if (debitKeywords.some(k => upperDesc.includes(k)) && !creditKeywords.some(k => upperDesc.includes(k))) {
+                        polarity = Polarity.DEBIT;
+                    }
+                }
+
                 const canonical = {
                     tx_id,
                     account_id,
@@ -503,7 +572,7 @@ window.RoboLedger = (function () {
                     ref: row.ref || null, // Capture Ref# from parser
                     amount_cents: Math.abs(amount_cents),
                     currency: 'CAD',
-                    polarity: amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT,
+                    polarity: polarity,
                     description: clean_description, // PRIMARY LINE (CLEAN)
                     raw_description: raw_description, // SECONDARY LINE (DIRTY)
                     sourceFileId: sourceFileId, // Link to workbench blob

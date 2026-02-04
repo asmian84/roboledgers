@@ -28,6 +28,9 @@
     activeFileId: null,
     isPoppedOut: false,
     popoutWindow: null,
+    recoveryPending: false,
+    isSearchOpen: false,
+    searchQuery: '',
     version: '5.1.1'
   };
 
@@ -61,6 +64,22 @@
       window.popInGrid();
     }
   });
+
+  window.handleRefUpdate = (val) => {
+    const success = window.RoboLedger.Accounts.setRef(UI_STATE.selectedAccount, val);
+    if (!success.success) {
+      UI_STATE.refError = success.error;
+    } else {
+      UI_STATE.refError = null;
+    }
+    render();
+  };
+
+  window.handleOpeningBalanceUpdate = (accId, val) => {
+    const amount = parseFloat(val) || 0;
+    window.RoboLedger.Accounts.setOpeningBalance(accId, amount * 100);
+    render();
+  };
 
   window.popInGrid = function () {
     UI_STATE.isPoppedOut = false;
@@ -181,9 +200,136 @@
   window.toggleSettings = (open) => toggleSettings(open);
   window.handleFiles = (files) => handleFiles(files);
 
+  window.openSourceFile = function (fileId) {
+    if (!fileId) return;
+    console.log(`[V5 AUDIT] Forensic Trace initiated for file: ${fileId}`);
+
+    UI_STATE.activeFileId = fileId;
+    window.toggleWorkbench(true, fileId);
+
+    const file = window.RoboLedger.Accounts.getFile(fileId);
+    if (!file) return;
+
+    const contentArea = document.getElementById('v5-pdf-curtain-content');
+    const filenameLabel = document.getElementById('v5-curtain-filename');
+
+    if (filenameLabel) filenameLabel.innerText = file.name;
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      const url = URL.createObjectURL(file);
+      contentArea.innerHTML = `<iframe src="${url}#toolbar=0" style="width:100%; height:100%; border:none;"></iframe>`;
+    } else {
+      // CSV/Text Preview
+      file.text().then(text => {
+        const lines = text.split('\n').slice(0, 50); // Preview first 50 lines
+        contentArea.innerHTML = `
+                <div style="padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #334155; line-height: 1.6; overflow: auto; height: 100%;">
+                    ${lines.map(line => `<div style="border-bottom: 1px solid #f1f5f9; padding: 4px 0;">${line}</div>`).join('')}
+                </div>
+            `;
+      });
+    }
+  };
+
+  window.toggleWorkbench = function (open, fileId) {
+    UI_STATE.workbenchOpen = open;
+    const curtain = document.getElementById('v5-pdf-curtain');
+    const overlay = document.getElementById('v5-pdf-overlay');
+
+    if (open) {
+      document.body.classList.add('workbench-active');
+      if (curtain) curtain.style.right = '0';
+      if (overlay) overlay.style.display = 'block';
+    } else {
+      document.body.classList.remove('workbench-active');
+      if (curtain) curtain.style.right = '-100%';
+      if (overlay) overlay.style.display = 'none';
+      UI_STATE.activeFileId = null;
+    }
+  };
+
+  window.handleRecovery = function (action) {
+    if (action === 'continue') {
+      UI_STATE.recoveryPending = false;
+      render();
+    } else {
+      window.RoboLedger.Ledger.reset();
+      UI_STATE.recoveryPending = false;
+      render();
+    }
+  };
+
+  window.switchAccount = function (accId) {
+    console.log(`[V5 CONTROL] Switching to account: ${accId}`);
+    UI_STATE.selectedAccount = accId;
+
+    // Performance Optimization: Use Tabulator-native filter instead of full render
+    if (window.txnTable) {
+      if (accId === 'ALL') {
+        window.txnTable.clearFilter();
+      } else {
+        window.txnTable.setFilter("account_id", "=", accId);
+      }
+      // Force Ref# re-calculation after filter
+      window.txnTable.redraw(true);
+    }
+
+    // Update Pill Active State (Manual DOM update to avoid full render flicker)
+    document.querySelectorAll('[data-acc-btn]').forEach(btn => {
+      const isActive = btn.getAttribute('data-acc-btn') === accId;
+      btn.classList.toggle('active', isActive);
+      if (isActive) {
+        btn.style.color = '#3b82f6';
+        btn.style.background = '#eff6ff';
+      } else {
+        btn.style.color = '';
+        btn.style.background = '';
+      }
+    });
+
+    // Handle "ALL" pill specifically
+    const allBtn = document.querySelector('button[onclick*="switchAccount(\'ALL\')"]');
+    if (allBtn) {
+      const isActive = accId === 'ALL';
+      allBtn.classList.toggle('active', isActive);
+      if (isActive) {
+        allBtn.style.color = '#3b82f6';
+        allBtn.style.background = '#eff6ff';
+      } else {
+        allBtn.style.color = '';
+        allBtn.style.background = '';
+      }
+    }
+  };
+
+  window.saveSettings = function () {
+    console.log("[SETTINGS] Persisting V5 Configuration...");
+    const themeSelect = document.querySelector('.v5-select');
+    if (themeSelect) {
+      UI_STATE.activeTheme = themeSelect.value;
+      // Apply Theme logic here... (e.g., adding class to body)
+      document.body.className = UI_STATE.activeTheme.toLowerCase().replace(' ', '-') + '-theme';
+    }
+    toggleSettings(false);
+    render();
+  };
+
   function init() {
     setupNav();
     setupActions();
+
+    // Check for existing data (Recovery Logic)
+    const existingData = window.RoboLedger.Ledger.getAll();
+    if (existingData.length > 0) {
+      console.log(`[V5 RECOVERY] Detected ${existingData.length} existing transactions. Prompting user.`);
+      UI_STATE.recoveryPending = true;
+    }
+
+    // Set default theme on body
+    if (UI_STATE.activeTheme) {
+      document.body.className = UI_STATE.activeTheme.toLowerCase().replace(' ', '-') + '-theme';
+    }
+
     window.render();
   }
 
@@ -322,27 +468,33 @@
     }
   };
 
-  window.handleRefUpdate = (newRef) => {
-    const activeAcc = window.RoboLedger.Accounts.get(UI_STATE.selectedAccount);
-    if (!activeAcc) return;
-
-    if (newRef.trim() === '') {
-      UI_STATE.refError = "Ref# cannot be empty.";
-      render();
-      return;
+  window.toggleSearch = function (open) {
+    UI_STATE.isSearchOpen = (open !== undefined) ? open : !UI_STATE.isSearchOpen;
+    if (!UI_STATE.isSearchOpen) {
+      UI_STATE.searchQuery = '';
+      if (window.txnTable) window.txnTable.clearFilter(true);
     }
+    render();
+    if (UI_STATE.isSearchOpen) {
+      setTimeout(() => {
+        const el = document.getElementById('v5-search-input');
+        if (el) el.focus();
+      }, 50);
+    }
+  };
 
-    const result = window.RoboLedger.Accounts.setRef(activeAcc.id, newRef.trim());
-    if (result.success) {
-      UI_STATE.refError = null;
-      window.render(); // Force deep render for pills
-      if (window.txnTable) {
-        // Redraw grid to update Source column badges
-        window.txnTable.redraw(true);
-      }
+  window.handleSearch = function (query) {
+    UI_STATE.searchQuery = query;
+    if (!window.txnTable) return;
+
+    if (!query) {
+      window.txnTable.clearFilter(true);
     } else {
-      UI_STATE.refError = result.error;
-      render();
+      window.txnTable.setFilter([
+        { field: "description", type: "like", value: query },
+        { field: "ref", type: "like", value: query },
+        { field: "accountNumber", type: "like", value: query }
+      ], "or");
     }
   };
 
@@ -388,7 +540,7 @@
       </div>
       <div class="drawer-footer">
           <button class="btn-restored" style="background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;">Reset to Defaults</button>
-          <button class="btn-restored" onclick="window.toggleSettings(false)">Save Settings</button>
+          <button class="btn-restored" onclick="window.saveSettings()">Save Settings</button>
       </div>
     `;
 
@@ -920,23 +1072,35 @@
     return `
       <div style="display: flex; flex-direction: column; gap: 0; flex: 1;">
         
-        <!-- V5 UNIFIED ISLAND WRAPPER (Enforces 1060px uniform stack) -->
-        <div style="width: 100%; max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 0;">
+        <!-- V5 UNIFIED ISLAND WRAPPER (Enforces 1166px uniform stack) -->
+        <div style="width: 100%; max-width: 1166px; margin: 0 auto; display: flex; flex-direction: column; gap: 0;">
+
+          <!-- SESSION RECOVERY BANNER (V5.2.20) -->
+          ${UI_STATE.recoveryPending ? `
+            <div class="v5-glass v5-notice-banner" style="width: 100%; height: 36px; margin-bottom: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 24px; animation: slideDown 0.3s ease; border-left: 4px solid #f59e0b; background: rgba(251, 191, 36, 0.05);">
+                <div style="font-size: 11px; font-weight: 700; color: #78350f; display: flex; align-items: center; gap: 8px;">
+                    <i class="ph ph-warning-circle" style="color: #f59e0b; font-size: 14px;"></i>
+                    PREVIOUS SESSION DETECTED. WOULD YOU LIKE TO CONTINUE?
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="cloudy-btn" style="width: auto; height: 24px; padding: 0 12px; font-size: 10px; font-weight: 700; color: #d97706; background: #fef3c7;" onclick="window.handleRecovery('continue')">CONTINUE</button>
+                    <button class="cloudy-btn" style="width: auto; height: 24px; padding: 0 12px; font-size: 10px; font-weight: 700; color: #94a3b8;" onclick="window.handleRecovery('new')">START NEW</button>
+                </div>
+            </div>
+          ` : ''}
 
           <!-- HEADER LOGIC -->
           <div class="v5-main-header fade-in" style="width: 100%;">
-            <div class="header-card" style="width: 100%; padding: 8px 16px; margin: 0; border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom: none;">
+            <div class="header-card v5-glass" style="width: 100%; padding: 8px 16px; margin: 0; border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom: none;">
                 <div class="header-icon-group" style="display: flex; align-items: center; gap: 12px;">
                    <!-- Fixed Icon -->
                    <div class="header-icon-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: white;">
                       <i class="ph ph-receipt" style="font-size: 20px;"></i>
                    </div>
                    
-                   <div class="header-text" style="display: flex; flex-direction: column; gap: 0;">
-                      <h1 style="font-size: 16px; font-weight: 700; color: #0f172a; margin: 0;">Transactions</h1>
-                      <div style="font-size: 10px; font-weight: 700; color: #94a3b8; letter-spacing: 0.05em; text-transform: uppercase; display: flex; align-items: center; gap: 4px;">
-                          WAITING TO GET STARTED <span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
-                      </div>
+                   <div class="header-text-group">
+                      <h1 class="header-title" style="font-size: 1.25rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.025em;">Transactions</h1>
+                      <p class="header-subtitle" style="font-size: 11px; font-weight: 600; color: #64748b; margin: 0; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.05em;">V5.2 • High-Performance Ledger</p>
                    </div>
                 </div>
              
@@ -954,13 +1118,13 @@
              </div>
           </div>
 
-          <!-- INGESTION PROGRESS STATE -->
+          <!-- INGESTION PROGRESS OVERLAY (PHASE 1-3) -->
           ${UI_STATE.isIngesting ? `
-               <div class="v5-waiting-container" style="flex: 1; background: transparent; border: none; padding: 40px 0;">
+               <div class="v5-waiting-container" style="flex: 1; min-height: 400px; background: transparent; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
                   <div style="margin-bottom: 24px;">
-                    <i class="ph ph-circle-notch pulsing" style="font-size: 48px; color: #3b82f6;"></i>
+                    <i class="ph ph-cpu pulsing" style="font-size: 80px; color: #3b82f6; opacity: 0.5;"></i>
                   </div>
-                  <div class="v5-waiting-title" style="color: #0f172a; font-size: 16px;">Parsing Statement...</div>
+                  <div class="v5-waiting-title" style="color: #1e293b;">Forensic Ingestion In Progress</div>
                   <div class="v5-waiting-subtitle" style="color: #64748b; margin-top: 12px; width: 300px;">
                     <div class="v5-progress-label" style="font-size: 11px; margin-bottom: 8px;">${UI_STATE.ingestionLabel || 'Finalizing Ledger...'}</div>
                     <div class="v5-progress-track" style="display: block; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; width: 100%;">
@@ -980,13 +1144,11 @@
                   <div class="v5-waiting-subtitle" style="color: #64748b; font-size: 14px; font-weight: 500; max-width: 440px; line-height: 1.6;">Import your bank statement or add your first entry manually to get started.</div>
               </div>
           ` : ''}
-
-
           </div> <!-- End v5-main-header -->
 
           ${hasData && !UI_STATE.isIngesting ? `
           <!-- V5 ACTION BAR (Option 1: Symmetrical Command Strip) -->
-          <div class="v5-action-bar" style="width: 100%; padding: 0 20px; height: 44px; margin: 0; border-radius: 0; border-bottom: none;">
+          <div class="v5-action-bar v5-glass" style="width: 100%; padding: 0 20px; height: 44px; margin: 0; border-radius: 0; border-bottom: none;">
             <!-- Left: Ref# Input -->
             <div style="display: flex; align-items: center; gap: 8px; min-width: 140px;">
                 <span style="font-size: 10px; font-weight: 800; color: #94a3b8;">REF#</span>
@@ -999,72 +1161,138 @@
             </div>
 
             <!-- Center: Monospace ATI Metadata Line -->
-            <div class="v5-ati-line-center" style="flex: 1; display: flex; justify-content: center; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #64748b; letter-spacing: 0.02em; text-transform: uppercase;">
-                ${activeAcc.accountNumber ? `
-                    ACCOUNT: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.accountNumber}</span>
-                    <span style="color: #cbd5e1; margin: 0 12px;">•</span>
-                    TYPE: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.accountType || 'BANK'}</span>
-                    <span style="color: #cbd5e1; margin: 0 12px;">•</span>
-                    PERIOD: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.period || '2023'}</span>
-                ` : 'NO METADATA DETECTED'}
+            <div class="v5-ati-line-center" style="flex: 1; display: flex; justify-content: center; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #64748b; letter-spacing: 0.01em; text-transform: uppercase;">
+                ${UI_STATE.selectedAccount === 'ALL' ? `
+                    <span style="color: #64748b; font-weight: 800; opacity: 0.7;">ALL LEDGERS • UNIFIED VIEW</span>
+                ` : (activeAcc ? (activeAcc.id === 'CC' || activeAcc.brand ? `
+                    BRAND: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.name || 'CREDIT CARD'}</span>
+                    <span style="color: #cbd5e1; margin: 0 8px;">•</span>
+                    CARD#: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.accountNumber || '**** **** **** ****'}</span>
+                ` : `
+                    INST: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.inst || '---'}</span>
+                    <span style="color: #cbd5e1; margin: 0 8px;">•</span>
+                    TRANSIT: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.transit || '---'}</span>
+                    <span style="color: #cbd5e1; margin: 0 8px;">•</span>
+                    ACC#: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.accountNumber || '---'}</span>
+                `) : 'NO METADATA DETECTED')}
             </div>
 
             <!-- Right: Horizontal Utility Icons -->
             <div style="display: flex; align-items: center; gap: 4px; min-width: 140px; justify-content: flex-end;">
-                 <button class="cloudy-btn" title="Search"><i class="ph ph-magnifying-glass"></i></button>
+                 ${UI_STATE.isSearchOpen ? `
+                    <input type="text" id="v5-search-input" 
+                           placeholder="Search..." 
+                           value="${UI_STATE.searchQuery}"
+                           style="width: 140px; height: 28px; border-radius: 4px; border: 1px solid #e2e8f0; padding: 0 8px; font-size: 11px; font-weight: 600; outline: none; transition: all 0.2s ease;"
+                           oninput="window.handleSearch(this.value)"
+                           onkeydown="if(event.key === 'Escape') window.toggleSearch(false)">
+                 ` : ''}
+                 <button class="cloudy-btn ${UI_STATE.isSearchOpen ? 'active' : ''}" title="Search" onclick="window.toggleSearch()"><i class="ph ph-magnifying-glass"></i></button>
                  <button class="cloudy-btn" title="Popout Grid" onclick="window.popOutGrid()"><i class="ph ph-arrow-square-out"></i></button>
                  <button class="cloudy-btn" title="Grid Settings" onclick="window.toggleSettings(true)"><i class="ph ph-sliders-horizontal"></i></button>
             </div>
-        </div>
+          </div>
 
-        <!-- V5 SWITCHER BAR (Account Pills) -->
-        <div class="v5-switcher-bar">
-            <!-- Account Switcher Pills -->
-            <button class="cloudy-btn ${UI_STATE.selectedAccount === 'ALL' ? 'active' : ''}" 
-                    style="${UI_STATE.selectedAccount === 'ALL' ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 10px; height: 26px;' : 'width: auto; padding: 0 10px; height: 26px;'}"
-                    onclick="window.UI_STATE.selectedAccount = 'ALL'; window.render();">
-                <span style="font-weight: 700; font-size: 11px;">ALL</span>
-            </button>
-            ${(() => {
-          // Deduplicate accounts by ID to prevent "2 of chq1" issues
-          const uniqueAccounts = [];
-          const seenIds = new Set();
-          accounts.forEach(acc => {
-            if (!seenIds.has(acc.id)) {
-              seenIds.add(acc.id);
-              uniqueAccounts.push(acc);
-            }
+          <!-- V5 SWITCHER BAR (Account Pills & Forensic Recon Hub) -->
+          <div class="v5-switcher-bar v5-glass" style="width: 100%; padding: 4px 20px; margin: 0; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
+            <!-- Left: Account Switcher Pills -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="cloudy-btn ${UI_STATE.selectedAccount === 'ALL' ? 'active' : ''}" 
+                        style="${UI_STATE.selectedAccount === 'ALL' ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 10px; height: 26px;' : 'width: auto; padding: 0 10px; height: 26px;'}"
+                        onclick="window.switchAccount('ALL')">
+                    <span style="font-weight: 700; font-size: 11px;">ALL</span>
+                </button>
+                ${(() => {
+          const typeOrder = { 'AMEX': 1, 'VISA': 2, 'MC': 3, 'CHQ': 4, 'CHECKING': 4, 'SAVINGS': 5 };
+          const sortedAccounts = [...accounts].sort((a, b) => {
+            const typeA = (a.accountType || 'CHQ').toUpperCase();
+            const typeB = (b.accountType || 'CHQ').toUpperCase();
+            const orderA = typeOrder[typeA] || 99;
+            const orderB = typeOrder[typeB] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.id.localeCompare(b.id);
           });
 
-          return uniqueAccounts.map(acc => `
-                    <button class="cloudy-btn ${UI_STATE.selectedAccount === acc.id ? 'active' : ''}" 
-                            style="${UI_STATE.selectedAccount === acc.id ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 10px; height: 26px;' : 'width: auto; padding: 0 10px; height: 26px;'}"
-                            onclick="window.UI_STATE.selectedAccount = '${acc.id}'; window.render();">
-                        <span style="font-weight: 700; font-size: 11px;">${acc.ref || acc.name.split(' ')[0]}</span>
-                    </button>
-                `).join('');
+          const counts = {};
+          return sortedAccounts.map(acc => {
+            const type = (acc.accountType || 'CHQ').toUpperCase();
+            const baseLabel = type === 'CHECKING' ? 'CHQ' : type;
+            counts[baseLabel] = (counts[baseLabel] || 0) + 1;
+            const label = acc.ref ? acc.ref :
+              (sortedAccounts.filter(a => (a.accountType || 'CHQ').toUpperCase() === type).length > 1
+                ? `${baseLabel}${counts[baseLabel]}`
+                : baseLabel);
+
+            return `
+                            <button class="cloudy-btn ${UI_STATE.selectedAccount === acc.id ? 'active' : ''}" 
+                                    data-acc-btn="${acc.id}"
+                                    style="${UI_STATE.selectedAccount === acc.id ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 10px; height: 26px;' : 'width: auto; padding: 0 10px; height: 26px;'}"
+                                    onclick="window.switchAccount('${acc.id}')">
+                                <span style="font-weight: 700; font-size: 11px;">${label}</span>
+                            </button>
+                        `;
+          }).join('');
         })()}
-        </div>
+            </div>
 
+            <!-- Right: Forensic Recon Hub (Universal Reconciliation) -->
+            ${UI_STATE.selectedAccount !== 'ALL' && activeAcc ? (() => {
+          const data = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === activeAcc.id);
+          const totalDebit = data.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + t.amount_cents, 0) / 100;
+          const totalCredit = data.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + t.amount_cents, 0) / 100;
+          const opening = activeAcc.openingBalance || 0;
+          const isLiability = activeAcc.id === 'CC' || activeAcc.brand || /VISA|MC|AMEX|CREDIT/i.test(activeAcc.type || '');
+          const ending = isLiability ? (opening + totalDebit - totalCredit) : (opening - totalDebit + totalCredit);
 
-        <!-- WALL-TO-WALL GRID CONTAINER -->
-        <div class="grid-container-wall">
-            ${UI_STATE.isPoppedOut ? `
-                <div class="v5-waiting-container" style="flex: 1; background: #f8fafc; border: none; padding: 60px 0;">
-                    <div style="margin-bottom: 24px;">
-                        <i class="ph ph-monitor-play" style="font-size: 80px; color: #3b82f6; opacity: 0.5;"></i>
+          return `
+                <div class="v5-recon-hub" style="display: flex; align-items: center; gap: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #64748b;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-weight: 800; color: #94a3b8; font-size: 9px; letter-spacing: 0.05em;">OPENING</span>
+                        <input type="number" class="cloudy-ref-input" 
+                               value="${opening}" 
+                               style="width: 70px; height: 24px; font-size: 10.5px; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.05); text-align: right; padding-right: 4px;"
+                               onblur="window.handleOpeningBalanceUpdate('${activeAcc.id}', this.value)"
+                               onkeydown="if(event.key === 'Enter') this.blur()">
                     </div>
-                    <div class="v5-waiting-title" style="color: #64748b;">Grid Popped Out</div>
-                    <div class="v5-waiting-subtitle" style="color: #94a3b8; margin-top: 12px;">Active in standalone window.</div>
-                    <button class="btn-restored" style="margin-top: 24px; background: #3b82f6; color: white; border: none;" onclick="window.popInGrid()">
-                        <i class="ph ph-arrow-square-down" style="margin-right: 6px;"></i> Bring it Back
-                    </button>
+                    <span style="color: #cbd5e1;">-</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                         <span style="font-weight: 800; color: #ef4444;">${totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                         <span style="font-size: 8px; font-weight: 800; opacity: 0.5;">DR</span>
+                    </div>
+                    <span style="color: #cbd5e1;">+</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                         <span style="font-weight: 800; color: #10b981;">${totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                         <span style="font-size: 8px; font-weight: 800; opacity: 0.5;">CR</span>
+                    </div>
+                    <span style="color: #cbd5e1;">=</span>
+                    <div style="background: rgba(15, 23, 42, 0.04); padding: 2px 8px; border-radius: 4px; display: flex; align-items: center; gap: 6px; border: 1px dashed rgba(0,0,0,0.1);">
+                         <span style="font-weight: 800; color: #94a3b8; font-size: 9px; letter-spacing: 0.05em;">ENDING</span>
+                         <span style="font-weight: 800; color: #1e293b; font-size: 12px;">${ending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
                 </div>
-            ` : `
-                <div id="txnGrid" style="height: 100%; width: 100%;"></div>
-            `}
-        </div>
-        ` : ''}
+              `;
+        })() : ''}
+          </div>
+
+          <!-- WALL-TO-WALL GRID CONTAINER -->
+          <div class="grid-container-wall">
+              ${UI_STATE.isPoppedOut ? `
+                  <div class="v5-waiting-container" style="flex: 1; min-height: 400px; background: #f8fafc; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
+                      <div style="margin-bottom: 24px;">
+                          <i class="ph ph-monitor-play" style="font-size: 80px; color: #3b82f6; opacity: 0.5;"></i>
+                      </div>
+                      <div class="v5-waiting-title" style="color: #64748b;">Grid Popped Out</div>
+                      <div class="v5-waiting-subtitle" style="color: #94a3b8; margin-top: 12px;">Active in standalone window.</div>
+                      <button class="btn-restored" style="margin-top: 24px; background: #3b82f6; color: white; border: none;" onclick="window.popInGrid()">
+                          <i class="ph ph-arrow-square-down" style="margin-right: 6px;"></i> Bring it Back
+                      </button>
+                  </div>
+              ` : `
+                  <div id="txnGrid" style="height: 100%; width: 100%;"></div>
+              `}
+          </div>
+          ` : ''}
+
         </div> <!-- End Island Wrapper -->
       </div> <!-- End Main Container -->
     `;
@@ -1125,7 +1353,7 @@
         txn.source_ref = txn.ref;
       } else if (!txn.source_ref) {
         const prefix = "CHQ1"; // Can be dynamic based on account
-        txn.source_ref = `${prefix}-${String(index + 1).padStart(3, '0')}`;
+        txn.source_ref = `${prefix} -${String(index + 1).padStart(3, '0')} `;
       }
     });
 
@@ -1148,6 +1376,24 @@
       selectable: false, // Disabled - no checkbox column
       headerSort: true, // Enable column sorting
       headerSortTristate: true, // Allow asc, desc, none
+      pagination: "local",
+      paginationSize: 20,
+      paginationSizeSelector: [10, 20, 50, 100],
+      paginationCounter: "rows",
+      rowHeader: { headerSort: false, resizable: false, minWidth: 20, width: 25, rowHandle: true, formatter: "handle" },
+      movableRows: true, // Cool reshuffle effect
+      renderHorizontal: "virtual",
+      progressiveRender: true,
+
+      cellEdited: function (cell) {
+        console.log("[GRID] Cell edited, persisting change.");
+        window.RoboLedger.Ledger.save();
+      },
+
+      dataSorted: function (sorters, rows) {
+        // Re-sequence Ref# live after sort
+        if (window.txnTable) window.txnTable.redraw(true);
+      },
 
       // Column Definitions
       columns: [
@@ -1155,7 +1401,7 @@
         {
           title: "Ref#",
           field: "ref",
-          width: 85,
+          width: 95,
           headerSort: true,
           formatter: (cell) => {
             // If explicitly set, use it. Else calc dynamic.
@@ -1164,7 +1410,7 @@
 
             const rowIndex = cell.getRow().getPosition(true) + 1; // 1-based index
             const prefix = getRefPrefix();
-            const code = `${prefix}-${String(rowIndex).padStart(3, '0')}`;
+            const code = `${prefix} -${String(rowIndex).padStart(3, '0')} `;
             return `<span style="color: #94a3b8;">${code}</span>`;
           }
         },
@@ -1173,40 +1419,22 @@
         {
           title: "Source",
           field: "source_ref",
-          width: 70,
+          width: 85,
           headerSort: true,
           formatter: (cell) => {
-            const rowData = cell.getRow().getData();
-            const ref = rowData.ref || '';
-
-            // Extract just the prefix (everything before the dash)
-            let prefix = 'N/A';
-            if (ref) {
-              const parts = ref.split('-');
-              prefix = parts[0] || 'N/A';
-            } else {
-              // Use the dynamic prefix from the input
-              prefix = getRefPrefix();
-            }
-
-            return `<span style="color: #64748b; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500;">${prefix}</span>`;
+            const val = cell.getValue() || "CSV";
+            return `<span style="font-weight: 700; color: #64748b; font-size: 10px;">${val}</span>`;
           }
         },
-
         // 3. Date
         {
           title: "Date",
           field: "date",
           width: 95,
           headerSort: true,
-          sorter: "date",
-          editor: "date",
           formatter: (cell) => {
             const dateValue = cell.getValue();
             if (!dateValue) return '<span style="color: #cbd5e1;">(No Date)</span>';
-
-            // Date is already formatted (e.g., "01 Apr 2026")
-            // Just display it directly
             return `<span style="color: #0f172a;">${dateValue}</span>`;
           }
         },
@@ -1245,11 +1473,11 @@
             const hasContext = bankContext.length > 0;
 
             return `
-                  <div style="display: flex; flex-direction: column; justify-content: center; height: 100%; line-height: 1.1;">
-                    <span style="text-transform: uppercase; color: #0f172a; font-size: 12px; font-weight: 600;">${cleanName}</span>
+    <div style="display: flex; flex-direction: column; justify-content: center; height: 100%; line-height: 1.1;">
+      <span style="text-transform: uppercase; color: #0f172a; font-size: 12px; font-weight: 600;">${cleanName}</span>
                     ${hasContext ? `<span style="font-size: 10px; color: #64748b; margin-top: 1px;">${bankContext}</span>` : ''}
                   </div>
-                `;
+    `;
           }
         },
 
@@ -1257,7 +1485,7 @@
         {
           title: "Debit",
           field: "debit_col",
-          width: 100,
+          width: 110,
           headerSort: true,
           hozAlign: "right",
           editor: "number",
@@ -1293,7 +1521,7 @@
         {
           title: "Credit",
           field: "credit_col",
-          width: 100,
+          width: 110,
           headerSort: true,
           hozAlign: "right",
           editor: "number",
@@ -1342,63 +1570,35 @@
           field: "coa_code",
           width: 180,
           headerSort: true,
-          editor: "list",
+          editor: "select",
           editorParams: {
             values: function (cell) {
-              // Build categorized COA list
-              const coa = window.RoboLedger.COA.getAll();
-              const opts = {};
+              const coaList = window.RoboLedger.COA.getAll();
+              const items = [];
 
-              // Group by category
-              const categories = {
-                'Assets': { icon: '💰', accounts: [], roots: ['ASSET', 'ASSETS'] },
-                'Liabilities': { icon: '💳', accounts: [], roots: ['LIABILITY', 'LIABILITIES'] },
-                'Income': { icon: '💵', accounts: [], roots: ['INCOME', 'REVENUE'] },
-                'Expenses': { icon: '📊', accounts: [], roots: ['EXPENSE', 'EXPENSES'] },
-                'Equity': { icon: '👤', accounts: [], roots: ['EQUITY'] }
-              };
+              // Define category icons
+              const icons = { 'ASSET': '💰', 'LIABILITY': '💳', 'INCOME': '💵', 'EXPENSE': '📊', 'EQUITY': '👤' };
 
-              coa.forEach(account => {
-                // Map root field to category
-                const root = (account.root || '').toUpperCase();
-                let matchedCategory = null;
-
-                for (const [catName, catData] of Object.entries(categories)) {
-                  if (catData.roots.includes(root)) {
-                    matchedCategory = catName;
-                    break;
-                  }
-                }
-
-                if (matchedCategory) {
-                  categories[matchedCategory].accounts.push(account);
-                } else {
-                  // Default to Expenses if no match
-                  categories['Expenses'].accounts.push(account);
-                }
+              // Group accounts by root category
+              const groups = {};
+              coaList.forEach(acc => {
+                const root = (acc.root || 'EXPENSE').toUpperCase();
+                if (!groups[root]) groups[root] = [];
+                groups[root].push(acc);
               });
 
-              // Build grouped options using CODE as the value
-              Object.keys(categories).forEach(catName => {
-                const cat = categories[catName];
-                if (cat.accounts.length > 0) {
-                  opts[`--- ${cat.icon} ${catName} ---`] = null; // Category header (disabled)
-                  cat.accounts.forEach(acc => {
-                    opts[acc.code] = `  ${acc.name}`; // Use CODE as key
-                  });
-                }
+              // Build grouped select options
+              Object.keys(groups).sort().forEach(groupName => {
+                const icon = icons[groupName] || '📊';
+                // Group Header (Label only)
+                items.push({ label: `-- - ${icon} ${groupName} --- `, value: "", disabled: true });
+
+                groups[groupName].sort((a, b) => a.name.localeCompare(b.name)).forEach(acc => {
+                  items.push({ label: `  ${acc.name} `, value: acc.code });
+                });
               });
 
-              return opts;
-            },
-            autocomplete: true,
-            clearable: true,
-            listItemFormatter: function (value, title) {
-              // Disable category headers
-              if (title && title.startsWith('---')) {
-                return `<div style="font-weight: 700; color: #64748b; padding: 4px 0; pointer-events: none;">${title}</div>`;
-              }
-              return title;
+              return items;
             }
           },
           formatter: (cell) => {
@@ -1434,13 +1634,16 @@
               const icon = categoryIcons[category] || '📊';
 
               return `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <span style="font-size: 14px;">${icon}</span>
-                  <span style="color: #0f172a; font-weight: 500; font-size: 12px;">${account.name}</span>
+                <div style="display: flex; align-items: center; gap: 8px; height: 100%;">
+                  <span style="font-size: 14px; opacity: 0.8;">${icon}</span>
+                  <div style="display: flex; flex-direction: column; line-height: 1.1;">
+                    <span style="font-size: 11px; font-weight: 700; color: #1e293b; text-transform: uppercase;">${account.name}</span>
+                    <span style="font-size: 9px; font-weight: 800; color: #94a3b8; letter-spacing: 0.02em;">${category} • ${val}</span>
+                  </div>
                 </div>
               `;
             }
-            return `<span style="color: #94a3b8; font-style: italic; font-size: 11px;">Uncategorized</span>`;
+            return `<span style="color: #cbd5e1; font-style: italic; font-size: 11px;">Uncategorized</span>`;
           }
         }
       ]
@@ -1482,23 +1685,9 @@
 
   window.bulkDelete = () => {
     const targets = window.txnTable.getSelectedData();
-    if (confirm(`Delete ${targets.length} transactions?`)) {
+    if (confirm(`Delete ${targets.length} transactions ? `)) {
       targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
       window.render();
-    }
-  };
-
-  window.handleRefUpdate = (newRef) => {
-    const activeAcc = window.RoboLedger.Accounts.get(UI_STATE.selectedAccount === 'ALL' ? 'ACC-001' : UI_STATE.selectedAccount);
-    if (!activeAcc) return;
-
-    if (newRef.trim() === '') return;
-
-    const result = window.RoboLedger.Accounts.setRef(activeAcc.id, newRef.trim());
-    if (result.success) {
-      UI_STATE.refError = null;
-      window.render();
-      if (window.txnTable) window.txnTable.redraw(true);
     }
   };
 
@@ -1521,12 +1710,12 @@
 
     const fileBlob = window.RoboLedger.Accounts.getFile(fileId);
     if (!fileBlob) {
-      container.innerHTML = `<div style="padding: 40px; color: #94a3b8;">Source file not found in memory.</div>`;
+      container.innerHTML = `< div style = "padding: 40px; color: #94a3b8;" > Source file not found in memory.</div > `;
       return;
     }
 
     label.innerText = fileBlob.name;
-    container.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center;"><i class="ph ph-circle-notch ph-spin"></i> Rendering PDF...</div>`;
+    container.innerHTML = `< div style = "height: 100%; display: flex; align-items: center; justify-content: center;" > <i class="ph ph-circle-notch ph-spin"></i> Rendering PDF...</div > `;
 
     try {
       const arrayBuffer = await fileBlob.arrayBuffer();
@@ -1548,7 +1737,7 @@
       await page.render({ canvasContext: context, viewport: viewport }).promise;
     } catch (e) {
       console.error("PDF Render Error:", e);
-      container.innerHTML = `<div style="padding: 40px; color: #ef4444;">Failed to render PDF. Browser may be blocking background tasks.</div>`;
+      container.innerHTML = `< div style = "padding: 40px; color: #ef4444;" > Failed to render PDF.Browser may be blocking background tasks.</div > `;
     }
   }
 
@@ -1561,45 +1750,45 @@
     }
     const modeLabel = mode === 'selected' ? `${targets.length} Selected Vendors` : `${targets.length} Vendors for Forensic Audit`;
     panel.innerHTML = `
-      <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
-        <div style="background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); max-width: 500px; width: 90%; overflow: hidden;">
-          
-          <div style="padding: 24px; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
-             <div style="display: flex; align-items: center; gap: 8px; background: #8b5cf6; padding: 6px 14px; border-radius: 20px; width: fit-content; margin-bottom: 16px;">
-                <i class="ph ph-sparkle" style="color: white; font-size: 14px;"></i>
-                <span style="color: white; font-weight: 700; font-size: 11px; text-transform: uppercase;">Turbo AI Audit</span>
-              </div>
-              <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">Run Classification</h3>
-              <p style="margin: 4px 0 0; color: #64748b; font-size: 0.85rem;">${modeLabel}</p>
+    < div style = "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;" >
+    <div style="background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); max-width: 500px; width: 90%; overflow: hidden;">
+
+      <div style="padding: 24px; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
+        <div style="display: flex; align-items: center; gap: 8px; background: #8b5cf6; padding: 6px 14px; border-radius: 20px; width: fit-content; margin-bottom: 16px;">
+          <i class="ph ph-sparkle" style="color: white; font-size: 14px;"></i>
+          <span style="color: white; font-weight: 700; font-size: 11px; text-transform: uppercase;">Turbo AI Audit</span>
+        </div>
+        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">Run Classification</h3>
+        <p style="margin: 4px 0 0; color: #64748b; font-size: 0.85rem;">${modeLabel}</p>
+      </div>
+
+      <div style="padding: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="padding: 16px; border: 2px solid #8b5cf6; background: #f5f3ff; border-radius: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer;">
+            <i class="ph ph-sparkle" style="color: #8b5cf6; font-size: 20px;"></i>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Google Gemini AI</div>
+              <div style="font-size: 0.8rem; color: #64748b;">Context-aware, 99% accuracy</div>
+            </div>
+            <i class="ph ph-check-circle" style="color: #8b5cf6; font-size: 20px;"></i>
           </div>
-          
-          <div style="padding: 24px;">
-              <div style="display: flex; flex-direction: column; gap: 12px;">
-                   <div style="padding: 16px; border: 2px solid #8b5cf6; background: #f5f3ff; border-radius: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                       <i class="ph ph-sparkle" style="color: #8b5cf6; font-size: 20px;"></i>
-                       <div style="flex: 1;">
-                           <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Google Gemini AI</div>
-                           <div style="font-size: 0.8rem; color: #64748b;">Context-aware, 99% accuracy</div>
-                       </div>
-                       <i class="ph ph-check-circle" style="color: #8b5cf6; font-size: 20px;"></i>
-                   </div>
-                   
-                    <div style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.6; cursor: not-allowed;">
-                       <i class="ph ph-lightning" style="color: #f59e0b; font-size: 20px;"></i>
-                       <div style="flex: 1;">
-                           <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Local Logic</div>
-                           <div style="font-size: 0.8rem; color: #64748b;">Fast, pattern-based (v5.0 default)</div>
-                       </div>
-                   </div>
-              </div>
-          </div>
-          
-          <div style="padding: 16px 24px 24px; display: flex; gap: 12px; justify-content: flex-end;">
-            <button onclick="document.getElementById('ai-audit-panel').remove()" style="padding: 10px 20px; background: transparent; border: none; font-weight: 600; color: #64748b; cursor: pointer;">Cancel</button>
-            <button id="start-audit-btn" style="padding: 10px 24px; background: #8b5cf6; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);">Start Analysis</button>
+
+          <div style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.6; cursor: not-allowed;">
+            <i class="ph ph-lightning" style="color: #f59e0b; font-size: 20px;"></i>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Local Logic</div>
+              <div style="font-size: 0.8rem; color: #64748b;">Fast, pattern-based (v5.0 default)</div>
+            </div>
           </div>
         </div>
       </div>
+
+      <div style="padding: 16px 24px 24px; display: flex; gap: 12px; justify-content: flex-end;">
+        <button onclick="document.getElementById('ai-audit-panel').remove()" style="padding: 10px 20px; background: transparent; border: none; font-weight: 600; color: #64748b; cursor: pointer;">Cancel</button>
+        <button id="start-audit-btn" style="padding: 10px 24px; background: #8b5cf6; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);">Start Analysis</button>
+      </div>
+    </div>
+      </div >
     `;
 
     document.getElementById('start-audit-btn').onclick = () => {

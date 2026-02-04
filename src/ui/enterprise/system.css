@@ -180,12 +180,12 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
 .workbench-active .main-wrapper {
     margin-right: 650px;
-    /* Width of the workbench pane */
+    /* Width of the forensic drawer */
 }
 
 /* Breadcrumb (Restored White Bar - FULL WIDTH) */
@@ -327,7 +327,7 @@ body {
 
 .tabulator-col {
     background: transparent !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.6) !important;
     height: 38px !important;
     padding: 0 !important;
 }
@@ -365,27 +365,61 @@ body {
 
 .tabulator-cell {
     padding: 4px 12px !important;
-    /* Snug cell padding */
     height: 34px !important;
     display: flex !important;
     align-items: center !important;
     font-size: 13px !important;
     font-weight: 400 !important;
-    /* Fully uniform non-bold */
     color: #334155 !important;
-    border-right: 1px solid transparent !important;
+    border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
+    /* Body Dividers */
 }
 
-.tabulator-cell:hover {
-    border-right-color: #f1f5f9 !important;
-    /* Subtle col separator on hover */
+/* --- PAGINATION & FOOTER --- */
+.tabulator-footer {
+    background: #f8fafc !important;
+    border-top: 1px solid #e2e8f0 !important;
+    padding: 6px 12px !important;
+    color: #475569 !important;
+    font-size: 11px !important;
+}
+
+.tabulator-paginator {
+    color: #475569 !important;
+}
+
+.tabulator-page {
+    border: 1px solid #cbd5e1 !important;
+    background: #fff !important;
+    color: #475569 !important;
+    border-radius: 4px !important;
+    padding: 2px 8px !important;
+    margin: 0 2px !important;
+    font-weight: 600 !important;
+}
+
+.tabulator-page.active {
+    background: #3b82f6 !important;
+    color: white !important;
+    border-color: #3b82f6 !important;
+}
+
+.tabulator-page:hover:not(.active) {
+    background: #f1f5f9 !important;
+}
+
+.tabulator-page-size {
+    border-radius: 4px !important;
+    border: 1px solid #cbd5e1 !important;
+    padding: 2px 4px !important;
+    font-size: 11px !important;
 }
 
 /* Grid Container reset (Card Style) */
 .grid-container-wall {
     height: calc(100vh - 250px);
     width: auto;
-    max-width: 1060px;
+    max-width: 1166px;
     margin-left: auto;
     margin-right: auto;
     background: #ffffff !important;
@@ -407,16 +441,23 @@ body {
 .v5-action-bar,
 .v5-switcher-bar {
     width: 100%;
-    max-width: 1060px;
+    max-width: 1166px;
     margin-left: auto;
     margin-right: auto;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    padding: 12px 20px;
     display: flex;
     align-items: center;
     box-sizing: border-box;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* V5 DIGITAL PRISM (Selected Aesthetic) */
+.v5-glass {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.72) !important;
+    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.03),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
 }
 
 .header-card {
@@ -1043,7 +1084,7 @@ body {
 /* Main Header Content Wrapper */
 .v5-main-header {
     width: auto;
-    max-width: 1060px;
+    max-width: 1166px;
     margin-left: auto;
     margin-right: auto;
     position: relative;
@@ -2114,7 +2155,7 @@ body {
 /* V5 Restoration Layout */
 .grid-container-wall {
     width: 100%;
-    max-width: 1060px;
+    max-width: 1166px;
     margin: 0 auto;
     flex: 1;
     display: flex;
@@ -2125,4 +2166,37 @@ body {
 .v5-ati-line-center {
     font-family: 'JetBrains Mono', 'Roboto Mono', monospace !important;
     letter-spacing: 0.05em;
+}
+
+/* --- SIDEBAR DRAWERS & CURTAINS (V5.2.21) --- */
+.v5-pdf-curtain {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 650px;
+    max-width: 90vw;
+    height: 100vh;
+    background: white;
+    z-index: 2000;
+    transition: right 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #e2e8f0;
+}
+
+.v5-overlay-dim {
+    transition: opacity 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
