@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboLedger | Financial OS</title>
+    <link rel="stylesheet" href="system.css">
+    <!-- Restoration Assets -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Tabulator (V5 Core Grid) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
+    <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+
+    <!-- AG Grid Community (Legacy Support) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
+
+    <!-- PDF.js (V5 Forensic Extraction) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+</head>
+
+<body>
+    <div class="app-layout">
+        <!-- Shared Grid Instance (Hidden Storage) -->
+        <div id="shared-grid-storage" style="display: none; width: 100%;">
+            <div id="sharedAccountsGrid" style="width: 100%;"></div>
+        </div>
+        <!-- Restored Navy Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo-text">roboledgers <span
+                        style="font-size: 10px; opacity: 0.5; margin-left: 4px;">v5.1</span></div>
+            </div>
+
+            <nav class="sidebar-nav-content">
+                <div class="nav-group">
+                    <div class="nav-item active" data-route="home">
+                        <i class="ph ph-house nav-icon"></i>
+                        <span class="nav-label">Home</span>
+                    </div>
+                    <div class="nav-item" data-route="import">
+                        <i class="ph ph-download-simple nav-icon"></i>
+                        <span class="nav-label">Transactions</span>
+                    </div>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-header">ANALYSIS</div>
+                    <div class="nav-item" data-route="dashboard">
+                        <i class="ph ph-chart-pie-slice nav-icon"></i>
+                        <span class="nav-label">Dashboard</span>
+                    </div>
+                    <div class="nav-item" data-route="reports">
+                        <i class="ph ph-chart-line-up nav-icon"></i>
+                        <span class="nav-label">Reports</span>
+                    </div>
+                    <div class="nav-item" data-route="coa">
+                        <i class="ph ph-tree-structure nav-icon"></i>
+                        <span class="nav-label">Chart of Accounts</span>
+                    </div>
+                    <div class="nav-item" data-route="source">
+                        <i class="ph ph-database nav-icon"></i>
+                        <span class="nav-label">Source Hub</span>
+                        <span
+                            style="font-size: 10px; font-weight: 700; color: #94a3b8; background: #334155; padding: 2px 6px; border-radius: 4px; margin-left: auto;">Phase
+                            2</span>
+                    </div>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-header">SYSTEM</div>
+                    <div class="nav-item" data-route="settings">
+                        <i class="ph ph-gear nav-icon"></i>
+                        <span class="nav-label">Settings</span>
+                    </div>
+                    <div class="nav-item" data-route="team">
+                        <i class="ph ph-users nav-icon"></i>
+                        <span class="nav-label">Team</span>
+                    </div>
+                    <div class="nav-item" data-route="roadmap">
+                        <i class="ph ph-map-trifold nav-icon"></i>
+                        <span class="nav-label">Roadmap</span>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Restored Alex Johnson Card -->
+            <footer class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar">AJ</div>
+                    <div class="user-info">
+                        <div class="user-name">Alex Johnson</div>
+                        <div class="user-role">Premium Plan</div>
+                    </div>
+                    <i class="ph ph-dots-three nav-icon" style="margin-left: auto; cursor: pointer;"></i>
+                </div>
+            </footer>
+        </aside>
+
+        <!-- Restored Main Container -->
+        <div class="main-wrapper">
+            <!-- Breadcrumb Bar -->
+            <div id="breadcrumb" class="breadcrumb-bar">
+                <div class="breadcrumb-item">
+                    <i class="ph ph-house breadcrumb-icon"></i>
+                    <span class="breadcrumb-link">Home</span>
+                </div>
+                <div class="breadcrumb-separator"><i class="ph ph-caret-right"></i></div>
+                <div class="breadcrumb-item breadcrumb-current">Transactions</div>
+            </div>
+
+            <!-- Stage Area -->
+            <main id="app-stage" class="stage">
+                <!-- V4/V5 Restoration Logic Injected Here -->
+            </main>
+        </div>
+    </div>
+
+    <div id="settings-drawer" class="settings-drawer">
+        <!-- Content Injected via app.js:renderSettingsDrawer() -->
+    </div>
+
+    <!-- V5: Digital Infrastructure (Floating Layers) -->
+    <div id="v5-pdf-overlay" class="v5-overlay-dim"
+        style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px); z-index: 20000;">
+    </div>
+
+    <div id="v5-pdf-curtain" class="v5-pdf-curtain"
+        style="position:fixed; top:0; right:-100%; width: 650px; max-width: 90vw; height:100vh; background:white; z-index:21000; transition:right 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow:-5px 0 25px rgba(15, 23, 42, 0.15); display:flex; flex-direction:column; border-left: 1px solid #e2e8f0;">
+        <!-- Curtain Header -->
+        <div
+            style="padding:16px 24px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background: #fff;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="background:#eff6ff; padding:8px; border-radius:8px; color:#3b82f6;"><i
+                        class="ph ph-file-pdf" style="font-size:1.3rem;"></i></div>
+                <div>
+                    <h3 style="margin:0; font-size:1rem; font-weight:700; color:#1e293b;">Source Document</h3>
+                    <span id="v5-curtain-filename"
+                        style="font-size:0.75rem; color:#64748b; font-family: 'JetBrains Mono';">Loading forensic
+                        trace...</span>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-icon-v5" id="v5-pdf-popout-btn"><i class="ph ph-arrow-square-out"></i></button>
+                <button class="btn-icon-v5 close-curtain-btn"><i class="ph ph-x"></i></button>
+            </div>
+        </div>
+
+        <!-- AI Audit Hub (V5.1) -->
+        <div class="v5-audit-hub">
+            <div class="audit-hub-pills">
+                <div class="hub-pill gemini active" id="hub-pill-gemini">
+                    <i class="ph ph-sparkle"></i> Google Gemini AI
+                </div>
+                <div class="hub-pill local" id="hub-pill-local">
+                    <i class="ph ph-lightning"></i> Local Logic
+                </div>
+            </div>
+            <div class="hub-actions">
+                <button class="btn-hub-secondary" onclick="window.toggleWorkbench(false)">Cancel</button>
+                <button class="btn-hub-primary" id="btn-hub-categorize">
+                    <i class="ph ph-play"></i> Categorize
+                </button>
+            </div>
+        </div>
+        <!-- Content Area -->
+        <div id="v5-pdf-curtain-content" style="flex:1; overflow:hidden; position:relative; background:#f8fafc;">
+            <div
+                style="height: 100%; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 0.9rem;">
+                <i class="ph ph-circle-notch ph-spin" style="margin-right: 8px;"></i> Initializing Forensic Viewer...
+            </div>
+        </div>
+    </div>
+
+    <!-- Speed Actions Bar (Contextual) -->
+    <div id="v5-speed-actions-bar" class="v5-speed-bar" style="display: none;">
+        <button class="speed-btn confirm" title="Confirm (Enter)"><i class="ph ph-check-circle"></i></button>
+        <button class="speed-btn swap" title="Swap Dr/Cr (S)"><i class="ph ph-arrows-left-right"></i></button>
+        <button class="speed-btn flag" title="Flag (F)"><i class="ph ph-flag"></i></button>
+        <div class="speed-divider"></div>
+        <button class="speed-btn delete" title="Delete (Del)"><i class="ph ph-trash"></i></button>
+    </div>
+
+    <!-- Magic Hub (AI Floating Launcher) -->
+    <div id="v5-magic-hub" class="v5-magic-launcher"
+        style="position: fixed; bottom: 24px; right: 24px; z-index: 10000;">
+        <div id="v5-magic-toast" style="display:none;" class="v5-magic-toast">
+            <div class="toast-header"><i class="ph-fill ph-sparkle"></i> High Confidence Found</div>
+            <div id="v5-magic-text">Mapping 12 transactions to COA...</div>
+            <div class="toast-actions">
+                <button class="btn-magic-apply">Apply All</button>
+                <button class="btn-magic-ignore">Ignore</button>
+            </div>
+        </div>
+        <button id="v5-magic-badge" class="v5-magic-btn">
+            <i class="ph ph-sparkle"></i>
+            <span id="v5-magic-count" class="badge-count" style="display:none;">0</span>
+        </button>
+    </div>
+
+    <script src="ledger.core.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

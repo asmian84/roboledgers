@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboLedger | Command Center</title>
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-shell">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span>🤖</span> RoboLedgers
+            </div>
+
+            <nav class="nav-group">
+                <div id="nav-home" class="nav-item active">
+                    <span class="nav-icon">🏠</span> Dashboard
+                </div>
+                <div id="nav-bookkeeper" class="nav-item">
+                    <span class="nav-icon">📋</span> Bookkeeper Lens
+                </div>
+                <div id="nav-accountant" class="nav-item">
+                    <span class="nav-icon">⚖️</span> Accountant Hub
+                </div>
+                <div id="nav-cfo" class="nav-item">
+                    <span class="nav-icon">📊</span> CFO Intelligence
+                </div>
+            </nav>
+
+            <div style="padding: 24px;">
+                <div
+                    style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px;">
+                    <div
+                        style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px;">
+                        System Status</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="status-dot" style="background: var(--accent-emerald);"></span>
+                        <span style="font-size: 0.8rem; font-weight: 500;">Ledger Sync: Live</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-stage" id="app-root">
+            <!-- Content Injected via app.js -->
+        </main>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>

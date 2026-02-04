@@ -1,0 +1,281 @@
+/**
+ * RoboLedgers Financial OS
+ * Design System Core (system.css)
+ * Philosophy: Truth Over Beauty. Calm Power. Forensic Comfort.
+ */
+
+:root {
+    /* --- TYPOGRAPHY --- */
+    --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-heading: 'Outfit', var(--font-ui);
+    --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+    /* --- SPACING SYSTEM (8pt basis) --- */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-8: 48px;
+
+    /* --- THEME TOKENS: MASTER --- */
+    --bg-base: #ffffff;
+    --text-primary: #1a1a1a;
+    --text-secondary: #4a5568;
+    --text-muted: #718096;
+    --border-color: #e2e8f0;
+
+    --accent-indigo: #6366f1;
+    --accent-emerald: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-rose: #f43f5e;
+
+    /* --- TRUTH STATE BADGES --- */
+    --truth-raw-bg: #f8fafc;
+    --truth-raw-text: #64748b;
+    --truth-predicted-bg: #eef2ff;
+    --truth-predicted-text: #4f46e5;
+    --truth-locked-bg: #ecfdf5;
+    --truth-locked-text: #059669;
+    --truth-certified-bg: #fdf2f8;
+    --truth-certified-text: #db2777;
+
+    /* --- SHARED GEOMETRY --- */
+    --radius-soft: 16px;
+    /* Zen Mode */
+    --radius-sharp: 4px;
+    /* Pro Mode */
+    --radius-audit: 0px;
+    /* Auditor Mode */
+}
+
+/* --- CONSTITUTIONAL THEMES --- */
+
+/* ZEN MODE (Emotional Safety) */
+body[data-theme="zen"] {
+    --bg-base: #f8fafc;
+    --text-primary: #0f172a;
+    --radius-current: var(--radius-soft);
+    --motion-intensity: 1;
+}
+
+/* PRO MODE (Steel Efficiency) */
+body[data-theme="pro"] {
+    --bg-base: #f1f5f9;
+    --text-primary: #0f172a;
+    --radius-current: var(--radius-sharp);
+    --motion-intensity: 0.5;
+}
+
+/* CFO MODE (Midnight Intelligence) */
+body[data-theme="cfo"] {
+    --bg-base: #0f172a;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --radius-current: var(--radius-sharp);
+}
+
+/* AUDITOR MODE (Raw Neutrality) */
+body[data-theme="auditor"] {
+    --bg-base: #ffffff;
+    --text-primary: #000000;
+    --font-ui: var(--font-mono);
+    /* Force institutional bias */
+    --radius-current: var(--radius-audit);
+    --motion-intensity: 0;
+}
+
+/* --- RESET & CORE --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-variant-numeric: tabular-nums;
+    /* Critical for financial data */
+    line-height: 1.5;
+}
+
+/* --- TRUTH BADGES --- */
+.truth-badge {
+    padding: 2px 8px;
+    border-radius: 40px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.truth-badge.raw {
+    background: var(--truth-raw-bg);
+    color: var(--truth-raw-text);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.truth-badge.predicted {
+    background: var(--truth-predicted-bg);
+    color: var(--truth-predicted-text);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.truth-badge.locked {
+    background: var(--truth-locked-bg);
+    color: var(--truth-locked-text);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.truth-badge.certified {
+    background: var(--truth-certified-bg);
+    color: var(--truth-certified-text);
+    border: 1px solid rgba(219, 39, 119, 0.2);
+}
+
+/* --- INSTITUTIONAL SHELL --- */
+.os-shell {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+.os-sidebar {
+    width: 240px;
+    border-right: 1px solid var(--border-color);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+}
+
+.os-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-6);
+}
+
+/* --- FINANCIAL DATA TABLES --- */
+.data-grid {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-grid th {
+    text-align: left;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.data-grid td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.85rem;
+}
+
+.data-grid .amount {
+    font-family: var(--font-mono);
+    text-align: right;
+    font-weight: 500;
+}
+
+/* --- MOTION PRIMITIVES --- */
+.os-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- CEREMONY OVERLAY --- */
+.ceremony-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.9);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.ceremony-card {
+    background: var(--bg-base);
+    padding: var(--space-8);
+    border-radius: var(--radius-current);
+    max-width: 540px;
+    text-align: center;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-color);
+}
+
+/* --- THE SEAL IMPRINT WOW --- */
+.seal-imprint {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto var(--space-6);
+    border: 4px double var(--accent-rose);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    opacity: 0;
+    transform: scale(3);
+    color: var(--accent-rose);
+}
+
+.seal-animating .seal-imprint {
+    animation: stampSeal 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes stampSeal {
+    0% {
+        opacity: 0;
+        transform: scale(5);
+        filter: blur(10px);
+    }
+
+    80% {
+        opacity: 1;
+        transform: scale(0.9);
+        filter: blur(0);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(244, 63, 94, 0.3);
+    }
+}
+
+/* AUDITOR OVERRIDES */
+body[data-theme="auditor"] .os-sidebar {
+    background: #f8fafc;
+}
+
+body[data-theme="auditor"] .truth-badge {
+    border-radius: 0;
+    border: 1px solid #000;
+    background: transparent;
+    color: #000;
+}
