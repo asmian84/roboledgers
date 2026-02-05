@@ -1738,19 +1738,28 @@
   window.openSourceFile = (id) => window.toggleWorkbench(true, id);
 
   // Wire Column Manager and Export dropdown
-  document.addEventListener("click", e => {
-    if (e.target.closest('[data-action="export"]')) {
-      const menu = document.getElementById("exportMenu");
-      if (menu) menu.classList.toggle("hidden");
-    } else {
-      const menu = document.getElementById("exportMenu");
-      if (menu) menu.classList.add("hidden");
-    }
-  });
+  document.addEventListener("click", (e) => {
+    const exportBtn = e.target.closest('[data-action="export"]');
+    const columnsBtn = e.target.closest('[data-action="columns"]');
+    const menu = document.getElementById("exportMenu");
 
-  document.addEventListener("click", e => {
-    if (e.target.closest('[data-action="columns"]')) {
-      window.openColumnManager();
+    // Export button clicked → toggle menu
+    if (exportBtn) {
+      e.stopPropagation();
+      menu?.classList.toggle("hidden");
+      return;
+    }
+
+    // Columns button clicked → open manager
+    if (columnsBtn) {
+      e.stopPropagation();
+      window.openColumnManager?.();
+      return;
+    }
+
+    // Click anywhere else → close menu
+    if (menu && !menu.contains(e.target)) {
+      menu.classList.add("hidden");
     }
   });
 
