@@ -786,10 +786,6 @@
     UI_STATE.ingestionLabel = null;
     UI_STATE.ingestionProgress = 100;
 
-    // Rebuild workspace with newly imported transactions
-    LedgerWorkspace.buildFromEngine();
-    LedgerWorkspace.switchAccount(LedgerWorkspace.TEMP_ACCOUNT_ID);
-
     render();
   }
 
@@ -893,16 +889,36 @@
     const stage = document.getElementById('app-stage');
     stage.innerHTML = `<div class="fade-in">${renderPage()}</div>`;
 
-    // 4. Grid Init
+    // 4. Grid Init with Orchestration
     if (UI_STATE.currentRoute === 'import' && !UI_STATE.isIngesting && !UI_STATE.isPoppedOut) {
       const gridDiv = document.querySelector('#txnGrid');
-      if (gridDiv) setTimeout(initGrid, 50);
+      if (gridDiv) {
+        setTimeout(() => {
+          // Step 1: Initialize grid
+          initGrid();
+
+          // Step 2: Wait for Tabulator to finish building
+          const waitForGrid = setInterval(() => {
+            if (window.txnTable) {
+              clearInterval(waitForGrid);
+
+              // Step 3: Build workspace AFTER grid exists
+              LedgerWorkspace.buildFromEngine();
+
+              // Step 4: Default view → INBOX (0000)
+              LedgerWorkspace.switchAccount("0000");
+
+              // Step 5: Run lifecycle audit if installed
+              if (window.RL_DEBUG_AUDIT) {
+                setTimeout(window.RL_DEBUG_AUDIT, 50);
+              }
+            }
+          }, 25);
+        }, 50);
+      }
     }
 
-    // 5. Run debug audit AFTER DOM fully updated
-    setTimeout(() => {
-      if (window.RL_DEBUG_AUDIT) window.RL_DEBUG_AUDIT();
-    }, 50);
+    // 5. Audit hook removed - now integrated into grid lifecycle above
   }
 
   function renderPage() {
@@ -1292,20 +1308,7 @@
       // 🚨 CRITICAL FIX — BOOT SEQUENCE
       tableBuilt: function () {
         console.log("[Tabulator] Table fully built");
-
-        // Build workspace AFTER table exists
-        LedgerWorkspace.buildFromEngine();
-
-        // Switch to current UI account
-        const acc = UI_STATE.selectedAccount || "ALL";
-
-        if (acc === "ALL") {
-          // Load everything first time
-          const all = window.RoboLedger.Ledger.getAll();
-          window.txnTable.setData(all);
-        } else {
-          LedgerWorkspace.switchAccount(acc);
-        }
+        // Workspace orchestration now happens in render() lifecycle
       },
 
       // Column Definitions
