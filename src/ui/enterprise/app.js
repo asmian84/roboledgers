@@ -1235,7 +1235,7 @@
     };
 
     window.txnTable = new Tabulator(gridDiv, {
-      data: data,
+      // data: REMOVED - loaded via tableBuilt callback instead
       height: "100%", // Wall-to-Wall height
       layout: "fitColumns",
       reactiveData: true, // Data sync
