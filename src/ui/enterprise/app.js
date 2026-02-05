@@ -1263,6 +1263,25 @@
         if (window.txnTable) window.txnTable.redraw(true);
       },
 
+      // 🚨 CRITICAL FIX — BOOT SEQUENCE
+      tableBuilt: function () {
+        console.log("[Tabulator] Table fully built");
+
+        // Build workspace AFTER table exists
+        LedgerWorkspace.buildFromEngine();
+
+        // Switch to current UI account
+        const acc = UI_STATE.selectedAccount || "ALL";
+
+        if (acc === "ALL") {
+          // Load everything first time
+          const all = window.RoboLedger.Ledger.getAll();
+          window.txnTable.setData(all);
+        } else {
+          LedgerWorkspace.switchAccount(acc);
+        }
+      },
+
       // Column Definitions
       columns: [
         
@@ -1501,10 +1520,6 @@
         }
       ]
     }); // End new Tabulator({...})
-
-    // Initialize Ledger Workspace layer
-    LedgerWorkspace.buildFromEngine();
-    LedgerWorkspace.switchAccount(UI_STATE.selectedAccount || LedgerWorkspace.TEMP_ACCOUNT_ID);
 
     // Attach Event Listeners
     window.txnTable.on("rowClick", function (e, row) {
