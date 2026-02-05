@@ -1058,60 +1058,57 @@
             <!-- Left: Account Pills -->
             <div style="display: flex; align-items: center; gap: 10px;">
                 ${(() => {
-                  if (unassignedCount === 0) return "";
+                  // Derive pill state from Ledger engine truth
+                  const allTx = window.RoboLedger.Ledger.getAll();
+                  const unassignedTx = allTx.filter(t => !t.gl_account_id);
+                  const assignedTx = allTx.filter(t => t.gl_account_id);
+                  const activatedAccounts = [...new Set(assignedTx.map(t => t.account_id))];
 
-                  const active = UI_STATE.selectedAccount === "0000";
+                  console.log("[UI] Activated bank pills:", activatedAccounts);
+                  console.log("[UI] Unassigned count:", unassignedTx.length);
 
-                  return `
-                    <button
-                      class="cloudy-btn unassigned-glow ${active ? 'active' : ''}"
-                      style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
-                      onclick="window.switchAccount('0000')"
-                      title="Transactions waiting to be assigned"
-                    >
-                      <span style="font-weight: 700; font-size: 13px;">UNASSIGNED <span class="pill-badge">${unassignedCount}</span></span>
-                    </button>
-                  `;
-                })()}
-                ${activatedAccounts.length > 0 ? `
-                <button class="cloudy-btn ${UI_STATE.selectedAccount === 'ALL' ? 'active' : ''}" 
-                        style="${UI_STATE.selectedAccount === 'ALL' ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 14px; height: 32px;' : 'width: auto; padding: 0 14px; height: 32px;'}"
+                  let pillsHTML = "";
+
+                  // 1️⃣ UNASSIGNED (Inbox)
+                  if (unassignedTx.length > 0) {
+                    const active = UI_STATE.selectedAccount === "0000";
+                    pillsHTML += `
+                      <button class="cloudy-btn unassigned-glow ${active ? 'active' : ''}"
+                        style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
+                        onclick="window.switchAccount('0000')"
+                        title="Transactions waiting to be assigned">
+                        <span style="font-weight: 700; font-size: 13px;">INBOX <span class="pill-badge">${unassignedTx.length}</span></span>
+                      </button>
+                    `;
+                  }
+
+                  // 2️⃣ ALL (Only if activated accounts exist)
+                  if (activatedAccounts.length > 0) {
+                    const active = UI_STATE.selectedAccount === "ALL";
+                    pillsHTML += `
+                      <button class="cloudy-btn ${active ? 'active' : ''}"
+                        style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
                         onclick="window.switchAccount('ALL')">
-                    <span style="font-weight: 700; font-size: 13px;">ALL</span>
-                </button>
-                ` : ''}
-                ${(() => {
-          const typeOrder = { 'AMEX': 1, 'VISA': 2, 'MC': 3, 'CHQ': 4, 'CHECKING': 4, 'SAVINGS': 5 };
-          const visibleAccounts = accounts.filter(acc => activatedAccounts.includes(acc.id));
-          const sortedAccounts = [...visibleAccounts].sort((a, b) => {
-            const typeA = (a.accountType || 'CHQ').toUpperCase();
-            const typeB = (b.accountType || 'CHQ').toUpperCase();
-            const orderA = typeOrder[typeA] || 99;
-            const orderB = typeOrder[typeB] || 99;
-            if (orderA !== orderB) return orderA - orderB;
-            return a.id.localeCompare(b.id);
-          });
+                        <span style="font-weight: 700; font-size: 13px;">ALL</span>
+                      </button>
+                    `;
+                  }
 
-          const counts = {};
-          return sortedAccounts.map(acc => {
-            const type = (acc.accountType || 'CHQ').toUpperCase();
-            const baseLabel = type === 'CHECKING' ? 'CHQ' : type;
-            counts[baseLabel] = (counts[baseLabel] || 0) + 1;
-            const label = acc.ref ? acc.ref :
-              (sortedAccounts.filter(a => (a.accountType || 'CHQ').toUpperCase() === type).length > 1
-                ? `${baseLabel}${counts[baseLabel]}`
-                : baseLabel);
+                  // 3️⃣ Activated bank ledgers with counts
+                  activatedAccounts.forEach(accId => {
+                    const count = assignedTx.filter(t => t.account_id === accId).length;
+                    const active = UI_STATE.selectedAccount === accId;
+                    pillsHTML += `
+                      <button class="cloudy-btn ${active ? 'active' : ''}"
+                        style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
+                        onclick="window.switchAccount('${accId}')">
+                        <span style="font-weight: 700; font-size: 13px;">${accId} (${count})</span>
+                      </button>
+                    `;
+                  });
 
-            return `
-                            <button class="cloudy-btn ${UI_STATE.selectedAccount === acc.id ? 'active' : ''}" 
-                                    data-acc-btn="${acc.id}"
-                                    style="${UI_STATE.selectedAccount === acc.id ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 14px; height: 32px;' : 'width: auto; padding: 0 14px; height: 32px;'}"
-                                    onclick="window.switchAccount('${acc.id}')">
-                                <span style="font-weight: 700; font-size: 13px;">${label}</span>
-                            </button>
-                        `;
-          }).join('');
-        })()}
+                  return pillsHTML;
+                })()}
             </div>
 
             <!-- Right: Recon Hub -->
