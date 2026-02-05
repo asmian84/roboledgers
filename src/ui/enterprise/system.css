@@ -2224,3 +2224,25 @@ body {
 .animated-dots {
     animation: blink-dots 1.4s infinite;
 }
+
+/* Unassigned pill glow */
+.unassigned-glow {
+    background: rgba(239, 68, 68, 0.08) !important;
+    color: #ef4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+
+.unassigned-glow:hover {
+    background: rgba(239, 68, 68, 0.15) !important;
+}
+
+/* Small red count bubble */
+.pill-badge {
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    margin-left: 6px;
+    display: inline-block;
+}

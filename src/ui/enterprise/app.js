@@ -36,6 +36,12 @@
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
 
+  // Helper: Get unassigned transaction count
+  function getUnassignedCount() {
+    if (!window.LedgerWorkspace) return 0;
+    return LedgerWorkspace.getLedger("0000")?.length || 0;
+  }
+
   // IMMEDIATE GLOBAL EXPOSURE (Fix ReferenceError)
   window.render = function () {
     if (typeof render === 'function') render();
@@ -292,35 +298,8 @@
   };
 
   window.switchAccount = function (accId) {
-    // Delegate to LedgerWorkspace for instant account switching
+    UI_STATE.selectedAccount = accId;
     LedgerWorkspace.switchAccount(accId);
-    
-    // Update Pill Active State (Manual DOM update to avoid flicker)
-    document.querySelectorAll('[data-acc-btn]').forEach(btn => {
-      const isActive = btn.getAttribute('data-acc-btn') === accId;
-      btn.classList.toggle('active', isActive);
-      if (isActive) {
-        btn.style.color = '#3b82f6';
-        btn.style.background = '#eff6ff';
-      } else {
-        btn.style.color = '';
-        btn.style.background = '';
-      }
-    });
-
-    // Handle "ALL" pill specifically
-    const allBtn = document.querySelector('button[onclick*="switchAccount(\'ALL\')"]');
-    if (allBtn) {
-      const isActive = accId === 'ALL';
-      allBtn.classList.toggle('active', isActive);
-      if (isActive) {
-        allBtn.style.color = '#3b82f6';
-        allBtn.style.background = '#eff6ff';
-      } else {
-        allBtn.style.color = '';
-        allBtn.style.background = '';
-      }
-    }
   };
 
   window.saveSettings = function () {
@@ -1052,6 +1031,22 @@
           <div class="v5-switcher-bar v5-glass" style="width: 100%; max-width: 1400px; margin: 0 auto; padding: 8px 24px; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
             <!-- Left: Account Pills -->
             <div style="display: flex; align-items: center; gap: 10px;">
+                ${(() => {
+                  const count = getUnassignedCount();
+                  const active = UI_STATE.selectedAccount === "0000";
+                  const glow = count > 0 ? "unassigned-glow" : "";
+
+                  return `
+                    <button
+                      class="cloudy-btn ${active ? 'active' : ''} ${glow}"
+                      style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
+                      onclick="LedgerWorkspace.switchAccount('0000')"
+                      title="Transactions waiting to be assigned"
+                    >
+                      <span style="font-weight: 700; font-size: 13px;">UNASSIGNED ${count > 0 ? `<span class="pill-badge">${count}</span>` : ""}</span>
+                    </button>
+                  `;
+                })()}
                 <button class="cloudy-btn ${UI_STATE.selectedAccount === 'ALL' ? 'active' : ''}" 
                         style="${UI_STATE.selectedAccount === 'ALL' ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 14px; height: 32px;' : 'width: auto; padding: 0 14px; height: 32px;'}"
                         onclick="window.switchAccount('ALL')">
