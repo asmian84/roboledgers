@@ -170,16 +170,57 @@
 
 ---
 
+### PROMPT #7: UI Flow Architecture Documentation (READY FOR LLM RECONSTRUCTION)
+**User Request:** "i want to know about the cards we have in the transaction page and how the grid renders etc so i can give as a prompt to another llm for audit and reconstruction"
+
+**Status:** ✅ **COMPLETED**
+
+**Deliverable:** `UI_FLOW_ARCHITECTURE.md` (628 lines)
+
+**Contents:**
+- Page structure overview with container hierarchy
+- Card 1: Merged header (account info + upload) - detailed breakdown
+- Card 2: Action bar (REF# input + metadata center + buttons) - all sections
+- Card 3: Switcher bar + recon hub (account pills + balance display)
+- State overlays (ingestion, empty state, popped-out)
+- Grid container with Tabulator v5.5 initialization
+- All 8 column definitions with exact formatters and logic
+- Complete data flow lifecycle (page load → grid init → interactions)
+- State management (UI_STATE properties)
+- Styling framework (classes, colors, fonts)
+- Function mapping table
+- Configuration & customization
+- Notes for reconstruction (10 key points)
+
+**Ready For:** Send to another LLM for audit, reconstruction, or logic overhaul
+
+**Git Commit:** `4bb6dc3`
+
+---
+
 ## 🚀 NEXT SESSION CHECKLIST
 
-- [ ] Feature branch for Prompt #6 (Blue Box)
+**For Prompt #6 Fix (Blue Box):**
+- [ ] Create feature branch: `git checkout -b feature/blue-box-fix`
 - [ ] Parse PDF metadata for bank product name
 - [ ] Extract account type from statement
-- [ ] Update subtitle text
+- [ ] Update subtitle text (Waiting... → Ready for review)
+- [ ] Update header title to show bank product + account type
 - [ ] Test in browser at localhost:8000
 - [ ] Verify no layout regression
 - [ ] Merge to master only after testing
 
+**For Prompt #7 Reconstruction:**
+- [ ] Send `UI_FLOW_ARCHITECTURE.md` to LLM for audit
+- [ ] Get feedback on logic/structure improvements
+- [ ] Identify potential bottlenecks or design flaws
+- [ ] Implement recommendations in feature branch
+- [ ] Test thoroughly before merge
+
 ---
 
-**Remember:** Always branch before modifying. Check `PROTECTION_GUIDE.md` if you break something.
+**Remember:** 
+- Always branch before modifying (see `PROTECTION_GUIDE.md`)
+- `UI_FLOW_ARCHITECTURE.md` is your blueprint for any major changes
+- Reference line numbers and exact code sections when debugging
+- Test in localhost:8000 before committing
