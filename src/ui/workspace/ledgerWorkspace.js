@@ -66,7 +66,17 @@ LedgerWorkspace.switchAccount = function(accountId){
     return;
   }
 
-  const data = LedgerWorkspace.getLedger(accountId);
+  let data;
+
+  const allTx = window.RoboLedger.Ledger.getAll();
+
+  if (accountId === "ALL") {
+    data = allTx.filter(txn => txn.gl_account_id);
+  } else if (accountId === "0000") {
+    data = allTx.filter(txn => !txn.gl_account_id);
+  } else {
+    data = allTx.filter(txn => txn.account_id === accountId && txn.gl_account_id);
+  }
 
   console.log("Switching to ledger:", accountId, "Rows:", data.length);
 

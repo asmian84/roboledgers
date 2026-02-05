@@ -214,6 +214,22 @@ window.RoboLedger = (function () {
             return true;
         },
 
+        updateMetadata: function (tx_id, patch) {
+            const tx = state.transactions[tx_id];
+            if (!tx) throw new Error("TX_NOT_FOUND");
+
+            const forbidden = ["amount_cents", "date", "account_id", "currency"];
+            Object.keys(patch).forEach(key => {
+                if (forbidden.includes(key)) {
+                    throw new Error("INVARIANT_VIOLATION_IMMUTABLE_FIELD");
+                }
+            });
+
+            Object.assign(tx, patch);
+            save();
+            return tx;
+        },
+
         swapPolarity: function (tx_id) {
             const tx = state.transactions[tx_id];
             if (tx) {

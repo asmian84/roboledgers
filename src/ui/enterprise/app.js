@@ -36,11 +36,23 @@
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
 
-  // Helper: Get unassigned transaction count
+  // Helper: Get unassigned transaction count (tx where gl_account_id is null)
   function getUnassignedCount() {
-    if (!window.LedgerWorkspace) return 0;
-    return LedgerWorkspace.getLedger("0000")?.length || 0;
+    if (!window.RoboLedger || !window.RoboLedger.Ledger) return 0;
+    return window.RoboLedger.Ledger.getAll().filter(txn => !txn.gl_account_id).length;
   }
+
+  // Helper: Get activated bank accounts (unique account_id where gl_account_id is not null)
+  function getActivatedBankAccounts() {
+    if (!window.RoboLedger || !window.RoboLedger.Ledger) return [];
+    const all = window.RoboLedger.Ledger.getAll();
+    const activated = new Set(all.filter(txn => txn.gl_account_id).map(txn => txn.account_id));
+    console.log('[UI] Activated bank pills:', Array.from(activated));
+    return Array.from(activated);
+  }
+
+  window.getUnassignedCount = getUnassignedCount;
+  window.getActivatedBankAccounts = getActivatedBankAccounts;
 
   // IMMEDIATE GLOBAL EXPOSURE (Fix ReferenceError)
   window.render = function () {
@@ -900,12 +912,26 @@
   function renderTransactionsRestored() {
     const data = window.RoboLedger.Ledger.getAll();
     const accounts = window.RoboLedger.Accounts.getAll();
+    const unassignedCount = getUnassignedCount();
+    const activatedAccounts = getActivatedBankAccounts();
+    console.log('[UI] Unassigned count:', unassignedCount);
+    const hasAssignedTransactions = (accountId) =>
+      activatedAccounts.includes(accountId);
+    if (UI_STATE.selectedAccount === '0000' && unassignedCount === 0) {
+      UI_STATE.selectedAccount = accounts[0]?.id || 'ALL';
+    }
+    if (UI_STATE.selectedAccount !== 'ALL' && UI_STATE.selectedAccount !== '0000' &&
+        !hasAssignedTransactions(UI_STATE.selectedAccount)) {
+      UI_STATE.selectedAccount = unassignedCount > 0 ? '0000' : (accounts[0]?.id || 'ALL');
+    }
     // OPTIMIZATION: Default to single account view if 'ALL' is bloated and accounts exist
     if (UI_STATE.selectedAccount === 'ALL' && accounts.length > 0) {
-      UI_STATE.selectedAccount = accounts[0].id;
+      UI_STATE.selectedAccount = unassignedCount > 0 ? '0000' : accounts[0].id;
     }
 
-    const activeAcc = UI_STATE.selectedAccount === 'ALL' ? null : (accounts.find(a => a.id === UI_STATE.selectedAccount) || accounts[0]);
+    const activeAcc = (UI_STATE.selectedAccount === 'ALL' || UI_STATE.selectedAccount === '0000')
+      ? null
+      : (accounts.find(a => a.id === UI_STATE.selectedAccount) || accounts[0]);
     const hasData = data.length > 0;
     const coa = window.RoboLedger.COA.getAll();
 
@@ -1032,29 +1058,32 @@
             <!-- Left: Account Pills -->
             <div style="display: flex; align-items: center; gap: 10px;">
                 ${(() => {
-                  const count = getUnassignedCount();
+                  if (unassignedCount === 0) return "";
+
                   const active = UI_STATE.selectedAccount === "0000";
-                  const glow = count > 0 ? "unassigned-glow" : "";
 
                   return `
                     <button
-                      class="cloudy-btn ${active ? 'active' : ''} ${glow}"
+                      class="cloudy-btn unassigned-glow ${active ? 'active' : ''}"
                       style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
-                      onclick="LedgerWorkspace.switchAccount('0000')"
+                      onclick="window.switchAccount('0000')"
                       title="Transactions waiting to be assigned"
                     >
-                      <span style="font-weight: 700; font-size: 13px;">UNASSIGNED ${count > 0 ? `<span class="pill-badge">${count}</span>` : ""}</span>
+                      <span style="font-weight: 700; font-size: 13px;">UNASSIGNED <span class="pill-badge">${unassignedCount}</span></span>
                     </button>
                   `;
                 })()}
+                ${activatedAccounts.length > 0 ? `
                 <button class="cloudy-btn ${UI_STATE.selectedAccount === 'ALL' ? 'active' : ''}" 
                         style="${UI_STATE.selectedAccount === 'ALL' ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 14px; height: 32px;' : 'width: auto; padding: 0 14px; height: 32px;'}"
                         onclick="window.switchAccount('ALL')">
                     <span style="font-weight: 700; font-size: 13px;">ALL</span>
                 </button>
+                ` : ''}
                 ${(() => {
           const typeOrder = { 'AMEX': 1, 'VISA': 2, 'MC': 3, 'CHQ': 4, 'CHECKING': 4, 'SAVINGS': 5 };
-          const sortedAccounts = [...accounts].sort((a, b) => {
+          const visibleAccounts = accounts.filter(acc => activatedAccounts.includes(acc.id));
+          const sortedAccounts = [...visibleAccounts].sort((a, b) => {
             const typeA = (a.accountType || 'CHQ').toUpperCase();
             const typeB = (b.accountType || 'CHQ').toUpperCase();
             const orderA = typeOrder[typeA] || 99;
@@ -1086,7 +1115,7 @@
             </div>
 
             <!-- Right: Recon Hub -->
-            ${UI_STATE.selectedAccount !== 'ALL' && activeAcc ? (() => {
+            ${UI_STATE.selectedAccount !== 'ALL' && UI_STATE.selectedAccount !== '0000' && activeAcc ? (() => {
           const data = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === activeAcc.id);
           const totalDebit = data.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + t.amount_cents, 0) / 100;
           const totalCredit = data.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + t.amount_cents, 0) / 100;
@@ -1474,10 +1503,10 @@
           }
         },
 
-        // 8. Account (5-Category COA)
+        // 8. Category (COA Assignment)
         {
-          title: "Account",
-          field: "coa_code",
+          title: "Category",
+          field: "gl_account_id",
           width: 250,
           headerSort: true,
           headerHozAlign: "left",
@@ -1507,10 +1536,26 @@
           cellEdited: function (cell) {
             const code = cell.getValue();
             const coa = window.RoboLedger.COA.get(code);
-            cell.getData().category_name = coa ? coa.name : "UNCATEGORIZED";
-            cell.getData().category_code = code;
-            cell.getData().status = 'CONFIRMED';
-            window.RoboLedger.Ledger.save();
+            const rowData = cell.getRow().getData();
+
+            try {
+              window.RoboLedger.Ledger.updateMetadata(rowData.tx_id, {
+                gl_account_id: code,
+                category_name: coa ? coa.name : "UNCATEGORIZED",
+                category_code: code,
+                status: 'CONFIRMED'
+              });
+            } catch (err) {
+              console.error("[LEDGER] Failed to update metadata", err);
+            }
+
+            if (UI_STATE.selectedAccount === "0000" && code) {
+              cell.getRow().delete();
+              if (getUnassignedCount() === 0) {
+                UI_STATE.selectedAccount = "ALL";
+              }
+              window.render();
+            }
           }
         }
       ]
