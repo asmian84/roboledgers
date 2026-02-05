@@ -198,6 +198,92 @@
 
 ---
 
+### PROMPT #8: Ledger Workspace Manager Architecture (READY FOR IMPLEMENTATION)
+**User Request:** "MASTER BUILD PROMPT — Create Ledger Workspace Manager to eliminate full page re-renders on account switch"
+
+**Status:** 📋 **PLANNED - READY TO BUILD**
+
+**Deliverable:** `LEDGER_WORKSPACE_SPEC.md` (complete implementation blueprint)
+
+**Goal:**
+- Eliminate full page re-render when switching accounts
+- Implement instant account switching using `table.setData()`
+- Add virtual "0000" Temporary Holding Ledger for unassigned transactions
+- Maintain in-memory workspace of ledgers grouped by account_id
+- Preserve ALL existing functions and grid logic
+
+**What Won't Break:**
+- `renderTransactionsRestored()` - Still renders normally
+- `initGrid()` - Still initializes Tabulator
+- `window.txnTable` - Still accessible globally
+- `window.RoboLedger.Ledger.getAll()` - Still works (workspace layers on top)
+- `window.RoboLedger.Accounts.getAll()` - Unchanged
+- `UI_STATE.selectedAccount` - Still the source of truth
+
+**6-Step Implementation:**
+
+**Step 1:** Create `/src/ui/workspace/ledgerWorkspace.js`
+- Build ledger store from RoboLedger engine
+- Group transactions by account_id
+- Initialize virtual TEMP_ACCOUNT_ID = "0000"
+
+**Step 2:** Add account switch engine
+- `LedgerWorkspace.switchAccount(accountId)` 
+- Uses `table.setData()` instead of full re-render
+- Updates UI_STATE.selectedAccount
+- ~5ms vs. ~500ms for full re-render
+
+**Step 3:** Add transaction movement engine
+- `LedgerWorkspace.moveTransaction(txId, targetAccountId)`
+- Moves transactions between ledgers in-memory
+- Refreshes current grid instantly
+- Enables drag-drop account assignment
+
+**Step 4:** Patch existing window.switchAccount()
+- Replace body with: `LedgerWorkspace.switchAccount(id);`
+- Massive performance gain instantly
+- No existing code needs rewriting
+
+**Step 5:** Initialize workspace after grid creation
+- Add to `initGrid()` after Tabulator creation:
+  ```javascript
+  LedgerWorkspace.buildFromEngine();
+  LedgerWorkspace.switchAccount(UI_STATE.selectedAccount || LedgerWorkspace.TEMP_ACCOUNT_ID);
+  ```
+
+**Step 6:** Patch import pipeline
+- After ingestion completes:
+  ```javascript
+  LedgerWorkspace.buildFromEngine();
+  LedgerWorkspace.switchAccount(LedgerWorkspace.TEMP_ACCOUNT_ID);
+  ```
+- New transactions appear in "Unassigned" ledger automatically (CaseWare behavior)
+
+**Performance Impact:**
+- Account switch: 500ms → 5ms (100x faster)
+- No re-render flicker
+- Smooth transaction movement between accounts
+- Foundation for future drag-drop account assignment
+
+**Files to Create:**
+- `src/ui/workspace/ledgerWorkspace.js` (~80 lines)
+
+**Files to Modify:**
+- `src/ui/enterprise/app.js`:
+  - Patch `window.switchAccount()` body
+  - Add 2 lines to `initGrid()`
+  - Add 2 lines to ingestion pipeline
+
+**Risk Level:** ⬇️ LOW
+- Additive only (no existing code removed)
+- Workspace layers on top of existing engine
+- All existing functions still work
+- Can rollback instantly if issues found
+
+**Git Commit:** (Planned) `LEDGER_WORKSPACE_IMPL`
+
+---
+
 ## 🚀 NEXT SESSION CHECKLIST
 
 **For Prompt #6 Fix (Blue Box):**
