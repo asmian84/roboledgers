@@ -1521,10 +1521,12 @@
       ]
     }); // End new Tabulator({...})
 
-    // Manually trigger tableBuilt since we didn't provide initial data
-    if (window.txnTable.options.tableBuilt) {
-      window.txnTable.options.tableBuilt.call(window.txnTable);
-    }
+    // Manually trigger tableBuilt after renderer is ready
+    setTimeout(() => {
+      if (window.txnTable.options.tableBuilt) {
+        window.txnTable.options.tableBuilt.call(window.txnTable);
+      }
+    }, 10);
 
     // Attach Event Listeners
     window.txnTable.on("rowClick", function (e, row) {
