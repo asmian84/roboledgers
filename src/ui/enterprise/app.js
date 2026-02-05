@@ -175,16 +175,11 @@
   };
 
   window.getDetachedColumns = function () {
+    // Return a set of column definitions for the detached Tabulator grid
     return [
-      { title: "Ref#", field: "ref", width: 100, editor: "input", formatter: (cell) => `<span style="color: #64748b;">${cell.getValue() || ''}</span>` },
-      { title: "Date", field: "date", width: 110, editor: "input", formatter: (cell) => `<span style="color: #0f172a;">${cell.getValue() || ''}</span>` },
-      {
-        title: "Description", field: "description", widthGrow: 3, editor: "input", formatter: (cell) => {
-          return `<div style="text-transform: uppercase; color: #0f172a; font-size: 13px;">${cell.getValue() || ''}</div>`;
-        }
-      },
-      {
-        title: "Debit", field: "debit_col", width: 120, hozAlign: "right", editor: "number", formatter: (cell) => {
+      { title: "Date", field: "date_iso", width: 120, hozAlign: "left", formatter: (cell) => cell.getValue() || '' },
+      { title: "Description", field: "raw_description", hozAlign: "left", responsive: 1 },
+      { title: "Debit", field: "debit_col", width: 120, hozAlign: "right", editor: "number", formatter: (cell) => {
           const row = cell.getRow().getData();
           if (row.polarity === 'DEBIT' && row.amount_cents > 0) {
             const val = (row.amount_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -193,8 +188,7 @@
           return `<span style="color: #e2e8f0;">-</span>`;
         }
       },
-      {
-        title: "Credit", field: "credit_col", width: 120, hozAlign: "right", editor: "number", formatter: (cell) => {
+      { title: "Credit", field: "credit_col", width: 120, hozAlign: "right", editor: "number", formatter: (cell) => {
           const row = cell.getRow().getData();
           if (row.polarity === 'CREDIT' && row.amount_cents > 0) {
             const val = (row.amount_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -203,8 +197,7 @@
           return `<span style="color: #e2e8f0;">-</span>`;
         }
       },
-      {
-        title: "Balance", field: "balance", width: 140, hozAlign: "right", formatter: (cell) => {
+      { title: "Balance", field: "balance", width: 140, hozAlign: "right", formatter: (cell) => {
           const val = cell.getValue() || 0;
           const formatted = (val / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
           return `<span style="color: #0f172a; font-weight: 600;">${formatted}</span>`;
@@ -252,10 +245,33 @@
     const curtain = document.getElementById('v5-pdf-curtain');
     const overlay = document.getElementById('v5-pdf-overlay');
 
-    if (open) {
+    if (open && fileId) {
+      UI_STATE.activeFileId = fileId;
       document.body.classList.add('workbench-active');
       if (curtain) curtain.style.right = '0';
       if (overlay) overlay.style.display = 'block';
+      // Render the PDF/file content
+      const file = window.RoboLedger.Accounts.getFile(fileId);
+      if (file) {
+        const contentArea = document.getElementById('v5-pdf-curtain-content');
+        const filenameLabel = document.getElementById('v5-curtain-filename');
+        if (filenameLabel) filenameLabel.innerText = file.name;
+        if (contentArea) {
+          if (file.name.toLowerCase().endsWith('.pdf')) {
+            renderWorkbenchPDF(fileId);
+          } else {
+            // CSV/Text Preview
+            file.text().then(text => {
+              const lines = text.split('\n').slice(0, 50);
+              contentArea.innerHTML = `
+                <div style="padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #334155; line-height: 1.6; overflow: auto; height: 100%;">
+                    ${lines.map(line => `<div style="border-bottom: 1px solid #f1f5f9; padding: 4px 0;">${line}</div>`).join('')}
+                </div>
+              `;
+            });
+          }
+        }
+      }
     } else {
       document.body.classList.remove('workbench-active');
       if (curtain) curtain.style.right = '-100%';
@@ -908,176 +924,6 @@
     }
   }
 
-  function renderCOAPage() {
-    const categories = [
-      { id: 'asset', label: 'Assets', sub: 'Cash, Inventory, Equipment', theme: 'theme-asset' },
-      { id: 'liability', label: 'Liabilities', sub: 'Loans, Payables, Credit Cards', theme: 'theme-liability' },
-      { id: 'equity', label: 'Equity', sub: "Owner's Capital, Retained Earnings", theme: 'theme-equity' },
-      { id: 'revenue', label: 'Revenue', sub: 'Sales, Services, Income', theme: 'theme-revenue' },
-      { id: 'expense', label: 'Expenses', sub: 'Advertising, Office, Travel', theme: 'theme-expense' }
-    ];
-
-    return `
-      <div class="ai-brain-page">
-          <div class="std-page-header">
-             <div class="header-brand">
-                 <div class="icon-box"><i class="ph ph-books"></i></div>
-                 <div>
-                     <h1 style="margin: 0; font-size: 1.1rem; font-weight: 700;">Chart of Accounts</h1>
-                     <p style="margin: 0; font-size: 0.8rem; color: #64748b;">Manage your financial categories</p>
-                 </div>
-             </div>
-             <div style="display: flex; gap: 8px;">
-                <button class="btn-restored" style="background: white; color: #334155; border: 1px solid #cbd5e1;">
-                    <i class="ph ph-export" style="margin-right:4px;"></i> Export
-                </button>
-                <button class="btn-restored" style="background: #3b82f6; color: white; border: none;">
-                    <i class="ph ph-plus" style="margin-right:4px;"></i> Add Account
-                </button>
-             </div>
-          </div>
-
-          <div class="coa-scroll-container">
-              ${categories.map(cat => `
-                  <div class="coa-row ${cat.theme}" id="row-${cat.id}">
-                    <div class="coa-row-header" onclick="window.toggleCoARow('${cat.id}')">
-                      <div class="row-info">
-                        <div class="row-title">
-                          ${cat.label} 
-                          <span class="row-desc-preview">${cat.sub}</span>
-                        </div>
-                      </div>
-                      <i class="ph ph-caret-down row-chevron"></i>
-                    </div>
-                    <div class="coa-row-content" id="content-${cat.id}">
-                        <div class="coa-grid-placeholder" style="min-height: 300px;">
-                            <!-- The shared grid will be moved here on expansion -->
-                        </div>
-                    </div>
-                  </div>
-              `).join('')}
-          </div>
-      </div>
-    `;
-  }
-
-  // Global shared grid state (Exposed for Forensic Debug)
-  window.coaTable = null;
-
-  function initCOAGrid() {
-    const gridDiv = document.querySelector('#sharedAccountsGrid');
-    if (!gridDiv || window.coaTable) return;
-
-    // Force width for Tabulator calculation
-    gridDiv.style.width = "100%";
-
-    window.coaTable = new Tabulator(gridDiv, {
-      data: [],
-      height: "auto",
-      layout: "fitColumns",
-      placeholder: "No Accounts Found",
-      columns: [
-        { title: "Account #", field: "code", width: 120, sorter: "number", headerSortStartingDir: "asc" },
-        { title: "Account Name", field: "name", widthGrow: 1, headerSort: false },
-        { title: "Type", field: "root", width: 120, formatter: (cell) => cell.getValue()?.toUpperCase() },
-        {
-          title: "Balance",
-          field: "balance",
-          width: 140,
-          hozAlign: "right",
-          formatter: "money",
-          formatterParams: { symbol: "$", decimal: ".", thousand: "," }
-        },
-        { title: "Tx", field: "tx_count", width: 80, hozAlign: "center", formatter: (cell) => cell.getValue() || "-" },
-        {
-          title: "",
-          field: "actions",
-          width: 60,
-          headerSort: false,
-          hozAlign: "center",
-          formatter: () => `<button class="btn-coa-delete"><i class="ph ph-x"></i></button>`
-        }
-      ]
-    });
-  }
-
-  // Global helper for COA expansion
-  window.toggleCoARow = function (catId) {
-    const row = document.getElementById(`row-${catId}`);
-    const content = document.getElementById(`content-${catId}`);
-    const placeholder = content.querySelector('.coa-grid-placeholder');
-    const sharedGrid = document.getElementById('sharedAccountsGrid');
-    const sharedGridStorage = document.getElementById('shared-grid-storage');
-
-    const isActive = row.classList.contains('active');
-
-    // Close others
-    document.querySelectorAll('.coa-row').forEach(r => {
-      if (r.id !== `row-${catId}`) {
-        r.classList.remove('active');
-        const otherContent = r.querySelector('.coa-row-content');
-        if (otherContent) {
-          otherContent.style.height = '0px';
-          otherContent.style.minHeight = '0px'; // Critical fix
-          otherContent.style.overflow = 'hidden';
-          const otherPlaceholder = otherContent.querySelector('.coa-grid-placeholder');
-          if (otherPlaceholder && otherPlaceholder.contains(sharedGrid)) {
-            sharedGridStorage.appendChild(sharedGrid);
-          }
-        }
-      }
-    });
-
-    if (!isActive) {
-      row.classList.add('active');
-      placeholder.appendChild(sharedGrid);
-
-      if (!window.coaTable) initCOAGrid();
-
-      // Update grid data
-      const allAccounts = window.RoboLedger.COA.getAll();
-      const filtered = allAccounts.filter(a => a.root.toLowerCase() === catId);
-
-      if (window.coaTable) {
-        // Use a small delay to ensure container is fully rendered
-        setTimeout(() => {
-          window.coaTable.setData(filtered);
-          window.coaTable.redraw();
-        }, 100);
-      }
-
-      content.style.height = 'auto';
-      content.style.minHeight = '300px';
-      content.style.overflow = 'visible';
-    } else {
-      row.classList.remove('active');
-      content.style.height = '0px';
-      content.style.minHeight = '0px'; // Critical fix
-      content.style.overflow = 'hidden';
-      sharedGridStorage.appendChild(sharedGrid);
-    }
-  };
-
-  function renderHome() {
-    return `
-      <div class="empty-state" style="background: white; border: 1px solid var(--border-color);">
-        <i class="ph ph-house empty-icon" style="color: #3b82f6;"></i>
-        <div class="empty-title">Welcome to RoboLedger V5</div>
-        <div class="empty-subtitle">Live system wired. Ready for high-performance operations.</div>
-      </div>
-    `;
-  }
-
-  function renderPlaceholder(title) {
-    return `
-      <div class="empty-state" style="background: white; border: 1px solid var(--border-color);">
-        <i class="ph ph-layout empty-icon" style="color: #94a3b8;"></i>
-        <div class="empty-title">${title}</div>
-        <div class="empty-subtitle">Module wired into the V5 Shell.</div>
-      </div>
-    `;
-  }
-
   function renderTransactionsRestored() {
     const data = window.RoboLedger.Ledger.getAll();
     const accounts = window.RoboLedger.Accounts.getAll();
@@ -1091,43 +937,39 @@
     const coa = window.RoboLedger.COA.getAll();
 
     return `
-      <div style="display: flex; flex-direction: column; gap: 0; flex: 1;">
+      <!-- V5 MAIN CONTENT WRAPPER -->
+      <div style="display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0;">
         
-        <!-- V5 UNIFIED ISLAND WRAPPER (Enforces 1400px uniform stack) -->
+        <!-- V5 UNIFIED ISLAND WRAPPER (1400px max-width) -->
         <div style="width: 100%; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 0;">
 
-          <!-- SESSION RECOVERY BANNER (V5.2.20) -->
-          ${UI_STATE.recoveryPending ? `
-            <div class="v5-glass v5-notice-banner" style="width: 100%; height: 36px; margin-bottom: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 24px; animation: slideDown 0.3s ease; border-left: 4px solid #f59e0b; background: rgba(251, 191, 36, 0.05);">
-                <div style="font-size: 11px; font-weight: 700; color: #78350f; display: flex; align-items: center; gap: 8px;">
-                    <i class="ph ph-warning-circle" style="color: #f59e0b; font-size: 14px;"></i>
-                    PREVIOUS SESSION DETECTED. WOULD YOU LIKE TO CONTINUE?
-                </div>
-                <div style="display: flex; gap: 12px;">
-                    <button class="cloudy-btn" style="width: auto; height: 24px; padding: 0 12px; font-size: 10px; font-weight: 700; color: #d97706; background: #fef3c7;" onclick="window.handleRecovery('continue')">CONTINUE</button>
-                    <button class="cloudy-btn" style="width: auto; height: 24px; padding: 0 12px; font-size: 10px; font-weight: 700; color: #94a3b8;" onclick="window.handleRecovery('new')">START NEW</button>
-                </div>
-            </div>
-          ` : ''}
-
-          <!-- HEADER LOGIC (Institutional Alignment) -->
+          <!-- MERGED HORIZONTAL HEADER CARD -->
           <div class="v5-main-header fade-in" style="width: 100%; display: flex; align-items: stretch; gap: 12px; margin-bottom: 12px;">
-             <!-- Left: Institutional ID Card -->
+             <!-- Left: Account Info -->
              <div class="header-card v5-glass" style="flex: 1; padding: 12px 20px; border-radius: 8px; display: flex; align-items: center; gap: 16px;">
                  <div class="header-icon-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: white;">
                     <i class="ph ph-bank" style="font-size: 24px;"></i>
                  </div>
-                 <div class="header-text-group" style="flex: 1;">
-                    <h1 class="header-title" style="font-size: 1.1rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.01em;">
-                        ${activeAcc ? (activeAcc.name || 'Unknown Bank') : 'No Account Selected'} / ${activeAcc ? (activeAcc.accountType || 'CHECKING') : '---'}
-                    </h1>
-                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8;">
-                        INST: ${activeAcc ? (activeAcc.inst || '---') : '---'} &nbsp;•&nbsp; TRANSIT: ${activeAcc ? (activeAcc.transit || '---') : '---'} &nbsp;•&nbsp; ACCOUNT: ${activeAcc ? (activeAcc.accountNumber || '---') : '---'}
-                    </div>
+                 <div class="header-text-group" style="flex: 1; min-width: 0;">
+                    ${!hasData ? `
+                        <h1 class="header-title" style="font-size: 1.1rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.01em;">
+                            Transactions
+                        </h1>
+                        <div style="font-size: 13px; font-weight: 600; color: #64748b; margin-top: 4px;">
+                            Waiting to get started<span class="animated-dots">...</span>
+                        </div>
+                    ` : `
+                        <h1 class="header-title" style="font-size: 1.1rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.01em;">
+                            ${activeAcc ? (activeAcc.name || 'Unknown Bank') : 'Transactions'} / ${activeAcc ? (activeAcc.accountType || 'CHECKING') : 'ALL'}
+                        </h1>
+                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8;">
+                            ${activeAcc ? `INST: ${activeAcc.inst || '---'} • TRANSIT: ${activeAcc.transit || '---'} • ACCOUNT: ${activeAcc.accountNumber || '---'}` : 'ALL ACCOUNTS'}
+                        </div>
+                    `}
                  </div>
              </div>
              
-             <!-- Right: Forensic Upload Zone -->
+             <!-- Right: Upload Zone -->
              <div class="upload-zone-v5 v5-glass" style="width: 420px; border: 1.5px dashed #cbd5e1; border-radius: 8px; background: rgba(248, 250, 252, 0.5); padding: 8px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer;" onclick="document.getElementById('fileInput').click()">
                   <div style="display: flex; align-items: center; gap: 12px;">
                       <i class="ph ph-cloud-arrow-up" style="color: #3b82f6; font-size: 22px;"></i>
@@ -1136,7 +978,7 @@
                          <div style="font-size: 9.5px; color: #94a3b8; font-weight: 600; letter-spacing: 0.01em;">Limit 200MB per file • PDF, CSV, Excel</div>
                       </div>
                   </div>
-                  <button class="btn-browse-v5" style="background: #3b82f6; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer; margin-left: auto;">Browse files</button>
+                  <button class="btn-browse-v5" style="background: #3b82f6; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer; margin-left: auto;">Browse</button>
                   <input type="file" id="fileInput" multiple accept=".csv,.xlsx,.xls,.pdf" style="display: none" onchange="window.handleFiles(this.files)">
              </div>
           </div>
@@ -1166,8 +1008,8 @@
           </div> <!-- End v5-main-header -->
 
           ${hasData && !UI_STATE.isIngesting ? `
-          <!-- V5 ACTION BAR (Option 1: Symmetrical Command Strip) -->
-          <div class="v5-action-bar v5-glass" style="width: 100%; padding: 0 24px; height: 53px; margin: 0; border-radius: 0; border-bottom: none;">
+          <!-- V5 ACTION BAR (Symmetrical Command Strip) -->
+          <div class="v5-action-bar v5-glass" style="width: 100%; max-width: 1400px; margin: 0 auto; padding: 0 24px; height: 53px; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
             <!-- Left: Ref# Input -->
             <div style="display: flex; align-items: center; gap: 10px; min-width: 170px;">
                 <span style="font-size: 13px; font-weight: 800; color: #94a3b8;">REF#</span>
@@ -1179,7 +1021,7 @@
                        onkeydown="if(event.key === 'Enter') this.blur()">
             </div>
 
-            <!-- Center: Monospace ATI Metadata Line -->
+            <!-- Center: ATI Metadata Line -->
             <div class="v5-ati-line-center" style="flex: 1; display: flex; justify-content: center; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #64748b; letter-spacing: 0.01em; text-transform: uppercase;">
                 ${UI_STATE.selectedAccount === 'ALL' ? `
                     <span style="color: #64748b; font-weight: 800; opacity: 0.7;">ALL LEDGERS • UNIFIED VIEW</span>
@@ -1195,11 +1037,8 @@
                     ACC#: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.accountNumber || '---'}</span>
                 `) : 'NO METADATA DETECTED')}
             </div>
-            <button class="cloudy-btn" style="height: 34px; background: #fff; border: 1px solid #e2e8f0; color: #64748b;" onclick="window.RoboLedger.Ledger.reset(); window.render();">
-                <i class="ph ph-trash" style="margin-right: 4px;"></i> PURGE
-            </button>
 
-            <!-- Right: Horizontal Utility Icons -->
+            <!-- Right: Utility Icons -->
             <div style="display: flex; align-items: center; gap: 6px; min-width: 170px; justify-content: flex-end;">
                  ${UI_STATE.isSearchOpen ? `
                     <input type="text" id="v5-search-input" 
@@ -1215,9 +1054,9 @@
             </div>
           </div>
 
-          <!-- V5 SWITCHER BAR (Account Pills & Forensic Recon Hub) -->
-          <div class="v5-switcher-bar v5-glass" style="width: 100%; padding: 8px 24px; margin: 0; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
-            <!-- Left: Account Switcher Pills -->
+          <!-- V5 SWITCHER BAR (Account Pills & Recon Hub) -->
+          <div class="v5-switcher-bar v5-glass" style="width: 100%; max-width: 1400px; margin: 0 auto; padding: 8px 24px; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
+            <!-- Left: Account Pills -->
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button class="cloudy-btn ${UI_STATE.selectedAccount === 'ALL' ? 'active' : ''}" 
                         style="${UI_STATE.selectedAccount === 'ALL' ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 14px; height: 32px;' : 'width: auto; padding: 0 14px; height: 32px;'}"
@@ -1257,7 +1096,7 @@
         })()}
             </div>
 
-            <!-- Right: Forensic Recon Hub (Universal Reconciliation) -->
+            <!-- Right: Recon Hub -->
             ${UI_STATE.selectedAccount !== 'ALL' && activeAcc ? (() => {
           const data = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === activeAcc.id);
           const totalDebit = data.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + t.amount_cents, 0) / 100;
@@ -1296,25 +1135,8 @@
         })() : ''}
           </div>
 
-          <!-- V5 MULTI-LEDGER STATUS BADGE -->
-          ${hasData && !UI_STATE.isIngesting ? `
-            <div style="width: 100%; display: flex; justify-content: center; margin-top: -12px; margin-bottom: 12px;">
-                <div style="background: #0f172a; color: white; border-radius: 6px; padding: 6px 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);">
-                    <span style="opacity: 0.5;">@ Multi-Ledger View</span>
-                    <span style="color: #3b82f6;">Accounts: ${accounts.length}</span>
-                    <span style="color: #10b981;">Txns: ${(() => {
-            let total = 0;
-            if (UI_STATE.selectedAccount === 'ALL') total = Object.keys(window.RoboLedger.Ledger.getRawState().transactions).length;
-            else total = Object.values(window.RoboLedger.Ledger.getRawState().transactions).filter(t => t.account_id === UI_STATE.selectedAccount).length;
-            return total;
-          })()}</span>
-                    <span style="opacity: 0.5;">Mode: Aggregate</span>
-                </div>
-            </div>
-          ` : ''}
-
-          <!-- WALL-TO-WALL GRID CONTAINER -->
-          <div class="grid-container-wall">
+          <!-- GRID CONTAINER -->
+          <div class="grid-container-wall" style="width: 100%; max-width: 1400px; margin: 0 auto; flex: 1; min-height: 0; display: flex; flex-direction: column;">
               ${UI_STATE.isPoppedOut ? `
                   <div class="v5-waiting-container" style="flex: 1; min-height: 400px; background: #f8fafc; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
                       <div style="margin-bottom: 24px;">
@@ -1323,7 +1145,7 @@
                       <div class="v5-waiting-title" style="color: #64748b;">Grid Popped Out</div>
                       <div class="v5-waiting-subtitle" style="color: #94a3b8; margin-top: 12px;">Active in standalone window.</div>
                       <button class="btn-restored" style="margin-top: 24px; background: #3b82f6; color: white; border: none;" onclick="window.popInGrid()">
-                          <i class="ph ph-arrow-square-down" style="margin-right: 6px;"></i> Bring it Back
+                          <i class="ph ph-arrow-square-down" style="margin-right: 6px;"></i> Restore
                       </button>
                   </div>
               ` : `
@@ -1332,8 +1154,17 @@
           </div>
           ` : ''}
 
-        </div> <!-- End Island Wrapper -->
-      </div> <!-- End Main Container -->
+      </div> <!-- End Main Content Wrapper -->
+    `;
+  }
+
+  function renderPlaceholder(title) {
+    return `
+      <div class="empty-state" style="background: white; border: 1px solid var(--border-color);">
+        <i class="ph ph-layout empty-icon" style="color: #94a3b8;"></i>
+        <div class="empty-title">${title}</div>
+        <div class="empty-subtitle">Module wired into the V5 Shell.</div>
+      </div>
     `;
   }
 
@@ -1351,6 +1182,7 @@
 
     // Get filtered and repaired transaction data
     let data = window.RoboLedger.Ledger.getAll();
+    const accounts = window.RoboLedger.Accounts.getAll();
 
     // ACCOUNT FILTERING (FIX)
     if (UI_STATE.selectedAccount && UI_STATE.selectedAccount !== 'ALL') {
@@ -1416,7 +1248,6 @@
       index: "id", // Stable ID
       rowHeight: 32, // Professional V5 density
       headerFilterLiveFilterDelay: 600,
-      selectable: false, // Disabled - no checkbox column
       headerSort: true, // Enable column sorting
       headerSortTristate: true, // Allow asc, desc, none
       pagination: "local",
@@ -1440,6 +1271,7 @@
 
       // Column Definitions
       columns: [
+        
         // 1. Ref# (Dynamic)
         {
           title: "Ref#",
@@ -1486,7 +1318,7 @@
           }
         },
 
-        // 4. Payee / Description (Main) - Professional One-Line
+        // 4. Payee / Description (2-Line: Name top, Description bottom, Sentence Case, No Dates)
         {
           title: "Payee / Description",
           field: "description",
@@ -1495,10 +1327,54 @@
           headerHozAlign: "left",
           editor: "input",
           formatter: (cell) => {
-            const val = cell.getValue() || "Unknown";
+            const row = cell.getRow().getData();
+            const cleanName = row.description || "Unknown";
+            const rawDetail = row.raw_description || "";
+            
+            // Convert to sentence case helper
+            const toSentenceCase = (str) => {
+              if (!str) return '';
+              return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+            };
+            
+            // Extract clean name (sentence case)
+            const displayName = toSentenceCase(cleanName);
+            
+            // Clean description: remove dates, account numbers, redundant words
+            const datePattern = /\b(\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{2,4}|\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})\b/gi;
+            const accountPattern = /\b(acc|account|ref|#)[-:\s]*\w+\b/gi;
+            
+            // Extract words from name to filter from description
+            const nameWords = cleanName.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+            const rawWords = rawDetail.split(/\s+/);
+            
+            const filteredWords = rawWords.filter(word => {
+              const wordLower = word.toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (wordLower.length < 2) return false;
+              // Remove if it's a duplicate from name
+              const isDupe = nameWords.some(nw => {
+                const clean = nw.replace(/[^a-z0-9]/g, '');
+                return clean && wordLower.includes(clean);
+              });
+              return !isDupe;
+            });
+            
+            let cleanDetail = filteredWords.join(' ')
+              .replace(datePattern, '')
+              .replace(accountPattern, '')
+              .replace(/\s{2,}/g, ' ')
+              .trim();
+            
+            const displayDetail = toSentenceCase(cleanDetail);
+            
             return `
-              <div style="font-weight: 700; color: #1e293b; font-size: 13px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ${val}
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <div style="font-weight: 700; color: #1e293b; font-size: 13px; line-height: 1.2;">
+                  ${displayName}
+                </div>
+                <div style="font-size: 11px; color: #64748b; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  ${displayDetail || '—'}
+                </div>
               </div>
             `;
           }
@@ -1632,23 +1508,11 @@
       ]
     }); // End new Tabulator({...})
 
-    // Attach Event Listeners to the NEW instance
-    window.txnTable.on("rowSelectionChanged", function (data, rows) {
-      const bar = document.getElementById('v5BulkBar');
-      const count = document.getElementById('bulkCount');
-      if (bar && count) {
-        count.innerText = rows.length;
-        if (rows.length > 0) {
-          bar.classList.add('visible');
-        } else {
-          bar.classList.remove('visible');
-        }
-      }
-    });
-
+    // Attach Event Listeners
     window.txnTable.on("rowClick", function (e, row) {
-      // Prevent Workbench open if clicking action buttons or editors
-      if (e.target.closest('.action-btn') || e.target.closest('.tabulator-editable')) return;
+      // Prevent audit drawer open if clicking action buttons or editors
+      if (e.target.closest('.action-btn') || 
+          e.target.closest('.tabulator-editable')) return;
 
       const data = row.getData();
       if (data.sourceFileId) {
@@ -1659,33 +1523,7 @@
     // Event Hook removed from repetitive init loop to prevent re-registration bugs
   }
 
-  // Global exports for Action Bar
-  window.bulkCategorize = () => {
-    const data = window.RoboLedger.Ledger.getAll();
-    const targets = window.txnTable.getSelectedData();
-    window.showAIAuditPanel(targets, 'selected');
-  };
-
-  window.bulkDelete = () => {
-    const targets = window.txnTable.getSelectedData();
-    if (confirm(`Delete ${targets.length} transactions ? `)) {
-      targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
-      window.render();
-    }
-  };
-
-  window.toggleWorkbench = function (isOpen, fileId = null) {
-    UI_STATE.workbenchOpen = isOpen;
-    UI_STATE.activeFileId = fileId || UI_STATE.activeFileId;
-
-    if (isOpen) {
-      document.body.classList.add('workbench-active');
-      renderWorkbenchPDF(UI_STATE.activeFileId);
-    } else {
-      document.body.classList.remove('workbench-active');
-    }
-  };
-
+  // renderWorkbenchPDF helper function (toggleWorkbench already defined above)
   async function renderWorkbenchPDF(fileId) {
     const container = document.getElementById('v5-pdf-curtain-content');
     const label = document.getElementById('v5-curtain-filename');
@@ -1693,12 +1531,12 @@
 
     const fileBlob = window.RoboLedger.Accounts.getFile(fileId);
     if (!fileBlob) {
-      container.innerHTML = `< div style = "padding: 40px; color: #94a3b8;" > Source file not found in memory.</div > `;
+      container.innerHTML = `<div style="padding: 40px; color: #94a3b8;">Source file not found in memory.</div>`;
       return;
     }
 
     label.innerText = fileBlob.name;
-    container.innerHTML = `< div style = "height: 100%; display: flex; align-items: center; justify-content: center;" > <i class="ph ph-circle-notch ph-spin"></i> Rendering PDF...</div > `;
+    container.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center;"><i class="ph ph-circle-notch ph-spin"></i> Rendering PDF...</div>`;
 
     try {
       const arrayBuffer = await fileBlob.arrayBuffer();
@@ -1720,7 +1558,7 @@
       await page.render({ canvasContext: context, viewport: viewport }).promise;
     } catch (e) {
       console.error("PDF Render Error:", e);
-      container.innerHTML = `< div style = "padding: 40px; color: #ef4444;" > Failed to render PDF.Browser may be blocking background tasks.</div > `;
+      container.innerHTML = `<div style="padding: 40px; color: #ef4444;">Failed to render PDF. Browser may be blocking background tasks.</div>`;
     }
   }
 
@@ -1733,7 +1571,7 @@
     }
     const modeLabel = mode === 'selected' ? `${targets.length} Selected Vendors` : `${targets.length} Vendors for Forensic Audit`;
     panel.innerHTML = `
-    < div style = "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;" >
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
     <div style="background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); max-width: 500px; width: 90%; overflow: hidden;">
 
       <div style="padding: 24px; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
