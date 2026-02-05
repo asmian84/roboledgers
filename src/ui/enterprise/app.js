@@ -1069,6 +1069,8 @@
                            onkeydown="if(event.key === 'Escape') window.toggleSearch(false)">
                  ` : ''}
                  <button class="cloudy-btn ${UI_STATE.isSearchOpen ? 'active' : ''}" style="height: 34px; width: 34px;" title="Search" onclick="window.toggleSearch()"><i class="ph ph-magnifying-glass" style="font-size: 18px;"></i></button>
+                 <button class="cloudy-btn" style="height: 34px; width: 34px;" title="Manage Columns" onclick="window.openColumnManager()"><i class="ph ph-columns" style="font-size: 18px;"></i></button>
+                 <button class="cloudy-btn" style="height: 34px; width: 34px;" title="Export Data" onclick="window.openExportMenu(event)"><i class="ph ph-download-simple" style="font-size: 18px;"></i></button>
                  <button class="cloudy-btn" style="height: 34px; width: 34px;" title="Popout Grid" onclick="window.popOutGrid()"><i class="ph ph-arrow-square-out" style="font-size: 18px;"></i></button>
                  <button class="cloudy-btn" style="height: 34px; width: 34px;" title="Grid Settings" onclick="window.toggleSettings(true)"><i class="ph ph-sliders-horizontal" style="font-size: 18px;"></i></button>
             </div>
@@ -1309,6 +1311,23 @@
       tableBuilt: function () {
         console.log("[Tabulator] Table fully built");
         // Workspace orchestration now happens in render() lifecycle
+
+        // Restore hidden columns from localStorage
+        try {
+          const hiddenColumns = JSON.parse(localStorage.getItem("rl_hidden_columns") || "[]");
+          if (hiddenColumns.length > 0) {
+            const columns = window.txnTable.getColumns();
+            columns.forEach(col => {
+              const field = col.getField();
+              if (field && hiddenColumns.includes(field)) {
+                col.hide();
+              }
+            });
+            console.log("[Column Manager] Restored hidden columns:", hiddenColumns);
+          }
+        } catch (e) {
+          console.error("[Column Manager] Failed to restore hidden columns", e);
+        }
       },
 
       // Column Definitions
@@ -1701,6 +1720,77 @@
   window.toggleSettings = toggleSettings;
   window.toggleWorkbench = window.toggleWorkbench;
   window.openSourceFile = (id) => window.toggleWorkbench(true, id);
+
+  // Export menu handler
+  window.openExportMenu = (event) => {
+    event.stopPropagation();
+    
+    // Remove any existing export menu
+    const existing = document.querySelector('.export-dropdown-menu');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+
+    // Create dropdown menu
+    const menu = document.createElement('div');
+    menu.className = 'export-dropdown-menu';
+    menu.style.cssText = `
+      position: absolute;
+      top: ${event.target.closest('button').getBoundingClientRect().bottom + 4}px;
+      right: ${window.innerWidth - event.target.closest('button').getBoundingClientRect().right}px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      padding: 6px 0;
+      z-index: 10000;
+      min-width: 140px;
+      font-family: system-ui, -apple-system, sans-serif;
+    `;
+
+    const options = [
+      { label: 'Export CSV', icon: 'ph-file-csv', fn: 'exportCSV' },
+      { label: 'Export Excel', icon: 'ph-file-xls', fn: 'exportXLSX' },
+      { label: 'Export PDF', icon: 'ph-file-pdf', fn: 'exportPDF' }
+    ];
+
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.innerHTML = `<i class="ph ${opt.icon}" style="margin-right: 8px;"></i>${opt.label}`;
+      btn.style.cssText = `
+        width: 100%;
+        text-align: left;
+        padding: 10px 16px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        color: #334155;
+        display: flex;
+        align-items: center;
+        transition: background 0.15s ease;
+      `;
+      btn.onmouseover = () => btn.style.background = '#f8fafc';
+      btn.onmouseout = () => btn.style.background = 'none';
+      btn.onclick = () => {
+        window[opt.fn]();
+        menu.remove();
+      };
+      menu.appendChild(btn);
+    });
+
+    document.body.appendChild(menu);
+
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu() {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }, { once: true });
+    }, 0);
+  };
 
   init();
 })();

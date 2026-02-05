@@ -1,23 +1,30 @@
 /**
  * Column Manager Modal
  * UI for toggling optional columns on/off
+ * Works directly with Tabulator's column show/hide methods
  */
 
-import { COLUMN_REGISTRY } from "../grid/columnRegistry.js";
-import { getActiveColumns, setActiveColumns } from "../grid/columnState.js";
-import { buildTabulatorColumns } from "../grid/buildColumns.js";
-
 export function openColumnManager() {
-  const active = new Set(getActiveColumns());
+  if (!window.txnTable) {
+    console.error("[Column Manager] Grid not initialized");
+    return;
+  }
 
-  const html = Object.entries(COLUMN_REGISTRY)
-    .map(([key, col]) => {
-      if (col.required) return ""; // Skip required columns
-      const checked = active.has(key) ? "checked" : "";
+  // Get all columns from the grid
+  const allColumns = window.txnTable.getColumns();
+  const requiredFields = new Set(["ref", "date", "description", "debit_col", "credit_col", "balance"]);
+
+  // Build checkbox list
+  const html = allColumns
+    .filter(col => col.getField() && !requiredFields.has(col.getField()))
+    .map(col => {
+      const field = col.getField();
+      const title = col.getDefinition().title;
+      const checked = col.isVisible() ? "checked" : "";
       return `
         <label style="display: block; padding: 8px 0; cursor: pointer;">
-          <input type="checkbox" data-col="${key}" ${checked} style="margin-right: 8px;"/>
-          <span style="font-weight: 500;">${col.label}</span>
+          <input type="checkbox" data-field="${field}" ${checked} style="margin-right: 8px;"/>
+          <span style="font-weight: 500;">${title}</span>
         </label>
       `;
     })
@@ -47,11 +54,14 @@ export function openColumnManager() {
       width: 90%;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     ">
-      <h2 style="margin: 0 0 24px 0; font-size: 20px; font-weight: 700; color: #1e293b;">
+      <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #1e293b;">
         Customize Columns
       </h2>
+      <p style="margin: 0 0 24px 0; font-size: 13px; color: #64748b;">
+        Toggle optional columns on or off. Core columns (Ref, Date, Description, Debit, Credit, Balance) are always visible.
+      </p>
       <div style="max-height: 300px; overflow-y: auto; margin-bottom: 24px;">
-        ${html}
+        ${html || '<p style="color: #94a3b8; font-style: italic;">No optional columns available</p>'}
       </div>
       <div style="display: flex; gap: 12px; justify-content: flex-end;">
         <button id="cancelCols" style="
@@ -84,15 +94,35 @@ export function openColumnManager() {
 
   // Save button
   document.getElementById("saveCols").onclick = () => {
-    const selected = [
-      ...Object.keys(COLUMN_REGISTRY).filter(k => COLUMN_REGISTRY[k].required),
-      ...Array.from(modal.querySelectorAll("input:checked")).map(i => i.dataset.col)
-    ];
+    const checkboxes = modal.querySelectorAll("input[type=checkbox]");
+    const visibleFields = Array.from(checkboxes)
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.field);
 
-    setActiveColumns(selected);
-    window.txnTable.setColumns(buildTabulatorColumns());
+    // Show/hide columns based on checkboxes
+    allColumns.forEach(col => {
+      const field = col.getField();
+      if (!field || requiredFields.has(field)) return; // Skip required columns
+
+      if (visibleFields.includes(field)) {
+        col.show();
+      } else {
+        col.hide();
+      }
+    });
+
+    // Persist to localStorage
+    try {
+      const hiddenFields = Array.from(checkboxes)
+        .filter(cb => !cb.checked)
+        .map(cb => cb.dataset.field);
+      localStorage.setItem("rl_hidden_columns", JSON.stringify(hiddenFields));
+    } catch (e) {
+      console.error("[Column Manager] Failed to save preferences", e);
+    }
+
     modal.remove();
-    console.log("[Column Manager] Applied columns:", selected);
+    console.log("[Column Manager] Applied column visibility");
   };
 
   // Close on backdrop click
