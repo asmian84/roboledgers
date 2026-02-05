@@ -120,35 +120,11 @@ window.RoboLedger = (function () {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             try {
-                const parsed = JSON.parse(saved);
                 state.transactions = parsed.transactions || {};
                 state.sigIndex = parsed.sigIndex || {};
-
-                // Legacy Repair Phase (v5.1.3 Backfill)
-                let repaired = false;
-                Object.values(state.transactions).forEach(tx => {
-                    let txRepaired = false;
-                    if (tx.raw_description && (!tx.description || tx.description === tx.raw_description)) {
-                        const next = Brain.cleanDescription(tx.raw_description);
-                        if (next !== tx.description) {
-                            tx.description = next;
-                            txRepaired = true;
-                        }
-                    }
-                    // Backfill: Migrate 2026 -> 2023
-                    ['date', 'date_iso', 'raw_date'].forEach(field => {
-                        if (tx[field] && typeof tx[field] === 'string' && tx[field].includes('2026')) {
-                            tx[field] = tx[field].replace(/2026/g, '2023');
-                            txRepaired = true;
-                        }
-                    });
-                    if (txRepaired) repaired = true;
-                });
-                if (repaired) save();
-
-                console.log('[LEDGER] Loaded state and performed deep backfill repair');
+                console.log('[LEDGER] State loaded.');
             } catch (e) {
-                console.error('[LEDGER] Failed to load/repair state', e);
+                console.error('[LEDGER] Failed to load state', e);
             }
         }
     }
@@ -302,6 +278,12 @@ window.RoboLedger = (function () {
                 acc.period = metadata.period || acc.period;
                 acc.holder = metadata.holder || acc.holder;
                 acc.brand = metadata.brand || acc.brand;
+
+                // SMART REF SELECTION: Don't stick with 'CHQ' if we know it's a CC
+                if (acc.brand === 'MASTERCARD' && acc.ref === 'CHQ1') acc.ref = 'MC1';
+                else if (acc.brand === 'VISA' && acc.ref === 'CHQ1') acc.ref = 'VISA1';
+                else if (acc.brand === 'AMEX' && acc.ref === 'CHQ1') acc.ref = 'AMEX1';
+
                 save();
             }
         },
@@ -375,58 +357,38 @@ window.RoboLedger = (function () {
             // Matches RBC Pattern: D MMM (7 May) | Description | Amount
             const rbcRegex = /(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))\s+([^\n\r]*?)\s+(-?[\d,]+\.\d{2})/gi;
 
+            // Matches Mastercard Pattern: (Posting Date) (Activity Date) | Description | LongRef | Amount
+            // Example: MAR 25   MAR 26   COSTCO CANADA ... 55134424085800182155271  $704.36
+            const mcRegex = /([A-Z]{3})\s+(\d{1,2})\s+[A-Z]{3}\s+\d{1,2}\s+(.*?)\s+(\d{12,})\s+(-?\$[\d,]+\.\d{2}|-?[\d,]+\.\d{2}(?!\s*%))/gi;
+
             let match;
+            // 1. Scan for RBC Standard Deposits/Verbs
             while ((match = rbcRegex.exec(text)) !== null) {
-                let desc = match[2].trim();
-
-                // HYPER-STRIP: Ignore header lines that leaked into the buffer
-                if (/continued|Date|Description|Balance|Amount/i.test(desc)) continue;
-
-                let ref = null;
-                let sub_detail = null;
-
-                // 1. Strip redundant dates (e.g. "04 Jul") if they match the row date
-                const datePart = match[1].trim();
-                if (desc.startsWith(datePart)) {
-                    desc = desc.substring(datePart.length).trim();
-                }
-
-                // 2. Extract technical metadata (Account/Transit etc)
-                const metadataPatterns = [
-                    /Account number:\s*[\d\s-]+ Account Activity Details/i,
-                    /Transit:\s*\d+/i,
-                    /Institution:\s*\d+/i
-                ];
-
-                for (const pattern of metadataPatterns) {
-                    const metaMatch = desc.match(pattern);
-                    if (metaMatch) {
-                        sub_detail = metaMatch[0];
-                        desc = desc.replace(pattern, '').trim();
-                        break; // Usually just one main meta block per line
-                    }
-                }
-
-                // 3. Extract Cheque Number
-                const chqMatch = desc.match(/(?:CHEQUE|CHQ|CHECK)\s*(?:#|NO\.?)?\s*(\d{2,})/i);
-                if (chqMatch) {
-                    ref = `CHQ-${chqMatch[1]}`;
-                }
-
                 transactions.push({
-                    date: match[1] + ' 2023', // Force 2023 for demo statement alignment
-                    description: desc,
-                    sub_detail: sub_detail,
-                    amount: parseFloat(match[3].replace(/,/g, '')),
-                    ref: ref
+                    date: match[1].trim() + ' 2024',
+                    description: match[2].trim(),
+                    amount: parseFloat(match[3].replace(/[$,]/g, '')),
+                    ref: null
                 });
             }
 
-            // Fallback: Just look for dollar amounts and nearby text if standard parse fails
+            // 2. Scan for Mastercard Signature (Business Dash)
             if (transactions.length === 0) {
-                console.warn("[FORENSICS] Primary RBC regex failed. Attempting deep-trace recovery...");
-                const moneyRegex = /(-?\$?[\d,]+\.\d{2})/g;
-                // This is a safety layer for messy extractions
+                while ((match = mcRegex.exec(text)) !== null) {
+                    const monthRaw = match[1].toLowerCase();
+                    const day = match[2].padStart(2, '0');
+                    const desc = match[3].trim();
+                    const amountStr = match[5].replace(/[$,]/g, '');
+
+                    const month = monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1);
+
+                    transactions.push({
+                        date: `${day} ${month} 2024`,
+                        description: desc,
+                        amount: parseFloat(amountStr),
+                        ref: match[4].substring(match[4].length - 6)
+                    });
+                }
             }
 
             console.log(`[FORENSICS] Identified ${transactions.length} potential transitions.`);
@@ -439,20 +401,25 @@ window.RoboLedger = (function () {
         detectInstitution: function (text) {
             const up = text.toUpperCase();
 
-            // IIN / Brand Intelligence
+            // IIN / Brand Intelligence (Handles Masked Numbers ****)
             const brands = [
-                { name: 'VISA', pattern: /4\d{3}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/, digits: 16 },
-                { name: 'MASTERCARD', pattern: /5[1-5]\d{2}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}/, digits: 16 },
-                { name: 'AMEX', pattern: /3[47]\d{2}[\s-]?\d{6}[\s-]?\d{5}/, digits: 15 }
+                { name: 'VISA', pattern: /4[\d\*]{3}[\s-]?[\d\*]{4}[\s-]?[\d\*]{4}[\s-]?[\d\*]{4}/, digits: 16 },
+                { name: 'MASTERCARD', pattern: /5[1-5][\d\*]{2}[\s-]?[\d\*]{4}[\s-]?[\d\*]{4}[\s-]?[\d\*]{4}/, digits: 16 },
+                { name: 'AMEX', pattern: /3[47][\d\*]{2}[\s-]?[\d\*]{6}[\s-]?[\d\*]{5}/, digits: 15 }
             ];
 
             let matchedBrand = null;
             let matchedAcc = null;
+
+            // Sort by occurrence position to get the ACTUAL card number (not references)
+            let bestMatch = null;
             for (const b of brands) {
-                const match = text.match(b.pattern);
-                if (match) {
+                const results = [...text.matchAll(new RegExp(b.pattern, 'g'))];
+                if (results.length > 0) {
+                    // Use the last match in the header section (usually the specific card number)
+                    const m = results[results.length - 1];
                     matchedBrand = b.name;
-                    matchedAcc = match[0].replace(/[\s-]/g, '');
+                    matchedAcc = m[0].replace(/[\s-]/g, '');
                     break;
                 }
             }
@@ -473,6 +440,7 @@ window.RoboLedger = (function () {
                         // Advanced Branding Logic
                         if (up.includes('AVION')) finalName = `${info.name} AVION ${matchedBrand}`;
                         else if (up.includes('PASSPORT')) finalName = `${info.name} PASSPORT ${matchedBrand}`;
+                        else if (up.includes('BUSINESS CASH BACK')) finalName = `${info.name} Business Cash Back ${matchedBrand}`;
                         else finalName = `${info.name} ${matchedBrand}`;
                     }
 
@@ -550,19 +518,27 @@ window.RoboLedger = (function () {
                 const predicted_code = Brain.predict(clean_description); // Predict based on clean name
                 const category = predicted_code ? COA.get(predicted_code) : null;
 
-                // SMARTER POLARITY DETECTION (V5.2.19 AUDIT)
-                // 1. Check sign first
-                let polarity = amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
+                // SMARTER POLARITY DETECTION (V5.2.29 AUDIT)
+                const isLiability = metadata.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(metadata.name);
 
-                // 2. Keyword Heuristic (Fallback for statements without signs)
+                // 1. Initial polarity based on sign (Normal Assets: pos=Credit, neg=Debit)
+                // For Credit Cards (Liabilities), we flip this: pos=Debit (Purchase), neg=Credit (Payment)
+                let polarity;
+                if (isLiability) {
+                    polarity = amount_cents >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
+                } else {
+                    polarity = amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
+                }
+
+                // 2. Keyword Heuristic (Override for ambiguous markers)
                 const upperDesc = raw_description.toUpperCase();
-                const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE'];
-                const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND'];
+                const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE', 'FX RATE'];
+                const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND', 'PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'CASH BACK'];
 
-                if (amount_cents > 0) {
-                    if (debitKeywords.some(k => upperDesc.includes(k)) && !creditKeywords.some(k => upperDesc.includes(k))) {
-                        polarity = Polarity.DEBIT;
-                    }
+                if (debitKeywords.some(k => upperDesc.includes(k))) {
+                    polarity = Polarity.DEBIT;
+                } else if (creditKeywords.some(k => upperDesc.includes(k))) {
+                    polarity = Polarity.CREDIT;
                 }
 
                 const canonical = {
@@ -689,13 +665,14 @@ window.RoboLedger = (function () {
                 'SHELL', 'PETRO CANADA', 'ESSO', 'CHEVRON',
                 'SAFEWAY', 'COSTCO', 'BEST BUY', 'APPLE',
                 'GOOGLE', 'MICROSOFT', 'ADOBE', 'AWS',
-                'DOORDASH', 'SKIP THE DISHES', 'NETFLIX', 'SPOTIFY',
-                'RBC', 'BMO', 'TD', 'SCOTIABANK', 'CIBC', 'TELUS', 'ROGERS', 'BELL'
+                'DOORDASH', 'SKIP THE DISHES', 'NETFLIX', 'SPOTIFY'
             ];
 
+            // Master Brand Force (Disabled - too aggressive for Payee names)
+            // Only return the brand if the whole string IS just the brand
             const upper = final.toUpperCase();
             for (const m of MASTERS) {
-                if (upper.includes(m)) {
+                if (upper === m) {
                     return m;
                 }
             }

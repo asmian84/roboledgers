@@ -81,6 +81,22 @@
     render();
   };
 
+  // --- FORMATTING HELPERS ---
+  const formatCardNumber = (num, brand) => {
+    if (!num) return '**** **** **** ****';
+    // Remove existing spaces to re-format correctly
+    const clean = num.toString().replace(/[\s-]/g, '');
+
+    if (brand === 'AMEX' && (clean.length === 15 || clean.includes('*'))) {
+      // 4-6-5 format for AMEX
+      return `${clean.slice(0, 4)} ${clean.slice(4, 10)} ${clean.slice(10, 15)}`.trim();
+    }
+
+    // Standard 4-4-4-4 blocks for VISA/MC
+    const matches = clean.match(/.{1,4}/g);
+    return matches ? matches.join(' ') : clean;
+  };
+
   window.popInGrid = function () {
     UI_STATE.isPoppedOut = false;
     if (UI_STATE.popoutWindow) {
@@ -1065,15 +1081,20 @@
   function renderTransactionsRestored() {
     const data = window.RoboLedger.Ledger.getAll();
     const accounts = window.RoboLedger.Accounts.getAll();
-    const activeAcc = window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) || accounts[0];
+    // OPTIMIZATION: Default to single account view if 'ALL' is bloated and accounts exist
+    if (UI_STATE.selectedAccount === 'ALL' && accounts.length > 0) {
+      UI_STATE.selectedAccount = accounts[0].id;
+    }
+
+    const activeAcc = UI_STATE.selectedAccount === 'ALL' ? null : (accounts.find(a => a.id === UI_STATE.selectedAccount) || accounts[0]);
     const hasData = data.length > 0;
     const coa = window.RoboLedger.COA.getAll();
 
     return `
       <div style="display: flex; flex-direction: column; gap: 0; flex: 1;">
         
-        <!-- V5 UNIFIED ISLAND WRAPPER (Enforces 1166px uniform stack) -->
-        <div style="width: 100%; max-width: 1166px; margin: 0 auto; display: flex; flex-direction: column; gap: 0;">
+        <!-- V5 UNIFIED ISLAND WRAPPER (Enforces 1400px uniform stack) -->
+        <div style="width: 100%; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 0;">
 
           <!-- SESSION RECOVERY BANNER (V5.2.20) -->
           ${UI_STATE.recoveryPending ? `
@@ -1089,118 +1110,119 @@
             </div>
           ` : ''}
 
-          <!-- HEADER LOGIC -->
-          <div class="v5-main-header fade-in" style="width: 100%;">
-            <div class="header-card v5-glass" style="width: 100%; padding: 8px 16px; margin: 0; border-top-left-radius: 8px; border-top-right-radius: 8px; border-bottom: none;">
-                <div class="header-icon-group" style="display: flex; align-items: center; gap: 12px;">
-                   <!-- Fixed Icon -->
-                   <div class="header-icon-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: white;">
-                      <i class="ph ph-receipt" style="font-size: 20px;"></i>
-                   </div>
-                   
-                   <div class="header-text-group">
-                      <h1 class="header-title" style="font-size: 1.25rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.025em;">Transactions</h1>
-                      <p class="header-subtitle" style="font-size: 11px; font-weight: 600; color: #64748b; margin: 0; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.05em;">V5.2 • High-Performance Ledger</p>
-                   </div>
-                </div>
+          <!-- HEADER LOGIC (Institutional Alignment) -->
+          <div class="v5-main-header fade-in" style="width: 100%; display: flex; align-items: stretch; gap: 12px; margin-bottom: 12px;">
+             <!-- Left: Institutional ID Card -->
+             <div class="header-card v5-glass" style="flex: 1; padding: 12px 20px; border-radius: 8px; display: flex; align-items: center; gap: 16px;">
+                 <div class="header-icon-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: white;">
+                    <i class="ph ph-bank" style="font-size: 24px;"></i>
+                 </div>
+                 <div class="header-text-group" style="flex: 1;">
+                    <h1 class="header-title" style="font-size: 1.1rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.01em;">
+                        ${activeAcc ? (activeAcc.name || 'Unknown Bank') : 'No Account Selected'} / ${activeAcc ? (activeAcc.accountType || 'CHECKING') : '---'}
+                    </h1>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8;">
+                        INST: ${activeAcc ? (activeAcc.inst || '---') : '---'} &nbsp;•&nbsp; TRANSIT: ${activeAcc ? (activeAcc.transit || '---') : '---'} &nbsp;•&nbsp; ACCOUNT: ${activeAcc ? (activeAcc.accountNumber || '---') : '---'}
+                    </div>
+                 </div>
+             </div>
              
-             <!-- Right Side: Full Upload Bucket -->
-             <div class="upload-zone-v5" style="border: 1px dashed #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 6px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; margin-left: auto;" onclick="document.getElementById('fileInput').click()">
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                      <i class="ph ph-cloud-arrow-up" style="color: #3b82f6; font-size: 20px;"></i>
+             <!-- Right: Forensic Upload Zone -->
+             <div class="upload-zone-v5 v5-glass" style="width: 420px; border: 1.5px dashed #cbd5e1; border-radius: 8px; background: rgba(248, 250, 252, 0.5); padding: 8px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer;" onclick="document.getElementById('fileInput').click()">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                      <i class="ph ph-cloud-arrow-up" style="color: #3b82f6; font-size: 22px;"></i>
                       <div style="text-align: left;">
-                         <div style="font-size: 12px; font-weight: 700; color: #1e293b;">Drag and drop files here</div>
-                         <div style="font-size: 10px; color: #94a3b8; font-weight: 500;">Limit 200MB • PDF, CSV, Excel</div>
+                         <div style="font-size: 12px; font-weight: 800; color: #1e293b;">Drag and drop files here</div>
+                         <div style="font-size: 9.5px; color: #94a3b8; font-weight: 600; letter-spacing: 0.01em;">Limit 200MB per file • PDF, CSV, Excel</div>
                       </div>
                   </div>
-                  <button class="btn-browse-v5" style="background: #3b82f6; color: white; border: none; padding: 4px 12px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer;">Browse files</button>
+                  <button class="btn-browse-v5" style="background: #3b82f6; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer; margin-left: auto;">Browse files</button>
                   <input type="file" id="fileInput" multiple accept=".csv,.xlsx,.xls,.pdf" style="display: none" onchange="window.handleFiles(this.files)">
              </div>
           </div>
 
-          <!-- INGESTION PROGRESS OVERLAY (PHASE 1-3) -->
+          <!-- INGESTION PROGRESS OVERLAY -->
           ${UI_STATE.isIngesting ? `
-               <div class="v5-waiting-container" style="flex: 1; min-height: 400px; background: transparent; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
-                  <div style="margin-bottom: 24px;">
-                    <i class="ph ph-cpu pulsing" style="font-size: 80px; color: #3b82f6; opacity: 0.5;"></i>
-                  </div>
-                  <div class="v5-waiting-title" style="color: #1e293b;">Forensic Ingestion In Progress</div>
-                  <div class="v5-waiting-subtitle" style="color: #64748b; margin-top: 12px; width: 300px;">
-                    <div class="v5-progress-label" style="font-size: 11px; margin-bottom: 8px;">${UI_STATE.ingestionLabel || 'Finalizing Ledger...'}</div>
-                    <div class="v5-progress-track" style="display: block; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; width: 100%;">
+               <div class="v5-waiting-container v5-glass" style="width: 100%; min-height: 400px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
+                  <div style="margin-bottom: 24px;"><i class="ph ph-cpu pulsing" style="font-size: 60px; color: #3b82f6; opacity: 0.7;"></i></div>
+                  <div class="v5-waiting-title" style="font-size: 18px; font-weight: 800; color: #1e293b;">Forensic Ingestion In Progress</div>
+                  <div class="v5-waiting-subtitle" style="color: #64748b; margin-top: 16px; width: 320px;">
+                    <div class="v5-progress-label" style="font-size: 10px; font-weight: 700; margin-bottom: 8px; text-align: center; text-transform: uppercase;">${UI_STATE.ingestionLabel || 'Processing...'}</div>
+                    <div class="v5-progress-track" style="height: 6px; background: #e2e8f0; border-radius: 10px; overflow: hidden; width: 100%;">
                         <div class="v5-progress-fill" style="width: ${UI_STATE.ingestionProgress}%; height: 100%; background: #3b82f6; transition: width 0.3s ease;"></div>
                     </div>
                   </div>
               </div>
           ` : ''}
 
-          <!-- EMPTY STATE (NO DATA) -->
+          <!-- EMPTY STATE -->
           ${!hasData && !UI_STATE.isIngesting ? `
-               <div class="v5-waiting-container" style="flex: 1; min-height: 400px; background: transparent; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
-                  <div style="margin-bottom: 24px; color: #929fb1; opacity: 0.8;">
-                    <i class="ph ph-book-open" style="font-size: 80px;"></i>
-                  </div>
-                  <div class="v5-waiting-title" style="color: #1e293b; font-size: 20px; font-weight: 800; margin-bottom: 8px;">No transactions yet.</div>
-                  <div class="v5-waiting-subtitle" style="color: #64748b; font-size: 14px; font-weight: 500; max-width: 440px; line-height: 1.6;">Import your bank statement or add your first entry manually to get started.</div>
+               <div class="v5-waiting-container v5-glass" style="width: 100%; min-height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
+                  <div style="margin-bottom: 24px; color: #cbd5e1;"><i class="ph ph-book-open" style="font-size: 70px;"></i></div>
+                  <div class="v5-waiting-title" style="font-size: 1.5rem; font-weight: 800; color: #1e293b;">No transactions yet.</div>
+                  <div class="v5-waiting-subtitle" style="color: #64748b; font-size: 0.9rem; max-width: 440px; text-align: center; line-height: 1.6;">Import your bank statement or add your first entry manually to get started.</div>
               </div>
           ` : ''}
           </div> <!-- End v5-main-header -->
 
           ${hasData && !UI_STATE.isIngesting ? `
           <!-- V5 ACTION BAR (Option 1: Symmetrical Command Strip) -->
-          <div class="v5-action-bar v5-glass" style="width: 100%; padding: 0 20px; height: 44px; margin: 0; border-radius: 0; border-bottom: none;">
+          <div class="v5-action-bar v5-glass" style="width: 100%; padding: 0 24px; height: 53px; margin: 0; border-radius: 0; border-bottom: none;">
             <!-- Left: Ref# Input -->
-            <div style="display: flex; align-items: center; gap: 8px; min-width: 140px;">
-                <span style="font-size: 10px; font-weight: 800; color: #94a3b8;">REF#</span>
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 170px;">
+                <span style="font-size: 13px; font-weight: 800; color: #94a3b8;">REF#</span>
                 <input type="text" class="cloudy-ref-input" 
-                       value="${activeAcc.ref || ''}" 
+                       value="${activeAcc ? (activeAcc.ref || '') : ''}" 
                        placeholder="AUTO"
-                       style="width: 80px; height: 28px; font-weight: 700;"
+                       style="width: 100px; height: 34px; font-size: 14px; font-weight: 700;"
                        onblur="window.handleRefUpdate(this.value)"
                        onkeydown="if(event.key === 'Enter') this.blur()">
             </div>
 
             <!-- Center: Monospace ATI Metadata Line -->
-            <div class="v5-ati-line-center" style="flex: 1; display: flex; justify-content: center; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #64748b; letter-spacing: 0.01em; text-transform: uppercase;">
+            <div class="v5-ati-line-center" style="flex: 1; display: flex; justify-content: center; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #64748b; letter-spacing: 0.01em; text-transform: uppercase;">
                 ${UI_STATE.selectedAccount === 'ALL' ? `
                     <span style="color: #64748b; font-weight: 800; opacity: 0.7;">ALL LEDGERS • UNIFIED VIEW</span>
                 ` : (activeAcc ? (activeAcc.id === 'CC' || activeAcc.brand ? `
-                    BRAND: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.name || 'CREDIT CARD'}</span>
-                    <span style="color: #cbd5e1; margin: 0 8px;">•</span>
-                    CARD#: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.accountNumber || '**** **** **** ****'}</span>
+                    BRAND: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.name || activeAcc.brand || 'CREDIT CARD'}</span>
+                    <span style="color: #cbd5e1; margin: 0 10px;">•</span>
+                    CARD#: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${formatCardNumber(activeAcc.accountNumber, activeAcc.brand)}</span>
                 ` : `
-                    INST: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.inst || '---'}</span>
-                    <span style="color: #cbd5e1; margin: 0 8px;">•</span>
-                    TRANSIT: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.transit || '---'}</span>
-                    <span style="color: #cbd5e1; margin: 0 8px;">•</span>
-                    ACC#: <span style="color: #1e293b; font-weight: 600; margin: 0 4px;">${activeAcc.accountNumber || '---'}</span>
+                    INST: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.inst || '---'}</span>
+                    <span style="color: #cbd5e1; margin: 0 10px;">•</span>
+                    TRANSIT: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.transit || '---'}</span>
+                    <span style="color: #cbd5e1; margin: 0 10px;">•</span>
+                    ACC#: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.accountNumber || '---'}</span>
                 `) : 'NO METADATA DETECTED')}
             </div>
+            <button class="cloudy-btn" style="height: 34px; background: #fff; border: 1px solid #e2e8f0; color: #64748b;" onclick="window.RoboLedger.Ledger.reset(); window.render();">
+                <i class="ph ph-trash" style="margin-right: 4px;"></i> PURGE
+            </button>
 
             <!-- Right: Horizontal Utility Icons -->
-            <div style="display: flex; align-items: center; gap: 4px; min-width: 140px; justify-content: flex-end;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 170px; justify-content: flex-end;">
                  ${UI_STATE.isSearchOpen ? `
                     <input type="text" id="v5-search-input" 
                            placeholder="Search..." 
                            value="${UI_STATE.searchQuery}"
-                           style="width: 140px; height: 28px; border-radius: 4px; border: 1px solid #e2e8f0; padding: 0 8px; font-size: 11px; font-weight: 600; outline: none; transition: all 0.2s ease;"
+                           style="width: 170px; height: 34px; border-radius: 4px; border: 1px solid #e2e8f0; padding: 0 10px; font-size: 13px; font-weight: 600; outline: none; transition: all 0.2s ease;"
                            oninput="window.handleSearch(this.value)"
                            onkeydown="if(event.key === 'Escape') window.toggleSearch(false)">
                  ` : ''}
-                 <button class="cloudy-btn ${UI_STATE.isSearchOpen ? 'active' : ''}" title="Search" onclick="window.toggleSearch()"><i class="ph ph-magnifying-glass"></i></button>
-                 <button class="cloudy-btn" title="Popout Grid" onclick="window.popOutGrid()"><i class="ph ph-arrow-square-out"></i></button>
-                 <button class="cloudy-btn" title="Grid Settings" onclick="window.toggleSettings(true)"><i class="ph ph-sliders-horizontal"></i></button>
+                 <button class="cloudy-btn ${UI_STATE.isSearchOpen ? 'active' : ''}" style="height: 34px; width: 34px;" title="Search" onclick="window.toggleSearch()"><i class="ph ph-magnifying-glass" style="font-size: 18px;"></i></button>
+                 <button class="cloudy-btn" style="height: 34px; width: 34px;" title="Popout Grid" onclick="window.popOutGrid()"><i class="ph ph-arrow-square-out" style="font-size: 18px;"></i></button>
+                 <button class="cloudy-btn" style="height: 34px; width: 34px;" title="Grid Settings" onclick="window.toggleSettings(true)"><i class="ph ph-sliders-horizontal" style="font-size: 18px;"></i></button>
             </div>
           </div>
 
           <!-- V5 SWITCHER BAR (Account Pills & Forensic Recon Hub) -->
-          <div class="v5-switcher-bar v5-glass" style="width: 100%; padding: 4px 20px; margin: 0; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
+          <div class="v5-switcher-bar v5-glass" style="width: 100%; padding: 8px 24px; margin: 0; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
             <!-- Left: Account Switcher Pills -->
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
                 <button class="cloudy-btn ${UI_STATE.selectedAccount === 'ALL' ? 'active' : ''}" 
-                        style="${UI_STATE.selectedAccount === 'ALL' ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 10px; height: 26px;' : 'width: auto; padding: 0 10px; height: 26px;'}"
+                        style="${UI_STATE.selectedAccount === 'ALL' ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 14px; height: 32px;' : 'width: auto; padding: 0 14px; height: 32px;'}"
                         onclick="window.switchAccount('ALL')">
-                    <span style="font-weight: 700; font-size: 11px;">ALL</span>
+                    <span style="font-weight: 700; font-size: 13px;">ALL</span>
                 </button>
                 ${(() => {
           const typeOrder = { 'AMEX': 1, 'VISA': 2, 'MC': 3, 'CHQ': 4, 'CHECKING': 4, 'SAVINGS': 5 };
@@ -1226,9 +1248,9 @@
             return `
                             <button class="cloudy-btn ${UI_STATE.selectedAccount === acc.id ? 'active' : ''}" 
                                     data-acc-btn="${acc.id}"
-                                    style="${UI_STATE.selectedAccount === acc.id ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 10px; height: 26px;' : 'width: auto; padding: 0 10px; height: 26px;'}"
+                                    style="${UI_STATE.selectedAccount === acc.id ? 'color: #3b82f6; background: #eff6ff; width: auto; padding: 0 14px; height: 32px;' : 'width: auto; padding: 0 14px; height: 32px;'}"
                                     onclick="window.switchAccount('${acc.id}')">
-                                <span style="font-weight: 700; font-size: 11px;">${label}</span>
+                                <span style="font-weight: 700; font-size: 13px;">${label}</span>
                             </button>
                         `;
           }).join('');
@@ -1245,34 +1267,51 @@
           const ending = isLiability ? (opening + totalDebit - totalCredit) : (opening - totalDebit + totalCredit);
 
           return `
-                <div class="v5-recon-hub" style="display: flex; align-items: center; gap: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #64748b;">
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-weight: 800; color: #94a3b8; font-size: 9px; letter-spacing: 0.05em;">OPENING</span>
+                <div class="v5-recon-hub" style="display: flex; align-items: center; gap: 15px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #64748b;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: 800; color: #94a3b8; font-size: 10px; letter-spacing: 0.05em;">OPENING</span>
                         <input type="number" class="cloudy-ref-input" 
                                value="${opening}" 
-                               style="width: 70px; height: 24px; font-size: 10.5px; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.05); text-align: right; padding-right: 4px;"
+                               style="width: 85px; height: 29px; font-size: 13px; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.05); text-align: right; padding-right: 6px;"
                                onblur="window.handleOpeningBalanceUpdate('${activeAcc.id}', this.value)"
                                onkeydown="if(event.key === 'Enter') this.blur()">
                     </div>
                     <span style="color: #cbd5e1;">-</span>
-                    <div style="display: flex; align-items: center; gap: 4px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
                          <span style="font-weight: 800; color: #ef4444;">${totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                         <span style="font-size: 8px; font-weight: 800; opacity: 0.5;">DR</span>
+                         <span style="font-size: 9px; font-weight: 800; opacity: 0.5;">DR</span>
                     </div>
                     <span style="color: #cbd5e1;">+</span>
-                    <div style="display: flex; align-items: center; gap: 4px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
                          <span style="font-weight: 800; color: #10b981;">${totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                         <span style="font-size: 8px; font-weight: 800; opacity: 0.5;">CR</span>
+                         <span style="font-size: 9px; font-weight: 800; opacity: 0.5;">CR</span>
                     </div>
                     <span style="color: #cbd5e1;">=</span>
-                    <div style="background: rgba(15, 23, 42, 0.04); padding: 2px 8px; border-radius: 4px; display: flex; align-items: center; gap: 6px; border: 1px dashed rgba(0,0,0,0.1);">
-                         <span style="font-weight: 800; color: #94a3b8; font-size: 9px; letter-spacing: 0.05em;">ENDING</span>
-                         <span style="font-weight: 800; color: #1e293b; font-size: 12px;">${ending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <div style="background: rgba(15, 23, 42, 0.04); padding: 4px 12px; border-radius: 4px; display: flex; align-items: center; gap: 8px; border: 1px dashed rgba(0,0,0,0.1);">
+                         <span style="font-weight: 800; color: #94a3b8; font-size: 10px; letter-spacing: 0.05em;">ENDING</span>
+                         <span style="font-weight: 800; color: #1e293b; font-size: 15px;">${ending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 </div>
               `;
         })() : ''}
           </div>
+
+          <!-- V5 MULTI-LEDGER STATUS BADGE -->
+          ${hasData && !UI_STATE.isIngesting ? `
+            <div style="width: 100%; display: flex; justify-content: center; margin-top: -12px; margin-bottom: 12px;">
+                <div style="background: #0f172a; color: white; border-radius: 6px; padding: 6px 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);">
+                    <span style="opacity: 0.5;">@ Multi-Ledger View</span>
+                    <span style="color: #3b82f6;">Accounts: ${accounts.length}</span>
+                    <span style="color: #10b981;">Txns: ${(() => {
+            let total = 0;
+            if (UI_STATE.selectedAccount === 'ALL') total = Object.keys(window.RoboLedger.Ledger.getRawState().transactions).length;
+            else total = Object.values(window.RoboLedger.Ledger.getRawState().transactions).filter(t => t.account_id === UI_STATE.selectedAccount).length;
+            return total;
+          })()}</span>
+                    <span style="opacity: 0.5;">Mode: Aggregate</span>
+                </div>
+            </div>
+          ` : ''}
 
           <!-- WALL-TO-WALL GRID CONTAINER -->
           <div class="grid-container-wall">
@@ -1335,26 +1374,30 @@
     console.log("[GRID DEBUG] Date field:", data[0]?.date_iso || data[0]?.date);
     console.log("[GRID DEBUG] Account field:", data[0]?.account_id);
 
-    // Calculate running balance and populate source_ref
-    let runningBalance = 0; // Starting balance in cents
+    // Calculate running balance based on account type (Asset vs Liability)
+    const activeAcc = accounts.find(a => a.id === UI_STATE.selectedAccount);
+    const isLiability = activeAcc && (activeAcc.brand || /VISA|MC|AMEX|CREDIT/i.test(activeAcc.name || ''));
+
+    let runningBalance = activeAcc ? (Math.round((activeAcc.openingBalance || 0) * 100)) : 0;
+
     data.forEach((txn, index) => {
-      // Calculate balance based on polarity
-      if (txn.polarity === 'CREDIT') {
-        runningBalance += txn.amount_cents || 0;
-      } else if (txn.polarity === 'DEBIT') {
-        runningBalance -= txn.amount_cents || 0;
+      if (isLiability) {
+        // Liability: Debits increase balance, Credits decrease it
+        if (txn.polarity === 'DEBIT') runningBalance += txn.amount_cents || 0;
+        else if (txn.polarity === 'CREDIT') runningBalance -= txn.amount_cents || 0;
+      } else {
+        // Asset: Credits increase balance, Debits decrease it
+        if (txn.polarity === 'CREDIT') runningBalance += txn.amount_cents || 0;
+        else if (txn.polarity === 'DEBIT') runningBalance -= txn.amount_cents || 0;
       }
-
-      // Set balance (already in cents)
       txn.balance = runningBalance;
+    });
 
-      // Sync source_ref with ref field (if ref exists, use it; otherwise generate)
-      if (txn.ref) {
-        txn.source_ref = txn.ref;
-      } else if (!txn.source_ref) {
-        const prefix = "CHQ1"; // Can be dynamic based on account
-        txn.source_ref = `${prefix} -${String(index + 1).padStart(3, '0')} `;
-      }
+    // Inject sequence and source_ref (FORCE Recalculate for current prefix visibility)
+    data.forEach((txn, index) => {
+      const acc = accounts.find(a => a.id === txn.account_id);
+      const prefix = acc ? (acc.ref || "TXN") : "TXN";
+      txn.source_ref = `${prefix}-${String(index + 1).padStart(3, '0')}`;
     });
 
     console.log("[GRID] Initializing Tabulator v5.5 on", gridDiv);
@@ -1377,8 +1420,8 @@
       headerSort: true, // Enable column sorting
       headerSortTristate: true, // Allow asc, desc, none
       pagination: "local",
-      paginationSize: 20,
-      paginationSizeSelector: [10, 20, 50, 100],
+      paginationSize: 50,
+      paginationSizeSelector: [50, 100, 200, 300, 500],
       paginationCounter: "rows",
       rowHeader: { headerSort: false, resizable: false, minWidth: 20, width: 25, rowHandle: true, formatter: "handle" },
       movableRows: true, // Cool reshuffle effect
@@ -1401,8 +1444,9 @@
         {
           title: "Ref#",
           field: "ref",
-          width: 95,
+          width: 120, // INCREASED
           headerSort: true,
+          headerHozAlign: "left",
           formatter: (cell) => {
             // If explicitly set, use it. Else calc dynamic.
             const val = cell.getValue();
@@ -1415,12 +1459,13 @@
           }
         },
 
-        // 2. Source (Prefix Only - e.g., "CHQ1")
+        // 2. Source (Prefix Only - e.g., "MC1-001")
         {
           title: "Source",
           field: "source_ref",
-          width: 85,
+          width: 145, // WIDENED significantly
           headerSort: true,
+          headerHozAlign: "left",
           formatter: (cell) => {
             const val = cell.getValue() || "CSV";
             return `<span style="font-weight: 700; color: #64748b; font-size: 10px;">${val}</span>`;
@@ -1430,54 +1475,32 @@
         {
           title: "Date",
           field: "date",
-          width: 95,
+          width: 130,
           headerSort: true,
+          headerHozAlign: "left",
           formatter: (cell) => {
-            const dateValue = cell.getValue();
-            if (!dateValue) return '<span style="color: #cbd5e1;">(No Date)</span>';
-            return `<span style="color: #0f172a;">${dateValue}</span>`;
+            const val = cell.getValue();
+            if (!val) return '<span style="color: #cbd5e1;">---</span>';
+            // Clean M/D/YYYY or DD MMM
+            return `<span style="font-weight: 600; color: #475569;">${val}</span>`;
           }
         },
 
-        // 4. Payee / Description (Main) - 2-Line UPPERCASE
+        // 4. Payee / Description (Main) - Professional One-Line
         {
           title: "Payee / Description",
           field: "description",
-          widthGrow: 1, // ABSORB ALL EXTRA SPACE
+          widthGrow: 2,
           headerSort: true,
+          headerHozAlign: "left",
           editor: "input",
           formatter: (cell) => {
-            const rowData = cell.getRow().getData();
-            let cleanName = rowData.description || "Unknown";
-            const rawTrace = rowData.raw_description || "";
-
-            // Extract the bank context (what was removed) for the sub-line
-            let bankContext = "";
-            const prefixPatterns = [
-              /^e-Transfer\s*(?:sent|received|to|from)?\s*-?\s*Autodeposit/i,
-              /^e-Transfer\s*(?:sent|received)/i,
-              /^Online\s*Banking\s*transfer/i,
-              /^Pay\s+Employee-Vendor/i,
-              /^MISCELLANEOUS\s*PAYMENT/i,
-              /^PRE-AUTHORIZED\s*DEBIT/i
-            ];
-
-            for (const pattern of prefixPatterns) {
-              const match = rawTrace.match(pattern);
-              if (match) {
-                bankContext = match[0];
-                break;
-              }
-            }
-
-            const hasContext = bankContext.length > 0;
-
+            const val = cell.getValue() || "Unknown";
             return `
-    <div style="display: flex; flex-direction: column; justify-content: center; height: 100%; line-height: 1.1;">
-      <span style="text-transform: uppercase; color: #0f172a; font-size: 12px; font-weight: 600;">${cleanName}</span>
-                    ${hasContext ? `<span style="font-size: 10px; color: #64748b; margin-top: 1px;">${bankContext}</span>` : ''}
-                  </div>
-    `;
+              <div style="font-weight: 700; color: #1e293b; font-size: 13px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                ${val}
+              </div>
+            `;
           }
         },
 
@@ -1487,6 +1510,7 @@
           field: "debit_col",
           width: 110,
           headerSort: true,
+          headerHozAlign: "left",
           hozAlign: "right",
           editor: "number",
           editorParams: { min: 0, step: 0.01 },
@@ -1523,6 +1547,7 @@
           field: "credit_col",
           width: 110,
           headerSort: true,
+          headerHozAlign: "left",
           hozAlign: "right",
           editor: "number",
           editorParams: { min: 0, step: 0.01 },
@@ -1556,6 +1581,7 @@
           field: "balance",
           width: 110,
           headerSort: true,
+          headerHozAlign: "left",
           hozAlign: "right",
           formatter: (cell) => {
             const balance = cell.getValue() || 0;
@@ -1568,82 +1594,39 @@
         {
           title: "Account",
           field: "coa_code",
-          width: 180,
+          width: 250,
           headerSort: true,
+          headerHozAlign: "left",
           editor: "select",
           editorParams: {
             values: function (cell) {
-              const coaList = window.RoboLedger.COA.getAll();
-              const items = [];
-
-              // Define category icons
-              const icons = { 'ASSET': '💰', 'LIABILITY': '💳', 'INCOME': '💵', 'EXPENSE': '📊', 'EQUITY': '👤' };
-
-              // Group accounts by root category
-              const groups = {};
-              coaList.forEach(acc => {
-                const root = (acc.root || 'EXPENSE').toUpperCase();
-                if (!groups[root]) groups[root] = [];
-                groups[root].push(acc);
-              });
-
-              // Build grouped select options
-              Object.keys(groups).sort().forEach(groupName => {
-                const icon = icons[groupName] || '📊';
-                // Group Header (Label only)
-                items.push({ label: `-- - ${icon} ${groupName} --- `, value: "", disabled: true });
-
-                groups[groupName].sort((a, b) => a.name.localeCompare(b.name)).forEach(acc => {
-                  items.push({ label: `  ${acc.name} `, value: acc.code });
-                });
-              });
-
-              return items;
-            }
+              return window.RoboLedger.COA.getAll().map(cat => ({
+                label: `(${cat.code}) ${cat.name}`,
+                value: cat.code
+              }));
+            },
+            search: true
           },
           formatter: (cell) => {
             const val = cell.getValue();
-            const coa = window.RoboLedger.COA.getAll();
-            const account = coa.find(a => a.code === val); // Match by CODE
+            const coa = window.RoboLedger.COA.get(val);
+            const label = coa ? coa.name : "Suspense (Uncategorized)";
+            const color = coa ? "#3b82f6" : "#94a3b8";
 
-            if (account) {
-              // Map root to category for icon display
-              const root = (account.root || '').toUpperCase();
-              const rootToCategory = {
-                'ASSET': 'Assets',
-                'ASSETS': 'Assets',
-                'LIABILITY': 'Liabilities',
-                'LIABILITIES': 'Liabilities',
-                'INCOME': 'Income',
-                'REVENUE': 'Income',
-                'EXPENSE': 'Expenses',
-                'EXPENSES': 'Expenses',
-                'EQUITY': 'Equity'
-              };
-
-              const category = rootToCategory[root] || 'Expenses';
-
-              // Determine category icon
-              const categoryIcons = {
-                'Assets': '💰',
-                'Liabilities': '💳',
-                'Income': '💵',
-                'Expenses': '📊',
-                'Equity': '👤'
-              };
-              const icon = categoryIcons[category] || '📊';
-
-              return `
-                <div style="display: flex; align-items: center; gap: 8px; height: 100%;">
-                  <span style="font-size: 14px; opacity: 0.8;">${icon}</span>
-                  <div style="display: flex; flex-direction: column; line-height: 1.1;">
-                    <span style="font-size: 11px; font-weight: 700; color: #1e293b; text-transform: uppercase;">${account.name}</span>
-                    <span style="font-size: 9px; font-weight: 800; color: #94a3b8; letter-spacing: 0.02em;">${category} • ${val}</span>
-                  </div>
-                </div>
-              `;
-            }
-            return `<span style="color: #cbd5e1; font-style: italic; font-size: 11px;">Uncategorized</span>`;
+            return `
+              <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 100%; color: ${color}; font-weight: 600; font-style: ${coa ? 'normal' : 'italic'};">
+                <span>${label}</span>
+                <i class="ph ph-caret-down" style="font-size: 10px; margin-left: auto; opacity: 0.4;"></i>
+              </div>
+            `;
+          },
+          cellEdited: function (cell) {
+            const code = cell.getValue();
+            const coa = window.RoboLedger.COA.get(code);
+            cell.getData().category_name = coa ? coa.name : "UNCATEGORIZED";
+            cell.getData().category_code = code;
+            cell.getData().status = 'CONFIRMED';
+            window.RoboLedger.Ledger.save();
           }
         }
       ]

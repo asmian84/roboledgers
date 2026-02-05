@@ -310,7 +310,8 @@ body {
 .tabulator-header {
     background: linear-gradient(90deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #818cf8, #a78bfa) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-    height: 38px !important;
+    height: 46px !important;
+    /* Scaled from 38px (+20%) */
     color: white !important;
 }
 
@@ -327,33 +328,35 @@ body {
 
 .tabulator-col {
     background: transparent !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.6) !important;
-    height: 38px !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.8) !important;
+    /* Sharper Dividers */
+    height: 46px !important;
     padding: 0 !important;
 }
 
 .tabulator-col-content {
-    padding: 8px 12px !important;
-    /* Tight padding */
+    padding: 10px 14px !important;
+    /* Scaled padding */
     height: 100% !important;
     display: flex !important;
     align-items: center !important;
+    justify-content: flex-start !important;
+    /* Left Aligned Header Text */
 }
 
 .tabulator-col-title {
-    font-size: 11px !important;
+    font-size: 13px !important;
+    /* Scaled from 11px */
     text-transform: uppercase !important;
     font-weight: 600 !important;
-    /* Clean, uniform weight */
     color: #ffffff !important;
-    /* White text for rainbow contrast */
     letter-spacing: 0.05em !important;
 }
 
 /* Rows */
 .tabulator-row {
-    min-height: 34px !important;
-    /* Minimal 34px rows */
+    min-height: 40px !important;
+    /* Scaled from 34px */
     border-bottom: 1px solid #f1f5f9 !important;
 }
 
@@ -364,11 +367,13 @@ body {
 }
 
 .tabulator-cell {
-    padding: 4px 12px !important;
-    height: 34px !important;
+    padding: 6px 14px !important;
+    /* Scaled */
+    height: 40px !important;
     display: flex !important;
     align-items: center !important;
-    font-size: 13px !important;
+    font-size: 15px !important;
+    /* Scaled from 13px */
     font-weight: 400 !important;
     color: #334155 !important;
     border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
@@ -417,9 +422,11 @@ body {
 
 /* Grid Container reset (Card Style) */
 .grid-container-wall {
-    height: calc(100vh - 250px);
+    height: calc(100vh - 280px);
+    /* Adjusted for larger cards */
     width: auto;
-    max-width: 1166px;
+    max-width: 1400px;
+    /* Scaled from 1166px (+20%) */
     margin-left: auto;
     margin-right: auto;
     background: #ffffff !important;
@@ -441,7 +448,8 @@ body {
 .v5-action-bar,
 .v5-switcher-bar {
     width: 100%;
-    max-width: 1166px;
+    max-width: 1400px;
+    /* Scaled from 1166px */
     margin-left: auto;
     margin-right: auto;
     display: flex;
@@ -1084,7 +1092,7 @@ body {
 /* Main Header Content Wrapper */
 .v5-main-header {
     width: auto;
-    max-width: 1166px;
+    max-width: 1400px;
     margin-left: auto;
     margin-right: auto;
     position: relative;
@@ -2155,7 +2163,7 @@ body {
 /* V5 Restoration Layout */
 .grid-container-wall {
     width: 100%;
-    max-width: 1166px;
+    max-width: 1400px;
     margin: 0 auto;
     flex: 1;
     display: flex;
