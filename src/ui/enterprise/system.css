@@ -2246,3 +2246,40 @@ body {
     margin-left: 6px;
     display: inline-block;
 }
+
+/* Export Dropdown Menu */
+.export-wrapper {
+    position: relative;
+}
+
+.export-menu {
+    position: absolute;
+    right: 0;
+    top: 42px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    z-index: 999;
+    min-width: 160px;
+}
+
+.export-menu.hidden {
+    display: none;
+}
+
+.export-menu div {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #334155;
+    transition: background 0.15s ease;
+}
+
+.export-menu div:hover {
+    background: #f1f5f9;
+}
