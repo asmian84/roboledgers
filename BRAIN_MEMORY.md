@@ -1,0 +1,185 @@
+# RoboLedger Session Brain Memory
+**Session Date:** 2026-02-05  
+**MVP Commit:** `9f6cbe9`  
+**MVP Tag:** `mvp-2026-02-05`
+
+---
+
+## 📋 NUMBERED PROMPTS & ACTIONS
+
+### PROMPT #1: Merge Headers + Upload Zone
+**User Request:** "a single horizontal card, with upload zone on the right" + "Transactions / Waiting to get started..." + "RESTORE GRID!!!!!"
+
+**Status:** ✅ **COMPLETED**
+- Merged header card with account info (left) + upload zone (right)
+- Grid displays 221 transactions with proper columns
+- Layout: 1400px max-width container with flex layout
+
+**File Modified:** `src/ui/enterprise/app.js` (lines 928-1010)
+
+---
+
+### PROMPT #2: Description Formatting (2-Line Split)
+**User Request:** "2-line description: Name at the top, Description at the bottom" + "no date in description, all text sentence case, make sure no garbage"
+
+**Status:** ✅ **ATTEMPTED** | ⚠️ **NEEDS REFINEMENT**
+- Implemented 2-line formatter with sentence case
+- Added date removal regex patterns
+- Added word filtering logic
+- **Issue:** Still showing dates in descriptions, word split not intelligent
+
+**File Modified:** `src/ui/enterprise/app.js` (lines 1280-1330)
+
+**Known Issues:**
+- "02 nov e-transfer - autodeposit xiaolin luan 88158" - date still present
+- "Xiaolin luan dde14fc00ad04711bdba18391ef20b71" - account hash present
+- Word splitting appears random/broken
+
+**BACKLOG:** Needs complete rewrite of description parsing logic
+
+---
+
+### PROMPT #3: Checkbox + Bulk Actions
+**User Request:** "audit drawer, checkbox in 1st grid column, bulk feature" (recalled from earlier conversation)
+
+**Status:** ✅ **IMPLEMENTED** | ❌ **THEN REVERTED**
+- Added checkbox column at position 0
+- Implemented bulk actions bar (categorize, delete, clear)
+- Row click opens audit drawer with PDF/CSV source
+- **Decision:** Removed checkboxes/bulk bar because not in original spec
+
+**Files Modified:** `src/ui/enterprise/app.js`
+
+**Reason for Revert:** User said layout was "broken" and "misaligned," realized original design didn't have bulk features
+
+---
+
+### PROMPT #4: Layout Complete Restore
+**User Request:** "look at the grid width, 3 cards, my icon is gone... action card, pill card... horrible... no ref# box, no search box, boundary bleeding into right wall... no meta data... just super messed up"
+
+**Status:** ✅ **COMPLETED**
+- Reverted all bad changes
+- Restored proper layout from backup:
+  - **Header Card:** Account info + upload zone (merged horizontal)
+  - **Action Bar:** REF# input | metadata center | search/buttons
+  - **Switcher Bar:** Account pills + balance recon hub
+  - **Grid:** Properly contained with flex layout
+- All 1400px max-width constraints restored
+- Icon back, layout clean
+
+**Files Modified:** `src/ui/enterprise/app.js` (lines 928-1155)
+
+**Git Commit:** `686baf0`
+
+---
+
+### PROMPT #5: MVP Freeze & Protection
+**User Request:** "mvp this and dont ever break current state"
+
+**Status:** ✅ **COMPLETED**
+- Created `MVP_STATUS.md` - Complete feature inventory
+- Created `PROTECTION_GUIDE.md` - Branching rules & safeguards
+- Tagged MVP: `mvp-2026-02-05`
+- Documented protected sections vs. safe-to-modify zones
+
+**Files Created:**
+- `MVP_STATUS.md` - What's working, what's broken, protection rules
+- `PROTECTION_GUIDE.md` - How to branch/revert if changes break things
+
+**Git Commits:**
+- `9a69023` - Add MVP_STATUS.md
+- `9f6cbe9` - Add PROTECTION_GUIDE.md
+
+---
+
+### PROMPT #6: Blue Box & Banking Info Display (SHELVED)
+**User Request:** 
+1. "Transactions" title stays
+2. Empty grid subtitle: "Waiting to get started..." → "Ready for review"
+3. Blue box header should show bank product name (from PDF) smartly
+4. Metadata display should be clean and comprehensive
+5. Account type (CHEQUING/SAVINGS) should be parsed from statement
+
+**Status:** 📋 **PLANNED** | ⏸️ **SHELVED FOR NOW**
+
+**Plan:**
+1. Change subtitle text in header (line ~955)
+2. Parse bank product name from PDF metadata
+3. Extract account type from statement
+4. Format header as: [Icon] BANK PRODUCT NAME / ACCOUNT_TYPE
+5. Keep metadata line showing INST • TRANSIT • ACCOUNT#
+
+**Files to Modify:** `src/ui/enterprise/app.js` (lines 940-980)
+
+**Why Shelved:** Need to preserve MVP state. Will do in feature branch later.
+
+**Associated Data:**
+- Your test PDF shows: "RBC DIGITAL CHOICE BUSINESS™ account package"
+- Account info: INST: 01259, TRANSIT: 106-116, ACCOUNT: 7
+- Account type: CHEQUING or SAVINGS (parse from statement title)
+
+---
+
+## 🎯 QUICK REFERENCE MAP
+
+| Prompt # | Feature | Status | File | Lines |
+|----------|---------|--------|------|-------|
+| #1 | Merge Headers + Grid | ✅ Done | app.js | 928-1010 |
+| #2 | Description Format | ⚠️ Partial | app.js | 1280-1330 |
+| #3 | Checkboxes + Bulk | ❌ Reverted | N/A | N/A |
+| #4 | Layout Restore | ✅ Done | app.js | 928-1155 |
+| #5 | MVP Freeze | ✅ Done | MVP_STATUS.md, PROTECTION_GUIDE.md | — |
+| #6 | Blue Box Banking Info | 📋 Plan | app.js | 940-980 |
+
+---
+
+## 🔐 CRITICAL CODE SECTIONS (DO NOT BREAK)
+
+### Protected Sections
+- **Header card:** `app.js` lines 940-990
+- **Action bar:** `app.js` lines 1010-1055
+- **Switcher bar:** `app.js` lines 1060-1125
+- **Grid container:** `app.js` lines 1130-1155
+- **Column definitions:** `app.js` lines 1180-1400
+
+### Safe to Modify
+- **Description formatter:** `app.js` lines 1280-1330 ✅
+- **Column styling:** Any CSS in formatters
+- **Search logic:** Search event handlers
+- **Account metadata:** Parsing logic when ingesting files
+
+---
+
+## 📊 CURRENT STATE SUMMARY
+
+**MVP Frozen At:** Commit `9f6cbe9`  
+**What Works:**
+- ✅ Transaction grid (221 rows)
+- ✅ Account switching (ALL/CHQ1)
+- ✅ REF# input + generation
+- ✅ Metadata display
+- ✅ Balance reconciliation
+- ✅ PDF audit drawer
+- ✅ Layout (header/action/switcher/grid)
+
+**What's Broken (Known):**
+- ⚠️ Description formatting (2-line split)
+- ⚠️ Date removal in descriptions
+- ⚠️ Bank product name not parsed from PDF
+- ⚠️ Account type not displayed smartly
+
+---
+
+## 🚀 NEXT SESSION CHECKLIST
+
+- [ ] Feature branch for Prompt #6 (Blue Box)
+- [ ] Parse PDF metadata for bank product name
+- [ ] Extract account type from statement
+- [ ] Update subtitle text
+- [ ] Test in browser at localhost:8000
+- [ ] Verify no layout regression
+- [ ] Merge to master only after testing
+
+---
+
+**Remember:** Always branch before modifying. Check `PROTECTION_GUIDE.md` if you break something.
