@@ -262,6 +262,17 @@
 
     <!-- Ledger Workspace Manager (Instant Account Switching) -->
     <script src="./src/ui/workspace/ledgerWorkspace.js"></script>
+
+    <!-- Column Management System (ES6 Modules) -->
+    <script type="module">
+        import { openColumnManager, exportCSV, exportXLSX, exportPDF } from './src/ui/components/columnManager.js';
+        
+        // Expose to window for onclick handlers
+        window.openColumnManager = openColumnManager;
+        window.exportCSV = exportCSV;
+        window.exportXLSX = exportXLSX;
+        window.exportPDF = exportPDF;
+    </script>
 </body>
 
 </html>
