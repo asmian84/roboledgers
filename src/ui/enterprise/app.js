@@ -898,6 +898,11 @@
       const gridDiv = document.querySelector('#txnGrid');
       if (gridDiv) setTimeout(initGrid, 50);
     }
+
+    // 5. Run debug audit AFTER DOM fully updated
+    setTimeout(() => {
+      if (window.RL_DEBUG_AUDIT) window.RL_DEBUG_AUDIT();
+    }, 50);
   }
 
   function renderPage() {
