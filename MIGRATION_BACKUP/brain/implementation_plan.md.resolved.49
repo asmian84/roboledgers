@@ -1,0 +1,53 @@
+# PDF Curtain \u0026 Audit Integration Plan
+
+The goal is to move from the legacy "New Tab" PDF viewer to an integrated "Curtain" or "Drawer" model that slides over the grid, allowing for simultaneous PDF viewing and transaction auditing/categorization.
+
+## User Requirements
+- **Integrated Viewer**: Display PDF within the app shell (Split Screen / Curtain), not a new tab.
+- **Audit Panel**: Implement the "AI Audit" capability (Local vs Google) for categorizing transactions.
+- **High-Fidelity**: Match the V5 aesthetic (Glassmorphism, specific colors).
+
+## Architecture Mapping
+
+### 1. The Curtain (PDF Viewer)
+We will implement [toggleCurtain(isOpen, fileBlob)](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#342-350) in [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/pro/app.js).
+- **UI Component**: A fixed-position distinct pane (right side, 50% width?) or a full-overlay curtain. Given "Curtain" usually implies a slide-over.
+- **Library**: We need `pdf.js` loaded in [index.html](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/pro/index.html).
+- **State**: `UI_STATE.curtainOpen`, `UI_STATE.activeFile`.
+
+### 2. The Audit Panel
+The "AI Audit Panel" described is a *modal*. We can keep it as a modal or integrate it into the Curtain.
+- **Proposal**: If the Curtain is open (displaying the Statement), the Audit Panel should likely be *part* of that curtain or a floating tool *over* it, rather than a separate centered modal that blocks the PDF.
+- **Refinement**: We'll implement the `showAIAuditPanel` logic as a function that injects the HTML dynamically, ensuring it layers correctly over the UI.
+
+### 3. File Storage
+The [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js) handles ingestion but currently just returns parsed rows.
+- **Change**: We need to store the *File Blob* reference.
+- **Solution**: Update [processUpload](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#402-480) to store the file blob in a temporary `window.RoboLedger. Files` map (memory-only for now, or IndexedDB if persisting). For this session, memory map `file_id -> blob` is sufficient to get the viewer working.
+
+## Proposed Changes
+
+### [Step 1] PDF.js Integration
+- Update [index.html](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/pro/index.html) to include the PDF.js CDN library (if not already there).
+
+### [Step 2] Core Updates ([ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js))
+- Update [processUpload](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#402-480) to return a `fileId` along with transactions.
+- Store `fileId` -> `Blob` in a lookup map.
+- Tag every transaction with `sourceFileId`.
+
+### [Step 3] UI Implementation ([app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/pro/app.js) & [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css))
+- **Curtain Container**: Add a `#pdf-curtain` div to the main layout (initially hidden/off-canvas).
+- **Toggle Logic**: `window.openSourceFile(fileId)` should now slide out the curtain and render the PDF into it.
+- **Viewer Controls**: Add basic Zoom/Page controls to the curtain header.
+- **Highlighting**: (Future) Add logic to scroll PDF to text locations.
+
+### [Step 4] Audit Panel Port
+- Port the `showAIAuditPanel` (Code B) logic into [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/pro/app.js) (or a new `ui/interactions.js` if splitting).
+- Ensure it sends data to the `Brain` in [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js).
+
+## Action Plan
+1.  **Commit** current state (Done via task_boundary).
+2.  **Edit [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js)**: Add File Storage mechanism.
+3.  **Edit [index.html](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/pro/index.html)**: Add PDF.js script tag.
+4.  **Edit [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)**: Add `.pdf-curtain` styles (Slide-over animation).
+5.  **Edit [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/pro/app.js)**: Implement `openSourceFile` logic to populate the curtain.

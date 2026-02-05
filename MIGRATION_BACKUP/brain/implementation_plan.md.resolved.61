@@ -1,0 +1,36 @@
+# RoboLedger V5.2.17: Aesthetic Polish, Breadcrumbs & Full-Width Layout
+
+Refining the V5 UI for a "slicker", high-density professional look. This involves reducing typography scales, implementing functional breadcrumbs, and expanding the layout to a full-width header pattern.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Full-Width Shift**: The Breadcrumb Bar will now stretch wall-to-wall (full width of the main content area) instead of being islanded. This aligns with the official V5 design pattern.
+> **Active Routing**: Breadcrumbs like "Home" and "Transactions" will be wired to the app's internal navigation system.
+
+## Proposed Changes
+
+### UI Logic (app.js)
+- **Functional Breadcrumbs**:
+  - Update [renderTransactionsRestored](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#909-1068) (and other pages) to use `onclick="window.UI_STATE.currentRoute='...' render()"` for breadcrumb items.
+  - Standardize breadcrumb icons (e.g., house icon for Home).
+- **Header Card Cleanup**:
+  - Reduce padding and scale down title fonts to "fit to content" density.
+- **Grid Layout (initGrid)**:
+  - Optimize column widths: Fixed sizes for specific data cols, `widthGrow: 1` for Description.
+  - Standardize font-size to **11.5px/12px** for a cleaner feel.
+
+### Styling (system.css)
+- **Full-Width Layout**:
+  - Remove `max-width: 1060px` from `.breadcrumb-bar` to allow wall-to-wall stretching.
+  - Adjust margins and borders for the breadcrumb bar to match the sidebar boundary.
+- **Typography Scale**:
+  - Reduce global font-sizes for grid cells, headers, and metadata lines.
+- **Vertical Gaps**: Tighten the spacing between the breadcrumb bar and the island stack.
+
+## Verification Plan
+
+### Manual Verification
+1. **Vertical Alignment Check**: Use a browser inspector or visual guide to ensure the left and right edges of the Header Card, Action Bar, and Switcher Bar are perfectly flush with each other.
+2. **Standardization Check**: Confirm that resizing the window maintains the 1060px centered islanding for all elements in the stack.
+

@@ -1,0 +1,87 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+- [x] Phase 4: Automated Invariant Testing
+- [x] Phase 5: COA Intelligence Layer
+- [x] Phase 6: Categorization Brain (Deterministic Reasoning)
+- [x] Phase 7: Reconciliation Proof Engine (Mathematical Truth)
+- [x] Phase 8: Role-Based Authority Control (RBAC)
+- [x] Phase 9: Adjusting Journal Entries (AJE) Layer
+- [x] **CORE FREEZE (v1.0.0-core-constitution)**
+- [x] Phase 10: UX Projection Contracts
+- [x] Phase 11: Zen Mode Feed (First Visual Layer)
+- [x] Phase 12: Professional Ledger Lenses (Bookkeeper Part)
+- [x] Phase 13: Accountant Lens (Authority & Certification)
+- [x] Phase 14A: Multi-Entity Consolidation Model
+- [x] Phase 14C: Forecasting Engine (COMPLETE)
+- [x] Phase 15: Production Hardening & Resilience (COMPLETE)
+- [x] Phase 16: UI/UX Command Center (COMPLETE - REJECTED)
+- [x] Phase 17: Principal UX Architecture (COMPLETE - REJECTED)
+- [x] Phase 18: Enterprise UI Architecture (COMPLETE)
+- [x] Phase 19: Hostile Auditor Simulation (COMPLETE)
+- [x] Phase 20: Human Friction Testing (COMPLETE)
+- [x] Phase 21: Minor Institutional Polish (COMPLETE)
+- [x] Phase 22: Akaunting-Inspired Institutional Refinement (COMPLETE)
+- [ ] Phase 24: Apple-Grade UI Redesign (IN PROGRESS)
+    - [x] 24.1: Implement Glassmorphic Foundation (COMPLETE)
+    - [/] 24.2: Build Apple-Grade Zen Mode (Dashboard IMPLEMENTED)
+    - [x] 24.3: Implement High-Density Bookkeeper Desk (Transactions RESTORED - V5 PURPLE)
+- [x] Phase 25: RoboLedger V5 UI Convergence (COMPLETE)
+- [x] Phase 26: RoboLedger V4/V5 Restoration (COMPLETE)
+    - [x] 26.1: V4 Navigation & Sidebar Restoration (COMPLETE)
+    - [x] 26.2: Breadcrumb & Main Shell Restoration (COMPLETE)
+    - [x] 26.3: Screenshot-Perfect Header Cards (COMPLETE)
+    - [x] 26.4: Empty State & Illustrations Restoration (COMPLETE)
+    - [x] 26.5: Functional Integration with Restored UI (COMPLETE)
+- [x] Phase 28: V5 Transactions High-Fidelity Refinement (COMPLETE)
+    - [x] 28.1: Implement Purple Header Theme (#9333ea)
+    - [x] 28.2: Integrated Header Search Filters
+    - [x] 28.3: Teal "TXN" Source Badges
+    - [x] 28.4: Full-Screen Adaptive Flex Layout ("No Bibs")
+    - [x] 28.5: Multi-File Batch Ingestion Support
+- [x] Phase 29: Settings Drawer & Metadata Hub Restoration (COMPLETE)
+    - [x] 29.1: Implement Metadata Action Bar (Status Cluster)
+    - [x] 29.2: Implement High-Fidelity Settings Drawer (Multi-Tab)
+    - [x] 29.3: Add Workspace Dexterity (Focus Lens) & Theme selection
+    - [x] 29.4: Wire Column Visibility Toggles
+    - [x] 29.5: Implement window.getSettingsTrace() for forensic console debugging
+- [x] Phase 30: "Start Over" Reset Logic
+    - [x] 30.1: Implement Ledger.reset() in ledger.core.js
+    - [x] 30.2: Add "Start Over" button with inline confirmation to V5 Header
+    - [x] 30.3: Ensure reset returns UI to fresh empty state
+- [x] Phase 35: V5 Shell Architecture & Wiring
+    - [x] 35.1: Implement Hierarchical Card Mapping (Orange/Green/Blue)
+    - [x] 35.2: Bidirectional Ref# wiring (Bar <-> Account <-> Grid)
+    - [x] 35.3: Unique Ref# verification with error messaging
+    - [x] 35.4: Restore V5 Bulk Action Menu and Iconic controls
+    - [x] 35.5: Align Grid Columns (Remove Account, Add dynamic Source)
+- [x] Phase 31: V5 Grid & Ingestion Refinement
+    - [x] 31.1: Implement 2-Line clean descriptions (Screenshot 2 Style)
+    - [x] 31.2: Implement separate Debit/Credit population logic
+    - [x] 31.3: Implement Running Balance calculation logic
+    - [x] 31.4: Reposition "Start Over" button beside upload bucket (Icon-style)
+    - [x] 31.5: Wire Ref# to parser (CHQ detection)
+- [x] Phase 32: Screenshot 2 Alignment & Spacing Polish
+    - [x] 32.1: Remove visual progress bar (textual trace only)
+    - [x] 32.2: Tighten vertical whitespace between Header and Grid
+    - [x] 32.3: Validate Tabulator density and styles against Screenshot 2
+- [x] Phase 33: TG Build Alignment (Visual V5 Benchmark)
+    - [x] 33.1: Implement Breadcrumb-style Header (Transactions / Account)
+    - [x] 33.2: Re-style Account Switcher to Pill-selection bar
+    - [x] 33.3: Apply Purple Header styling to Tabulator grid
+    - [x] 33.4: Align Running Balance logic with "Opening Balance" view
+    - [x] 33.5: Final layout tightening for high-density forensic look
+- [x] Phase 34: Description De-Cluttering & Forensic Cleaning
+    - [x] 34.1: Strip redundant dates from raw descriptions
+    - [x] 34.2: Move account/transit numbers to sub-line
+    - [x] 34.3: Implement surgical extraction for main Payee title
+    - [x] 34.4: Update grid formatter to use clean title/detail fields
+- [x] Phase 36: V5 UI Polish (FINAL)
+    - [x] 36.1: Implement Clean Slate "Waiting" State
+    - [x] 36.2: Implement Screenshot 1 Blue Progress Bar
+    - [x] 36.3: Refine Header Card to Screenshot 3 (Blue Icon/Breadcrumb/Metadata)
+    - [x] 36.4: Implement Sticky Yellow Bulk Action Bar
+
+**CORE ACCOUNTING ENGINE COMPLETE & FROZEN**

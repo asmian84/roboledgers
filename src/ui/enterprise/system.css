@@ -2208,3 +2208,19 @@ body {
         opacity: 1;
     }
 }
+
+@keyframes blink-dots {
+    0%, 20% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.animated-dots {
+    animation: blink-dots 1.4s infinite;
+}

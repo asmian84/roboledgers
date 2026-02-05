@@ -1,0 +1,138 @@
+# Grid Column Restructuring & UI Refinement
+
+## Problem Statement
+
+The current transaction grid has several critical issues:
+1. **Date parsing error** - Showing 2026 instead of 2023
+2. **Wrong columns** - Account column should be Balance, missing Source column
+3. **Cluttered UI** - Search fields in headers, unnecessary Actions column
+4. **Missing COA integration** - Need 5-category COA system instead of simple account dropdown
+
+## Proposed Changes
+
+### 1. Fix Date Parsing Issue
+
+**Problem**: Dates are showing as 2026 when they should be 2023.
+
+**Root Cause**: Likely in the date formatter or the Luxon configuration.
+
+**Solution**: 
+- Re-enable Luxon datetime formatter with correct format
+- Verify date parsing in ledger.core.js
+- Ensure dates are stored/displayed correctly
+
+---
+
+### 2. Column Restructure
+
+#### Remove:
+- ❌ **Account Column** (replace with Balance)
+- ❌ **Actions Column** (will be redesigned later)
+- ❌ **Header search fields** (all columns)
+
+#### Add/Modify:
+- ✅ **Balance Column** - Running balance with proper formatting
+  - Calculate cumulative balance from transaction history
+  - Format: `$1,234.56` with color coding (green positive, red negative)
+  - Width: 140px
+
+- ✅ **Source Column** - Show Ref# with account pill
+  - Format: `REF-001` with colored pill badge
+  - Link to source account
+  - Width: 180px
+
+#### Final Column Order:
+1. **Checkbox** (select)
+2. **Ref#** (e.g., CHQ1-060)
+3. **Date** (formatted correctly)
+4. **Payee / Description** (2-line: UPPERCASE + context)
+5. **Debit** (red, right-aligned)
+6. **Credit** (green, right-aligned)
+7. **Balance** (running total, color-coded)
+8. **Source** (Ref# + account pill)
+9. **Account** (5-category COA dropdown - see below)
+
+---
+
+### 3. Chart of Accounts - 5 Category System
+
+Replace the current account dropdown with a **5-category COA selector**:
+
+#### Categories:
+1. **💰 Assets** - Bank accounts, receivables, inventory
+2. **💳 Liabilities** - Payables, loans, credit cards
+3. **💵 Income** - Revenue, sales, other income
+4. **📊 Expenses** - Operating costs, COGS, overhead
+5. **👤 Equity** - Owner's equity, retained earnings, draws
+
+#### Implementation:
+- Dropdown shows category icon + name
+- Clicking opens sub-menu with specific accounts
+- Selected account shows as: `[Category Icon] Account Name`
+- Color-coded by category for quick visual scanning
+
+---
+
+### 4. UI/UX Improvements
+
+#### Typography:
+- **Primary font**: Inter or SF Pro (clean, modern)
+- **Monospace font**: JetBrains Mono (for numbers, Ref#)
+- **Font sizes**: 
+  - Headers: 11px, bold, uppercase, tracking: 0.5px
+  - Data: 13px, medium weight
+  - Sub-text: 10px, regular
+
+#### Spacing & Density:
+- Row height: 44px (snug but readable)
+- Cell padding: 8px horizontal, 4px vertical
+- Column gaps: Minimal (let Tabulator handle)
+
+#### Colors:
+- **Debit**: `#dc2626` (red-600)
+- **Credit**: `#10b981` (emerald-500)
+- **Balance positive**: `#059669` (emerald-600)
+- **Balance negative**: `#dc2626` (red-600)
+- **Ref pills**: `#3b82f6` (blue-500) background, white text
+
+#### Visual Polish:
+- Remove all header search inputs
+- Clean column headers (icon + label only)
+- Subtle hover states on rows
+- Smooth transitions (150ms ease)
+
+---
+
+## Verification Plan
+
+### Functional Tests:
+1. Upload a 2023 bank statement → Verify dates show as 2023
+2. Check Balance column → Running total should be accurate
+3. Click Source pill → Should link to account
+4. Select COA category → Dropdown should show accounts
+5. Verify no search fields in headers
+
+### Visual Tests:
+1. Typography is clean and readable
+2. Colors are consistent with design system
+3. Spacing feels balanced
+4. No visual clutter
+
+---
+
+## Files to Modify
+
+### [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- Fix date formatter (re-enable Luxon)
+- Remove Account column, add Balance column
+- Remove Actions column
+- Add Source column with Ref# pill
+- Remove headerFilter from all columns
+- Implement 5-category COA dropdown formatter
+
+### [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- Add styles for Balance column (color-coded)
+- Add styles for Source pill badges
+- Add styles for COA category dropdown
+- Refine typography (Inter/SF Pro)
+- Polish hover states and transitions

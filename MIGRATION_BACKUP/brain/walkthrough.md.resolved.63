@@ -1,0 +1,39 @@
+# RoboLedger V5.2.22: Forensic Audit & Persistence Update
+
+This update introduces critical features for session reliability, side-by-side forensic verification, and enhanced grid scannability.
+
+## 📐 Layout Expansion (1166px) & Grid Fidelity
+The "Island Stack" is expanded to **1166px**, and we've sharpened the structural scannability.
+
+- [x] **Forced 1166px Width**: Standardized across Header, Action Bar, Switcher, and Grid.
+- [x] **Sharpened Dividers**: Crisp `1px` separators added with optimized opacity (`30%` headers / `8%` body) for high-scannability without distraction.
+
+## ⚡ Session Recovery (V5.2.20)
+Never lose your work on an accidental refresh.
+- [x] **In-Page Recovery Banner**: A sleek blue-bordered banner appears if previous data is detected.
+- [x] **Continue vs Start New**: Choose to resume your flow or purge the ledger for a fresh start.
+
+## 🕵️ Forensic Audit Drawer (V5.2.21)
+Implement side-by-side verification to handle truncated or ambiguous descriptions.
+
+- [x] **Integrated Sidebar**: Full-height drawer that compresses the main stage when active.
+- [x] **Multi-Source Support**:
+    - **PDF**: Embedded iframe viewer for high-fidelity source checking.
+    - **CSV/Text**: Monospace scrollable preview for raw data verification.
+- [x] **Contextual Sync**: Click any "Source" icon in the grid to immediately load the correct document fragment.
+
+## ⚡ Performance & Logic
+- [x] **Flicker-Free Switcher**: Filter-based performance (0ms latency).
+- [x] **Adaptive Naming**: CHQ1, CHQ2 sequencing for intuitive navigation.
+- [x] **Parser Polarity**: Deep-audit of Debit vs Credit logic (v5.2.19 fixed).
+
+---
+*RoboLedger V5: Forensic Integrity. Infinite Scale.*
+- **COA Tagging**: Integrated the "All roads lead to COA" philosophy—transactions map to categories via high-fidelity tags rather than sub-ledgers.
+
+## 🛠️ Parser Polarity Fix
+Resolved a critical bug where all transactions were bucketed as "Credits". 
+- **Debit Detection**: The engine now correctly identifies outgoings based on amount signs (`-`) and description keywords (`PURCHASE`, `WITHDRAWAL`).
+
+---
+**RoboLedger V5 is now functionally audited and performance-hardened.** 🚀

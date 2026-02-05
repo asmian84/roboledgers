@@ -292,21 +292,10 @@
   };
 
   window.switchAccount = function (accId) {
-    console.log(`[V5 CONTROL] Switching to account: ${accId}`);
-    UI_STATE.selectedAccount = accId;
-
-    // Performance Optimization: Use Tabulator-native filter instead of full render
-    if (window.txnTable) {
-      if (accId === 'ALL') {
-        window.txnTable.clearFilter();
-      } else {
-        window.txnTable.setFilter("account_id", "=", accId);
-      }
-      // Force Ref# re-calculation after filter
-      window.txnTable.redraw(true);
-    }
-
-    // Update Pill Active State (Manual DOM update to avoid full render flicker)
+    // Delegate to LedgerWorkspace for instant account switching
+    LedgerWorkspace.switchAccount(accId);
+    
+    // Update Pill Active State (Manual DOM update to avoid flicker)
     document.querySelectorAll('[data-acc-btn]').forEach(btn => {
       const isActive = btn.getAttribute('data-acc-btn') === accId;
       btn.classList.toggle('active', isActive);
@@ -805,6 +794,11 @@
     UI_STATE.isIngesting = false;
     UI_STATE.ingestionLabel = null;
     UI_STATE.ingestionProgress = 100;
+
+    // Rebuild workspace with newly imported transactions
+    LedgerWorkspace.buildFromEngine();
+    LedgerWorkspace.switchAccount(LedgerWorkspace.TEMP_ACCOUNT_ID);
+
     render();
   }
 
@@ -1507,6 +1501,10 @@
         }
       ]
     }); // End new Tabulator({...})
+
+    // Initialize Ledger Workspace layer
+    LedgerWorkspace.buildFromEngine();
+    LedgerWorkspace.switchAccount(UI_STATE.selectedAccount || LedgerWorkspace.TEMP_ACCOUNT_ID);
 
     // Attach Event Listeners
     window.txnTable.on("rowClick", function (e, row) {

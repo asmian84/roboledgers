@@ -1,0 +1,29 @@
+# Walkthrough: Canonical Accounting Invariants
+
+I have defined the "constitution" of the RoboLedgers accounting system. These invariants ensure that the system is audit-ready, forensically sound, and mathematically consistent.
+
+## Key Accomplishments
+
+### 1. Canonical Transaction Model
+Defined a robust model that separates **Core Facts** (Immutable) from **Metadata** (Versioned). This ensures that once a financial fact is entered, it cannot be quietly altered.
+
+### 2. Forensic Fingerprinting (txsig)
+Implemented a hashing strategy (SHA-256) that guarantees unique identification of transactions without relying on database-generated IDs. This allows for collision-free imports and perfect duplicate detection.
+
+### 3. Absolute Immutability
+Established a "No Destruction" policy. Errors must be corrected through reversals and new entries, preserving the full audit trail for historical reconstruction.
+
+### 4. Reconciliation Math
+Enforced strict reconciliation rules where the ledger must mathematically prove its consistency with external statements before a period can be locked or reported on.
+
+### 5. Exception Strategy
+Defined a clear hierarchy of `INVARIANT_VIOLATION` errors to ensure that any breach of these laws is caught immediately and handled safely.
+
+## Final Documents
+- [canonical_accounting_invariants.md](file:///C:/Users/asmia/.gemini/antigravity\brain\410a76b2-0025-4cfc-a894-2bba5b8c33e5/canonical_accounting_invariants.md)
+
+## Verification
+The defined invariants align with:
+- **GAAP/IFRS Principles**: Revenue/Expense recognition and dual-entry consistency.
+- **Forensic Accounting Standards**: Immutable audit logs and hash-based integrity.
+- **Modern Ledger Design**: Versioning instead of mutation.

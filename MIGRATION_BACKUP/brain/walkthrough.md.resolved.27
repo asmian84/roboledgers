@@ -1,0 +1,28 @@
+# Walkthrough: V5 Institutional Hardening
+
+This walkthrough demonstrates the restoration of the Metadata Action Bar and the high-fidelity Settings Drawer, with strict visibility guards for the empty state.
+
+## 1. Metadata Action Bar (Hub)
+The "Purple Era" Action Bar has been restored. It provides a dense, forensic summary of the current ledger state.
+
+- **Forensic Stats**: Shows total Accounts, transactions in flight, and system mode.
+- **Global REF# Input**: Compact text input for rapid reference labeling.
+- **Analytics & Settings Gear**: Quick access to deep diagnostics and grid controls.
+
+![Metadata Hub Reference](file:///C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1770145350861.png)
+> [!NOTE]
+> The image above shows the Hub. I have since updated the logic so it **only** appears once data is present, as per your instruction.
+
+## 2. High-Fidelity Settings Drawer
+The drawer is now a multi-tabbed interactive panel.
+- **System**: Features the **Focus Lens** (Workspace Dexterity) and Theme selection (Rainbow, Wave Blue, etc.).
+- **Columns**: Logic to toggle Tabulator visibility for every field (Date, Ref#, Debit, etc.).
+- **Preferences**: Controls for REF overrides and Tax Calculation math.
+
+## 3. Empty State Hardening
+The UI has been hardened to ensure a clean first impression.
+- **Conditional Rendering**: The Metadata Hub and Account Switcher are wrapped in a `hasData` guard. They will only manifest once your forensic documents are parsed and the grid is initialized.
+- **"Waiting" Header**: The header card displays a clean "WAITING TO GET STARTED" animation until ingestion begins.
+
+## 4. Forensic Console Trace
+You can audit the entire browser-side state by running `window.getSettingsTrace()` in your console. This provides a 1:1 view of the institutional registry variables.

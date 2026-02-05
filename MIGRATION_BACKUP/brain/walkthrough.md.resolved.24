@@ -1,0 +1,35 @@
+# RoboLedger V5 Live System Restoration
+
+The restoration is complete. We have moved from a static shell to a **Live, High-Performance Financial OS**.
+
+## 🚀 Live System Features
+
+### 1. Hardened Ledger Engine ([ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js))
+I have ported the TypeScript-based Ledger Engine into a browser-native core.
+- **Truth Vault**: Enforces transaction immutability and `txsig` uniqueness.
+- **Persistence**: Data is saved to `localStorage`, meaning your transactions survive page refreshes.
+- **Idempotency**: The system prevents duplicate imports by fingerprinting every transaction with a SHA-256 signature.
+
+### 2. Functional Ingestion
+The "Transactions" module is now fully functional.
+- **Real Imports**: The "Browse files" button now opens a file picker.
+- **CSV Support**: Upload any standard bank CSV, and the system will ingest it into the Ledger.
+- **Real-Time Grid**: The AG Grid updates instantly upon ingestion, showing live ledger data.
+
+### 3. Iconic V5 Aesthetic
+- **Navy Gradient Sidebar**: Replicated perfectly.
+- **Pragmatic Header**: 1:1 match with the "WAITING TO GET STARTED.." state and dashed upload zone.
+- **High-Density Grid**: Table layout optimized for professional accounting data.
+
+---
+
+## 🚀 Proof of Work
+
+The system is now live at [**index.html**](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/index.html).
+
+### Key Files:
+- [**ledger.core.js**](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js): The brain of the live system.
+- [**app.js**](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js): The UI controller wired to the core logic.
+- [**system.css**](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css): The precise V5 design system.
+
+You can now test the system by clicking "Browse files" and uploading a CSV. Every transaction will be uniquely signed and persisted to your browser storage.

@@ -1,0 +1,78 @@
+# V5 Restoration: Settings Drawer & Metadata Action Bar
+
+Restore the Transactions Metadata Hub (Action Bar) and the high-fidelity Settings Drawer to match the "Purple Era" V5 benchmark.
+
+## Proposed Changes
+
+### [Component] Metadata Hub (Action Bar) [COMPLETE]
+- **Positioning**: Fixed bar above the grid area.
+- **REF# Input**: Compact text input for global reference overrides.
+- **Status Cluster**: Multi-Ledger status bar showing:
+  - Account counts
+  - Total Transactions (e.g., "TXNS: 512")
+  - System Mode (e.g., "Mode: Aggregate")
+- **Control Cluster**:
+  - Analytics Icon button.
+  - Settings Gear (triggers the Drawer).
+
+### [Component] High-Fidelity Settings Drawer [COMPLETE]
+- **Vertical Orientation**: The drawer should slide from the right, with content panels opening "downwards" or sequentially within the scroll area.
+- **Tabs Integration**:
+  - **System**: Workspace Dexterity (Focus Lens), Appearance (Theme), Font Size, Row Density.
+  - **Columns**: Logic to hide/show specific Tabulator columns (Date, Desc, Debit, etc.).
+  - **Auto-Cat**: Categorization engine controls (future).
+  - **Preferences**: REF field auto-detect, Date Formats, Tax Calculations.
+  - **Advanced**: Forensic trace settings.
+- **Theme Dropdown**: High-fidelity dropdown that opens downwards, containing the full V5 palette (Rainbow, Wave Blue, Subliminal Dark, etc.).
+
+### [Component] JavaScript Wiring (app.js) [COMPLETE]
+- Implement `UI_STATE.settingsTab` for internal drawer routing.
+- Wire [toggleSettings(true)](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#116-120) to re-render the drawer with current tab state.
+- Expose a `window.getSettingsTrace()` function for console-level forensic inspection of the drawer state.
+
+### [Feature] Start Over (Reset Logic) [COMPLETE]
+- **Inline Confirmation**: The "Start Over" button will toggle to a confirmation state (e.g., "Confirm Reset?") when clicked, requiring a second click to finalize.
+- **Ledger Reset**: Calls `window.RoboLedger.Ledger.reset()` to wipe all transactions from state and localStorage.
+- **UI Reset**: Triggers a full [render()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#166-194) to bring the user back to the high-fidelity empty state.
+
+### [Phase 31] Grid & Ingestion Refinement [COMPLETE]
+- **2-Line Descriptions**: Refactor the description formatter to display the main description and sub-details in a clean, high-fidelity 2-line layout.
+- **Financial Logic**:
+    - **Separate Debit/Credit**: Ensure rows populate either the Debit or Credit column exclusively based on polarity.
+    - **Running Balance**: Implement a calculation to derive the balance for each row based on the initial account balance and subsequent transactions.
+- **Ref# Logic**:
+    - Update the parser to identify "CHQ" patterns and assign them to the `ref` field.
+    - Fallback to `TXN-###` if no specific reference is found.
+- **UI Adjustments**: Move the "Start Over" button to be an icon-button positioned adjacent to the upload/browse group.
+
+### [Phase 32] Screenshot 2 Alignment & Spacing Polish [COMPLETE]
+- **Ingestion UI**: Remove the visual progress bar (`.forensic-bar`). Only display the textual status (e.g., "[3/13] Reconstructing Truth State... 50%") to match the surgical, forensic aesthetic of Screenshot 2.
+- **Layout Tightening**: Reduce vertical padding/margins in the main stage (Header to Action Bar, Action Bar to Grid) to maximize row visibility and align with the dense benchmark.
+- **Grid Calibration**: Ensure the Tabulator theme (`.txn-grid-v5`) uses the high-density row setting and matches the color/font weights seen in the reference screenshot.
+
+### [Phase 33] TG Build Alignment (Visual V5 Benchmark) [COMPLETE]
+- **Breadcrumb Header**: Simplify the `header-card` to a multi-stage breadcrumb: `Transactions / [BANK NAME] / [TYPE]`. Move institutional metadata (INST, TRANSIT, ACCOUNT) to a secondary row with distinct spacing.
+- **Pill Account Switcher**: Re-style the `account-switcher` buttons into pill-shaped tabs on a light-neutral background track. Use white background for active pills with blue text.
+- **Purple Tabulator Header**: Force the Tabulator header to `#9333ea` with white text and clearly visible column separators.
+- **Opening Balance View**: Adjust calculation logic so the "Balance" column reflects the balance *before* the current transaction is applied, matching the provided benchmark.
+
+### [Phase 34] Description De-Cluttering & Forensic Cleaning [COMPLETE]
+- **Surgical Extraction**: Update the [parsePDFText](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#314-377) logic to identify and strip redundant leading dates (e.g., "04 Jul") from the transaction description.
+- **Sub-Detail Migration**: Automatically move technical metadata (account numbers, transit markers, activity logs) from the main `raw_description` to a new `sub_detail` field in the canonical transaction object.
+- **Clean Title Formatting**: Ensure the primary `description` field contains only the Payee/Entity name for a high-fidelity first line.
+- **Grid Integration**: Refactor the Tabulator `Description` formatter to display these two distinct fields (`description` and `metadata.sub_detail`) vertically, removing the messy hardcoded fallbacks.
+
+### [Phase 35] V5 UI Polish (Visual Completion) [COMPLETE]
+- **Clean Slate**: Implemented waiting state card with large blue action icon and nested dropzone.
+- **Forensic Progress Bar**: Specific V5-blue rounded progress bar (`.v5-progress-container`) for ingestion states.
+- **Header Card Refinement**: Aligned exactly with "Screenshot 3" (Blue Icon + Breadcrumb + Meta-row).
+- **Sticky Bulk Actions**: Implemented the `Amber-50` floating bulk action bar that slides up on selection.
+
+## Verification Plan
+
+### Manual Verification
+1.  **Metadata Check**: Confirm the REF# input and Status Cluster are visible above the Transactions grid.
+2.  **Drawer Interaction**: Click gear -> Confirm drawer slides in -> Confirm Tab switching works.
+3.  **Column Toggles**: Toggle "Description" off in the drawer -> Confirm Tabulator hides the column instantly.
+4.  **Theme Switch**: Change theme to "Wave Blue" -> Confirm CSS variables update across the shell.
+5.  **Console Trace**: Run `window.getSettingsTrace()` to see full reactive state.

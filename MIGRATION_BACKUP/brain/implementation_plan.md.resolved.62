@@ -1,0 +1,30 @@
+# RoboLedger V5.2.18: Glassmorphism Island Stack
+
+Implementing the "Digital Prism" glassmorphism effect across the Header Card, Action Bar, and Switcher Bar. This high-fidelity aesthetic uses backdrop-filters, glossy highlights, and subtle shadows to create depth.
+
+## User Review Required
+
+> [!NOTE]
+> **Digital Prism Aesthetic**: I am applying a `8px` backdrop blur and a `1px` glossy top highlight to each element in the island stack. This will replace the solid white backgrounds with a semi-transparent, premium glass feel.
+
+## Proposed Changes
+
+### UI Logic (app.js)
+- **renderTransactionsRestored**:
+  - Apply the new `.v5-glass` class to the `header-card`, `v5-action-bar`, and `v5-switcher-bar`.
+  - Remove redundant inline background and border styles that conflict with the glass class.
+
+### Styling (system.css)
+- **Glassmorphism Layer (.v5-glass)**:
+  - Add `backdrop-filter: blur(8px)`.
+  - background: `rgba(255, 255, 255, 0.75)`.
+  - border: `1px solid rgba(255, 255, 255, 0.45)`.
+  - box-shadow: `0 4px 12px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8)`. (The glossy top prism line).
+- **Island Symmetry**: Ensure the `1060px` wrapper allows the glass effect to breathe against the `#f8fafc` background.
+
+## Verification Plan
+
+### Manual Verification
+1. **Vertical Alignment Check**: Use a browser inspector or visual guide to ensure the left and right edges of the Header Card, Action Bar, and Switcher Bar are perfectly flush with each other.
+2. **Standardization Check**: Confirm that resizing the window maintains the 1060px centered islanding for all elements in the stack.
+

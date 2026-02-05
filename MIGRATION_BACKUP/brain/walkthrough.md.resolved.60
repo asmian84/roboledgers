@@ -1,0 +1,107 @@
+# V5.2.6 Walkthrough: Advanced Grid Popout & Ref# Syncing
+
+I have implemented the advanced window detachment system and dynamic account renaming for RoboLedger V5.2.6.
+
+## 🔗 Ref# & Pill Syncing
+Renaming the account reference in the Action Bar now instantly propagates to the account switcher pills. This allows for rapid, unique identification of autodetected bank accounts.
+
+```javascript
+// Sync logic from app.js
+window.handleRefUpdate = (newRef) => {
+    const result = window.RoboLedger.Accounts.setRef(activeAcc.id, newRef.trim());
+    if (result.success) {
+      window.render(); // Pill refresh
+      // ...
+    }
+}
+```
+
+## 🚀 Surgical Grid Popout
+You can now detach the transaction grid into a standalone browser window.
+
+### Key Features:
+- **Blob URL Strategy**: No server-side files; the popout is generated dynamically via a Blob URL.
+- **Bidirectional Sync**: Edits made in the popout window are sent back to the main window via `postMessage`, updating the Ledger Truth Vault in real-time.
+- **Visual Parity**: The popout grid inherits the main app's CSS, including the **Rainbow Header** and color-coded amounts.
+- **Pop-In Bridge**: A heartbeat monitor automatically restores the local grid if the popout window is closed or "Docked".
+
+### 📸 Verification Data
+![Grid Popped Out Overlay](C:\Users\asmia\.gemini\antigravity\brain\410a76b2-0025-4cfc-a894-2bba5b8c33e5\uploaded_media_1770185593497.png)
+
+> [!NOTE]
+> The image above shows the main window transitioning to the "Grid Popped Out" state, replacing the local grid with a "Bring it Back" bridge.
+
+## 🏢 Triple-Bar Layout System (V5.2.7)
+I have refactored the transaction header from a monolithic block into three distinct, high-efficiency bars:
+1.  **Main Header**: Brand logo, Bank breadcrumbs, and Unified Upload zone.
+2.  **Action Bar**: Dynamic Ref# input, real-time Metrics (Tx count, Total Balance), Search, and Popout tools.
+3.  **Switcher Bar**: Account pills now inhabit their own snug row, ensuring 1:1 width alignment with the grid.
+
+> [!TIP]
+> **Real Estate Optimization**: Stage side padding was reduced by 10% (32px → 29px), and card heights were compressed to ensure maximum transaction visibility.
+
+## ⚡ Stability & Layout Restoration (V5.2.8)
+I have resolved the critical `TypeError` and perfected the 1060px vertical stack for all header bars.
+
+## 🎨 UI Fidelity: Empty State (V5.2.9 - V5.2.12)
+I have restored the "No transactions yet" state to match your high-fidelity design 1:1, including the **1060px centered layout**.
+
+### 📸 Restoration Status: SUCCESS
+![V5.2.9 Design Reference](C:\Users\asmia\.gemini\antigravity\brain\410a76b2-0025-4cfc-a894-2bba5b8c33e5\uploaded_media_1770186885782.png)
+
+**Key Restorations & Improvements:**
+- **Centered Island Layout**: Re-enforced the strictly centered **1060px width** for the Header Card, Action Bar, and Switcher Bar. They are now perfectly aligned with the grid once more.
+- **High-Fidelity Content**: Kept the blue **"Browse files"** button on the right and the `WAITING TO GET STARTED..` subtitle.
+- **Iconography**: Standardized sidebar icons and breadcrumbs with house icons and caret-right separators.
+- **Balanced Scale**: The large book icon empty state is now properly scaled (80px) and centered for a professional look.
+
+## 🏗️ ATI Metadata & Header Refinement (V5.2.14)
+I have transformed the Header and Action Bar into a high-fidelity 'Forensic Command' layout.
+
+### 🎯 Key Engineering Achievements:
+- **Clean Header Card**: Reduced the header to its purest functionality: **Title**, **Live Status** (with 'Typing' animation), and **Full Upload Bucket**.
+- **The Digital Command Strip**: Implemented a symmetrical Action Bar (Option 1).
+  - **Left**: REF# Control.
+  - **Center**: Centered Monospace ATI Line (`ACCOUNT: **** 1234 • TYPE: CHECKING • PERIOD: 2023`).
+  - **Right**: Horizontal Utility Icons (Search, Popout, Settings).
+- **Standardized Padding**: Enforced `12px 20px` padding across the entire header/action/switcher stack for ultimate visual consistency (matching the V5 grid cards).
+
+### 🤖 V5 Technical Metadata Engine:
+I've integrated a forensic detection layer into the ingestion pipeline:
+1.  **classifyStatementType**: Automated scoring to distinguish Credit vs Bank statements.
+2.  **extractUniversalMetadata**: Robust Regex pipeline for extracting Account Numbers, Periods, and Holder names.
+3.  **Checksum Validation**: Integrity layer ensuring total credits/debits reconcile with statement balances.
+
+### 📸 Action Bar Design Reference (Option 1):
+![Action Bar Options](C:\Users\asmia\.gemini\antigravity\brain\410a76b2-0025-4cfc-a894-2bba5b8c33e5\action_bar_design_options_1770214632679.png)
+
+### 📐 Layout Width Standardization (V5.2.15)
+I have unified the width of the entire header stack to ensure a perfectly aligned "Island Stack" layout.
+
+### 🛠️ Key Fixes:
+- **Header Card Expansion**: Enforced `width: 100%` and `max-width: 1060px` with `margin: 0 auto` in the [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js) render loop.
+- **Vertical Alignment**: Guaranteed that the Header Card, Action Bar, and Switcher Bar edges are perfectly flush, matching the 1060px footprint of the transaction grid.
+
+## 🎨 Aesthetic Polish & Functional Breadcrumbs (V5.2.17)
+I have refined the UI for a "slicker" professional look and implemented full-width functional navigation.
+
+### 🛠️ Aesthetic Improvements:
+- **Slicker Typography**: Reduced global font sizes (cells and headers) to **11.5px - 12px** for a crisper SaaS density.
+- **Compact Header**: Scaled down the Header Card padding and title font to "fit to content".
+- **Grid Optimization**: Data columns (Ref, Date, Debit, etc.) now use fixed/snug widths, allowing the **Payee / Description** column to expand and absorb all remaining space.
+
+### 🧭 Navigation & Layout:
+- **Functional Breadcrumbs**: "Home" and "Transactions" in the top bar are now active links wired to the app's routing.
+- **Full-Width Breadcrumb Bar**: The top breadcrumb bar now stretches wall-to-wall, matching the official V5 design pattern.
+
+## 💎 Glassmorphism Island Stack (V5.2.18)
+I have implemented the **"Digital Prism"** glassmorphism aesthetic across the entire island stack (Header Card, Action Bar, and Switcher Bar).
+
+### 🛠️ Key Improvements:
+- **Depth & Fidelity**: Applied a `8px` backdrop blur (`backdrop-filter`) and a semi-transparent white background for a premium glass feel.
+- **Glassy Highlight & Defined Borders**: Added a `1px` glossy top highlight and darkened the outer border to `rgba(0,0,0,0.12)` for stronger definition against the light theme.
+- **Unified Identity**: Created a shared CSS class `.v5-glass` ensuring all components in the stack share identical translucent properties.
+
+### 📸 Selected Design Mock:
+![Option 2: Digital Prism](C:\Users\asmia\.gemini\antigravity\brain\410a76b2-0025-4cfc-a894-2bba5b8c33e5\glassmorphism_v5_island_stack_options_1770227192326.png)
+

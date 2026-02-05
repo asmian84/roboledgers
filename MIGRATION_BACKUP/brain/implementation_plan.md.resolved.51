@@ -1,0 +1,177 @@
+# Grid Column Restructuring & UI Refinement - V5.2
+
+## Problem Statement
+
+The current transaction grid has several critical issues:
+1. **Date parsing error** - Showing 2026 instead of 2023
+2. **Wrong columns** - Account column should be Balance, missing Source column
+3. **Missing 4-card layout** - Need Header, Action Bar, Account Switcher, Grid cards
+4. **Cluttered UI** - Search fields in headers, unnecessary Actions column
+5. **Missing COA integration** - Need 5-category COA system
+6. **Debit/Credit logic** - Must enforce mutual exclusivity
+
+---
+
+## 4-Card Layout Architecture
+
+### Card Visibility States
+
+#### Empty State (No Data):
+- ✅ **Header Card** - Shows "Transactions" title + "Waiting for bank statement..." subtitle
+- ❌ **Action Bar** - Hidden
+- ❌ **Account Switcher** - Hidden
+- ❌ **Grid Card** - Hidden (shows empty state illustration instead)
+
+#### Loaded State (Data Imported):
+- ✅ **Header Card** - Shows "Transactions" title + Breadcrumbs (Bank / Account) + Metadata (INST | TRANSIT | ACCOUNT)
+- ✅ **Action Bar** - Shows search, filters, bulk actions
+- ✅ **Account Switcher** - Shows Ref# pills for multi-account switching
+- ✅ **Grid Card** - Shows transaction data
+
+---
+
+## Column Restructure
+
+### Remove:
+- ❌ **Account Column** (replace with Balance)
+- ❌ **Actions Column** (will be redesigned later)
+- ❌ **Header search fields** (move to Action Bar)
+
+### Add/Modify:
+
+#### 1. Balance Column (NEW)
+- **Purpose**: Running balance after each transaction
+- **Calculation**: 
+  - Bank accounts: `Balance = Opening + Credits - Debits`
+  - Credit cards: `Balance = Opening - Debits + Credits`
+- **Format**: `$1,234.56` with color coding
+  - Positive: `#059669` (emerald-600)
+  - Negative: `#dc2626` (red-600)
+- **Width**: 140px
+- **Alignment**: Right
+
+#### 2. Source Column (MODIFIED)
+- **Purpose**: Show Ref# as text (no pill badge)
+- **Format**: Plain text like `CHQ1-060`
+- **Color**: `#64748b` (slate-500)
+- **Font**: JetBrains Mono, 11px, medium
+- **Width**: 120px
+- **Alignment**: Left
+
+#### 3. Account Column (5-Category COA)
+- **Purpose**: Chart of Accounts categorization
+- **Categories**:
+  1. 💰 **Assets** - Bank accounts, receivables
+  2. 💳 **Liabilities** - Payables, loans, credit cards
+  3. 💵 **Income** - Revenue, sales
+  4. 📊 **Expenses** - Operating costs, COGS
+  5. 👤 **Equity** - Owner's equity, retained earnings
+- **Format**: Dropdown with category icon + name
+- **Width**: 200px
+
+### Final Column Order:
+1. **☑** Checkbox (select)
+2. **Ref#** (e.g., CHQ1-060) - from grid
+3. **Date** (formatted correctly as 2023)
+4. **Payee / Description** (2-line: UPPERCASE + context)
+5. **Debit** (red, right-aligned, mutually exclusive with Credit)
+6. **Credit** (green, right-aligned, mutually exclusive with Debit)
+7. **Balance** (running total, color-coded)
+8. **Source** (Ref# text only, no pill)
+9. **Account** (5-category COA dropdown)
+
+---
+
+## Debit/Credit Mutual Exclusivity
+
+### Core Rules:
+- Each row has EITHER Debit OR Credit, NEVER both
+- If `debit > 0`, then `credit = 0`
+- If `credit > 0`, then `debit = 0`
+- Empty cells show blank (not $0.00)
+
+### Cell Editing Behavior:
+- When user enters value in Debit → Credit auto-clears to 0
+- When user enters value in Credit → Debit auto-clears to 0
+- Provide "⇄" swap button to move value between columns
+
+### Visual Styling:
+- **Debit**: `#334155` (slate-700), right-aligned, medium weight
+- **Credit**: `#10b981` (emerald-500), right-aligned, bold weight
+- **Empty**: Blank cell (not $0.00)
+
+---
+
+## Date Fix
+
+### Problem:
+Dates showing as 2026 instead of 2023
+
+### Solution:
+1. Re-enable Luxon datetime formatter
+2. Verify date parsing in ledger.core.js
+3. Use format: `DD MMM YYYY` (e.g., "05 Jan 2023")
+
+---
+
+## Action Bar Card
+
+### Purpose:
+Centralized search, filters, and bulk actions
+
+### Components:
+- **Search input** - Global transaction search
+- **Filter dropdowns** - Date range, account type, category
+- **Bulk action buttons** - Categorize, Rename, Delete
+- **View toggles** - Density, column visibility
+
+### Visibility:
+- Hidden when no data
+- Shows when data is loaded
+
+---
+
+## UI/UX Improvements
+
+### Typography:
+- **Primary font**: Inter (clean, modern)
+- **Monospace font**: JetBrains Mono (for Ref#, amounts)
+- **Sizes**:
+  - Headers: 11px, bold, uppercase, tracking: 0.5px
+  - Data: 13px, medium
+  - Sub-text: 10px, regular
+
+### Spacing:
+- Row height: 44px
+- Cell padding: 8px horizontal, 4px vertical
+- Card gaps: 12px between cards
+
+### Colors:
+- **Debit**: `#dc2626` (red-600)
+- **Credit**: `#10b981` (emerald-500)
+- **Balance positive**: `#059669` (emerald-600)
+- **Balance negative**: `#dc2626` (red-600)
+- **Source text**: `#64748b` (slate-500)
+
+---
+
+## Files to Modify
+
+### [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- Implement 4-card layout with proper visibility states
+- Fix date formatter (re-enable Luxon with correct format)
+- Remove Account column, add Balance column with running total calculation
+- Remove Actions column
+- Modify Source column to show text only (no pill)
+- Remove headerFilter from all columns (move to Action Bar)
+- Implement 5-category COA dropdown
+- Enforce debit/credit mutual exclusivity in cell editors
+
+### [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- Add styles for 4-card layout
+- Add styles for Action Bar card
+- Add styles for Balance column (color-coded)
+- Add styles for Source text (no pill)
+- Add styles for COA category dropdown
+- Refine typography (Inter font)
+- Polish hover states and transitions

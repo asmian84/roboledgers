@@ -1,0 +1,45 @@
+# V5 Restoration: Settings Drawer & Metadata Action Bar
+
+Restore the Transactions Metadata Hub (Action Bar) and the high-fidelity Settings Drawer to match the "Purple Era" V5 benchmark.
+
+## Proposed Changes
+
+### [Component] Metadata Hub (Action Bar)
+- **Positioning**: Fixed bar above the grid area.
+- **REF# Input**: Compact text input for global reference overrides.
+- **Status Cluster**: Multi-Ledger status bar showing:
+  - Account counts
+  - Total Transactions (e.g., "TXNS: 512")
+  - System Mode (e.g., "Mode: Aggregate")
+- **Control Cluster**:
+  - Analytics Icon button.
+  - Settings Gear (triggers the Drawer).
+
+### [Component] High-Fidelity Settings Drawer
+- **Vertical Orientation**: The drawer should slide from the right, with content panels opening "downwards" or sequentially within the scroll area.
+- **Tabs Integration**:
+  - **System**: Workspace Dexterity (Focus Lens), Appearance (Theme), Font Size, Row Density.
+  - **Columns**: Logic to hide/show specific Tabulator columns (Date, Desc, Debit, etc.).
+  - **Auto-Cat**: Categorization engine controls (future).
+  - **Preferences**: REF field auto-detect, Date Formats, Tax Calculations.
+  - **Advanced**: Forensic trace settings.
+- **Theme Dropdown**: High-fidelity dropdown that opens downwards, containing the full V5 palette (Rainbow, Wave Blue, Subliminal Dark, etc.).
+
+### [Component] JavaScript Wiring (app.js)
+- Implement `UI_STATE.settingsTab` for internal drawer routing.
+- Wire [toggleSettings(true)](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#116-120) to re-render the drawer with current tab state.
+- Expose a `window.getSettingsTrace()` function for console-level forensic inspection of the drawer state.
+
+### [Feature] Start Over (Reset Logic)
+- **Inline Confirmation**: The "Start Over" button will toggle to a confirmation state (e.g., "Confirm Reset?") when clicked, requiring a second click to finalize.
+- **Ledger Reset**: Calls `window.RoboLedger.Ledger.reset()` to wipe all transactions from state and localStorage.
+- **UI Reset**: Triggers a full [render()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/os/app.js#54-83) to bring the user back to the high-fidelity empty state.
+
+## Verification Plan
+
+### Manual Verification
+1.  **Metadata Check**: Confirm the REF# input and Status Cluster are visible above the Transactions grid.
+2.  **Drawer Interaction**: Click gear -> Confirm drawer slides in -> Confirm Tab switching works.
+3.  **Column Toggles**: Toggle "Description" off in the drawer -> Confirm Tabulator hides the column instantly.
+4.  **Theme Switch**: Change theme to "Wave Blue" -> Confirm CSS variables update across the shell.
+5.  **Console Trace**: Run `window.getSettingsTrace()` to see full reactive state.

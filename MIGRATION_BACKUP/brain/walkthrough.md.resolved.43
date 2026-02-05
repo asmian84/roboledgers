@@ -1,0 +1,84 @@
+# V5.2: Grid Column Restructuring - Complete Walkthrough
+
+## Overview
+
+Successfully restructured the transaction grid with proper column ordering, date parsing fixes, balance calculations, and 5-category COA dropdown implementation.
+
+---
+
+## Final Grid Column Order
+
+1. **Ref#** - Transaction reference (e.g., "CHQ1-002")
+2. **Source** - Prefix only (e.g., "CHQ1") - extracted from Ref#
+3. **Date** - Formatted as "dd MMM yyyy" (e.g., "05 Jan 2023")
+4. **Description** - 2-line display (UPPERCASE + bank context)
+5. **Debit** - Money out (mutually exclusive with Credit)
+6. **Credit** - Money in (mutually exclusive with Debit)
+7. **Balance** - Running total (color-coded)
+8. **Account** - 5-category COA dropdown with icons
+
+---
+
+## V5.2.4: Aesthetic & Functional Polish
+
+### ✅ Rainbow Header Theme
+- Implemented a custom rainbow gradient for Tabulator headers.
+- Uses `linear-gradient` to create a professional but vibrant look.
+- White text for high contrast on the rainbow background.
+
+### ✅ Uniform Typography
+- Removed all bold weights from the grid for a cleaner, modern look.
+- Applied `font-weight: 400` globally to cells.
+- Standardized `font-weight: 600` for column titles.
+
+### ✅ Functional Sorting
+- All column headers are now clickable for sorting.
+- Enabled native Tabulator `headerSort` on all columns.
+- Supports ASC, DESC, and None sorting states.
+
+### ✅ Smart Account Switcher
+- Added an **"ALL"** button to view a consolidated ledger.
+- Implemented deduplication logic to ensure only unique accounts are shown.
+- Linked "ALL" button to `UI_STATE.selectedAccount = null`.
+
+---
+
+## Files Modified
+
+### [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- Added rainbow gradient to `.tabulator-header`.
+- Standardized typography (non-bold weights for cells and titles).
+- Fixed grid overflow issues with `max-width`.
+
+### [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- Enabled `headerSort` on all columns.
+- Refactored account switcher with deduplication and "ALL" selection.
+- Fixed syntax errors and stripped bold weights from descriptions.
+
+---
+
+## Technical Validation
+
+### CSS Changes
+Modified [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css) to override Tabulator's default header and cell styling:
+```css
+.tabulator-header {
+    background: linear-gradient(90deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #818cf8, #a78bfa) !important;
+}
+.tabulator-cell {
+    font-weight: 400 !important;
+}
+```
+
+### JS Changes
+Updated [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js) to include `headerSort: true` in column definitions and refactored the switcher pill rendering loop with deduplication.
+
+---
+
+## Final Summary
+
+The RoboLedger V5.2 grid is now a high-performance, aesthetically pleasing tool:
+- ✅ **Aesthetic**: Rainbow headers and clean typography.
+- ✅ **Functional**: Full column sorting and smart account switching.
+- ✅ **Clean**: No duplicates or visual clutter.
+- ✅ **Reliable**: Syntax errors and year-parsing bugs resolved.

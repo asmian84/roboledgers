@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboLedger | Financial OS</title>
+    <link rel="stylesheet" href="src/ui/enterprise/system.css">
+    <!-- Restoration Assets -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Tabulator (V5 Core Grid) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
+    <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+
+    <!-- AG Grid Community (Legacy Support) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
+
+    <!-- PDF.js (V5 Forensic Extraction) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+</head>
+
+<body>
+    <div class="app-layout">
+        <!-- Shared Grid Instance (Hidden Storage) -->
+        <div id="shared-grid-storage" style="display: none; width: 100%;">
+            <div id="sharedAccountsGrid" style="width: 100%;"></div>
+        </div>
+        <!-- Restored Navy Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo-text">roboledgers <span
+                        style="font-size: 10px; opacity: 0.5; margin-left: 4px;">v5.1</span></div>
+            </div>
+
+            <nav class="sidebar-nav-content">
+                <div class="nav-group">
+                    <div class="nav-item active" data-route="home">
+                        <i class="ph ph-house nav-icon"></i>
+                        <span class="nav-label">Home</span>
+                    </div>
+                    <div class="nav-item" data-route="import">
+                        <i class="ph ph-rows nav-icon"></i>
+                        <span class="nav-label">Transactions</span>
+                    </div>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-header">ANALYSIS</div>
+                    <div class="nav-item" data-route="dashboard">
+                        <i class="ph ph-chart-pie nav-icon"></i>
+                        <span class="nav-label">Dashboard</span>
+                    </div>
+                    <div class="nav-item" data-route="reports">
+                        <i class="ph ph-files nav-icon"></i>
+                        <span class="nav-label">Reports</span>
+                    </div>
+                    <div class="nav-item" data-route="coa">
+                        <i class="ph ph-book-open nav-icon"></i>
+                        <span class="nav-label">Chart of Accounts</span>
+                    </div>
+                    <div class="nav-item" data-route="source">
+                        <i class="ph ph-database nav-icon"></i>
+                        <span class="nav-label">Source Hub</span>
+                        <span
+                            style="font-size: 10px; font-weight: 700; color: #94a3b8; background: #334155; padding: 2px 6px; border-radius: 4px; margin-left: auto;">Phase
+                            2</span>
+                    </div>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-header">SYSTEM</div>
+                    <div class="nav-item" data-route="settings">
+                        <i class="ph ph-gear nav-icon"></i>
+                        <span class="nav-label">Settings</span>
+                    </div>
+                    <div class="nav-item" data-route="team">
+                        <i class="ph ph-users nav-icon"></i>
+                        <span class="nav-label">Team</span>
+                    </div>
+                    <div class="nav-item" data-route="roadmap">
+                        <i class="ph ph-map-trifold nav-icon"></i>
+                        <span class="nav-label">Roadmap</span>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Restored Alex Johnson Card -->
+            <footer class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar">AJ</div>
+                    <div class="user-info">
+                        <div class="user-name">Alex Johnson</div>
+                        <div class="user-role">Premium Plan</div>
+                    </div>
+                    <i class="ph ph-dots-three nav-icon" style="margin-left: auto; cursor: pointer;"></i>
+                </div>
+            </footer>
+        </aside>
+
+        <!-- Restored Main Container -->
+        <div class="main-wrapper">
+            <!-- Breadcrumb Bar -->
+            <div id="breadcrumb" class="breadcrumb-bar">
+                <div class="breadcrumb-item">
+                    <i class="ph ph-house breadcrumb-icon"></i>
+                    <span class="breadcrumb-link">Home</span>
+                </div>
+                <div class="breadcrumb-separator"><i class="ph ph-caret-right"></i></div>
+                <div class="breadcrumb-item breadcrumb-current">Transactions</div>
+            </div>
+
+            <!-- Stage Area -->
+            <main id="app-stage" class="stage">
+                <!-- V4/V5 Restoration Logic Injected Here -->
+            </main>
+        </div>
+    </div>
+
+    <div id="settings-drawer" class="settings-drawer">
+        <!-- Content Injected via app.js:renderSettingsDrawer() -->
+    </div>
+
+    <!-- V5: Digital Infrastructure (Floating Layers) -->
+    <div id="v5-pdf-overlay" class="v5-overlay-dim"
+        style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px); z-index: 20000;">
+    </div>
+
+    <div id="v5-pdf-curtain" class="v5-pdf-curtain"
+        style="position:fixed; top:0; right:-100%; width: 650px; max-width: 90vw; height:100vh; background:white; z-index:21000; transition:right 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow:-5px 0 25px rgba(15, 23, 42, 0.15); display:flex; flex-direction:column; border-left: 1px solid #e2e8f0;">
+        <!-- Curtain Header -->
+        <div
+            style="padding:16px 24px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background: #fff;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="background:#eff6ff; padding:8px; border-radius:8px; color:#3b82f6;"><i
+                        class="ph ph-file-pdf" style="font-size:1.3rem;"></i></div>
+                <div>
+                    <h3 style="margin:0; font-size:1rem; font-weight:700; color:#1e293b;">Source Document</h3>
+                    <span id="v5-curtain-filename"
+                        style="font-size:0.75rem; color:#64748b; font-family: 'JetBrains Mono';">Loading forensic
+                        trace...</span>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-icon-v5" id="v5-pdf-popout-btn"><i class="ph ph-arrow-square-out"></i></button>
+                <button class="btn-icon-v5 close-curtain-btn"><i class="ph ph-x"></i></button>
+            </div>
+        </div>
+
+        <!-- AI Audit Hub (V5.1) -->
+        <div class="v5-audit-hub">
+            <div class="audit-hub-pills">
+                <div class="hub-pill gemini active" id="hub-pill-gemini">
+                    <i class="ph ph-sparkle"></i> Google Gemini AI
+                </div>
+                <div class="hub-pill local" id="hub-pill-local">
+                    <i class="ph ph-lightning"></i> Local Logic
+                </div>
+            </div>
+            <div class="hub-actions">
+                <button class="btn-hub-secondary" onclick="window.toggleWorkbench(false)">Cancel</button>
+                <button class="btn-hub-primary" id="btn-hub-categorize">
+                    <i class="ph ph-play"></i> Categorize
+                </button>
+            </div>
+        </div>
+        <!-- Content Area -->
+        <div id="v5-pdf-curtain-content" style="flex:1; overflow:hidden; position:relative; background:#f8fafc;">
+            <div
+                style="height: 100%; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 0.9rem;">
+                <i class="ph ph-circle-notch ph-spin" style="margin-right: 8px;"></i> Initializing Forensic Viewer...
+            </div>
+        </div>
+    </div>
+
+    <!-- Speed Actions Bar (Contextual) -->
+    <div id="v5-speed-actions-bar" class="v5-speed-bar" style="display: none;">
+        <button class="speed-btn confirm" title="Confirm (Enter)"><i class="ph ph-check-circle"></i></button>
+        <button class="speed-btn swap" title="Swap Dr/Cr (S)"><i class="ph ph-arrows-left-right"></i></button>
+        <button class="speed-btn flag" title="Flag (F)"><i class="ph ph-flag"></i></button>
+        <div class="speed-divider"></div>
+        <button class="speed-btn delete" title="Delete (Del)"><i class="ph ph-trash"></i></button>
+    </div>
+
+    <!-- Magic Hub (AI Floating Launcher) -->
+    <div id="v5-magic-hub" class="v5-magic-launcher"
+        style="position: fixed; bottom: 24px; right: 24px; z-index: 10000;">
+        <div id="v5-magic-toast" style="display:none;" class="v5-magic-toast">
+            <div class="toast-header"><i class="ph-fill ph-sparkle"></i> High Confidence Found</div>
+            <div id="v5-magic-text">Mapping 12 transactions to COA...</div>
+            <div class="toast-actions">
+                <button class="btn-magic-apply">Apply All</button>
+                <button class="btn-magic-ignore">Ignore</button>
+            </div>
+        </div>
+        <button id="v5-magic-badge" class="v5-magic-btn">
+            <i class="ph ph-sparkle"></i>
+            <span id="v5-magic-count" class="badge-count" style="display:none;">0</span>
+        </button>
+    </div>
+
+    <script src="src/ui/enterprise/ledger.core.js"></script>
+    <script src="src/ui/enterprise/app.js"></script>
+        <!-- Dev: DBG2 debug helper auto-inject -->
+        <script>
+        (function(){
+            if(window.__DBG2_ENABLED) return console.log('DBG2 already active');
+            window.__DBG2_ENABLED = true;
+            window.__DBG_LOGS = window.__DBG_LOGS || [];
+            const pushLog = (level, msg, meta) => {
+                const entry = { t: new Date().toISOString(), level, msg, meta };
+                window.__DBG_LOGS.push(entry);
+                if (window.__DBG_LOGS.length > 5000) window.__DBG_LOGS.splice(0, window.__DBG_LOGS.length - 3000);
+                console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](`[DBG] ${entry.t} ${msg}`, meta || '');
+            };
+            window.dumpState = () => {
+                try {
+                    pushLog('log','dumpState invoked');
+                    console.groupCollapsed('DBG dumpState');
+                    console.log('UI_STATE', window.UI_STATE);
+                    console.log('Ledger.getRawState', window.RoboLedger?.Ledger?.getRawState?.());
+                    console.log('Ledger.getAll', window.RoboLedger?.Ledger?.getAll?.() || []);
+                    console.log('Accounts', window.RoboLedger?.Accounts?.getAll?.() || []);
+                    console.log('txnTable', window.txnTable || null);
+                    console.groupEnd();
+                    pushLog('log','dumpState complete');
+                } catch (e) { pushLog('error','dumpState error', e); console.error(e); }
+            };
+            window.dumpGrid = () => {
+                try {
+                    const data = window.txnTable?.getData ? window.txnTable.getData() : (window.RoboLedger?.Ledger?.getAll?.() || []);
+                    pushLog('log','dumpGrid', { count: (data || []).length });
+                    console.table((data || []).slice(0,200));
+                    return data;
+                } catch(e){ pushLog('error','dumpGrid error', e); console.error(e); }
+            };
+            window.persistDbgLogs = () => { try { localStorage.setItem('robo_dbg_logs', JSON.stringify(window.__DBG_LOGS)); pushLog('log','persisted logs'); } catch(e){ pushLog('error','persist failed', e);} };
+            window.loadDbgLogs = () => { try { const raw = localStorage.getItem('robo_dbg_logs'); return raw ? JSON.parse(raw) : []; } catch(e){ pushLog('error','loadDbgLogs failed', e); return []; } };
+            window.tailDbg = (n=50) => { const slice = window.__DBG_LOGS.slice(-n); console.table(slice); return slice; };
+            window.openDbgLogWindow = () => {
+                const w = window.open('', 'ROBO_DBG_LOGS', 'width=900,height=800');
+                const html = `<!doctype html><html><body style="font-family: system-ui, Arial; padding:12px;"><h3>Robo Debug Logs</h3><div id="content"></div><button id="refresh">Refresh</button><button id="download">Download JSON</button><pre id="pre" style="white-space: pre-wrap; background:#0f172a;color:#e6edf3;padding:12px;border-radius:6px;height:70vh;overflow:auto;"></pre><script>const pre=document.getElementById('pre');const render=()=>{pre.textContent=JSON.stringify(window.opener.__DBG_LOGS||[],null,2).slice(-200000);} ;document.getElementById('refresh').onclick=render;document.getElementById('download').onclick=()=>{const b=new Blob([JSON.stringify(window.opener.__DBG_LOGS||[],null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='robo_dbg_logs.json';a.click();URL.revokeObjectURL(u);} ;render();<\/script></body></html>`;
+                w.document.write(html); w.document.close();
+            };
+            window.addEventListener('error', e => { pushLog('error','GLOBAL ERROR', { message: e.message, file: e.filename, line: e.lineno, col: e.colno, stack: (e.error && e.error.stack) || null }); });
+            window.addEventListener('unhandledrejection', e => { pushLog('error','UNHANDLED REJECTION', { reason: e.reason }); });
+            function instrument(obj, name) { try { if (!obj || !name || typeof obj[name] !== 'function') return false; const orig = obj[name]; if (orig.__dbg_instrumented) return true; obj[name] = function(...args) { const id = `${name}@${Date.now().toString(36)}`; pushLog('log', `enter ${name}`, { id, args }); try { const res = orig.apply(this, args); if (res && typeof res.then === 'function') { res.then(r => pushLog('log', `exit ${name} (async)`, { id })).catch(err => pushLog('error', `error ${name} (async)`, { id, err })); } else { pushLog('log', `exit ${name}`, { id }); } return res; } catch (err) { pushLog('error', `error ${name}`, { id, err }); throw err; } }; obj[name].__dbg_instrumented = true; return true; } catch (e) { pushLog('error','instrument failed', { name, e }); return false; } }
+            ['render','renderTransactionsRestored','initGrid','handleFiles','popOutGrid','popInGrid'].forEach(n => instrument(window, n));
+            if (window.RoboLedger?.Ledger) ['load','save','reset','getAll','getRawState'].forEach(n => instrument(window.RoboLedger.Ledger, n));
+            if (window.RoboLedger?.Accounts) ['getAll','setRef','setOpeningBalance'].forEach(n => instrument(window.RoboLedger.Accounts, n));
+            window.watchDOM = (selector='body') => { try { const root = document.querySelector(selector); if (!root) { pushLog('warn','watchDOM no selector', selector); return null; } const mo = new MutationObserver(muts => { muts.forEach(m => { pushLog('log','DOM mutation', { type: m.type, added: m.addedNodes?.length, removed: m.removedNodes?.length, attr: m.attributeName }); }); }); mo.observe(root, { childList: true, subtree: true, attributes: true, characterData: false }); pushLog('log','watchDOM started', selector); return mo; } catch(e){ pushLog('error','watchDOM failed', e); return null; } };
+            window.startDbgSnapshots = (ms=3000) => { if (window.__dbg_snapshot_timer) return pushLog('warn','snapshots already running'); window.__dbg_snapshot_timer = setInterval(() => { try { const snapshot = { t: new Date().toISOString(), ui: window.UI_STATE, ledger: window.RoboLedger?.Ledger?.getRawState?.(), }; localStorage.setItem('robo_dbg_snapshot_'+snapshot.t, JSON.stringify(snapshot)); const keys = Object.keys(localStorage).filter(k => k.startsWith('robo_dbg_snapshot_')).sort(); while (keys.length > 50) { localStorage.removeItem(keys.shift()); keys.shift(); } pushLog('log','snapshot saved', { time: snapshot.t }); } catch(e){ pushLog('error','snapshot failed', e); } }, ms); pushLog('log','startDbgSnapshots', { ms }); };
+            window.stopDbgSnapshots = () => { clearInterval(window.__dbg_snapshot_timer); window.__dbg_snapshot_timer = null; pushLog('log','stopDbgSnapshots'); };
+            window.dbg = { log: (m,d) => pushLog('log', m, d), warn: (m,d) => pushLog('warn', m, d), err: (m,d) => pushLog('error', m, d), persist: window.persistDbgLogs, load: window.loadDbgLogs, tail: window.tailDbg, dumpState: window.dumpState, dumpGrid: window.dumpGrid, open: window.openDbgLogWindow, watchDOM: window.watchDOM, startSnapshots: window.startDbgSnapshots, stopSnapshots: window.stopDbgSnapshots, instrument };
+            pushLog('log','DBG2 initialized');
+            console.log('DBG2 installed. Use dumpState(), dumpGrid(), dbg.tail(), dbg.open(), dbg.watchDOM(selector).');
+        })();
+        </script>
+
+    <!-- Ledger Workspace Manager (Instant Account Switching) -->
+    <script src="./src/ui/workspace/ledgerWorkspace.js"></script>
+</body>
+
+</html>

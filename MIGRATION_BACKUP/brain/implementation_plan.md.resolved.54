@@ -1,0 +1,36 @@
+# RoboLedger V5.2.6: Popout Grid & Ref# Syncing
+
+Implementing advanced UI features for grid detachment and dynamic account renaming.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Popout Strategy**: I will use the "Object URL" (Blob) strategy to serve the popped-out grid. This allows for zero-configuration detachment without needing separate server-side files, maintaining the same styles and Tabulator logic as the main app.
+
+## Proposed Changes
+
+### Ref# Input & Pill Syncing (app.js)
+- **handleRefUpdate**: Update logic to ensure `window.render()` is called after a successful rename, which will automatically update the account switcher pills since they use `acc.ref || acc.name`.
+
+### Grid Popout System (app.js)
+- **window.popOutGrid**: 
+  - Serialize current grid data and styles.
+  - Generate a `Blob` containing a full HTML document (Tabulator CDN, styles, and data).
+  - Open a new window via `URL.createObjectURL(blob)`.
+  - Set up a `postMessage` listener in the main window to receive updates from the child.
+- **Child Window Logic**:
+  - Render a full-screen Tabulator grid.
+  - Send messages back to `window.opener` on cell edits or row deletions.
+  - Implement a "Dock" button to close the window and signal the parent to re-render.
+- **Heartbeat Monitor**: Use `setInterval` to detect when the popup is closed manually, automatically restoring the local grid.
+
+### UI Enhancements
+- **Missing Grid Overlay**: When the grid is popped out, replace the local `.grid-container-wall` content with an informative overlay: "Grid Popped Out • [Bring it Back]".
+
+## Verification Plan
+
+### Manual Verification
+1. **Pill Sync**: Rename a Ref# and verify the pill updates immediately on Enter/Blur.
+2. **Popout**: Click the "Popout" button. A separate window should open with the same data.
+3. **Edit Sync**: Edit a cell in the popout window. Verify the main ledger state updates (can verify by docking or checking console).
+4. **Docking**: Close the popout window. Verify the main window grid restores instantly.

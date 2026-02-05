@@ -1,0 +1,50 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+    - [x] Initialize Ledger Core based on Invariants
+    - [x] Implement `txsig` and uniqueness constraints
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+    - [x] Establish `/src/parsers_raw/` (DMZ)
+    - [x] Define `RawParsedTransaction` & Adapter Firewall
+    - [x] Implement Parser Contamination Test
+    - [x] Refactor Ingestion Pipeline to enforce one-way flow
+- [x] Phase 4: Automated Invariant Testing
+    - [x] Define complete Invariant-Led Test Suite
+    - [x] Implement Ledger Core & Ingestion tests
+    - [x] Establish Master Test Runner (CI Gate)
+- [x] Phase 5: COA Intelligence Layer
+    - [x] Define Canonical Account Types & Metadata Schema
+    - [x] Implement `COAService` (The Account Register)
+    - [x] Implement `COAGate` (The Posting Firewall)
+    - [x] Verify COA Invariants (Numeric ranges, mapping rules)
+- [x] Phase 6: Categorization Brain (Deterministic Reasoning)
+    - [x] TCV (Transaction Context Vector) Generation
+    - [x] Deterministic Scoring Engine (Identity, Context, Anomaly)
+    - [x] COA Compatibility Gate (Consumption)
+    - [x] Decision State Machine (RAW -> LOCKED)
+    - [x] DecisionTrace Persistence (Immutable History)
+    - [x] Verify Brain Invariants (Determinism, gate enforcement)
+- [x] Phase 7: Reconciliation Proof Engine (Mathematical Truth)
+    - [x] Proof Object Model (Hashable Manifest)
+    - [x] Reconciliation Math Engine (Bank & CC)
+    - [x] Internal Transfer Matcher (Zero-Sum)
+    - [x] Reconciliation State Machine (Proof-Mandated)
+    - [x] Reconciliation Audit Trail (Transparency)
+    - [x] Verify Reconciliation Invariants (Zero-variance gate)
+- [x] Phase 8: Role-Based Authority Control (RBAC)
+    - [x] Capability Registry (Atomic Powers)
+    - [x] Role Definitions (Bundles Only)
+    - [x] Authority Guard (Domain-Level Assertion)
+    - [x] Period Lifecycle Controller (OPEN -> LOCKED)
+    - [x] Certification Records (Signed Sign-offs)
+    - [x] Verify Authority Invariants (Capability-enforced truth)
+- [x] Phase 9: Adjusting Journal Entries (AJE) Layer
+    - [x] AJE Data Model (Non-mutating entries)
+    - [x] Posting Engine (Balance & COA enforcement)
+    - [x] Period Interaction Rules (LOCKED periods only)
+    - [x] Restatement Protocol (Period Versioning V1, V2...)
+    - [x] Audit & Certification Linkage
+    - [x] Verify AJE Invariants (Balanced, additive truth)
+
+**CORE ACCOUNTING ENGINE COMPLETE**

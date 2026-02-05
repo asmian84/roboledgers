@@ -1,0 +1,58 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+- [x] Phase 4: Automated Invariant Testing
+- [x] Phase 5: COA Intelligence Layer
+- [x] Phase 6: Categorization Brain (Deterministic Reasoning)
+- [x] Phase 7: Reconciliation Proof Engine (Mathematical Truth)
+- [x] Phase 8: Role-Based Authority Control (RBAC)
+- [x] Phase 9: Adjusting Journal Entries (AJE) Layer
+- [x] **CORE FREEZE (v1.0.0-core-constitution)**
+- [x] Phase 10: UX Projection Contracts
+    - [x] 10.1: Define Zen, Bookkeeper, Accountant Contracts
+    - [x] 10.2: Implement Mode-Based Projection Logic
+- [x] Phase 11: Zen Mode Feed (First Visual Layer)
+- [x] Phase 12: Professional Ledger Lenses (Bookkeeper Part)
+- [x] Phase 13: Accountant Lens (Authority & Certification)
+- [x] Phase 14A: Multi-Entity Consolidation Model
+- [x] Phase 14C: Forecasting Engine (COMPLETE)
+    - [x] 14C.1: Define Forecast Contracts (Type Separation)
+    - [x] 14C.2: Implement Forecast Engine (Pure Math Layer)
+    - [x] 14C.3: Verify Forecast Invariants (Non-Truth Gating)
+    - [x] 14C.4: Build CFO Projection Lens (UI Sandbox)
+- [x] Phase 15: Production Hardening & Resilience (COMPLETE)
+    - [x] 15.1: Operational Fail-Safes (Idempotency & Crash Recovery)
+    - [x] 15.2: Safe Degradation & Kill-Switch Logic
+    - [x] 15.3: Data Recovery (Ledger Reconstruction from AuditLog)
+    - [x] 15.4: Security Hardening (Tamper Resistance & RBAC Stress)
+- [x] Phase 16: UI/UX Command Center (COMPLETE - REJECTED)
+- [x] Phase 17: Principal UX Architecture (COMPLETE - REJECTED)
+- [x] Phase 18: Enterprise UI Architecture (COMPLETE)
+- [x] Phase 19: Hostile Auditor Simulation (COMPLETE)
+    - [x] 19.1: Mental Self-Audit (B&W & Drift Checks)
+    - [x] 19.2: Code-Level Integrity Check (Fixed Auditor Click-Trace & CFO alignment)
+    - [x] 19.3: Verification of Source-to-Entry Evidence Path
+- [x] Phase 20: Human Friction Testing (COMPLETE)
+    - [x] 20.1: Navigation Velocity Audit (180ms Linear Fades verified)
+    - [x] 20.2: Cognitive Load Assessment (Institutional spacing enforced)
+- [x] Phase 21: Minor Institutional Polish (COMPLETE)
+- [x] Phase 22: Akaunting-Inspired Institutional Refinement (COMPLETE)
+- [ ] Phase 24: Apple-Grade UI Redesign (IN PROGRESS)
+    - [x] 24.1: Implement Glassmorphic Foundation (COMPLETE)
+    - [/] 24.2: Build Apple-Grade Zen Mode (Dashboard IMPLEMENTED)
+    - [/] 24.3: Implement High-Density Bookkeeper Desk (Transactions IMPLEMENTED)
+    - [/] 24.4: Author Accountant Governance Console (Trial Balance IMPLEMENTED)
+    - [ ] 24.5: Create CFO Certified Metrics (Boardroom clarity)
+    - [ ] 24.6: Build Forecast Sandbox (Watermarked projections)
+    - [ ] 24.7: Finalize Auditor Forensic Mode (Zero-animation)
+    - [ ] 24.8: Polish Forest Audit Drawer (Reverence for txsig)
+- [x] Phase 25: RoboLedger V5 UI Convergence (COMPLETE)
+    - [x] 25.1: Adopt V5 Design Tokens & Palette (COMPLETE)
+    - [x] 25.2: Refactor Rail to V5 Style (Phosphor Icons + Profile) (COMPLETE)
+    - [x] 25.3: Implement V5 Unified Command Surface (Card Refactor) (COMPLETE)
+    - [x] 25.4: Port V5 Caseware Grid Themes (COMPLETE)
+    - [x] 25.5: Final Global Polish (Inputs, Fades, Search) (COMPLETE)
+
+**CORE ACCOUNTING ENGINE COMPLETE & FROZEN**

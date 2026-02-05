@@ -1,0 +1,28 @@
+# RoboLedger V5.2.19: Island Scale & Grid Dividers
+
+Expanding the V5 stage real estate and adding structural clarity to the grid. This involves a 10% width increase for the main content stack and implementing vertical separators between column headers.
+
+## User Review Required
+
+> [!NOTE]
+> **Width Expansion**: I am increasing the `max-width` from `1060px` to `1166px` (+10%). This will provide more breathing room for the Payee / Description column.
+> **Column Dividers**: I am adding subtle vertical separators between grid column headers to improve scannability, specifically between Date, Description, and the amount columns.
+
+## Proposed Changes
+
+### UI Logic (app.js)
+- **Shared Island Wrapper**: Update the max-width constant from `1060px` to `1166px`.
+- **initGrid**: Add `headerHozAlign: "center"` or CSS-based dividers to the column definitions.
+
+### Styling (system.css)
+- **Universal Scale**: Update all occurrences of `max-width: 1060px` to `1166px` (Main Header, Action Bar, Switcher, Grid Container).
+- **Grid Dividers**:
+  - Add a subtle border-right to `.tabulator-col` elements in the header area.
+  - Color: `rgba(255, 255, 255, 0.2)` to contrast against the purple header while remaining clean.
+
+## Verification Plan
+
+### Manual Verification
+1. **Vertical Alignment Check**: Use a browser inspector or visual guide to ensure the left and right edges of the Header Card, Action Bar, and Switcher Bar are perfectly flush with each other.
+2. **Standardization Check**: Confirm that resizing the window maintains the 1060px centered islanding for all elements in the stack.
+

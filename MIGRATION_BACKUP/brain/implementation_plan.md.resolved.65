@@ -1,0 +1,39 @@
+# RoboLedger V5.2.19: High-Fidelity Audit & Parser Fixes
+
+A comprehensive sweep to bring the V5 interface to "Stock Market" levels of dynamic polish while resolving critical parsing bugs. This includes layout expansion, structural dividers, live sort animations, and a functional audit of the settings drawer and parser engine.
+
+## User Review Required
+
+> [!CAUTION]
+> **Parser Polarity Fix**: I am updating the ingestion engine to correctly distinguish between debits and credits. Currently, it biases towards credits. This fix will ensure all future imports are accurate.
+> **Dynamic Ref#**: The "Ref#" column will now dynamically re-calculate based on the current sort order (e.g., the top transaction is always 001). This provides a live "ledger count" feel but means Ref#s are not persistent if sorted.
+
+## Proposed Changes
+
+### UI Logic (app.js)
+- **10% Scale Expansion**: Update all `max-width: 1060px` instances to **`1166px`**.
+- **Dynamic Sorting**:
+  - Add `rowHeader: true` if needed, but primarily enable Tabulator sort animations via CSS + `redraw` triggers.
+  - Wire `dataSorted` event to force-refresh the Ref# column.
+- **Settings Drawer Wiring**:
+  - Implement `window.saveSettings()` to persist theme and density choices.
+  - Fix the theme selector to apply high-fidelity themes (Rainbow default) to the `body` class.
+- **Auto-Cat Ticker**: Add `transition: all 0.4s` to category pill changes to mimic a "ticker" update.
+
+### Styling (system.css)
+- **Structural Dividers**: Implement `border-right: 1px solid rgba(0,0,0,0.06)` on `.tabulator-col` for a structured data-heavy look.
+- **Dynamic Grid Effects**: Add CSS transitions for row movement and cell value updates.
+- **Rainbow Default**: Set the Purple-to-Cyan rainbow header as the default state.
+
+### Core Logic (ledger.core.js)
+- **Parser Intelligence**: 
+  - Update [processUpload](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#448-530) to handle polarity based on column identity (CSV) and sign (PDF).
+  - Ensure debits are correctly bucketed into the `DEBIT` polarity.
+- **Ref# Sequence**: Ensure the engine supports dynamic position-based referencing.
+
+## Verification Plan
+
+### Manual Verification
+1. **Vertical Alignment Check**: Use a browser inspector or visual guide to ensure the left and right edges of the Header Card, Action Bar, and Switcher Bar are perfectly flush with each other.
+2. **Standardization Check**: Confirm that resizing the window maintains the 1060px centered islanding for all elements in the stack.
+

@@ -1,0 +1,26 @@
+# Phase 54: Emergency UI Recovery & Symmetry Restoration
+
+The goal is to fix the UI regressions introduced in V5.2.25 and restore the professional, high-fidelity aesthetic of the "Transactions" page.
+
+## Proposed Changes
+
+### [Component] UI Enterprise Shell (app.js)
+
+#### [MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- **Title Restoration**:
+  - Revert header title "Forensic Ledger" back to **"Transactions"**.
+  - Update subtitle to **"V5.2 • High-Performance Ledger"** (removing any "Audit-Ready" or overly descriptive forensic terminology if annoying).
+- **Grid Formatter Fix**:
+  - Remove accidental spaces from HTML strings in all Tabulator column formatters (e.g., change `< span` to `<span>` and `</span >` to `</span>`).
+  - This affects columns: Date, Payee / Description, Debit, Credit, Balance, Account, and Source.
+- **Symmetry & Polish**:
+  - Ensure the Switcher Bar and Action Bar maintain perfect horizontal alignment.
+  - Remove any placeholder text that might be perceived as a "joke" (e.g., "WAITING TO GET STARTED").
+
+## Verification Plan
+
+### Manual Verification
+- Verify that the grid renders real data again (no raw HTML tags visible).
+- Verify the header title correctly displays "Transactions".
+- Ensure the reconciliation hub in the switcher bar remains functional but looks professional.
+- Check horizontal symmetry across the entire island stack.

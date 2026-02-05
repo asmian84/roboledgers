@@ -1,0 +1,33 @@
+# RoboLedger V5.2.17: Aesthetic Polish & Grid Optimization
+
+Refining the V5 UI for a "slicker", high-density professional look. This involves reducing typography scales, tightening vertical density, and optimizing grid column distribution to maximize readability.
+
+## User Review Required
+
+> [!NOTE]
+> **Typography Shift**: I am reducing the global font size in the grid from 13-14px to 12px for a more professional "SaaS" density, and tightening the header title for a more compact footprint.
+
+## Proposed Changes
+
+### UI Logic (app.js)
+- **Header Card Cleanup**:
+  - Reduce padding from `12px 20px` to `8px 16px` for a tighter feel.
+  - Scale down "Transactions" title (`18px` -> `16px`) and waiting dots.
+  - Optimize `upload-zone-v5` spacing and internal gaps.
+- **Grid Layout (initGrid)**:
+  - Set specific `width` values for data columns (Ref, Source, Date, Debit, Credit, Balance, Account).
+  - Set `widthGrow: 1` ONLY for the **Payee / Description** column so it absorbs all remaining space.
+  - Reduce `rowHeight` to `32` for better density.
+
+### Styling (system.css)
+- **Typography Scale**: 
+  - Update `.tabulator-cell` and `.tabulator-col-title` to `font-size: 11.5px`.
+  - Tighten line-heights in the Description formatter.
+- **Structural Gaps**: Reduce the spacing between Header, Action Bar, and Switcher Bar elements.
+
+## Verification Plan
+
+### Manual Verification
+1. **Vertical Alignment Check**: Use a browser inspector or visual guide to ensure the left and right edges of the Header Card, Action Bar, and Switcher Bar are perfectly flush with each other.
+2. **Standardization Check**: Confirm that resizing the window maintains the 1060px centered islanding for all elements in the stack.
+

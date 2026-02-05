@@ -1,0 +1,40 @@
+# RoboLedger V4/V5 Restoration Walkthrough
+
+I have successfully reversed the UI "disaster" and perfectly replicated the V4/V5 aesthetic as seen in your screenshot. The system now feels relatable, pragmatic, and high-performance.
+
+## 🎨 Restoration Highlights
+
+### 1. Master Shell & Layout
+Fixed the layout to use the **Fixed Navy Gradient Sidebar** (260px) and the **White Breadcrumb Bar** (60px).
+- **Background**: Slate Light (`#f8fafc`).
+- **Sidebar**: `linear-gradient(180deg, #0f172a 0%, #1e293b 100%)`.
+- **Active State**: Cyan (`#06b6d4`) left border with highlight.
+
+### 2. Header & Upload Zone
+Replicated the exact dual-pane header card.
+- **Status**: "WAITING TO GET STARTED.."
+- **Upload Zone**: Dashed border with cloud icon, "Drag and drop files here" text, and the blue "Browse files" button.
+
+### 3. Icon Set (Phosphor 1:1)
+Corrected all icons to match the screenshot:
+- Home (`ph-house`)
+- Transactions (`ph-download-simple`)
+- Dashboard (`ph-chart-pie-slice`)
+- Grid V2 (`ph-sparkle` with Cyan accent)
+- Profile Card (Alex Johnson + Premium Plan)
+
+### 4. Functional Grid Integration
+Restored the high-density **Grid V2** using AG Grid, ensuring tabular figures and professional data density.
+
+---
+
+## 🚀 Proof of Work
+
+![V5 Restoration Shell](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/index.html)
+
+**Files Restored**:
+- [**system.css**](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css): Precise V5 tokens and layout.
+- [**index.html**](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/index.html): Restored V5 structure.
+- [**app.js**](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js): Restored V5 routing and grid logic.
+
+The restoration is complete and the "Apple-grade" deviation has been eliminated.

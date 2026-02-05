@@ -1,0 +1,31 @@
+# Walkthrough: TG Build Alignment & Forensic Cleaning
+
+This walkthrough demonstrates the total alignment of the "TabulatorGrid" (TG) build with the target RoboLedger V5 visual benchmark, including the surgical cleaning of transaction descriptions.
+
+## 1. Surgical Description De-Cluttering (V5 Logic)
+I've implemented a high-fidelity cleaning engine to achieve the surgical look of the V5 benchmark.
+- **Payee Isolation**: Removed redundant dates (e.g. "04 Jul") and technical strings from the primary description, leaving only the clean Entity name (e.g. `EMERALD ELK HOLDINGS`).
+- **Sub-Detail Sequestration**: Technical metadata like `Account number: ...` or `Transit: ...` is automatically moved to a secondary line.
+- **Dynamic 2-Line Grid**: The Tabulator grid now dynamically renders these isolated fields vertically, removing the "messy" overlap seen in previous builds.
+
+## 2. Breadcrumb Header Architecture
+Simplified the industrial header to match the surgical, multi-stage breadcrumb look.
+- **Transactions / [BANK] / [TYPE]**: High-fidelity breadcrumb with green-tinted institutional naming.
+- **Forensic Meta Row**: INST, TRANSIT, and ACCOUNT metadata moved to a secondary, high-density row below the breadcrumb.
+
+## 3. Pill-Based Account Switcher
+Converted the toggle buttons into a clean, pill-based tab system.
+- **Grey Track**: A light procedural background track for the switches.
+- **White Active Pills**: Active account indicators use a white background with blueprint blue text.
+
+## 4. Purple Tabulator Theme
+- **Purple Header**: The header background is forced to `#9333ea` with bold white text and clear vertical separators.
+- **Institutional Balance**: Accurate "Opening Balance" logic and ascending sort for numerical parity with the benchmark.
+
+### Benchmark Alignment (The Clean Look)
+![V5 Surgical Descriptions](/C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1770155279396.png)
+
+## 5. Safety & Diagnostics
+- **Icon-Based Start Over**: Compact reset control with dual-click safety.
+- **Numerical Trace**: Clean forensic status updates without visual progress bars.
+落落.

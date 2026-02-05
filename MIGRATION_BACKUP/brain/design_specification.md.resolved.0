@@ -1,0 +1,93 @@
+# design_specification.md: RoboLedgers Financial OS
+
+> **Role**: Principal UX Architect + Design Systems Lead  
+> **Mission**: Communicate "This system cannot lie" through forensic comfort and institutional clarity.
+
+---
+
+## 🏛️ 1. Design Language & Brand System
+
+### Philosophy: Institutional Clarity
+Inspired by **Apple** (Humanity), **Stripe** (Precision), and **Bloomberg** (Information Density).
+
+#### Typography
+- **Primary (UI/General)**: `Inter` (Variable). Optimized for legibility at small scales.  
+- **Institutional (Headings)**: `Outfit` or `Public Sans`. Structural, stable, human but firm.  
+- **Monospace (Data/Ledgers/Digests)**: `JetBrains Mono` or `SF Mono`. Used for all numeric values, `txsig`, and locator paths. Numbers must be tabular (equally spaced).
+
+#### Spacing & Geometry
+- **Logical Grid**: 4pt/8pt basis. Most containers use 16pt/24pt padding.
+- **Corner Radius**: 
+    - 16pt for Zen (Safe/Soft)
+    - 4pt for Pro (Sharp/Professional/Structural)
+    - 0pt for Auditor (Absolute/Raw)
+- **Shadows**: 
+    - **Forbidden**: Floating cards on data grids. Data must feel "settled" into the surface.
+    - **Allowed**: Subtle, large-radius blurs for temporary drawers (Audit Drawer).
+
+---
+
+## 🎨 2. Theme System (Authority Mapping)
+
+Each theme maps to a legal level of authority within the engine.
+
+| Mode | Theme | Psychology | Rules |
+| :--- | :--- | :--- | :--- |
+| **Zen** | Ocean/Sage/Slate | Emotional Safety | Low saturation, zero jargon, gentle transitions. |
+| **Pro** | Classic/Steel | Surgical Efficiency | Neutral palette, high contrast grids, reduced motion. |
+| **CFO** | Obsidian/Midnight | High-Stakes Intelligence | Strong typographic hierarchy, dark-mode focus, certified markers. |
+| **Auditor** | Monochrome/White | Absolute Neutrality | No animation, raw mono font, zero decoration. |
+
+---
+
+## 🖼️ 3. Screen UI Breakdown
+
+### A. The Landing Screen (Entry)
+- **Visuals**: Large, centered entity selector. 
+- **Cues**: "Identity Verified" badges next to role names.
+- **Header**: Live "System Integrity" pulse.
+
+### B. Zen Mode (Money Flow)
+- **WOW**: Cards that don't look like statements. They look like "events".
+- **Truth**: A small `P` (Predicted) or `C` (Confirmed) icon that, when hovered, explains *why* the brain knows this.
+
+### C. Bookkeeper Lens (Preparation Desk)
+- **Form**: The "Control Table". 
+- **Grid**: 12px row height. Zero whitespace waste.
+- **Matching**: Side-by-side reconciliation comparison with "Line-of-Sight" connectors.
+
+### D. Accountant Lens (Governance Console)
+- **Finality**: The "Lock Ceremony". A full-screen overlay that appears when certifying a period. 
+- **Ceremony**: Requires a digital "Seal Imprint" animation that feels heavy and permanent.
+
+### E. CFO & Forecast Sandbox
+- **Separation**: Certified metrics use solid outlines and high-contrast text. Projections use indigo dashed outlines and watermark overlays "DRAFT - PROJECTION".
+
+### F. Audit Drawer (The Forensic Wow)
+- **Action**: Click any transaction → Drawer slides from the right.
+- **Context**: Shows the **SourceLocator** (Page X, Y:Coord) as a small coordinate system.
+- **Hash**: The `txsig` displayed in monochrome monospace at the footer, used as a "footer anchor".
+
+---
+
+## ⚡ 4. Interaction & Motion
+
+- **Allowed**: "Settling" animations (0.2s ease-out) when data is reconciled.
+- **Forbidden**: Bouncy icons, playful loaders, or "AI sparkle" effects.
+- **Ritual**: Locking a period has a 1.2s "Casting" state—deliberate slowness to force realization of finality.
+
+---
+
+## 🛡️ 5. Audit & Trust Visuals
+
+- **Proof Objects**: Represented as a "Certificate" icon with a timestamp.
+- **Locks**: Not a standard padlock. An institutional "Seal" (Crest-style).
+- **History**: A "Truth Timeline" at the top of every grid showing the chain of custody.
+
+---
+
+## 🚫 6. Explicit Avoidance (Anti-Patterns)
+- No "Toggle" reconciliation (reconciliation is a decision, not a state-flip).
+- No "Editable" balances (all balances are derived from the ledger).
+- No hidden uncertainty (if the brain is 50/50, show two bars, not the "best" one).
+- No gamification. This is not a game; it is a fiduciary system.

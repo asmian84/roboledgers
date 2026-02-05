@@ -1,0 +1,36 @@
+# RoboLedger V5: Forensic Ingestion Workflow
+
+The V5 "Truth Engine" follows a non-linear, multi-stage pipeline designed for 100% cryptographic certainty and forensic auditability.
+
+## 1. Interaction Layer (The Shell)
+- **Input**: [app.js](file:///g:/My%20Drive/AutoBookkeeping/app.js) binds to the `.upload-zone`.
+- **Logic**: Detects MIME type. If `.pdf`, it triggers the "Forensic Digital Reconstruction" animation. If [.csv](file:///g:/My%20Drive/AutoBookkeeping/sample-transactions.csv), it proceeds to the legacy "Normalization Loop".
+- **Visuals**: The UI locks the "Browse" button and switches to the `forensic-scan` progress state.
+
+## 2. Institutional Fingerprinting (The Detector)
+Before parsing, the [Ingestion](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/core/ingestion.ts#14-76) engine scans the raw text for institutional markers:
+- **Transit Number**: Searches for [(\d{5})](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/core/coa.ts#51-65) patterns near bank headers.
+- **Institution #**: Lookups for `003` (RBC), `001` (BMO), `004` (TD).
+- **Account Identification**: Extracts the partial account string to verify the `selectedAccount` target.
+
+## 3. Forensic Extraction (Smart Regex Parsers)
+Instead of simple splitting, the engine uses **Regex Lookbehinds** and **Anchor Search**:
+- **Date Matching**: Differentiates between `Transaction Date` and `Post Date`.
+- **Amount Sanitization**: Handles parentheses [(123.45)](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/core/coa.ts#51-65) as debits and cleans currency symbols.
+- **Description Normalization**: Strips reference numbers (e.g., `REF #12345`) to ensure the `txsig` remains stable even if the bank changes its export format slightly.
+
+## 4. Idempotency Firewall (`txsig`)
+```javascript
+txsig = SHA256(account_id + normalized_date + amount_cents + raw_description)
+```
+- The [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js) checks every candidate transaction against the `sigIndex`. 
+- **Collision Policy**: If a `txsig` exists, the transaction is dropped. This allows a user to upload the same statement 100 times with zero duplicate risk.
+
+## 5. Ledger Posting & UI Grid Wiring
+- **Vault Update**: Validated transactions are pushed to the `state.transactions` map.
+- **Persistence**: `localStorage.setItem` is called immediately for 0ms recovery on page refresh.
+- **Grid Sync**: [app.js](file:///g:/My%20Drive/AutoBookkeeping/app.js) detects the end of `isIngesting`, clears the stage, and calls `agGrid.createGrid` with the fresh `Ledger.getAll()` projection.
+
+## 6. Audit Trail Projection
+- Every row in the grid maintains a reference to its `txsig`.
+- Clicking a row (in a later phase) will open the **Forensic Evidence Drawer**, showing exactly where in the source PDF the transaction was extracted from.

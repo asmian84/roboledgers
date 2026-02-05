@@ -1,0 +1,36 @@
+# RoboLedger V5.2.24: High-Fidelity Header & COA Restoration
+
+This update targets the core ergonomics of the transaction grid, sharpening the visual structure and restoring the essential Chart of Accounts (COA) workflow.
+
+## 📐 Grid Header Fidelity
+The rainbow header is now sharper and more professional, with zero text truncation.
+- [x] **Sharpened Dividers**: Header dividers increased to **60% white**; body cell dividers added at **10% black** for perfect vertical alignment.
+- [x] **Zero Truncation**: Expanded the **Ref#** (95px), **Source** (85px), and **Debit/Credit** (110px) columns to give titles and sorting arrows ample breathing room.
+- [x] **Wall Street Typography**: Refined letter-spacing and font-size for a high-density, professional finish.
+
+## 🛠️ COA Editor Restoration
+The "Account" column dropdown is fully functional and wired to the ledger.
+- [x] **Robust Select Editor**: Switched to a high-density `select` editor that appears instantly on click.
+- [x] **Categorized Grouping**: Accounts are logically grouped by type (Assets, Liabilities, etc.) with consistent icons.
+- [x] **Forensic Persistence**: Any manual category selection is instantly saved to the forensic ledger via the new recursive [save()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#156-162) wire.
+
+## 🏛️ Phase 50: Logic & Metadata Hardening
+- [x] **Smart Search**: Integrated live forensic searching across descriptions and references.
+- [x] **Bidirectional Ref Sync**: Changing an account's Ref# instantly updates all UI pills and grid badges.
+- [x] **Metadata Recovery**: Unified canonical property naming (`accountNumber`) to ensure institution and transit data always display in the action bar.
+
+![Improved Grid Header and COA Dropdown](file:///C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1770237951900.png)
+
+---
+*RoboLedger V5: Forensic Integrity. Infinite Scale.*
+
+---
+*RoboLedger V5: Forensic Integrity. Infinite Scale.*
+- **COA Tagging**: Integrated the "All roads lead to COA" philosophy—transactions map to categories via high-fidelity tags rather than sub-ledgers.
+
+## 🛠️ Parser Polarity Fix
+Resolved a critical bug where all transactions were bucketed as "Credits". 
+- **Debit Detection**: The engine now correctly identifies outgoings based on amount signs (`-`) and description keywords (`PURCHASE`, `WITHDRAWAL`).
+
+---
+**RoboLedger V5 is now functionally audited and performance-hardened.** 🚀

@@ -1,0 +1,25 @@
+# Walkthrough: V5 UI Refinement & Sticky Actions
+
+This update refines the shell architecture to achieve 1:1 parity with the "V5" design patterns requested, specifically focusing on the Header Hierarchy and the Industrial Sticky Bulk Bar.
+
+## 1. Multi-Tier Header Hierarchy
+The top of the view has been restructured into distinct functional layers:
+- **Layer 1: Title**: Pure [Transactions](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#384-476) header with the "Start Over" forensic control.
+- **Layer 2: Breadcrumb Card (Blue Box)**: A dedicated card containing the **Bank Dropdown** and **Account Type Dropdown** (visual), creating a clear navigational context.
+- **Layer 3: Action Bar (Green Box)**: The `REF#` input and forensic counts, residing naturally below the breadcrumb context.
+- **Layer 4: Account Card (Orange Box)**: The Account Switcher and Metadata pills.
+
+## 2. Sticky Yellow Bulk Bar
+Implemented the "V5 Vendor Analysis" pattern for bulk actions:
+- **Behavior**: The bar is hidden by default and slides up (`transform: translateY`) from the bottom when rows are selected in the grid.
+- **Styling**: Uses the signature `Amber-50` background with `Amber-400` borders and `Amber-800` text, providing a high-contrast forensic alert state.
+- **Controls**: Includes "Categorize", "Rename", and "Delete" actions with a dynamic selection counter.
+
+## 3. Visual Polish
+- **Upload Zone**: Moved inside the Breadcrumb Card for better space utilization.
+- **Grid Integration**: Validated that row selection events (`rowSelectionChanged`) correctly trigger the sticky bar visibility.
+
+### The Final V5 Build (Refined)
+![V5 Refined UI](/C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_0_1770157083574.png)
+
+落落.

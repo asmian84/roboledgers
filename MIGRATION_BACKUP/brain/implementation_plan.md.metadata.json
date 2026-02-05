@@ -1,0 +1,6 @@
+{
+  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
+  "summary": "Technical plan to optimize the ingestion engine and remove bloat from ledger.core.js. Includes regex pre-compilation, legacy cleanup, and description cleaner optimization.",
+  "updatedAt": "2026-02-05T00:32:29.125484200Z",
+  "version": "78"
+}

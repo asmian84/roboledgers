@@ -1,0 +1,132 @@
+# design_specification.md: Enterprise Financial OS (RoboLedgers)
+
+> **Role**: Principal Enterprise UI Architect  
+> **Philosophy**: Absolute Uniformity. Fiduciary Trust. Pixel Symmetry.
+
+---
+
+## 🏗️ 1. GLOBAL LAYOUT SYSTEM
+
+Exactly one layout scaffold is permitted.
+
+### View Nomenclature (Traditional)
+- **Dashboard**: High-level metrics + Recent Activity.
+- **Transactions**: Full ledger grid with verification controls.
+- **Trial Balance**: Ceremonial accounting views + Period Locking.
+- **Reports**: CFO-level analytics and projection scenarios.
+- **Audit Log**: Monochrome, read-only evidentiary trace.
+
+---
+
+## 📐 2. SPACING & ALIGNMENT
+
+### Spacing Scale (Mandatory)
+Padding, margins, and gaps must snap to this scale:
+- `4px` | micro
+- `8px` | base
+- `12px` | small
+- `16px` | medium
+- `24px` | large
+- `32px` | section
+- `48px` | page break
+
+### Alignment Standards
+- **Numbers**: Always RIGHT-ALIGNED. Tabular figures mandatory.
+- **Labels**: Always LEFT-ALIGNED.
+- **Icons**: 16px (Standard) or 20px (Action).
+
+---
+
+## 🔡 3. TYPOGRAPHY
+
+### Fonts
+- **Primary**: Inter / SF Pro / Geist (400, 600 weights only).
+- **Tabular**: JetBrains Mono / SF Mono (For all numbers, balances, and `txsig`).
+
+### Hierarchy (Strict)
+- **Page Title**: 20px / 600 weight.
+- **Section Header**: 14px / 600 weight.
+- **Body / Table**: 13px / 400 weight.
+- **Metadata**: 11px / 500 weight.
+
+---
+
+## 🎨 4. SEMANTIC COLOR SYSTEM
+
+Neutrality is the default state. Color is used only to communicate state or truth.
+
+### Neutral Base
+- **Background**: `#F7F8FA`
+- **Surface**: `#FFFFFF`
+- **Border**: `#E5E7EB`
+- **Text Primary**: `#111827`
+- **Text Secondary**: `#6B7280`
+
+### Truth Signaling (Semantic Dots)
+- **RAW**: Amber 400 dot.
+- **PREDICTED**: Blue 400 dot.
+- **RECONCILED**: Green 500 dot + Label.
+- **LOCKED / CERTIFIED**: Graphite 800 + Lock Icon.
+
+**Forbidden**: Gradients, decorative icons, "mood" palettes, or emojis.
+
+---
+
+## 🧩 5. COMPONENT SYSTEM (Akaunting-Inspired, RoboLedger-Enforced)
+
+Borrowing the clarity of Akaunting while enforcing mathematical truth.
+
+### Cards (.card)
+- **Style**: Background Surface, 1px Border (#E5E7EB), 8px Radius. 
+- **Shadow**: 0 4px 12px rgba(0,0,0,0.06) — Subtle elevation only.
+- **Enforcement**: Must always include a Truth State Badge.
+
+### Data Tables (.data-table)
+- **Style**: No outer borders (except header bottom). 16px row padding.
+- **Enforcement**: 
+    - No inline edits. 
+    - No drag-reorder. 
+    - Numeric columns MUST use `JetBrains Mono` and be right-aligned.
+
+### Modals & Dialogs (.modal)
+- **Style**: Center-anchored. Minimalist headers.
+- **Enforcement**: Required for all mutations (Locking, Posting, Reconciling). No "Soft Undo".
+
+---
+
+## 🗺️ 6. AKAUNTING COMPONENT MAPPING
+
+| RoboLedger Objective | Akaunting Pattern | Constraint/Enforcement |
+| :--- | :--- | :--- |
+| **Summaries** | Dashboard Cards | Use grid but add Semantic Truth Badges. |
+| **Verification** | Styled Tables | Spacing influence only. NO inline editing. |
+| **Governance** | Form Layouts | Akaunting-like clarity but validate invariants first. |
+| **Certification** | Modals & Dialogs | Use for high-stakes ceremonies. |
+
+---
+
+## 🎨 7. TRUTH PATTERNS (SEMANTIC BADGES)
+
+| State | Dot Color | System Value |
+| :--- | :--- | :--- |
+| **RAW** | Amber 400 | Data sensed but not categorized. |
+| **PREDICTED** | Blue 400 | AI-suggested intent. Requires review. |
+| **RECONCILED** | Green 500 | Human-verified truth. |
+| **LOCKED** | Graphite 700 | Historically immutable state. |
+
+---
+
+## 🚫 8. FORBIDDEN ELEMENTS (MICKEY-MOUSE PREVENTION)
+- No Emojis (🤖, ⚖️, ✨).
+- No playful icons or rounded cartoonish glyphs.
+- No gamification or progress bars for "engagement".
+- No hidden uncertainty.
+- Forbidden buttons must not exist (no disabled states for illegal actions).
+- No toggle-based reconciliation (Must be a terminal action).
+
+---
+
+## ✅ 7. THE FINALITY TEST
+"Would a banking underwriter or government auditor trust a screenshot of this screen as clear evidence?" 
+
+If the answer is not an immediate "Yes", the design is rejected.

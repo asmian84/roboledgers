@@ -1,0 +1,29 @@
+# Walkthrough: V5 Shell Architecture & Wiring
+
+This walkthrough demonstrates the total architectural overhaul of the RoboLedger shell, aligning it with the V5 functional mapping (Orange, Green, and Blue zones) and implementing deep bidirectional wiring.
+
+## 1. Hierarchical Card Architecture
+The shell is now organized into functional zones for surgical clarity:
+- **Blue Zone (Header)**: Featuring multi-stage breadcrumbs (`Transactions / ACCOUNT`) and a repositioned "Start Over" control. The Workspace Settings icon has been sequestered to the Action Bar.
+- **Green Zone (Action Bar)**: The primary metadata hub containing the bidirectional Ref# input, operational status clusters, and the system gear.
+- **Orange Zone (Account Info)**: A dedicated card for active account metadata (INST, TRANSIT, ACCOUNT) displayed as high-fidelity pills, alongside the account switcher.
+
+## 2. Bidirectional Ref# Wiring
+Implemented deep state synchronization between the UI and the Ledger Truth:
+- **Instant Sync**: Updating the `REF#` in the Action Bar instantly updates the Account Switcher pill labels and the Grid's "Source" column.
+- **Uniqueness Verification**: A built-in forensic check prevents duplicate account references, displaying a readable "Already in use" message directly below the input.
+- **Grid Source Integration**: The "Source" column now dynamically pulls the current Account reference (e.g., `CHQ1`), matching the surgical V5 tag style.
+
+## 3. Iconic Action Controls
+Restored the iconic, high-density control system from V5:
+- **Iconic Grid Actions**: Replaced text buttons with `+` (Add Entry), `-` (Delete Account), and `...` (Bulk Menu) icons for a professional forensic aesthetic.
+- **Bulk Action Menu**: A responsive dropdown menu for "Rename", "Re-categorize", and "Delete" operations, styled with V5 hover effects and industrial whitespace.
+
+## 4. Visual Layout Alignment
+- **Upload Zone**: Repositioned to the right of the breadcrumbs with a clean, dashed-border industrial look.
+- **Vertical Hierarchy**: Balanced the spacing between the Header, Action Bar, Info Card, and Grid to achieve 1:1 parity with the V5 benchmark.
+
+### The Final V5 Build (Surgical Parity)
+![V5 Shell Overhaul](/C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1770156011133.png)
+
+落落.

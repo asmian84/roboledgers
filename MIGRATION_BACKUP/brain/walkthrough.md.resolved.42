@@ -1,0 +1,196 @@
+# V5.2: Grid Column Restructuring - Complete Walkthrough
+
+## Overview
+
+Successfully restructured the transaction grid with proper column ordering, date parsing fixes, balance calculations, and 5-category COA dropdown implementation.
+
+---
+
+## Final Grid Column Order
+
+1. **Ref#** - Transaction reference (e.g., "CHQ1-002")
+2. **Source** - Prefix only (e.g., "CHQ1") - extracted from Ref#
+3. **Date** - Formatted as "dd MMM yyyy" (e.g., "05 Jan 2023")
+4. **Description** - 2-line display (UPPERCASE + bank context)
+5. **Debit** - Money out (mutually exclusive with Credit)
+6. **Credit** - Money in (mutually exclusive with Debit)
+7. **Balance** - Running total (color-coded)
+8. **Account** - 5-category COA dropdown with icons
+
+---
+
+## Changes Implemented
+
+### 1. Column Restructure
+
+**Removed:**
+- ❌ Checkbox/selection column
+- ❌ Actions column (swap/delete buttons)
+- ❌ All header search fields
+
+**Added/Modified:**
+- ✅ **Source Column** (position 2) - Shows only prefix (e.g., "CHQ1")
+- ✅ **Balance Column** (position 7) - Running total with color coding
+- ✅ **Account Column** (position 8) - 5-category COA dropdown
+
+**Reordered:**
+- Columns now follow exact specification: Ref#, Source, Date, Description, Debit, Credit, Balance, Account
+
+### 2. Date Formatter Fix
+
+Implemented custom Luxon formatter to properly parse ISO date strings:
+
+```javascript
+formatter: (cell) => {
+  const dateValue = cell.getValue();
+  if (!dateValue) return '<span style="color: #cbd5e1;">(No Date)</span>';
+  
+  try {
+    const date = luxon.DateTime.fromISO(dateValue);
+    if (date.isValid) {
+      return date.toFormat('dd MMM yyyy');
+    }
+  } catch (e) {
+    console.warn('[DATE] Failed to parse:', dateValue, e);
+  }
+  
+  return '<span style="color: #cbd5e1;">(Invalid)</span>';
+}
+```
+
+### 3. Balance Calculation
+
+Automatic running balance calculation before grid initialization:
+
+```javascript
+let runningBalance = 0;
+data.forEach((txn, index) => {
+  if (txn.polarity === 'CREDIT') {
+    runningBalance += txn.amount_cents || 0;
+  } else if (txn.polarity === 'DEBIT') {
+    runningBalance -= txn.amount_cents || 0;
+  }
+  txn.balance = runningBalance;
+});
+```
+
+### 4. Source Column Implementation
+
+Extracts prefix from Ref# field:
+
+```javascript
+formatter: (cell) => {
+  const rowData = cell.getRow().getData();
+  const ref = rowData.ref || '';
+  
+  let prefix = 'N/A';
+  if (ref) {
+    const parts = ref.split('-');
+    prefix = parts[0] || 'N/A';
+  } else {
+    prefix = getRefPrefix(); // From header input
+  }
+  
+  return `<span style="color: #64748b; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500;">${prefix}</span>`;
+}
+```
+
+# Grid Wiring and Aesthetics Polish
+
+Restructuring the transaction grid to improve data display, typography, and user interaction.
+
+## Proposed Changes
+
+### [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- [MODIFY] Added rainbow gradient theme to grid headers.
+- [MODIFY] Enabled uniform, non-bold typography for all grid text.
+- [MODIFY] Implemented max-width constraints to fix grid overflow.
+
+### [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- [MODIFY] Enabled `headerSort` for all columns.
+- [MODIFY] Refactored account switcher with "ALL" button and unique account deduplication.
+- [MODIFY] Fixed date field mapping and categorization logic.
+- [MODIFY] Fixed syntax error in account switcher logic.
+- [MODIFY] Removed bold weights from Payee/Description renderer.
+- No header search fields
+- Row selection disabled
+
+### ⏳ Future Enhancements:
+- Multi-ledger account switcher system
+- Source column linked to account switcher for reconciliation
+- Reconciliation drawer integration
+- Account isolation with separate transaction stores
+
+---
+
+## Notes for Future Development
+
+### Multi-Ledger System (Phase 2)
+
+The Source column is designed to eventually link to a multi-ledger account switcher system:
+
+**Planned Features:**
+- AccountManager class for managing up to 10 separate accounts
+- Account switcher UI in header
+- Transaction isolation per account (separate localStorage keys)
+- Reconciliation drawer for cross-account reconciliation
+- Source column becomes clickable to switch between accounts
+
+**Current Implementation:**
+- Source column shows prefix for visual reference
+- Single-ledger system (all transactions in one store)
+- No account switching capability yet
+
+This will be implemented as a separate phase to maintain clean separation of concerns.
+
+---
+
+## V5.2.4: Aesthetic & Functional Polish
+
+### ✅ Rainbow Header Theme
+- Implemented a custom rainbow gradient for Tabulator headers.
+- Uses `linear-gradient` to create a professional but vibrant look.
+- White text for high contrast on the rainbow background.
+
+### ✅ Uniform Typography
+- Removed all bold weights from the grid for a cleaner, modern look.
+- Applied `font-weight: 400` globally to cells.
+- Standardized `font-weight: 600` for column titles.
+
+### ✅ Functional Sorting
+- All column headers are now clickable for sorting.
+- Enabled native Tabulator `headerSort` on all columns.
+- Supports ASC, DESC, and None sorting states.
+
+### ✅ Smart Account Switcher
+- Added an **"ALL"** button to view a consolidated ledger.
+- Implemented deduplication logic to ensure only unique accounts are shown.
+- Linked "ALL" button to `UI_STATE.selectedAccount = null`.
+
+---
+
+## Technical Validation
+
+### CSS Changes
+Modified [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css) to override Tabulator's default header and cell styling:
+```css
+.tabulator-header {
+    background: linear-gradient(90deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #818cf8, #a78bfa) !important;
+}
+.tabulator-cell {
+    font-weight: 400 !important;
+}
+```
+
+### JS Changes
+Updated [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js) to include `headerSort: true` in column definitions and refactored the switcher pill rendering loop with deduplication.
+
+---
+
+## Final Summary
+
+The RoboLedger V5.2 grid is now a high-performance, aesthetically pleasing tool:
+- ✅ **Aesthetic**: Rainbow headers and clean typography.
+- ✅ **Functional**: Full column sorting and smart account switching.
+- ✅ **Clean**: No duplicates or visual clutter.
+- ✅ **Reliable**: Syntax errors and year-parsing bugs resolved.

@@ -1,0 +1,44 @@
+# Live System Wiring (V4/V5 UI Restoration)
+
+Finalize the functional restoration by implementing a live, browser-native Ledger Engine, hardening the ingestion pipeline for **Primary PDF** and **Secondary CSV** support, and ensuring 1 = 1 architectural fidelity with the original V5 "Truth Engine" aesthetics.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Primary PDF Ingestion**: The system will now prioritize PDF bank statements.
+> **Forensic Reconstruction UI**: PDF uploads will trigger a specialized "Digital Reconstruction" phase to maintain the forensic accounting aesthetic.
+
+## Proposed Changes
+
+### [Component] Ledger Engine (Restoration Port)
+
+#### [MODIFY] [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js)
+- Extend `RoboLedger` with PDF text extraction logic (via `pdf.js` or simulated forensic layer).
+- Implement Smart Regex Parsers for Canadian banks (RBC, BMO, TD).
+- Update [processUpload](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#110-156) to handle file type detection and specific parsing paths.
+
+### [Component] UI Framework (V4/V5 Restoration)
+
+#### [MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- Update Header Card labels: "Drag and drop PDF or CSV here".
+- Implement multi-stage progress indicator:
+    1. Forensic Digital Reconstruction (PDF Only).
+    2. Truth State Extraction.
+    3. Ledger Posting Ceremony.
+
+#### [MODIFY] [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- Add specialized typography and animations for "Forensic" progress states.
+- Refine drop-zone "drag-over" effects.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- Upload `mock_rbc_statement.pdf`.
+- Upload `mock_amex_export.csv`.
+- Verify `txsig` generation and duplicate rejection in both formats.
+
+### Manual Verification
+- Visual inspection of the "Digital Reconstruction" progress bar.
+- Verification of account balance updates in the Sidebar after PDF ingestion.

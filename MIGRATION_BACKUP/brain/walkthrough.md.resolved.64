@@ -1,0 +1,33 @@
+# RoboLedger V5.2.23: Fidelity & Logic Wiring Update
+
+This update hardens the V5 shell, ensuring data integrity across account switches and providing enhanced search-as-you-type capabilities.
+
+## 🔍 Smart Search & Action Bar
+The Action Bar now supports live forensic searching.
+- [x] **Live Search Engine**: Toggle search via the magnifying glass to filter descriptions, Ref#, or Account# in real-time.
+- [x] **ESC to Dismiss**: High-fidelity UX—press Escape to clear search and return to the primary view.
+
+## 🔄 Bidirectional Ref# & Pill Sync
+Changing the account name now reflects everywhere instantly.
+- [x] **Custom Pill Labels**: Changing the Ref# (e.g., to `CHQ3`) now instantly updates the Account Switcher pill label.
+- [x] **Consolidated Wiring**: Removed duplicate logic to ensure a single, stable source of truth for account naming.
+
+## 🏛️ Account & Metadata Fidelity
+Fixed property naming mismatches to ensure absolute forensic accuracy.
+- [x] **Canonical Metadata**: Unified property names to fix the "NO METADATA" bug. Inst, Transit, and Account# now show up correctly in the Action Bar.
+- [x] **Account Pruning**: Removed redundant default accounts to ensure the UI only shows relevant data pills.
+
+## ⚡ Session Recovery Refinement
+- [x] **Subtle Notice Styling**: The recovery banner is now styled as a professional, non-aggressive amber notice (`v5-notice-banner`).
+- [x] **Deep Purge**: Choosing "Start New" now performs a full-ledger reset and clears the UI state.
+
+---
+*RoboLedger V5: Forensic Integrity. Infinite Scale.*
+- **COA Tagging**: Integrated the "All roads lead to COA" philosophy—transactions map to categories via high-fidelity tags rather than sub-ledgers.
+
+## 🛠️ Parser Polarity Fix
+Resolved a critical bug where all transactions were bucketed as "Credits". 
+- **Debit Detection**: The engine now correctly identifies outgoings based on amount signs (`-`) and description keywords (`PURCHASE`, `WITHDRAWAL`).
+
+---
+**RoboLedger V5 is now functionally audited and performance-hardened.** 🚀

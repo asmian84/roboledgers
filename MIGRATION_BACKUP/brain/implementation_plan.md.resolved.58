@@ -1,0 +1,26 @@
+# RoboLedger V5.2.15: Layout Width Standardization
+
+Unifying the width of all header components (Header Card, Action Bar, Switcher Bar) to ensure a perfectly aligned "Island Stack" at 1060px.
+
+## User Review Required
+
+> [!NOTE]
+> **Width Enforcement**: The Header Card currently appears narrower than the Action Bar. I will enforce `width: 100%; max-width: 1060px;` to ensure perfect vertical alignment with the transaction grid.
+
+## Proposed Changes
+
+### UI Logic (app.js)
+- **renderTransactionsRestored**:
+  - Update `header-card` inline style to include `width: 100%`.
+  - Fix `margin: auto` to `margin: 0 auto` for stricter box-model behavior.
+
+### Styling (system.css)
+- Review `.header-card` and `.v5-action-bar` to ensure they share identical `max-width` tokens and margin behaviors.
+- Ensure the parent container `.v5-main-header` doesn't apply any width-restricting flex properties.
+
+## Verification Plan
+
+### Manual Verification
+1. **Vertical Alignment Check**: Use a browser inspector or visual guide to ensure the left and right edges of the Header Card, Action Bar, and Switcher Bar are perfectly flush with each other.
+2. **Standardization Check**: Confirm that resizing the window maintains the 1060px centered islanding for all elements in the stack.
+

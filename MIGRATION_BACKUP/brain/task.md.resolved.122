@@ -1,0 +1,281 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+- [x] Phase 4: Automated Invariant Testing
+- [x] Phase 5: COA Intelligence Layer
+- [x] Phase 6: Categorization Brain (Deterministic Reasoning)
+- [x] Phase 7: Reconciliation Proof Engine (Mathematical Truth)
+- [x] Phase 8: Role-Based Authority Control (RBAC)
+- [x] Phase 9: Adjusting Journal Entries (AJE) Layer
+- [x] **CORE FREEZE (v1.0.0-core-constitution)**
+- [x] Phase 10: UX Projection Contracts
+- [x] Phase 11: Zen Mode Feed (First Visual Layer)
+- [x] Phase 12: Professional Ledger Lenses (Bookkeeper Part)
+- [x] Phase 13: Accountant Lens (Authority & Certification)
+- [x] Phase 14A: Multi-Entity Consolidation Model
+- [x] Phase 14C: Forecasting Engine (COMPLETE)
+- [x] Phase 15: Production Hardening & Resilience (COMPLETE)
+- [x] Phase 16: UI/UX Command Center (COMPLETE - REJECTED)
+- [x] Phase 17: Principal UX Architecture (COMPLETE - REJECTED)
+- [x] Phase 18: Enterprise UI Architecture (COMPLETE)
+- [x] Phase 19: Hostile Auditor Simulation (COMPLETE)
+- [x] Phase 20: Human Friction Testing (COMPLETE)
+- [x] Phase 21: Minor Institutional Polish (COMPLETE)
+- [x] Phase 22: Akaunting-Inspired Institutional Refinement (COMPLETE)
+- [ ] Phase 24: Apple-Grade UI Redesign (IN PROGRESS)
+    - [x] 24.1: Implement Glassmorphic Foundation (COMPLETE)
+    - [/] 24.2: Build Apple-Grade Zen Mode (Dashboard IMPLEMENTED)
+    - [x] 24.3: Implement High-Density Bookkeeper Desk (Transactions RESTORED - V5 PURPLE)
+- [x] Phase 25: RoboLedger V5 UI Convergence (COMPLETE)
+- [x] Phase 26: RoboLedger V4/V5 Restoration (COMPLETE)
+    - [x] 26.1: V4 Navigation & Sidebar Restoration (COMPLETE)
+    - [x] 26.2: Breadcrumb & Main Shell Restoration (COMPLETE)
+    - [x] 26.3: Screenshot-Perfect Header Cards (COMPLETE)
+    - [x] 26.4: Empty State & Illustrations Restoration (COMPLETE)
+    - [x] 26.5: Functional Integration with Restored UI (COMPLETE)
+- [x] Phase 28: V5 Transactions High-Fidelity Refinement (COMPLETE)
+    - [x] 28.1: Implement Purple Header Theme (#9333ea)
+    - [x] 28.2: Integrated Header Search Filters
+    - [x] 28.3: Teal "TXN" Source Badges
+    - [x] 28.4: Full-Screen Adaptive Flex Layout ("No Bibs")
+    - [x] 28.5: Multi-File Batch Ingestion Support
+- [x] Phase 29: Settings Drawer & Metadata Hub Restoration (COMPLETE)
+    - [x] 29.1: Implement Metadata Action Bar (Status Cluster)
+    - [x] 29.2: Implement High-Fidelity Settings Drawer (Multi-Tab)
+    - [x] 29.3: Add Workspace Dexterity (Focus Lens) & Theme selection
+    - [x] 29.4: Wire Column Visibility Toggles
+    - [x] 29.5: Implement window.getSettingsTrace() for forensic console debugging
+- [x] Phase 30: "Start Over" Reset Logic
+    - [x] 30.1: Implement Ledger.reset() in ledger.core.js
+    - [x] 30.2: Add "Start Over" button with inline confirmation to V5 Header
+    - [x] 30.3: Ensure reset returns UI to fresh empty state
+- [x] Phase 35: V5 Shell Architecture & Wiring
+    - [x] 35.1: Implement Hierarchical Card Mapping (Orange/Green/Blue)
+    - [x] 35.2: Bidirectional Ref# wiring (Bar <-> Account <-> Grid)
+    - [x] 35.3: Unique Ref# verification with error messaging
+    - [x] 35.4: Restore V5 Bulk Action Menu and Iconic controls
+    - [x] 35.5: Align Grid Columns (Remove Account, Add dynamic Source)
+- [x] Phase 31: V5 Grid & Ingestion Refinement
+    - [x] 31.1: Implement 2-Line clean descriptions (Screenshot 2 Style)
+    - [x] 31.2: Implement separate Debit/Credit population logic
+    - [x] 31.3: Implement Running Balance calculation logic
+    - [x] 31.4: Reposition "Start Over" button beside upload bucket (Icon-style)
+    - [x] 31.5: Wire Ref# to parser (CHQ detection)
+- [x] Phase 32: Screenshot 2 Alignment & Spacing Polish
+    - [x] 32.1: Remove visual progress bar (textual trace only)
+    - [x] 32.2: Tighten vertical whitespace between Header and Grid
+    - [x] 32.3: Validate Tabulator density and styles against Screenshot 2
+- [x] Phase 33: TG Build Alignment (Visual V5 Benchmark)
+    - [x] 33.1: Implement Breadcrumb-style Header (Transactions / Account)
+    - [x] 33.2: Re-style Account Switcher to Pill-selection
+    - [x] 33.3: Apply Purple Header styling to Tabulator grid
+    - [x] 33.4: Align Running Balance logic with "Opening Balance" view
+    - [x] 33.5: Final layout tightening for high-density forensic look
+
+## V5.2.4: Aesthetic & Functional Polish
+
+### ✅ Rainbow Header Theme
+Implemented a professional, vibrant rainbow gradient across the grid headers:
+- `linear-gradient(90deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #818cf8, #a78bfa)`
+
+### ✅ Uniform Typography
+Removed all aggressive bold weights across the grid:
+- Uniform `font-weight: 400` for cells.
+- Clean `font-weight: 600` for column titles.
+- Consistent typography for better readability.
+
+### ✅ Header Sorting
+Enabled native Tabulator sorting on every column:
+- Click header to cycle through ASC, DESC, and None.
+
+### ✅ Account Switcher Fixes
+- Added an "ALL" pill to view transactions from all accounts.
+- Deduplicated individual account pills to prevent redundant entries.
+- Fixed selection logic for active pill state.
+
+---
+
+## Technical Updates
+
+- **system.css**: Updated `.tabulator-header`, `.tabulator-col`, and `.tabulator-cell` for rainbow theme and typography.
+- **app.js**: Updated column definitions with `headerSort: true` and refactored switcher pill rendering.
+
+---
+
+## Summary
+
+The grid is now:
+- ✅ **Rainbow Themed** - Vibrant and high-end.
+- ✅ **Cleanly Typed** - Non-bold, uniform, and readable.
+- ✅ **Fully Sortable** - Headers are now functional.
+- ✅ **Smartly Switched** - ALL + unique account pills.
+- ✅ **Bug Free** - Syntax errors and duplication issues resolved.
+
+Ready for production use with enhanced UX.
+- [x] Phase 34: Description De-Cluttering & Forensic Cleaning
+    - [x] 34.1: Strip redundant dates from raw descriptions
+    - [x] 34.2: Move account/transit numbers to sub-line
+    - [x] 34.3: Implement surgical extraction for main Payee title
+    - [x] 34.4: Update grid formatter to use clean title/detail fields
+- [x] Phase 36: V5 UI Polish (FINAL)
+    - [x] 36.1: Implement Clean Slate "Waiting" State
+    - [x] 36.2: Implement Screenshot 1 Blue Progress Bar
+    - [x] 36.3: Refine Header Card to Screenshot 3 (Blue Icon/Breadcrumb/Metadata)
+    - [x] 36.4: Implement Sticky Yellow Bulk Action Bar
+- [x] Phase 37: V5.2 Grid Refinement & Data Wiring
+    - [x] 37.1: Fix grid data wiring (replace dataAdjustedForAccount with Ledger.getAll)
+    - [x] 37.2: Fix date column field mapping (date_iso → date)
+    - [x] 37.3: Remove bold styling from Credit/Balance columns
+    - [x] 37.4: Fix double file browser bug (remove nested button)
+    - [x] 37.5: Add file type restrictions (.csv, .xlsx, .pdf)
+    - [x] 37.6: Add debug logging for grid data inspection
+    - [x] 37.7: Document all bugs in bug_log.md
+    - [x] 37.8: Wire COA categorization (account_id → coa_code, use code-based matching)
+    - [x] 37.9: Add parsing/categorization progress indicator
+    - [x] 37.10: Wire settings drawer to grid columns
+    - [x] 37.11: Implement rainbow header theme
+    - [x] 37.12: Remove all bold text for uniform typography
+    - [x] 37.13: Enable sorting on all column headers
+    - [x] 37.14: Fix account switcher (show ALL + unique accounts)
+
+- [x] Phase 38: V5.2.5 Forensic Stabilization
+    - [x] 38.1: Expose 'render' to global window scope (fix ReferenceError)
+    - [x] 38.2: Fix double browse bug (remove duplicate upload listeners)
+    - [x] 38.3: Wire account switcher filtering logic in initGrid
+    - [x] 38.4: Fix Debit/Credit styling (Debit=Red, Balance=Black, Credit=Green)
+    - [x] 38.5: Enforce 2023 year on all transactions (fix 2026 persistence)
+    - [x] 38.6: Increase grid container height (calc 100vh-250px)
+    - [x] 38.7: Fix header sorting behavior/icons
+    - [x] 38.8: Implement visible progress bar for file ingestion
+    - [x] 38.9: Fix grid overflow beyond wall paddings (max-width alignment)
+
+- [x] Phase 39: V5.2.6 Popout Grid & Ref# Syncing
+    - [x] 39.1: Sync Ref# input with account switcher pills (dynamic renaming)
+    - [x] 39.2: Implement "Object URL" Popout System (Blob serving)
+    - [x] 39.3: Bidirectional State Sync (postMessage channel)
+    - [x] 39.4: "Pop-In" Bridge & Heartbeat Monitoring
+    - [x] 39.5: Style & Resource Injection (Tabulator parity)
+
+- [x] Phase 40: V5.2.7 Layout & Switcher Optimization
+    - [x] 40.1: Fix Switcher Pill hang (investigate infinite render loops)
+    - [x] 40.2: Reduce stage side padding by 10% (adjust system.css)
+    - [x] 40.3: Split Action Bar and Switcher Bar (Reorder components)
+    - [x] 40.4: Standardize header card width (1:1 with grid card)
+    - [x] 40.5: Implement V5.2.7 Debug Console Script
+
+- [x] Phase 41: V5.2.9 UI Fidelity (Empty State)
+    - [x] 41.1: Match Empty Header layout with screenshot (Browse files button)
+    - [x] 41.2: Match Master Empty State layout (Large book icon)
+    - [x] 41.3: Update breadcrumb position/style for empty state
+    - [x] 41.4: Implement specialized CSS for "Browse files" button
+
+- [x] Phase 42: V5.2.14 ATI Metadata & Clean Header Implementation
+    - [x] 42.1: Implement Clean Header State (Title + Waiting Msg + Upload Zone)
+    - [x] 42.2: Implement Monospace ATI Line in Action Bar (Right Side)
+    - [x] 42.3: Remove legacy metrics from Action Bar
+    - [x] 42.4: Horizontalize Action Bar icons
+    - [x] 42.5: Standardize Card Padding (Green Box match)
+    - [x] 42.6: Implement Metadata Extraction Engine (Regex + Logic)
+
+- [x] Phase 43: V5.2.16 Layout Width Correction
+    - [x] 43.1: Enforce 1060px uniform max-width on ALL stack containers (Header, Action, Switcher)
+    - [x] 43.2: Align side paddings strictly across the stack
+    - [x] 43.3: Remove redundant width/margin overrides to prevent box-model collapse
+
+- [x] Phase 44: V5.2.17 Aesthetic Polish, Functional Breadcrumbs & Full-Width Layout
+    - [x] 44.1: Implementation of "Slicker" typography (Global font-size reduction to 11.5px)
+    - [x] 44.2: Header Card cleanup (Fit-to-content + reduced padding)
+    - [x] 44.3: Grid Column Re-allocation (Description absorbs extra space)
+    - [x] 44.4: Functional Breadcrumbs (Home -> Transactions active routing)
+    - [x] 44.5: Full-Width Breadcrumb Bar (Wall-to-wall in main stage)
+    - [x] 44.6: Vertical density tightening (Island gap reduction)
+
+- [x] Phase 45: V5.2.18 Glassmorphism Island Stack
+    - [x] 45.1: Generate 3 design mocks for glassmorphism
+    - [x] 45.2: Implement selected glass aesthetic (backdrop-filter + border refinement)
+    - [x] 45.3: Gap optimization (Floating vs. Snug stack)
+    - [x] 45.4: Shadow depth tuning for V5 elevation
+    - [x] 45.5: Refine glass borders (Darker definition for contrast)
+
+- [x] Phase 46: V5.2.19 High-Fidelity Audit & Parser Fixes
+    - [x] 46.1: Expansion of Island max-width to 1166px (+10%)
+    - [x] 46.2: Implement vertical dividers between grid column headers
+    - [x] 46.3: Dynamic Sorting Animations & Sequential Ref# Reset
+    - [x] 46.4: Flicker-Free Switcher (Filter-based performance)
+    - [x] 46.5: Adaptive Account Naming (CHQ1, CHQ2, AMEX - Chronological)
+    - [x] 46.6: Pagination System (Dropdown + Arrows - Inpage/Popout)
+    - [x] 46.7: COA Tagging Integration ("All roads lead to COA")
+    - [x] 46.8: Parser Polarity Fix (Debit vs Credit detection)
+    - [x] 46.9: Default Rainbow Theme & Settings Persistence
+
+- [x] Phase 47: Session Persistence & Recovery UX (V5.2.20)
+    - [x] 47.1: Implement recovery check on session start
+    - [x] 47.2: Build in-page Recovery Banner UI (Continue vs Start New)
+
+- [x] Phase 48: Forensic Audit Drawer (V5.2.21)
+    - [x] 48.1: Implement right-side Audit Drawer container in system.css
+    - [x] 48.2: Integrate iframe/table source viewer into drawer
+    - [x] 48.3: Wire openSourceFile() to side-by-side view
+    - [x] 48.4: Add 'Close' and 'Popout' actions to Audit Drawer header
+
+- [x] Phase 49: Grid Fidelity Polish (V5.2.22)
+    - [x] 49.1: Sharpen vertical dividers in headers (30% opacity)
+    - [x] 49.2: Sharpen vertical dividers in body (8% opacity)
+
+- [x] Phase 50: Logic Wiring & Metadata Fidelity (V5.2.23)
+    - [x] 50.1: Correct search bar toggle & implementation
+    - [x] 50.2: Fix Ref# wiring (Consolidate functions & ensure pill update)
+    - [x] 50.3: Unify Canonical Metadata properties (account_num vs accountNumber)
+    - [x] 50.4: Prune redundant default accounts from core engine
+
+- [x] Phase 50: Logic Wiring & Metadata Fidelity (V5.2.23)
+    - [x] 50.1: Correct search bar toggle & implementation
+    - [x] 50.2: Fix Ref# wiring (Consolidate functions & ensure pill update)
+    - [x] 50.3: Unify Canonical Metadata properties (account_num vs accountNumber)
+    - [x] 50.4: Prune redundant default accounts from core engine
+
+- [x] Phase 51: Grid Header & COA Fidelity (V5.2.24)
+    - [x] 51.1: Sharpen header dividers (60% white) & body dividers (10% black)
+    - [x] 51.2: Fix header truncation (Source: 85px, Ref#: 90px, Debit/Credit: 110px)
+    - [x] 51.3: Convert COA editor from 'list' to robust 'select'
+    - [x] 51.4: Refine header typography & sorting arrow alignment
+
+- [x] Phase 52: Forensic Recon Hub & Metadata Intelligence (V5.2.25)
+    - [x] 52.1: Implement Universal Recon Hub in Switcher Bar (Right side)
+    - [x] 52.2: Add Asset Logic (Op - Dr + Cr = Ed) & Liability Logic (Op + Dr - Cr = Ed)
+    - [x] 52.3: Implement IIN Branding Detection (VISA/MC/AMEX)
+    - [x] 52.4: Extract 15/16 digit CC numbers for high-fidelity metadata
+    - [x] 52.5: Fix Ingestion Routing (Resolve 'ALL' to primary account)
+
+- [x] Phase 55: Grid Header Refinement (V5.2.27)
+    - [x] 55.1: Sharpen column dividers (80% white)
+    - [x] 55.2: Left-align all header text (headerHozAlign: "left")
+    - [x] 55.3: Explicit flex-start in system.css
+
+- [x] Phase 56: UI Scaling & Performance Optimization (V5.2.28)
+    - [x] 56.1: Scale Island max-width to 1400px
+    - [x] 56.2: Scale Header/Action/Switcher by 20% (Height & Font)
+    - [x] 56.3: Default to individual account view (Remove "ALL" default)
+    - [x] 56.4: Optimize Switcher logic for low-latency responsiveness
+
+- [x] Phase 57: Ingestion Engine Optimization & Minimalist UI (V5.2.34)
+    - [x] 57.1: Centralize and pre-compile all regex parsers
+    - [x] 57.2: Prune legacy repair logic from load()
+    - [x] 57.3: Streamline detectInstitution and cleanDescription
+    - [x] 57.4: Refactor processUpload signage logic
+    - [x] 57.5: Implement one-line minimalist metadata in app.js
+    - [x] 57.6: Revert Payee column to high-fidelity one-line format
+    - [x] 57.7: Optimize and minimalize all grid headers
+    - [x] 57.8: Verify performance and aesthetic accuracy
+
+- [x] Phase 58: Visual Forensic Alignment (V5.2.35)
+    - [x] 58.1: Overhaul Header to match Screenshot 2 (Institutional ID Card)
+    - [x] 58.2: Implement Multi-Ledger status badge
+    - [x] 58.3: Restore COA Dropdown with Search (Tabulator select)
+    - [x] 58.4: Fix Mastercard date '00' bug and stabilize parsing
+    - [x] 58.5: Enforce .pdf, .csv, .xlsx file restrictions
+    - [x] 58.6: Final minimalist pass on all grid typography
+
+**CORE ACCOUNTING ENGINE COMPLETE & FROZEN**

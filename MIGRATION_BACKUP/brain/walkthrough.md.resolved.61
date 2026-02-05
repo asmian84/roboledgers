@@ -1,0 +1,41 @@
+# Walkthrough: V5.2.19 High-Fidelity Functional Audit
+
+RoboLedger V5 has undergone a massive structural and functional upgrade, transforming from a "static" grid into a dynamic, "Stock Market Ticker" performance environment.
+
+## 📐 Layout Expansion (1166px)
+The "Island Stack" has been expanded by **10%** from 1060px to **1166px**. This provides critical breathing room for the Payee / Description column and deeper financial data scanning.
+
+- [x] Header Card scaling (+10%)
+- [x] Action Bar scaling (+10%)
+- [x] Switcher Bar scaling (+10%)
+- [x] Grid Container scaling (+10%)
+- [x] **Vertical Dividers**: Crisp `1px` separators added to both headers and grid body for structured scannability.
+
+## ⚡ Performance: Flicker-Free Switcher
+The Account Switcher has been re-wired to use **Tabulator-native filtering**. 
+- **Legacy**: Pillar clicks triggered a full screen re-render (flicker/hang).
+- **V5.2.19**: Switcher pills isolate data INSTANTLY without a single screen flick.
+
+## 🔢 Sequential Ref# Logic
+Ref# 001 is now dynamic. It always targets the **top-most transaction** in the current view.
+- If you sort by Date (Oldest First) -> Top is 001.
+- If you sort by Date (Newest First) -> New Top is 001.
+- This creates a live "ledger count" feel for audit visibility.
+
+## 🏷️ Adaptive Account Naming
+Account pills now follow a strict chronological and type-aware logic:
+- **Priority**: AMEX > VISA > MC > CHQ.
+- **Auto-Grouping**: If multiple accounts of the same type exist, they are automatically sequenced (e.g., `CHQ1`, `CHQ2`).
+
+## 🗂️ Grid Fidelity & Pagination
+- **Local Pagination**: The grid now supports `10 / 20 / 50` row view limits with a clean footer controls bar.
+- **Row Reshuffle**: Enabled movable rows and CSS transitions for a "liquid" data feel when sorting.
+- **COA Tagging**: Integrated the "All roads lead to COA" philosophy—transactions map to categories via high-fidelity tags rather than sub-ledgers.
+
+## 🛠️ Parser Polarity Fix
+Resolved a critical bug where all transactions were bucketed as "Credits". 
+- **Debit Detection**: The engine now correctly identifies outgoings based on amount signs (`-`) and description keywords (`PURCHASE`, `WITHDRAWAL`).
+- **Credit Detection**: Incomings correctly identified via sign or keywords (`DEPOSIT`, `REFUND`).
+
+---
+**RoboLedger V5 is now functionally audited and performance-hardened.** 🚀

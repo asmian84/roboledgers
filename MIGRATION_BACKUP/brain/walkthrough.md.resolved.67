@@ -1,0 +1,37 @@
+# RoboLedger V5.2.25: Forensic Recon Hub & Metadata Intelligence
+
+This update introduces the **Universal Reconciliation Hub**, providing real-time forensic balancing and high-fidelity metadata intelligence for both Asset and Liability ledgers.
+
+## 🏛️ Universal Reconciliation Hub
+A live, interactive calculator now resides on the right side of the **Switcher Bar**, perfectly aligned with the account pills.
+- [x] **Dual-Mode Logic**:
+    - **Asset Accounts (CHQ/SAV)**: `Opening - Total Debit + Total Credit = Ending`.
+    - **Liability Accounts (VISA/MC/AMEX)**: `Opening + Total Debit - Total Credit = Ending`.
+- [x] **Native Persistence**: Opening balances are editable directly in the bar and instantly saved to the forensic ledger.
+- [x] **Horizontal Symmetry**: The UI is uniform and symmetrical, maintaining a professional "Wall Street" density.
+
+## 💳 High-Fidelity CC Metadata
+The ingestion engine now uses **IIN (Issuer Identification Number)** intelligence to classify and brand credit cards.
+- [x] **Brand Detection**: Automatically identifies **VISA**, **Mastercard**, and **AMEX** based on the 15/16 digit numbering style.
+- [x] **Advanced Branding**: Extracts bank-specific details to display branding like "**RBC AVION VISA**" or "**SCOTIABANK PASSPORT AMEX**".
+- [x] **Dynamic Metadata**: The Action Bar now shows "**ALL LEDGERS**" in unified view, and full forensic tokens (Transit, Inst, ACC#) when a specific ledger is selected.
+
+## 📐 Logic & Routing Hardening
+- [x] **Ingestion Routing**: Fixed the bug where transactions uploaded from the "ALL" view were orphan-tagged. They now correctly resolve to the primary account ledger.
+- [x] **Symmetrical UI**: Refined all horizontal utility strips to ensure a uniform, premium look across the island stack.
+
+![Improved Grid Header and COA Dropdown](C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1770237951900.png)
+
+---
+*RoboLedger V5: Forensic Integrity. Infinite Scale.*
+
+---
+*RoboLedger V5: Forensic Integrity. Infinite Scale.*
+- **COA Tagging**: Integrated the "All roads lead to COA" philosophy—transactions map to categories via high-fidelity tags rather than sub-ledgers.
+
+## 🛠️ Parser Polarity Fix
+Resolved a critical bug where all transactions were bucketed as "Credits". 
+- **Debit Detection**: The engine now correctly identifies outgoings based on amount signs (`-`) and description keywords (`PURCHASE`, `WITHDRAWAL`).
+
+---
+**RoboLedger V5 is now functionally audited and performance-hardened.** 🚀

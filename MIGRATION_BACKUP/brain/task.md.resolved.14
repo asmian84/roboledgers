@@ -1,0 +1,22 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+    - [x] Initialize Ledger Core based on Invariants
+    - [x] Implement `txsig` and uniqueness constraints
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+    - [x] Establish `/src/parsers_raw/` (DMZ)
+    - [x] Define `RawParsedTransaction` & Adapter Firewall
+    - [x] Implement Parser Contamination Test
+    - [x] Refactor Ingestion Pipeline to enforce one-way flow
+- [x] Phase 4: Automated Invariant Testing
+    - [x] Define complete Invariant-Led Test Suite
+    - [x] Implement Ledger Core & Ingestion tests
+    - [x] Establish Master Test Runner (CI Gate)
+- [x] Phase 5: COA Intelligence Layer
+    - [x] Define Canonical Account Types & Metadata Schema
+    - [x] Implement `COAService` (The Account Register)
+    - [x] Implement `COAGate` (The Posting Firewall)
+    - [x] Verify COA Invariants (Numeric ranges, mapping rules)
+- [ ] Phase 6: Categorization Brain (Scoring Engine)
+- [ ] Phase 7: Role-Based Authority Control (RBAC)

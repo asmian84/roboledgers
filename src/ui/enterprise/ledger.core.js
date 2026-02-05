@@ -120,6 +120,7 @@ window.RoboLedger = (function () {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             try {
+                const parsed = JSON.parse(saved);
                 state.transactions = parsed.transactions || {};
                 state.sigIndex = parsed.sigIndex || {};
                 console.log('[LEDGER] State loaded.');

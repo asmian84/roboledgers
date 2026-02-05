@@ -1,0 +1,38 @@
+# Canonical Accounting Invariants Implementation Plan
+
+Goal: Define the immutable laws of the RoboLedgers system to ensure audit-readiness and financial integrity.
+
+## Proposed Sections
+
+### 1. Canonical Transaction Object
+- Define the base structure of a transaction.
+- Identify immutable vs. mutable (versioned) fields.
+- Define fingerprinting triggers.
+
+### 2. Transaction Fingerprinting (txsig)
+- Define the hashing algorithm (SHA-256 recommended).
+- List exact input fields for the fingerprint.
+- Define duplicate handling logic.
+
+### 3. Instrument Polarity Rules
+- Define Debit/Credit behavior for Assets, Liabilities, Equity, Revenue, and Expenses.
+- Focus on Bank Accounts, Credit Cards, and Crypto.
+
+### 4. Immutability & Mutation Rules
+- Define the "No Destruction" policy.
+- Detail reversing and adjusting entries.
+
+### 5. Audit Trail Invariants
+- Define log requirements for every state change.
+- Ensure time-travel capability.
+
+### 6. Reconciliation Invariants
+- Define the threshold for "Reconciled" status.
+- Block reporting on unreconciled data.
+
+### 7. Debugging & Exception Strategy
+- Define the invariant violation error hierarchy.
+
+## Verification Plan
+- Cross-check against standard GAAP/IFRS principles.
+- Simulated edge cases (duplicates, mid-month reversals).

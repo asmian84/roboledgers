@@ -1,0 +1,33 @@
+# Walkthrough: RoboLedger v5.1 "Forensic Workbench"
+
+This update marks the transition to a professional, high-density auditing workflow.
+
+## New Features
+
+### 1. Integrated Split-View Audit
+The app now supports a side-by-side "Workbench" layout. 
+- **Trigger**: Clicking any row in the transaction grid (that has a source PDF).
+- **Behavior**: The grid compacts to the left, and a PDF viewer pane slides in on the right. 
+- **Benefit**: Zero-friction verification. You can review the bank statement and the ledger entry at the same time.
+
+### 2. AI Audit Hub (v5.1)
+The workbench header features the new **Audit Hub**:
+- **Google Gemini AI**: High-fidelity, context-aware classification.
+- **Local Logic**: Fast, pattern-based matching.
+- **Turbo Categorize**: A unified action to process all selected or "Raw" transactions through the chosen AI engine.
+
+### 3. Smart Blob Storage
+Transactions are now cryptographically linked to their source file blobs. When you upload a statement, the original file is preserved in memory (accessible via `fileId`) to power the workbench viewer without needing separate downloads.
+
+### 4. Professional Versioning (v5.1)
+Updated brand architecture to reflect the v5.1 enterprise-grade status.
+
+## Visual Verification
+
+![Forensic Workbench Mockup](file:///C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/forensic_workbench_mockup_1770159549131.png)
+
+## Verification Steps
+1. **Import**: Upload an RBC PDF statement.
+2. **Review**: Click a transaction row in the grid.
+3. **Audit**: Watch the workbench slide out and render the original PDF statement.
+4. **Categorize**: Use the Audit Hub to trigger the AI analysis cycle.

@@ -1,0 +1,44 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+- [x] Phase 4: Automated Invariant Testing
+- [x] Phase 5: COA Intelligence Layer
+- [x] Phase 6: Categorization Brain (Deterministic Reasoning)
+- [x] Phase 7: Reconciliation Proof Engine (Mathematical Truth)
+- [x] Phase 8: Role-Based Authority Control (RBAC)
+- [x] Phase 9: Adjusting Journal Entries (AJE) Layer
+- [x] **CORE FREEZE (v1.0.0-core-constitution)**
+- [x] Phase 10: UX Projection Contracts
+    - [x] 10.1: Define Zen, Bookkeeper, Accountant Contracts
+    - [x] 10.2: Implement Mode-Based Projection Logic
+- [x] Phase 11: Zen Mode Feed (First Visual Layer)
+- [x] Phase 12: Professional Ledger Lenses (Bookkeeper Part)
+- [x] Phase 13: Accountant Lens (Authority & Certification)
+- [x] Phase 14A: Multi-Entity Consolidation Model
+- [x] Phase 14C: Forecasting Engine (COMPLETE)
+    - [x] 14C.1: Define Forecast Contracts (Type Separation)
+    - [x] 14C.2: Implement Forecast Engine (Pure Math Layer)
+    - [x] 14C.3: Verify Forecast Invariants (Non-Truth Gating)
+    - [x] 14C.4: Build CFO Projection Lens (UI Sandbox)
+- [x] Phase 15: Production Hardening & Resilience (COMPLETE)
+    - [x] 15.1: Operational Fail-Safes (Idempotency & Crash Recovery)
+    - [x] 15.2: Safe Degradation & Kill-Switch Logic
+    - [x] 15.3: Data Recovery (Ledger Reconstruction from AuditLog)
+    - [x] 15.4: Security Hardening (Tamper Resistance & RBAC Stress)
+- [x] Phase 16: UI/UX Command Center (COMPLETE - REJECTED)
+- [x] Phase 17: Principal UX Architecture (COMPLETE - REJECTED)
+- [x] Phase 18: Enterprise UI Architecture (COMPLETE)
+- [ ] Phase 19: Hostile Auditor Simulation (IN PROGRESS)
+    - [ ] 19.1: Mental Self-Audit (B&W & Drift Checks)
+    - [ ] 19.2: Scripted Integrity Check (DOM-level txsig verification)
+    - [ ] 19.3: Verification of Source-to-Entry Evidence Path
+- [ ] Phase 20: Human Friction Testing
+    - [ ] 20.1: Cognitive Load Assessment
+    - [ ] 20.2: Navigation Velocity Audit
+- [ ] Phase 21: Minor Institutional Polish
+    - [ ] 21.1: Microcopy Clarity & Precision
+    - [ ] 21.2: Tooltip Precision & ARIA Compliance
+
+**CORE ACCOUNTING ENGINE COMPLETE & FROZEN**

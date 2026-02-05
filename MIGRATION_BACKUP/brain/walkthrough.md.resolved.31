@@ -1,0 +1,33 @@
+# Walkthrough: TG Build Alignment (V5 Visual Benchmark)
+
+This walkthrough demonstrates the total alignment of the "TabulatorGrid" (TG) build with the target RoboLedger V5 visual benchmark.
+
+## 1. Breadcrumb Header Architecture
+Simplified the industrial header to match the surgical, multi-stage breadcrumb look.
+- **Transactions / [INST] [BANK] / [TYPE]**: High-fidelity breadcrumb with green-tinted institutional naming.
+- **Forensic Meta Row**: INST, TRANSIT, and ACCOUNT metadata moved to a secondary, high-density row below the breadcrumb.
+
+## 2. Pill-Based Account Switcher
+Converted the toggle buttons into a clean, pill-based tab system.
+- **Grey Track**: A light procedural background track for the switches.
+- **White Active Pills**: Active account indicators use a white background with blue forensic text to match the target.
+
+## 3. High-Fidelity Tabulator (TG Build)
+The grid now matches the V5 visual benchmark in every forensic detail.
+- **Purple Header**: The header background is forced to `#9333ea` with bold white text.
+- **Vertical Separators**: Added clear vertical lines between all header columns and row cells for surgical data separation.
+- **2-Line Forensic Descriptions**: Descriptions show the transaction title and detailed account activity sub-lines.
+- **Teal Credits**: Credit values are colored in a distinct industrial teal/green.
+
+## 4. Opening Balance Logic
+Adjusted the core calculation engine to match the "TG" target.
+- **Ascending Sort**: Transactions are now sorted oldest-to-newest by default.
+- **Opening Balance**: The "Balance" column reflects the state of the account **before** the current row's transaction is applied, ensuring mathematical parity with the benchmark.
+
+### Benchmark Alignment (Target V5 Look)
+![V5 Visual Benchmark](/C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1770154856890.png)
+
+## 5. Safety & Diagnostics
+- **Icon-Based Start Over**: Compact reset control with dual-click safety.
+- **Forensic Trace**: Numerical progress trace instead of a visual bar for cleaner batching.
+落落.

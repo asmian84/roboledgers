@@ -1,0 +1,15 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Define and Lock Canonical Accounting Invariants
+- [x] Define Canonical COA Intelligence Layer
+- [x] Define Categorization Brain Intelligence
+- [x] Define Reconciliation & Proof Layer
+- [x] Define Authority, Period Close, and Adjustment Model
+- [x] Define UX System Prompts & Interaction
+- [x] Define Feature Flags & Pricing Enforcement
+- [x] Define Master System Prompt
+- [x] Define Implementation & CI Strategy
+- [x] Define core TypeScript types (Transaction, Ingestion)
+- [x] Implement Ingestion Mapper (Raw -> Canonical)
+- [x] Implement Validation & Handlers for Invariant Violations
+- [x] Verify Ledger Invariants (Uniqueness, Immutability, Versioning)

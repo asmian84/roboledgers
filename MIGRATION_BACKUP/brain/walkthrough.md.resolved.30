@@ -1,0 +1,34 @@
+# Walkthrough: V5 Institutional Alignment & Spacing Polish
+
+This walkthrough demonstrates the final refinements to the RoboLedger V5 shell, achieving absolute visual parity with the industrial benchmark (Screenshot 2).
+
+## 1. Surgical Ingestion Trace (Screenshot 2 Alignment)
+I have excised the terminal progress bar to favor a clean, text-based forensic trace.
+
+- **Clean Status**: During document batching, the system now displays a surgical status line (e.g., "[3/13] Reconstructing Truth State... 50%") without the visual clutter of a bar.
+- **High-Fidelity Feedback**: The trace uses 'JetBrains Mono' for a professional developer-grade feel.
+
+## 2. Vertical Spacing Audit (The Dense Aesthetic)
+To align with the high-density requirements of professional bookkeeping, I have tightened the vertical architecture of the Transactions stage.
+
+- **Reduced Gaps**: Minimal margins between the Header Card, Metadata Hub, and Account Switcher ensure maximum vertical real estate for the grid.
+- **Sleek Header**: Reduced padding in the primary header card for a more compact and industrial presence.
+
+## 3. High-Fidelity Transactions Grid (Tabulator)
+The Transactions grid is powered exclusively by **Tabulator**, optimized for the dense visual style of Screenshot 2.
+
+- **2-Line Descriptions**: Vertical-stack layout for raw descriptions, providing clear distinction between main names and forensic sub-details.
+- **Separate Polarity Columns**: Distinct **Debit** (Red) and **Credit** (Teal) columns with exclusive population based on fiscal polarity.
+- **Institutional Running Balance**: Dynamic calculation engine with bold signing markers.
+
+## 4. Reset & Safety Protocol
+- **Icon-Based "Start Over"**: Repositioned as a compact icon-button adjacent to the upload group.
+- **Safety Lock**: Retains the Dual-Click confirmation flow with a 3-second auto-timeout.
+
+### Comparison Target (Screenshot 2 Reference)
+![Benchmark Reference](/C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1_1770153216214.png)
+
+## 5. Forensic Audit Commands
+- `window.debugForensics()`: Deep trace of human/system registries.
+- `window.getSettingsTrace()`: Diagnostic export of institutional variables.
+落落.

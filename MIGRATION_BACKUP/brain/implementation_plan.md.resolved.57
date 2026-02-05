@@ -1,0 +1,42 @@
+# RoboLedger V5.2.14: ATI Metadata & Header Refinement
+
+Standardizing the V5 UI architecture: Cleaning the Header Card and implementing the ATI Metadata Line in the Action Bar.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Placement Shift**: The Monospace ATI Line will be placed in the **Action Bar** (right side), not the header. The **Header Card** will be cleaned to only show the Title, a "Waiting" message, and the Drag/Drop bucket.
+
+## Proposed Changes
+
+### UI Architecture (app.js)
+- **Header Card Cleanup**:
+  - Left side: "Transactions" + Subtitle "WAITING TO GET STARTED..." (with animated dots).
+  - Right side: Full "Drag and drop files here" bucket with blue "Browse files" button.
+- **Action Bar (ATI Line)**:
+  - Remove legacy metrics (transaction count, total dollars).
+  - Inject ATI Metadata Line on the right side: `ACCOUNT: **** 1234 • TYPE: CHECKING • PERIOD: 2023`.
+  - Apply `font-family: 'JetBrains Mono', monospace`, `text-transform: uppercase`, and `font-size: 11px`.
+- **Icon Alignment**: Standardize all utility icons (Search, Popout, Settings) to a single horizontal line.
+
+### Metadata Engine (New Logic)
+- **Technical Prompt Integration**:
+  - Implement `classifyStatementType()` scoring system (Credit vs Bank indicators).
+  - Implement `extractUniversalMetadata()` regex pipeline for Holder, Account #, and Period.
+  - Implement Year Rollover logic (Dec -> Jan month transition).
+  - Implement Checksum Validation (Opening + Credits - Debits === Closing).
+- **Persistence**: Update [Account](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#349-356) model to store these expanded metadata tokens.
+
+### Styling (system.css)
+- Standardize `.header-card` padding to exactly match the other grid cards (`12px 20px`).
+- Refine `.v5-ati-line` typography for maximum "forensic monospace" aesthetic.
+- Ensure horizontal flex alignment for all Action Bar controls.
+
+## Verification Plan
+
+### Manual Verification
+1. **Clean Header Check**: Verify the header only has Title+Subtitle+Bucket.
+2. **Action Bar Check**: Verify the ATI line appears on the right and metrics are gone.
+3. **Alignment Check**: Confirm all icons are horizontal.
+4. **Metadata Extraction Test**: Upload a PDF and check console for the "Integrity Check" result and populated ATI line.
+

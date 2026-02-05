@@ -1,0 +1,57 @@
+# V5.2.6 Walkthrough: Advanced Grid Popout & Ref# Syncing
+
+I have implemented the advanced window detachment system and dynamic account renaming for RoboLedger V5.2.6.
+
+## 🔗 Ref# & Pill Syncing
+Renaming the account reference in the Action Bar now instantly propagates to the account switcher pills. This allows for rapid, unique identification of autodetected bank accounts.
+
+```javascript
+// Sync logic from app.js
+window.handleRefUpdate = (newRef) => {
+    const result = window.RoboLedger.Accounts.setRef(activeAcc.id, newRef.trim());
+    if (result.success) {
+      window.render(); // Pill refresh
+      // ...
+    }
+}
+```
+
+## 🚀 Surgical Grid Popout
+You can now detach the transaction grid into a standalone browser window.
+
+### Key Features:
+- **Blob URL Strategy**: No server-side files; the popout is generated dynamically via a Blob URL.
+- **Bidirectional Sync**: Edits made in the popout window are sent back to the main window via `postMessage`, updating the Ledger Truth Vault in real-time.
+- **Visual Parity**: The popout grid inherits the main app's CSS, including the **Rainbow Header** and color-coded amounts.
+- **Pop-In Bridge**: A heartbeat monitor automatically restores the local grid if the popout window is closed or "Docked".
+
+### 📸 Verification Data
+![Grid Popped Out Overlay](C:\Users\asmia\.gemini\antigravity\brain\410a76b2-0025-4cfc-a894-2bba5b8c33e5\uploaded_media_1770185593497.png)
+
+> [!NOTE]
+> The image above shows the main window transitioning to the "Grid Popped Out" state, replacing the local grid with a "Bring it Back" bridge.
+
+## 🏢 Triple-Bar Layout System (V5.2.7)
+I have refactored the transaction header from a monolithic block into three distinct, high-efficiency bars:
+1.  **Main Header**: Brand logo, Bank breadcrumbs, and Unified Upload zone.
+2.  **Action Bar**: Dynamic Ref# input, real-time Metrics (Tx count, Total Balance), Search, and Popout tools.
+3.  **Switcher Bar**: Account pills now inhabit their own snug row, ensuring 1:1 width alignment with the grid.
+
+> [!TIP]
+> **Real Estate Optimization**: Stage side padding was reduced by 10% (32px → 29px), and card heights were compressed to ensure maximum transaction visibility.
+
+## ⚡ Stability & Layout Restoration (V5.2.8)
+I have resolved the critical `TypeError` and perfected the 1060px vertical stack for all header bars.
+
+## 🎨 UI Fidelity: Empty State (V5.2.9)
+I have restored the "No transactions yet" state to match your high-fidelity design 1:1.
+
+### 📸 Design vs. Implementation
+![V5.2.9 Design Reference](C:\Users\asmia\.gemini\antigravity\brain\410a76b2-0025-4cfc-a894-2bba5b8c33e5\uploaded_media_1770186885782.png)
+
+**Key Improvements:**
+- **Surgical Header Match**: Subtitle set to `WAITING TO GET STARTED..` with a dedicated blue **"Browse files"** button.
+- **Iconography**: Standardized sidebar icons (`ph-rows`, `ph-book-open`) and added the Phosphor house icon to breadcrumbs.
+- **Empty State Container**: Replaced the placeholder with the large book icon and specific "manual entry" messaging from the design.
+- **Perfect 1060px Stack**: Verified that the breadcrumbs and header cards align perfectly centered at 1060px.
+

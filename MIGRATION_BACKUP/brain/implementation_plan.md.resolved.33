@@ -1,0 +1,42 @@
+# Live System Wiring (V4/V5 Restoration)
+
+The objective is to move from a "bare bones" structure to a "live system" where file imports, data persistence, and ledger invariants are fully functional.
+
+## User Review Required
+
+> [!IMPORTANT]
+> This phase transforms the UI into a functional tool. 
+> - **Persistence**: Data will be saved to `localStorage` under the `roboledger_v5` key.
+> - **Core Logic**: I am porting the TypeScript-based [LedgerService](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/core/ledger.ts#10-99) and [IngestionService](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/core/ingestion.ts#14-76) into a browser-native `ledger.core.js` to avoid a modern build step (keeping the "Hardened Vanilla" stack).
+
+## Proposed Changes
+
+### Core Engine Integration
+- **[NEW] [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js)**:
+  - Ported [LedgerService](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/core/ledger.ts#10-99) with `localStorage` persistence.
+  - Ported [IngestionService](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/core/ingestion.ts#14-76) for transaction transformation.
+  - Ported [ProjectionService](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/projection_service.ts#13-176) for UI-safe data formatting.
+  - Web Crypto API based `txsig` (SHA-256) implementation.
+
+### UI Controller Refactor
+- **[MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)**:
+  - Connect "Browse files" to a real file upload handler.
+  - Integrate with `ledger.core.js` for all data operations.
+  - Implement real-time grid updates upon ingestion.
+
+### Entry Point Update
+- **[MODIFY] [index.html](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/index.html)**:
+  - Load `ledger.core.js` as a dependency.
+  - Load `PapaParse` or similar for CSV parsing (if not already present).
+
+## Verification Plan
+
+### Automated Tests
+- Run [LedgerService](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/core/ledger.ts#10-99) unit tests in the console.
+- Verify `txsig` collision detection in browser.
+
+### Manual Verification
+1. Open the UI.
+2. Upload a sample Bank CSV.
+3. Verify transactions appear in the grid.
+4. Refresh the page and verify data persists.

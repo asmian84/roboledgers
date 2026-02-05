@@ -1,0 +1,33 @@
+# Refinement Plan: Screenshot #2 Fidelity
+
+Achieve the exact "Clean Parse" look from Screenshot #2, focusing on professional data display and removing "Forensic" placeholder noise.
+
+## User Review Required
+> [!IMPORTANT]
+> I will be removing the "Forensic Truth Extracted" sub-text as it was perceived as "messy". I will revert to a cleaner 1-line or conditional 2-line approach based on actual data.
+
+## Proposed Changes
+
+### [Component] Transaction Grid (UI)
+#### [MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- **Column Definition**: Update to match Screenshot #2:
+    - `[x]` Checkbox column.
+    - `Ref#` (TXN-XXX format).
+    - [Date](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/parsers_raw/RBCChequingParser.js#622-626) (YYYY-MM-DD format).
+    - [Description](file:///g:/My%20Drive/AutoBookkeeping/AutoBookkeeping-V4/src/pages/txn-import-v5-v2.js#5431-5433) (Cleaned, no placeholders).
+    - [Debit](file:///g:/My%20Drive/AutoBookkeeping/AutoBookkeeping-V4/src/pages/txn-import-v5-v2.js#2225-2249) / [Credit](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/parsers_raw/RBCChequingParser.js#627-631) (Show `-` if 0/null).
+    - [Balance](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/types/coa.ts#57-58).
+    - [Account](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/types/coa.ts#66-76) (Target bank/account).
+    - [Source](file:///g:/My%20Drive/AutoBookkeeping/AutoBookkeeping-V4/src/pages/txn-import-v5-v2.js#2792-2803) (File origin).
+- **Cell Renderers**:
+    - **Description**: Only show sub-line if explicit metadata exists; otherwise, keep it a clean single line.
+    - **Currency**: Swap `$0.00` for `-` in empty debit/credit slots.
+
+### [Component] Ledger Engine (Core)
+#### [MODIFY] [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js)
+- **Ingestion Mapping**: Ensure [ref](file:///g:/My%20Drive/AutoBookkeeping/AutoBookkeeping-V4/src/pages/txn-import-v5-v2.js#2552-2563) is generated as `TXN-###`.
+- **Metadata Persistence**: Ensure `account_name` and `source_file` are explicitly stored for the grid.
+
+## Verification Plan
+- **Comparison**: Take a screenshot of the new grid and compare 1:1 with Screenshot #2.
+- **Data Integrity**: Verify that [Debit](file:///g:/My%20Drive/AutoBookkeeping/AutoBookkeeping-V4/src/pages/txn-import-v5-v2.js#2225-2249) and [Credit](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/parsers_raw/RBCChequingParser.js#627-631) column logic correctly separates the signed amount.

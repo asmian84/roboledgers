@@ -1,0 +1,29 @@
+# Walkthrough: V5 UI Refinement & Sticky Actions
+
+This update refines the shell architecture to achieve 1:1 parity with the "V5" design patterns requested, specifically focusing on the Header Hierarchy, Clean Slate states, and the Industrial Sticky Bulk Bar.
+
+## 1. Clean Slate & Progress States
+We've introduced dedicated states to reduce initial clutter and provide clear forensic feedback:
+- **Clean Slate**: When no data exists, the grid is hidden. A centered "Waiting to get started" card appears with a large blue action icon and an embedded upload zone.
+- **Forensic Progress**: During ingestion (`isIngesting`), a dedicated forensic progress bar (`.v5-progress-container`) takes center stage, displaying the current file and a precision blue bar.
+
+## 2. Multi-Tier Header Hierarchy (Screenshot 3 Match)
+The top of the view has been restructured to match the "Screenshot 3" layout:
+- **Layer 1: Title**: Pure [Transactions](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#632-694) header.
+- **Layer 2: Header Card**: A comprehensive card containing:
+    - **Blue Icon Box**: Visual anchor.
+    - **Breadcrumb**: `Bank Name / Account Type` with distinct typography.
+    - **Metadata Line**: `INST | TRANSIT | ACCOUNT` details displayed inline below the breadcrumb.
+    - **Upload Zone**: Integrated on the right side.
+- **Layer 3: Action Bar**: The `REF#` input and status counts (TXNS) now reside in a streamlined bar below the header card.
+
+## 3. Sticky Yellow Bulk Bar
+Implemented the "V5 Vendor Analysis" pattern for bulk actions:
+- **Behavior**: The bar is hidden by default and slides up (`transform: translateY`) from the bottom when rows are selected in the grid.
+- **Styling**: Uses the signature `Amber-50` background with `Amber-400` borders and `Amber-800` text.
+- **Controls**: Includes "Categorize", "Rename", and "Delete" actions with a dynamic selection counter.
+
+### The Final V5 Build (Refined)
+*(Detailed screenshots of Clean Slate and Grid View would go here)*
+
+落落.

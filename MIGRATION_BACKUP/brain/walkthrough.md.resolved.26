@@ -1,0 +1,30 @@
+# Walkthrough: V5 Transactions "Purple Era" Restoration 落落
+
+This walkthrough demonstrates the high-fidelity restoration of the Transactions module, matching the provided screenshot reference while leveraging the power of Batch Ingestion and adaptive layouts.
+
+## High-Fidelity UI Restoration
+The Transactions grid has been fully reconciled with the V5 "Purple Era" aesthetic.
+
+### Signature Styling
+- **Purple Header Card**: Implemented the deep purple (`#9333ea`) header theme with high-contrast white bold text.
+- **Forensic Filtering**: Added integrated search filters directly into the header row for immediate drill-down capability.
+- **"TXN" Source Pills**: Teal Pills are back for document identifiers, providing immediate visual classification of data sources.
+
+### Vertical Adaptive Layout ("No Bibs")
+- The stage and grid container now utilize full-screen flex logic. 
+- The grid is glued to the viewport bottom, ensuring a professional, edge-to-edge spreadsheet experience regardless of screen scale.
+
+## Multi-File Batch Ingestion
+The upload zone has been hardened for high-volume document workflows.
+
+- **Drop Bucket**: The entire dashed zone is now an interactive bucket supporting drag-and-drop and multi-file selection.
+- **Iterative Forensic Scan**: The progress UI now tracks batch progress (e.g., `[1/3] Forensic Scan: Jan_Statement.pdf`) to provide real-time feedback during large forensic reconstructions.
+
+## Verification Checklist
+- [x] **Header Color**: Deep Purple with white bold text.
+- [x] **Column Order**: `Selection | Ref# | Date | Source | Description | Debit | Credit | Balance | Account`
+- [x] **Filters**: Active input filters present in the header.
+- [x] **Grid Scale**: full-height adaptive flexible layout.
+- [x] **Batch Upload**: Successfully handles multiple PDF/CSV selections.
+
+落落 落落 落落.

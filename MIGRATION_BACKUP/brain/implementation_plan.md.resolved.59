@@ -1,0 +1,27 @@
+# RoboLedger V5.2.16: Layout Alignment Correction
+
+Ensuring perfect vertical alignment across the "Island Stack" (Header, Action Bar, Switcher, and Grid) by unifying their max-width and margin rules into a shared structural pattern.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Island Wrapper**: I am wrapping the entire header stack in a unified container to prevent box-model collapse. This ensures the Header Card, Action Bar, and Switcher Bar are exactly flush on the left and right edges, matching the transaction grid at 1060px.
+
+## Proposed Changes
+
+### UI Logic (app.js)
+- **renderTransactionsRestored**:
+  - Wrap the `v5-main-header`, `v5-action-bar`, and `v5-switcher-bar` in a shared `div` with `width: 100%; max-width: 1060px; margin: 0 auto;`.
+  - Consistent side padding of `0px` for these bars (since they are contained in the island) or matched with the grid's side padding.
+  - Remove all conflicting `max-width` and `margin` from those individual elements to prevent "centering inside a center".
+
+### Styling (system.css)
+- Review and unify `.header-card`, `.v5-action-bar`, and `.v5-switcher-bar` definitions to ensure no hidden `padding` or `border-box` discrepancies causing 1px misalignments.
+- Standardize `.grid-container-wall` to use the same 1060px islanding pattern.
+
+## Verification Plan
+
+### Manual Verification
+1. **Vertical Alignment Check**: Use a browser inspector or visual guide to ensure the left and right edges of the Header Card, Action Bar, and Switcher Bar are perfectly flush with each other.
+2. **Standardization Check**: Confirm that resizing the window maintains the 1060px centered islanding for all elements in the stack.
+

@@ -1,0 +1,41 @@
+# High-Fidelity UI Restoration (V5 Specification)
+
+Restore the RoboLedger V5 "Truth Engine" UI with 1:1 fidelity to Screenshot #3 and #4, incorporating advanced forensic metadata and decision logic.
+
+## Proposed Changes
+
+### [Component] Shell & Navigation
+- **Settings Drawer**: Add a hidden `<div id="settings-drawer">` in [index.html](file:///g:/My%20Drive/RoboLedger2/index.html) with 5 functional tabs (Entity, Users, Integrations, Audit Log, Subscription).
+- **Chart of Accounts Navigation**: Ensure the "Chart of Accounts" left nav item toggles the COA sidebar visibility within the Transactions view, as shown in Screenshot #1.
+
+### [Component] Transaction Header (Truth Injected)
+#### [MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- **Header Card Structure**: Rebuild the header card into a two-column high-performance layout:
+    - **Left**: Institutional Icon, metadata string (`Bank / Account Type`), and forensic data row (`INST | TRANSIT | ACCOUNT`).
+    - **Right**: Reduced (30% smaller) upload zone with "Green Box" drag-and-drop styling.
+- **Account Toggles**: Add a persistent account switcher row (`ALL`, `CHQ1`, `CHQ2`, `CHQ3`) between the header card and the grid.
+
+### [Component] Forensic Ingestion Grid
+#### [MODIFY] [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js)
+- **Account Metadata**: Update `state.accounts` to include `inst`, `transit`, and `account_num` fields.
+- **Multi-Account State**: Ensure [processUpload](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#193-264) can intelligently update account metadata upon parsing bank headers.
+#### [MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- **Custom Renderers**:
+    - **Description**: Implement "2-line logic" using a custom AgGrid cell renderer (wraps text or uses a sub-div).
+    - **Debit/Credit**: Split the `amount_cents` into separate columns for [Debit](file:///g:/My%20Drive/AutoBookkeeping/AutoBookkeeping-V4/src/pages/txn-import-v5-v2.js#2225-2249) and [Credit](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/parsers_raw/RBCChequingParser.js#627-631) as per the user request.
+- **Grid Actions**: Add row-level actions for "Delete" and "Swap Debit/Credit".
+
+### [Component] Aesthetics
+#### [MODIFY] [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- **Upload Zone**: Apply `-30%` shrink to the upload zone and add the "Green Box" forensic highlight.
+- **Settings Drawer**: Add premium glassmorphic/institutional styles for the tabs and drawer transitions.
+
+## Verification Plan
+
+### Automated Tests
+- Parse a PDF with bank metadata -> Verify Header Card updates smoothly (`INST/TRANSIT/ACCOUNT`).
+- Trigger "Swap Debit/Credit" -> Verify `amount_cents` sign change in the ledger vault.
+
+### Manual Verification
+- Verify 2-line description rendering quality.
+- Verify Account Toggle behavior (Grid filtering by `account_id`).

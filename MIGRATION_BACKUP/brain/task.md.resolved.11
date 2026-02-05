@@ -1,0 +1,16 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Define and Lock Canonical Accounting Invariants
+- [x] Define Canonical COA Intelligence Layer
+- [x] Define Categorization Brain Intelligence
+- [x] Define Reconciliation & Proof Layer
+- [x] Define Authority, Period Close, and Adjustment Model
+- [x] Define UX System Prompts & Interaction
+- [x] Define Feature Flags & Pricing Enforcement
+- [x] Establish `/src/parsers_raw/` (DMZ)
+- [x] Define `RawParsedTransaction` & Adapter Firewall
+- [x] Implement Parser Contamination Test
+- [x] Refactor Ingestion Pipeline to enforce one-way flow
+Ingestion Mapper (Raw -> Canonical)
+- [x] Implement Validation & Handlers for Invariant Violations
+- [x] Verify Ledger Invariants (Uniqueness, Immutability, Versioning)

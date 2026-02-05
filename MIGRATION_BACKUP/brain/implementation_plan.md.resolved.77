@@ -1,0 +1,68 @@
+# Phase 54: Emergency UI Recovery & Symmetry Restoration
+
+The goal is to fix the UI regressions introduced in V5.2.25 and restore the professional, high-fidelity aesthetic of the "Transactions" page.
+
+## Proposed Changes
+
+### [Component] UI Enterprise Shell (app.js)
+
+#### [MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- **Title Restoration**:
+  - Revert header title "Forensic Ledger" back to **"Transactions"**.
+  - Update subtitle to **"V5.2 • High-Performance Ledger"** (removing any "Audit-Ready" or overly descriptive forensic terminology if annoying).
+- **Grid Formatter Fix**:
+  - Remove accidental spaces from HTML strings in all Tabulator column formatters (e.g., change `< span` to `<span>` and `</span >` to `</span>`).
+  - This affects columns: Date, Payee / Description, Debit, Credit, Balance, Account, and Source.
+- **Symmetry & Polish**:
+  - Ensure the Switcher Bar and Action Bar maintain perfect horizontal alignment.
+  - Remove any placeholder text that might be perceived as a "joke" (e.g., "WAITING TO GET STARTED").
+
+## Verification Plan
+
+### Manual Verification
+- Verify that the grid renders real data again (no raw HTML tags visible).
+- Verify the header title correctly displays "Transactions".
+- Ensure the reconciliation hub in the switcher bar remains functional but looks professional.
+- Check horizontal symmetry across the entire island stack.
+
+## Phase 55: Grid Header Refinement
+
+The goal is to sharpen the header visual structure and ensure left-aligned uniformity for all column titles.
+
+### [Component] UI Enterprise Shell (app.js & system.css)
+
+#### [MODIFY] [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- **Sharpen Dividers**:
+  - Increase `.tabulator-col` border-right to `1px solid rgba(255, 255, 255, 0.8)` for maximum definition.
+- **Left Indented Text**:
+  - Update `.tabulator-col-content` to explicitly use `justify-content: flex-start !important`.
+
+#### [MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- **Uniform Alignment**:
+  - Add `headerHozAlign: "left"` to all columns in the Tabulator configuration.
+
+## Phase 56: UI Scaling & Performance Optimization
+
+The goal is to increase visibility by scaling the top 3 cards by 20% and optimizing the switcher logic for high-performance responsiveness.
+
+### [Component] UI Enterprise Shell (app.js & system.css)
+
+#### [MODIFY] [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- **Island Scale**:
+  - Increase max-width from `1166px` to `1400px` (~20% increase).
+- **Component Scaling**:
+  - Increase Header height, Action Bar height (~53px), and Switcher Bar density.
+  - Scale font-sizes by ~20% (e.g., 11px -> 13px, 12.5px -> 15px).
+
+#### [MODIFY] [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- **Account Switcher Optimization**:
+  - Change default `selectedAccount` from `'ALL'` to the first available account ID.
+  - Streamline [switchAccount](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#262-304) logic to prevent redundant re-renders.
+  - Ensure "ALL" is an optional toggle rather than the default entry point.
+
+## Verification Plan
+
+### Manual Verification
+- Verify the header/action/switcher cards appear 20% larger and more readable.
+- Confirm the system defaults to an individual account view on load.
+- Verify column dividers are sharp and text is left-aligned.

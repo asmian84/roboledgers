@@ -1,0 +1,18 @@
+### Phase 32: Screenshot 2 Alignment & Spacing Polish
+- **Surgical Ingestion Trace**: Excised the terminal progress bar to favor a clean, high-fidelity textual forensic trace (e.g., "[3/13] Reconstructing Truth State... 50%").
+- **Vertical Architecture**: Tightened the gaps between the Header Card, Metadata Hub, and Account Switcher. Reduced primary padding in the header card to align with the dense, professional aesthetic of Screenshot 2.
+- **Tabulator Confirmation**: Finalized the grid architecture to exclusively use Tabulator for high-density forensic display.
+
+### Phase 31: V5 Grid & Ingestion Refinement
+
+## 3. Forensic Debugging & Control
+- **Metadata Action Bar**: provides a dense, conditional summary that manifest only when data is present.
+- **Settings Drawer**: multi-tabbed control hub for Workspace Dexterity (Focus Lens), Column visibility, and theme selection.
+
+### Comparison Target (Benchmark)
+![Screenshot 2 - Reference](file:///C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1_1770152645721.png)
+
+## 4. Operational Commands
+Run these in the console for real-time auditing:
+- `window.debugForensics()`: Full audit of registries and grid status.
+- `window.getSettingsTrace()`: Dumps institutional reactive state to a table.

@@ -1,0 +1,58 @@
+# Implementation Plan: RoboLedgers Core
+
+## Phase 1: Architectural Foundation (COMPLETE)
+- [x] Codify 01-09 Canonical Specifications into `/docs/canonical_specifications/`.
+- [x] Verify no contradictions between Master System Prompt and Specific Invariants.
+
+## Phase 10: UX Projection Contracts (COMPLETE)
+- [x] 10.1: Define Zen, Bookkeeper, Accountant Contracts.
+- [x] 10.2: Implement Mode-Based Projection Logic.
+
+## Phase 11: Zen Mode Feed (IN PROGRESS)
+- [/] Establish HSL Theme / Design System.
+- [ ] Build "Money In / Money Out" Feed.
+- [ ] Implement Truth Badges (RAW/PREDICTED/LOCKED).
+- [x] Refactor Ingestion Pipeline to enforce one-way flow.
+
+## Phase 4: Automated Test Specification (COMPLETE)
+- [x] Define complete Invariant-Led Test Suite.
+- [x] Implement Ledger Core & Ingestion tests.
+- [x] Establish CI gating logic.
+
+## Phase 5: COA Intelligence Layer (COMPLETE)
+- [x] Define Canonical Account Types & Metadata Schema.
+- [x] Implement `COAService` (The Account Register).
+- [x] Implement `COAGate` (The Posting Firewall).
+- [x] Verify COA Invariants (Numeric ranges, mapping rules).
+
+## Phase 6: Categorization Brain (COMPLETE)
+- [x] 6.1: TCV (Transaction Context Vector) Generation.
+- [x] 6.2: Deterministic Scoring Engine.
+- [x] 6.3: COA Compatibility Gate (Consumption).
+- [x] 6.4: Decision State Machine.
+- [x] 6.5: DecisionTrace Persistence.
+- [x] Verify Brain Invariants (Determinism, gate enforcement).
+
+## Phase 7: Reconciliation Proof Engine (COMPLETE)
+- [x] 7.1: Proof Object Model.
+- [x] 7.2: Reconciliation Math Engine.
+- [x] 7.3: Internal Transfer Matcher (Zero-Sum).
+- [x] 7.4: Reconciliation State Machine.
+- [x] 7.5: Reconciliation Audit Trail.
+- [x] Verify Reconciliation Invariants (Zero-variance gate).
+
+## Phase 8: Role-Based Authority Control (RBAC) (COMPLETE)
+- [x] 8.1: Capability Registry (Atomic Powers).
+- [x] 8.2: Role Definitions (Bundles Only).
+- [x] 8.3: Authority Guard (Domain-Level).
+- [x] 8.4: Period Lifecycle Controller.
+- [x] 8.5: Certification Records.
+- [x] Verify RBAC Invariants (Capability-enforced truth).
+
+## Phase 9: Adjusting Journal Entries (AJE) Layer (COMPLETE)
+- [x] 9.1: AJE Data Model.
+- [x] 9.2: Posting Engine (Reclassification Only).
+- [x] 9.3: Period Interaction Rules (BASE + AJE).
+- [x] 9.4: Restatement Protocol (Period Versioning).
+- [x] 9.5: Audit & Certification Linkage.
+- [x] Verify AJE Invariants (Balanced, non-mutating).

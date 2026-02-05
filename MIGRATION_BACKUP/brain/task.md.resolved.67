@@ -1,0 +1,55 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+- [x] Phase 4: Automated Invariant Testing
+- [x] Phase 5: COA Intelligence Layer
+- [x] Phase 6: Categorization Brain (Deterministic Reasoning)
+- [x] Phase 7: Reconciliation Proof Engine (Mathematical Truth)
+- [x] Phase 8: Role-Based Authority Control (RBAC)
+- [x] Phase 9: Adjusting Journal Entries (AJE) Layer
+- [x] **CORE FREEZE (v1.0.0-core-constitution)**
+- [x] Phase 10: UX Projection Contracts
+- [x] Phase 11: Zen Mode Feed (First Visual Layer)
+- [x] Phase 12: Professional Ledger Lenses (Bookkeeper Part)
+- [x] Phase 13: Accountant Lens (Authority & Certification)
+- [x] Phase 14A: Multi-Entity Consolidation Model
+- [x] Phase 14C: Forecasting Engine (COMPLETE)
+- [x] Phase 15: Production Hardening & Resilience (COMPLETE)
+- [x] Phase 16: UI/UX Command Center (COMPLETE - REJECTED)
+- [x] Phase 17: Principal UX Architecture (COMPLETE - REJECTED)
+- [x] Phase 18: Enterprise UI Architecture (COMPLETE)
+- [x] Phase 19: Hostile Auditor Simulation (COMPLETE)
+- [x] Phase 20: Human Friction Testing (COMPLETE)
+- [x] Phase 21: Minor Institutional Polish (COMPLETE)
+- [x] Phase 22: Akaunting-Inspired Institutional Refinement (COMPLETE)
+- [ ] Phase 24: Apple-Grade UI Redesign (IN PROGRESS)
+    - [x] 24.1: Implement Glassmorphic Foundation (COMPLETE)
+    - [/] 24.2: Build Apple-Grade Zen Mode (Dashboard IMPLEMENTED)
+    - [x] 24.3: Implement High-Density Bookkeeper Desk (Transactions RESTORED - V5 PURPLE)
+- [x] Phase 25: RoboLedger V5 UI Convergence (COMPLETE)
+- [x] Phase 26: RoboLedger V4/V5 Restoration (COMPLETE)
+    - [x] 26.1: V4 Navigation & Sidebar Restoration (COMPLETE)
+    - [x] 26.2: Breadcrumb & Main Shell Restoration (COMPLETE)
+    - [x] 26.3: Screenshot-Perfect Header Cards (COMPLETE)
+    - [x] 26.4: Empty State & Illustrations Restoration (COMPLETE)
+    - [x] 26.5: Functional Integration with Restored UI (COMPLETE)
+- [x] Phase 28: V5 Transactions High-Fidelity Refinement (COMPLETE)
+    - [x] 28.1: Implement Purple Header Theme (#9333ea)
+    - [x] 28.2: Integrated Header Search Filters
+    - [x] 28.3: Teal "TXN" Source Badges
+    - [x] 28.4: Full-Screen Adaptive Flex Layout ("No Bibs")
+    - [x] 28.5: Multi-File Batch Ingestion Support
+- [x] Phase 29: Settings Drawer & Metadata Hub Restoration (COMPLETE)
+    - [x] 29.1: Implement Metadata Action Bar (Status Cluster)
+    - [x] 29.2: Implement High-Fidelity Settings Drawer (Multi-Tab)
+    - [x] 29.3: Add Workspace Dexterity (Focus Lens) & Theme selection
+    - [x] 29.4: Wire Column Visibility Toggles
+    - [x] 29.5: Implement window.getSettingsTrace() for forensic console debugging
+- [x] Phase 30: "Start Over" Reset Logic
+    - [x] 30.1: Implement Ledger.reset() in ledger.core.js
+    - [x] 30.2: Add "Start Over" button with inline confirmation to V5 Header
+    - [x] 30.3: Ensure reset returns UI to fresh empty state
+
+**CORE ACCOUNTING ENGINE COMPLETE & FROZEN**

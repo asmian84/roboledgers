@@ -1,0 +1,13 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+    - [x] Initialize Ledger Core based on Invariants
+    - [x] Implement `txsig` and uniqueness constraints
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+    - [x] Establish `/src/parsers_raw/` (DMZ)
+    - [x] Define `RawParsedTransaction` & Adapter Firewall
+    - [x] Implement Parser Contamination Test
+    - [x] Refactor Ingestion Pipeline to enforce one-way flow
+    - [x] Verify Ledger Invariants (Uniqueness, Immutability, Versioning)
+- [ ] Phase 4: Role-Based Authority Control (RBAC)

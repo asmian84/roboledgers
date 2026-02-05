@@ -1,0 +1,30 @@
+# RoboLedger V5.2.9: UI Fidelity - Empty State Restoration
+
+Restoring the "Empty State" transaction view to match the provided high-fidelity design.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Component Synchronization**: I will update the [renderTransactionsRestored](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#841-1063) function to use the exact HTML structure and CSS classes required for the "No transactions yet" state, including the blue "Browse files" button and the large book icon.
+
+## Proposed Changes
+
+### UI Fidelity Restoration (app.js)
+- **renderTransactionsRestored**:
+  - Update the `header-card` when `!hasData` to show the blue "Browse files" button on the right.
+  - Set the left-side subtitle to "WAITING TO GET STARTED.." (All Caps, gray).
+  - Update the `v5-waiting-container` to show the large Phosphor `ph-book-open` icon.
+  - Set the empty state title to "No transactions yet." and subtitle to the specific version from the screenshot.
+
+### Styling Refinements (system.css)
+- **.btn-browse**: A new primary blue button style specifically for the upload zone.
+- **.empty-state-v5**: Refined styling for the book icon and Typography.
+- **.upload-zone-v5**: Adjustments to match the dashed border and padding from the screenshot.
+
+## Verification Plan
+
+### Manual Verification
+1. **Empty State Check**: Purge all transactions and verify the layout matches the screenshot.
+2. **Button Functionality**: Click the blue "Browse files" button to ensure it triggers the file input correctly.
+3. **Responsive Alignment**: Ensure the 1060px centered layout is maintained in the empty state.
+

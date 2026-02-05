@@ -1,0 +1,31 @@
+# Task: Define and Lock Canonical Accounting Invariants
+
+- [x] Phase 1: Architectural Foundation (LOCKED)
+- [x] Phase 2: Core Engineering
+- [x] Phase 3: Parser Quarantine & Adapter Firewall
+- [x] Phase 4: Automated Invariant Testing
+- [x] Phase 5: COA Intelligence Layer
+- [x] Phase 6: Categorization Brain (Deterministic Reasoning)
+- [x] Phase 7: Reconciliation Proof Engine (Mathematical Truth)
+- [x] Phase 8: Role-Based Authority Control (RBAC)
+- [x] Phase 9: Adjusting Journal Entries (AJE) Layer
+- [x] **CORE FREEZE (v1.0.0-core-constitution)**
+- [x] Phase 10: UX Projection Contracts
+    - [x] 10.1: Define Zen, Bookkeeper, Accountant Contracts
+    - [x] 10.2: Implement Mode-Based Projection Logic
+- [x] Phase 11: Zen Mode Feed (First Visual Layer)
+- [x] Phase 12: Professional Ledger Lenses (Bookkeeper Part)
+- [x] Phase 13: Accountant Lens (Authority & Certification)
+- [x] Phase 14A: Multi-Entity Consolidation Model
+- [ ] Phase 14B: Certified CFO Metrics (IN PROGRESS)
+    - [ ] 14B.1: Define CFO UI Contracts
+    - [ ] 14B.2: Implement Metrics Service (Truth Derived)
+    - [ ] 14B.3: Verify Metric Invariants (Locked-Only Source)
+- [x] Phase 14-HARDENING: Forensic txsig & Spatial Entropy (COMPLETE)
+    - [x] 14H.1: Update Transaction Contract (Spatial Locator)
+    - [x] 14H.2: Update Adapter to Pass Spatial Data
+    - [x] 14H.3: Implement Spatial Entropy in txsig Generation
+    - [x] 14H.4: Verify Collision Avoidance (New Invariant Test)
+- [ ] Phase 14C: Forecasting Engine (Non-Certified)
+
+**CORE ACCOUNTING ENGINE COMPLETE & FROZEN**

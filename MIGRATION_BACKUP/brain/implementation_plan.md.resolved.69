@@ -1,0 +1,57 @@
+# RoboLedger V5.2.19: High-Fidelity Functional Audit
+
+A comprehensive structural and functional upgrade to the V5 interface, bringing it to "Stock Market" levels of dynamic polish while resolving deep-seated parsing and performance issues.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Sequential Ref# System**: I am enabling dynamic Ref# re-sequencing. This means the Ref# (e.g., 001) will always prioritize the top-most row in the current view, updating live as you sort or filter. 
+> **Flicker-Free Navigation**: I am switching the Account Switcher from a full-page re-render to a Tabulator-native filter. This will eliminate flickering and hangs, but requires the grid to be fully initialized with all data at once.
+> **Adaptive Account Naming**: Switches from `CHQ` -> `CHQ` to a smarter `CHQ1` | `CHQ2` logic with chronological sorting (AMEX -> MC -> CHQ).
+
+## Proposed Changes
+
+### UI Logic (app.js)
+- **Scale Expansion**: Increase all `max-width: 1060px` instances to **`1166px`** (+10%).
+- **Static Render Prevention**: Re-wire `window.render()` and the Account Switcher to use `txnTable.setFilter()` for account isolation. This prevents the "screen flick" and hanging.
+- **Adaptive Naming**: Implement a type-aware label generator for the switcher pills.
+- **Pagination**: 
+  - Enable Tabulator `pagination: "local"`.
+  - Add a footer controls bar with page-size limit dropdown and navigation arrows.
+- **Settings Persistence**: Fix [toggleSettings()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#181-182) and the save logic to ensure theme (Rainbow default) and density choices are saved to `UI_STATE`.
+
+### Styling (system.css)
+- **Structural Dividers**: Add vertical `1px solid rgba(0,0,0,0.06)` lines to grid headers.
+- **Dynamic Sorting**: Enable native CSS transitions for Tabulator row movement.
+- **Rainbow Default**: Set the Purple-to-Cyan rainbow header as the default theme.
+- **COA Tags**: Implement high-fidelity CSS for COA tags (`.coa-tag`) to support the "tickers" update effect.
+
+### Core Logic (ledger.core.js)
+- **Parser Polarity Audit**: 
+  - Fix `Ingestion.processUpload` to correctly distinguish between debits and credits based on row sign and column headers.
+  - Implement a check for negative values in the "Amount" field to correctly set `Polarity.DEBIT`.
+- **Sequential Indexing**: Ensure the ledger engine supports live position-based indexing for the Ref# column.
+
+### Session Persistence (V5.2.20)
+- **Recovery Logic**: Implement a check in [init()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#184-189). If transactions exist in `window.RoboLedger.Ledger.getAll()`, set `UI_STATE.recoveryPending = true`.
+- **In-Page Recovery UX**: Add a sleek, V5-styled banner to the top of the `v5-unified-island-wrapper` (above the header card).
+  - **Continue**: Dismisses banner and keeps existing data.
+  - **Start New**: Triggers `Ledger.reset()`, refreshes the view.
+
+### Forensic Audit Drawer (V5.2.21)
+- **Architecture**: Implement a right-side full-height sidebar (`.audit-drawer`) that compresses the main stage when active.
+- **Embedded Viewer**: 
+  - **PDF**: Load `sourceFileBlob` into an `<iframe>` for forensic verification.
+  - **CSV**: Implement a lightweight grid preview for non-binary sources.
+- **Contextual Sync**: Wire [openSourceFile(fileId)](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#1717-1718) to toggle the drawer and update the viewer without page reloads.
+- **UI Interaction**: clicking the "Source" icon in the grid (e.g., RBC, CHQ1) opens the side-by-side view.
+
+## Verification Plan
+
+### Automated Verification
+- **Stress Test**: Switch between accounts rapidly with 1000+ transactions to verify no flicker.
+- **Parser Test**: Import a mixed-polarity statement and verify Debit/Credit column distribution.
+
+### Manual Verification
+- Verify that "ALL" view shows the combined ledger correctly.
+- Confirm Ref# 001 moves to the new top row after a Date sort.

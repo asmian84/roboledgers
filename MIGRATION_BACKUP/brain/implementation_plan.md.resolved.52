@@ -1,0 +1,23 @@
+# RoboLedger Grid Aesthetic & Functional Polish
+
+Finalizing the UX of the transaction grid with vibrant themes and improved functional interactions.
+
+## Proposed Changes
+
+### [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css)
+- **Rainbow Theme**: Add vibrant linear gradient to Tabulator headers.
+- **Typography**: Force `font-weight: 400` for cells and `600` for titles for a clean look.
+- **Overflow**: Apply `max-width` and `margin: 0 auto` to prevent bleeding into viewport edges.
+
+### [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- **Header Sorting**: Enable `headerSort: true` on all columns.
+- **Account Switcher**: Add "ALL" button and implement deduplication logic.
+- **Typography**: Strip inline bold weights from description renderers.
+
+## Verification Plan
+
+### Manual Verification
+- **Aesthetic**: Check for rainbow gradient in grid header.
+- **Typography Check**: Ensure all text is non-bold and uniform.
+- **Sorting Check**: Click every header to verify ASC/DESC/None sorting.
+- **Switcher Check**: Verify "ALL" button exists and no duplicate CHQ1 pills.

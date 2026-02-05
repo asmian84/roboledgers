@@ -1,0 +1,145 @@
+# V5.2.0: Grid Column Restructuring - MVP Walkthrough
+
+## Overview
+
+Successfully restructured the transaction grid to align with the new Balance/Source column architecture and removed unnecessary UI clutter.
+
+---
+
+## Changes Implemented
+
+### 1. Column Restructure
+
+#### Removed:
+- ❌ **Actions Column** - Removed swap/delete buttons (will be redesigned in Action Bar)
+- ❌ **All Header Search Fields** - Moved to future Action Bar implementation
+
+#### Added:
+- ✅ **Balance Column** - Running total with color-coded display
+  - Green (`#059669`) for positive balances
+  - Red (`#dc2626`) for negative balances
+  - Right-aligned, formatted as currency
+  
+- ✅ **Source Column** - Text-only Ref# display
+  - Plain text format (e.g., "CHQ1-002")
+  - Monospace font (JetBrains Mono)
+  - Slate color (`#64748b`)
+
+### 2. Date Formatter
+
+Re-enabled Luxon datetime formatter with format `dd MMM yyyy` (e.g., "05 Jan 2023").
+
+**Note**: Currently showing "(No Date)" - requires date parsing fix in next iteration.
+
+### 3. Balance Calculation Logic
+
+Implemented automatic running balance calculation:
+
+```javascript
+let runningBalance = 0;
+data.forEach((txn, index) => {
+  if (txn.polarity === 'CREDIT') {
+    runningBalance += txn.amount_cents || 0;
+  } else if (txn.polarity === 'DEBIT') {
+    runningBalance -= txn.amount_cents || 0;
+  }
+  txn.balance = runningBalance;
+});
+```
+
+### 4. Source Ref Population
+
+Auto-generates source references for transactions:
+
+```javascript
+txn.source_ref = `${prefix}-${String(index + 1).padStart(3, '0')}`;
+```
+
+---
+
+## Current Grid Layout
+
+![Current Grid State](file:///C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1770179159197.png)
+
+### Column Order:
+1. ☑ **Checkbox** - Row selection
+2. **Ref#** - Transaction reference (e.g., CHQ1-002)
+3. **Date** - Transaction date *(needs fix)*
+4. **Payee / Description** - 2-line display (UPPERCASE + context)
+5. **Debit** - Money out (red, right-aligned)
+6. **Credit** - Money in (green, right-aligned)
+7. **Balance** - Running total (color-coded)
+8. **Source** - Ref# text (monospace)
+9. **Account** - COA categorization
+
+---
+
+## Files Modified
+
+### [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+- Removed Actions column definition (lines 1084-1115)
+- Removed `headerFilter` from all columns
+- Re-enabled Luxon formatter with `dd MMM yyyy` format
+- Added Balance column with running total calculation
+- Added Source column with text-only Ref# display
+- Implemented balance calculation logic before grid initialization
+
+---
+
+## Known Issues
+
+### 1. Date Parsing
+**Issue**: Dates showing as "(No Date)" instead of actual dates.
+
+**Root Cause**: Date field values may not be in correct format for Luxon parser.
+
+**Next Steps**: 
+- Verify date format in [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js)
+- Ensure dates are stored as ISO strings or valid date objects
+- Test with actual 2023 bank statement data
+
+### 2. Missing 4-Card Layout
+**Status**: Not yet implemented.
+
+**Required Cards**:
+- Header Card (exists)
+- Action Bar (not implemented)
+- Account Switcher (exists but needs refinement)
+- Grid Card (exists)
+
+### 3. 5-Category COA System
+**Status**: Account column exists but needs category dropdown implementation.
+
+**Required Categories**:
+1. 💰 Assets
+2. 💳 Liabilities
+3. 💵 Income
+4. 📊 Expenses
+5. 👤 Equity
+
+---
+
+## Next Iteration Priorities
+
+1. **Fix Date Parsing** - Critical for showing correct years (2023 vs 2026)
+2. **Implement Action Bar Card** - Search, filters, bulk actions
+3. **Refine Account Switcher** - Pill-style multi-account switching
+4. **Implement 5-Category COA** - Dropdown with category icons
+5. **Add Debit/Credit Mutual Exclusivity** - Cell editing behavior
+
+---
+
+## Verification
+
+### ✅ Completed:
+- Balance column displays running totals
+- Source column shows text-only Ref#
+- Actions column removed
+- Header search fields removed
+- Color coding works (green/red for balance)
+
+### ⏳ Pending:
+- Date format showing correct year (2023)
+- 4-card layout implementation
+- Action Bar with search/filters
+- 5-category COA dropdown

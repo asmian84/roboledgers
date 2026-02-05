@@ -1,0 +1,28 @@
+# Walkthrough: V5 Header Unified Refactor
+
+This update addresses specific feedback to align the Header Card layout with "Screenshot 3" and unify the "Start Over" / "Clean Slate" experience.
+
+## Changes Implemented
+
+### 1. Unified Header Architecture
+The `header-card` now persists across all three states (Clean Slate, Ingestion, Data), providing a stable anchor for the UI.
+
+-   **Clean Slate**:
+    -   **Title**: "Transactions"
+    -   **Subtitle**: "Waiting for bank statement..."
+    -   **Action**: "Browse files" (in Header).
+    -   **Body**: "Ready for Data" illustration.
+-   **Data View**:
+    -   **Title**: "Transactions"
+    -   **Subtitle**: Bank Name / Type / INST-TRANSIT-ACCOUNT metadata.
+    -   **Action**: "Start Over" (Left of Browse) + "Browse files".
+    -   **Body**: Metadata Hub + Grid.
+
+### 2. "Start Over" Placement
+The "Start Over" button has been moved from the far-right top row to **inside the Header Card**, immediately to the left of the Upload/Browse container. This improves accessibility and forensic workflow logic.
+
+### 3. "Transactions" Title
+The H1 title has been moved **inside the Header Card**, adjacent to the blue icon, to create a cohesive "Card Title" effect as requested.
+
+### 4. Grid "Ghost" State
+Added a "No transactions in this view" ghost state inside the grid container, ensuring that if data exists globally but is filtered out (or the grid hasn't loaded), the user sees a proper forensic empty state instead of a broken div.

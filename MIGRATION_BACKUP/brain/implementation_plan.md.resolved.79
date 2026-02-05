@@ -1,0 +1,46 @@
+# Ingestion Engine Optimization (V5.2.34)
+
+Speed up the statement parsing process and remove legacy code bloat from [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js) and [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js).
+
+## Proposed Changes
+
+### [ledger.core.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js)
+
+#### 1. Centralized Parser Engine [OPTIMIZE]
+- Move all regex patterns (RBC, Mastercard, Brands, Cleaning prefixes) to a top-level `PARSERS` object within the IIFE.
+- Pre-compile all regexes to avoid re-compilation during loops.
+
+#### 2. Legacy Bloat Removal [CLEANUP]
+- Prune the [load()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#118-155) function of the "Legacy Repair Phase" (2026->2023 repair and cleanDescription backfill).
+- Remove redundant console logs and commented-out code segments.
+
+#### 3. Streamlined Intelligence [OPTIMIZE]
+- Optimize [detectInstitution](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#433-498) to use a more efficient matching strategy.
+- Batch the description cleaning logic in `Brain.cleanDescription` to reduce string allocations.
+
+#### 4. Hardened Polarity Detection [CLEANUP]
+- Refactor the signage logic in [processUpload](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/ledger.core.js#499-610) to be more declarative using a mapping or helper function.
+
+### [app.js](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js)
+
+#### 1. Minimalist UI Refinement [AESTHETIC]
+- **One-Line Metadata**: Refactor the ATI Metadata line to be minimal, removing labels like "BRAND:" and "CARD#:" in favor of a clean "MASTERCARD • XXXX-XXXX" format.
+- **One-Line Descriptions**: Revert the description column to a high-fidelity single line. Move the raw trace to a subtle tooltip or remove it if not needed for the professional view.
+- **Consise Headers**: Ensure all grid headers are short and professional (e.g., "Ref", "Date", "Payee", "Amount", "Balance").
+
+#### 2. UI Performance [OPTIMIZE]
+- Ensure [render()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#39-44) is only called when state actually changes during ingestion.
+- Batch grid updates if multiple files are uploaded.
+
+## Verification Plan
+
+### Automated Tests
+- Run existing ingestion tests to ensure no regression in parsing accuracy.
+- Benchmark parsing speed with large PDF statements (100+ transactions).
+
+### Manual Verification
+- Upload the Mastercard statement and verify:
+    - Ingestion speed is noticeably faster (check console timestamps).
+    - UI is "Minimalist & Professional": one-line text, no clutter.
+    - All forensic alignments (Dates, Card#, Payees) remain 100% correct.
+    - No "Legacy Repair" logs appear in the console.

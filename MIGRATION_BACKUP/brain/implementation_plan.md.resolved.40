@@ -1,0 +1,36 @@
+# V5 Transactions High-Fidelity Styling落落
+
+Restore the Transactions grid to match the provided screenshot reference while maintaining the power of the Tabulator engine.
+
+## Proposed Changes
+
+### [Component] CSS Layer (system.css)
+- Implement `.txn-grid-v5` theme:
+  - Header: Purple background (`#9333ea`), white bold text.
+  - Header Filters: White background inputs within the purple header row.
+  - Border: Vertical separators between columns.
+  - Rows: Alternate background or subtle borders.
+- Add `.txn-badge` for source identifier pills (Blue/Teal).
+- Refine `.desc-cell` for 1:1 occupancy with the reference.
+- Update `.amount-negative` and `.amount-positive` to match the exact red/neutral colors in the screenshot.
+
+### [Component] JavaScript Layer (app.js)
+- Update [initGrid](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#477-557) column definitions:
+  - Order: `[Selection, Ref#, Date, Source, Description, Debit, Credit, Balance, Account]`
+  - Add `headerFilter: "input"` to all searchable columns.
+  - Implement [Source](file:///g:/My%20Drive/AutoBookkeeping/AutoBookkeeping-V4/src/pages/txn-import-v5-v2.js#2792-2803) formatter: Return a `<span class="txn-badge">TXN</span>`.
+  - Refine [Description](file:///g:/My%20Drive/AutoBookkeeping/AutoBookkeeping-V4/src/pages/txn-import-v5-v2.js#5431-5433) formatter: Prepend selection dot (visual) if required, or keep standard selection column.
+  - Ensure [Balance](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/types/coa.ts#57-58) column uses correct coloring logic for negative sums (Red/Bold).
+
+## Verification Plan
+
+### Automated Tests
+- N/A (Visual UI polish)
+
+### Manual Verification
+1.  Navigate to **Transactions**.
+2.  Upload a document set.
+3.  Verify the header is purple with white text.
+4.  Verify search inputs are present in the header row.
+5.  Verify the "Source" column shows the blue/teal "TXN" pills.
+6.  Verify descriptions and amounts match the screenshot's typography.

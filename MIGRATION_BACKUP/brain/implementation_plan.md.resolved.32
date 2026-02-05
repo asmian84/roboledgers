@@ -1,0 +1,179 @@
+# Implementation Plan: RoboLedgers Core
+
+## Phase 1: Architectural Foundation (COMPLETE)
+- [x] Codify 01-09 Canonical Specifications into `/docs/canonical_specifications/`.
+- [x] Verify no contradictions between Master System Prompt and Specific Invariants.
+
+## Phase 2: Core Engineering (COMPLETE)
+- [x] Initialize Ledger Core based on Invariants.
+- [x] Implement `txsig` and uniqueness constraints.
+
+## Phase 3: Parser Quarantine & Adapter Firewall (COMPLETE)
+- [x] Establish `/src/parsers_raw/` (DMZ).
+- [x] Define `RawParsedTransaction` & Adapter Firewall.
+- [x] Implement Parser Contamination Test.
+- [x] Refactor Ingestion Pipeline to enforce one-way flow.
+
+## Phase 4: Automated Test Specification (COMPLETE)
+- [x] Define complete Invariant-Led Test Suite.
+- [x] Implement Ledger Core & Ingestion tests.
+- [x] Establish CI gating logic.
+
+## Phase 5: COA Intelligence Layer (COMPLETE)
+- [x] Define Canonical Account Types & Metadata Schema.
+- [x] Implement `COAService` (The Account Register).
+- [x] Implement `COAGate` (The Posting Firewall).
+- [x] Verify COA Invariants (Numeric ranges, mapping rules).
+
+## Phase 6: Categorization Brain (COMPLETE)
+- [x] 6.1: TCV (Transaction Context Vector) Generation.
+- [x] 6.2: Deterministic Scoring Engine.
+- [x] 6.3: COA Compatibility Gate (Consumption).
+- [x] 6.4: Decision State Machine.
+- [x] 6.5: DecisionTrace Persistence.
+- [x] Verify Brain Invariants (Determinism, gate enforcement).
+
+## Phase 7: Reconciliation Proof Engine (COMPLETE)
+- [x] 7.1: Proof Object Model.
+- [x] 7.2: Reconciliation Math Engine.
+- [x] 7.3: Internal Transfer Matcher (Zero-Sum).
+- [x] 7.4: Reconciliation State Machine.
+- [x] 7.5: Reconciliation Audit Trail.
+- [x] Verify Reconciliation Invariants (Zero-variance gate).
+
+## Phase 8: Role-Based Authority Control (RBAC) (COMPLETE)
+- [x] 8.1: Capability Registry (Atomic Powers).
+- [x] 8.2: Role Definitions (Bundles Only).
+- [x] 8.3: Authority Guard (Domain-Level).
+- [x] 8.4: Period Lifecycle Controller.
+- [x] 8.5: Certification Records.
+- [x] Verify RBAC Invariants (Capability-enforced truth).
+
+## Phase 9: Adjusting Journal Entries (AJE) Layer (COMPLETE)
+- [x] 9.1: AJE Data Model.
+- [x] 9.2: Posting Engine (Reclassification Only).
+- [x] 9.3: Period Interaction Rules (BASE + AJE).
+- [x] 9.4: Restatement Protocol (Period Versioning).
+- [x] 9.5: Audit & Certification Linkage.
+- [x] Verify AJE Invariants (Balanced, non-mutating).
+
+## Phase 10: UX Projection Contracts (COMPLETE)
+- [x] 10.1: Define Zen, Bookkeeper, Accountant Contracts.
+- [x] 10.2: Implement Mode-Based Projection Logic.
+
+## Phase 11: Zen Mode Feed (COMPLETE)
+- [x] 11.1: Establish HSL Theme / Design System.
+- [x] 11.2: Build "Money In / Money Out" Feed.
+- [x] 11.3: Implement Truth Badges (RAW/PREDICTED/LOCKED).
+
+## Phase 12: Professional Ledger Lenses (Bookkeeper Part) (COMPLETE)
+- [x] 12.1: Establish Professional Workspace (Sidebar/Grid).
+- [x] 12.2: Implement Bookkeeper Lens (Grid + Matcher).
+
+## Phase 13: Accountant Lens (Authority & Certification) (COMPLETE)
+- [x] 13.1: Define Accountant UI Contracts.
+- [x] 13.2: Implement Trial Balance Projection.
+- [x] 13.3: Build AJE Workspace & Certification Protocol.
+- [x] 13.4: Verify Accountant Invariants (Locking/Immutability).
+
+## Phase 14A: Multi-Entity Consolidation Model (COMPLETE)
+- [x] 14A.1: Implement Entity Registry & Hierarchy.
+- [x] 14A.2: Enforce Strict Inter-Entity Isolation (RBAC + Ledger).
+- [x] 14A.3: Define Consolidation Boundaries (Read-Only).
+- [x] 14A.4: Verify Multi-Entity Invariants.
+
+## Phase 14-HARDENING: Forensic txsig & Spatial Entropy (COMPLETE)
+- [x] 14H.1: Update Transaction Contract (Spatial Locator).
+- [x] 14H.2: Update Adapter to Pass Spatial Data (Page/Y).
+- [x] 14H.3: Implement Spatial Entropy in txsig Generation.
+- [x] 14H.4: Verify Collision Avoidance (New Invariant Test).
+
+## Phase 14B: Certified CFO Metrics (COMPLETE)
+- [x] 14B.1: Define CFO UI Contracts.
+- [x] 14B.2: Implement Metrics Service (Truth Derived).
+- [x] 14B.3: Verify Metric Invariants (Locked-Only Source).
+
+## Phase 14C: Forecasting Engine (COMPLETE)
+- [x] 14C.1: Define Forecast Contracts (Type Separation).
+- [x] 14C.2: Implement Forecast Engine (Pure Math Layer).
+- [x] 14C.3: Verify Forecast Invariants (Non-Truth Gating).
+- [ ] 14C.4: Build CFO Projection Lens (UI Sandbox).
+
+## Phase 15: Production Hardening & Resilience (COMPLETE)
+
+### Operational Durability
+- [x] 15.1: Implement Idempotent Ingestion (De-duping at the Ingest level).
+- [x] 15.2: Handle "Dirty State" recovery (mid-import crash handling).
+
+### Safe Degradation
+- [x] 15.3: Implement Global Kill-Switch for AI Categorization (Brain).
+- [x] 15.4: Implement Forced Read-Only Mode (Emergency Lockdown).
+
+### Data Integrity & Recovery
+- [x] 15.5: Build `LedgerReconstructor` (Rebuild state from AuditLog).
+- [x] 15.6: Implement Proof Re-verification after state restoration.
+
+### Security
+- [x] 15.7: Stress Test RBAC (Capability escalation attempts).
+- [x] 15.8: Implement API-layer Replay Protection.
+## Phase 19: Hostile Auditor Simulation
+Focus on the "Truth Over Beauty" core. Attempt to find hidden uncertainty or unverified data points through the interface.
+
+## Phase 20: Human Friction Testing
+Observe interaction speed and cognitive load for the Bookkeeper and Accountant roles. 
+
+## Phase 21: Institutional Polish
+Finalize microcopy and accessibility. Ensure 10th-year longevity.
+## Phase 16: UI/UX Command Center Overhaul
+
+**Goal**: Transform RoboLedgers from a basic grid-view into a premium, high-fidelity Command Center that "Wows" the user with state-of-the-art aesthetics and deep system integration.
+
+### The "Command Center" Blueprint
+We will move away from isolated pages to a unified **Single Page Command Center (SPCC)**.
+
+#### 🎨 1. Design Language (Glassmorphism & Midnight Theme)
+- **Palette**: `Midnight Navy (#0f172a)`, `Emerald Green (#10b981)`, `Electric Indigo (#6366f1)`.
+- **Effects**: Backdrop blurs (`glassmorphism`), soft card shadows, and Inter/Outfit typography.
+- **Micro-interactions**: Hover-glows on action items, smooth view-swapping transitions.
+
+#### 🏠 2. Terminal Home (The Pulse)
+- **Pulse Metrics**: Net Cash, Projected Runway (Live), and "Truth Health" score.
+- **Anomaly Feed**: A ticker showing the latest anomalies detected by the Brain.
+- **Entity Switcher**: Quick-access dropdown for multi-company management.
+
+#### 🛠️ 3. Integrated Functional Modules
+- **The Bookkeeper Lens**: High-density verification queue with "Confidence" progress bars.
+- **The Accountant Lens**: Governance focal point. Proof Certificates, Period Locking, and AJE (Adjusting Journal Entry) drafting.
+- **The CFO Sandbox**: Data-dense charts (using Canvas/CSS gradients) and interactive "What-If" assumptions.
+
+#### 🔗 4. Real-World Readiness
+- **Safe-State Indicators**: Visual indicators showing if the Ledger is Synchronized, in Read-Only mode, or if the Brain is disabled.
+- **Breadcrumb Audit**: Always visible "Truth State" (CERTIFIED vs. PROJECTION) to avoid user confusion.
+
+### Proposed Roadmap
+1. **Foundation**: Build the `CommandShell` (Sidebar + Backdrop + Typography).
+2. **Dashboard**: Implement the Home view with real data aggregations.
+3. **Module Refactor**: Migrate existing Lens logic into the new UI components.
+4. **Resilience UI**: Add visual feedback for kill-switches and recovery states.
+## Phase 26: RoboLedger V4/V5 Restoration (URGENT)
+**Goal**: Revert the UI disaster and perfectly replicate the V4/V5 architecture seen in the user's screenshot.
+
+### 26.1: V4 Navigation & Sidebar Restoration
+- Implement the 260px Navy Gradient Sidebar (`#0f172a`).
+- Port exact navigation structure: Home, Transactions, ANALYSIS (Dashboard, Reports, Grid V2...), SYSTEM.
+- Restore the Phosphor Icon set and Cyan active states.
+- Rebuild the "Alex Johnson" Premium User Card in the footer.
+
+### 26.2: Breadcrumb & Main Shell
+- Implement the 60px White Breadcrumb bar with Home > Transactions logic.
+- Set global background to Slate Light (`#f8fafc`).
+
+### 26.3: "Transactions" Header Card (Screenshot-Perfect)
+- Build the top card with the "WAITING TO GET STARTED.." subtitle.
+- Replicate the "Drag and drop files here" zone with the cloud icon and blue "Browse files" button.
+
+### 26.4: Empty State Restoration
+- Port the "No transactions yet" illustration and centered text patterns.
+
+### 26.5: Functional Convergence
+- Ensure the existing Ledger logic (Immutability, Brain, etc.) works seamlessly within this restored UI shell.

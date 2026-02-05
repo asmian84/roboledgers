@@ -1,0 +1,37 @@
+# RoboLedger V5.2.5: Forensic Stabilization
+
+Addressing critical regressions and missing features from V5.2.4 to ensure a production-ready transaction grid.
+
+## User Review Required
+
+> [!CAUTION]
+> **Year Enforce**: I will be implementing a "Deep Repair" trigger that automatically enforces the year 2023 on all transactions containing 2026, until the bank-specific parsers can be fixed. This prevents current-year bleed.
+
+## Proposed Changes
+
+### UI Logic & Scope fixes (app.js)
+- **Global Scope**: Expose [render()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#471-499) to `window.render` to fix "ReferenceError: render is not defined" when using [onclick](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#1365-1383) attributes.
+- **Deduplication**: Remove the secondary click listener on `.upload-zone` found in [setupActions()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#56-143) to resolve the "double browse" window issue.
+- **Account Wiring**: Update [initGrid()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#877-1264) to use [dataAdjustedForAccount()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#187-194) instead of raw ledger data, enabling the "ALL" and "CHQ1" switcher pills.
+- **Progress Visibility**: Ensure `v5-progress-track` is visible and `ingestionProgress` correctly updates during batch processing.
+
+### Grid Aesthetics & Consistency
+- **Height**: Increase grid container height in [system.css](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/system.css) from `calc(100vh - 300px)` to `calc(100vh - 250px)` to comfortably display 15+ transactions.
+- **Color Coding**: Update column formatters for:
+  - **Debit**: Red (`#ef4444`)
+  - **Credit**: Green (`#10b981`)
+  - **Balance**: Black (`#0f172a`)
+- **Typography**: Verify and enforce uniform, non-bold fonts across all cells.
+- **Sorting Icons**: Check for CSS conflicts hiding the ascending/descending chevron icons in Tabulator headers.
+
+### Data Stabilization
+- **Year Repair**: Inject a logic block into [initGrid](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#877-1264) that detects `2026` in date strings and replaces it with `2023` to synchronize with statement periods.
+
+## Verification Plan
+
+### Manual Verification
+- **Switcher Test**: Click "ALL", then "CHQ1", then another account. The grid should filter in-place without errors.
+- **Upload Test**: Click the drag-drop zone. Verify only one browse dialog appears.
+- **Color Check**: Verify Debit column is red, Credit is green, and Balance is black.
+- **Pagination/Size**: Confirm grid holds ~15 rows without internal scrollbars if possible.
+- **Date Check**: Confirm no "2026" dates appear in the grid.

@@ -1,0 +1,28 @@
+# RoboLedger V5: 1:1 Digital Reconstruction Plan
+
+Using the provided Digital Blueprint, I am reconstructing the V5 environment with pixel-perfect fidelity.
+
+## Proposed Changes
+
+### [Component] V5 Shell (index.html)
+- **Sidebar Architecture**: Implement the grouped navigation (ANALYSIS, SYSTEM) and the premium user profile footer.
+- **Main Layout**: Reconstruct the `main-content` area with the V5 breadcrumb separator (`›`) and the unified `#app` container.
+- **Inventory Tray**: Add the hidden `<div class="v5-inventory-tray">` for pending statements.
+
+### [Component] Truth Command Surface (app.js)
+- **V5 Routing**: Align route paths (`#/txn-import-v5`, `#/accounts`) and breadcrumb generation.
+- **Accordion COA**: Implement the [renderCOAPage()](file:///g:/My%20Drive/RoboLedger%20-%20NEW/src/ui/enterprise/app.js#204-262) using the `coa-row` structure with dynamic expansion logic.
+- **Tabulator Integration**: Implement the shared `Tabulator` instance inside the COA accordion to match the V5 architecture.
+- **Inventory Management**: Implement `renderV5Inventory()` to handle multiple uploaded statements.
+- **Account Nav Strip**: Implement the "Double-Decker" control center with the horizontal account switcher.
+- **Workspace Lens**: implement the "Workspace Dexterity" logic (Zen -> Accountant modes).
+
+### [Component] V5 Design System (system.css)
+- **Tabulator Styling**: Apply the IBM Plex Sans typography, 38px row height, and forensic accent colors specifically for the Tabulator grid.
+- **COA Themes**: Implement `.theme-asset`, `.theme-liability`, etc., with the specific hex codes and the 50% -> 100% width transition.
+- **Glassmorphism**: Implement the `<div class="bulk-actions-bar">` with its 20px blur and saturation filters.
+- **Typography**: Import the Inter, Public Sans, and JetBrains Mono fonts.
+
+## Verification Plan
+- **Blueprint Mapping**: Cross-reference the final computed styles with the JSON snippet provided.
+- **Interactive Check**: Verify the `v5-popover` breadcrumb system and the inventory tray toggle.

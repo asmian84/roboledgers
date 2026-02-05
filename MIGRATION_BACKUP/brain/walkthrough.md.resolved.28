@@ -1,0 +1,27 @@
+# Walkthrough: V5 Institutional Refinement & Grid Repair
+
+This walkthrough demonstrates the restoration and refinement of the RoboLedger V5 shell, focusing on high-fidelity grid output and industrial-grade safety protocols.
+
+## 1. High-Fidelity Transactions Grid (Benchmark: Screenshot 2)
+The Transactions grid now matches the industrial V4/V5 benchmark precisely.
+
+- **2-Line Descriptions**: Implemented a vertical-stack layout for raw descriptions, splitting main transaction names and sub-details (e.g., account numbers or continued IDs).
+- **Separate Debit/Credit Polarity**: The grid now populates the **Debit** (Red) and **Credit** (Teal) columns exclusively based on fiscal parity.
+- **Running Balance Logic**: Implemented a calculation engine that derives a running balance for every row, displaying it with explicit sign markers (`+`/`-`) and bold institutional styling.
+- **Smart Ref# Extraction**: The parser now scans for "CHQ ####" in the raw text and automatically populates the Ref# field, falling back to sequential "TXN-###" only for non-referenced items.
+
+## 2. Industrial Ingestion & Safety
+- **Flicker-Free Progress**: moved progress tracking to targeted DOM updates, ensuring the UI remains stable and professional during batch forensic scans.
+- **Start Over Safety Protocol**: Repositioned the reset button as a compact icon-button next to the upload bucket. It features a **Dual-Click Confirmation** with a 3-second auto-revert to prevent accidental ledger wipes.
+
+## 3. Forensic Debugging & Control
+- **Metadata Action Bar**: provides a dense, conditional summary that manifest only when data is present.
+- **Settings Drawer**: multi-tabbed control hub for Workspace Dexterity (Focus Lens), Column visibility, and theme selection.
+
+### Comparison Target (Benchmark)
+![Screenshot 2 - Reference](file:///C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1_1770152645721.png)
+
+## 4. Operational Commands
+Run these in the console for real-time auditing:
+- `window.debugForensics()`: Full audit of registries and grid status.
+- `window.getSettingsTrace()`: Dumps institutional reactive state to a table.

@@ -1,0 +1,71 @@
+# RoboLedgers: Canonical Accounting Invariants
+**Version:** 1.0.0  
+**Status:** DRAFT (LOCKED Pending Final Review)  
+**Author:** Principal Accounting Systems Architect
+
+This document defines the immutable laws of RoboLedgers. These rules are non-negotiable and must be enforced at the database and application logic layers.
+
+---
+
+## SECTION 1 — Canonical Transaction Object
+
+The Canonical Transaction Object is the atomic unit of financial truth.
+
+### 1.1 Field Definitions
+
+| Field | Type | Required | Mutation Rule | Hashed in `txsig` |
+| :--- | :--- | :--- | :--- | :--- |
+| `tx_id` | UUID | YES | **IMMUTABLE** | NO |
+| `version` | INT | YES | INCREMENTAL | NO |
+| `date` | DATE (ISO) | YES | **IMMUTABLE** | YES |
+| `amount` | DECIMAL | YES | **IMMUTABLE** | YES |
+| `currency` | STRING (3) | YES | **IMMUTABLE** | YES |
+| `account_id` | UUID | YES | **IMMUTABLE** | YES |
+| `polarity` | ENUM | YES | **IMMUTABLE** | NO |
+| `raw_desc` | STRING | YES | **IMMUTABLE** | YES |
+| `source_sys` | STRING | YES | **IMMUTABLE** | NO |
+| `txsig` | STRING (64) | YES | **IMMUTABLE** | NO |
+| `ext_id` | STRING | NO | **IMMUTABLE** | YES |
+| `clean_desc` | STRING | NO | VERSIONED | NO |
+| `cat_id` | UUID | NO | VERSIONED | NO |
+| `status` | ENUM | YES | AUDITED-VERSIONED | NO |
+| `created_at` | TIMESTAMP | YES | **IMMUTABLE** | NO |
+| `updated_at` | TIMESTAMP | YES | MUTABLE | NO |
+
+### 1.2 Immutability Guarantees
+- **IMMUTABLE**: Once written, these fields can NEVER be modified. Any change requires a reversing entry or a voiding status change with a new version.
+- **VERSIONED**: Fields that can be updated (e.g., `cat_id`) must create a new record in the audit version table linked by `tx_id`.
+
+### 1.3 New Transaction vs. Revision
+- **NEW TRANSACTION**: A record with a `txsig` that does not currently exist in the ledger for the specific `account_id`.
+- **REVISION**: A metadata update (category, cleaner description, notes) to an existing `tx_id`. 
+- **CRITICAL**: Changing the `amount`, `date`, or `account_id` is NOT a revision; it is a DESTRUCTION of the original fact. In such cases, the original must be VOIDED and a NEW transaction created.
+
+---
+
+## SECTION 2 — Transaction Fingerprinting (txsig)
+
+The `txsig` (Transaction Signature) is the forensic fingerprint of a transaction. It guarantees uniqueness across all time and space.
+
+### 2.1 Hashing Specification
+The `txsig` is a SHA-256 hash of the following fields, concatenated with a pipe separator (`|`):
+
+1. `date` (format: `YYYY-MM-DD`)
+2. `amount` (formatted as integer cents/smallest unit, no decimals)
+3. `currency` (uppercase ISO 4217, e.g., `USD`)
+4. `account_id` (the source bank/ledger account identifier)
+5. `raw_desc` (trimmed, lowercase, special characters removed)
+6. `ext_id` (if available, else empty string)
+
+**Formula:**  
+`txsig = SHA256(date|amount|currency|account_id|raw_desc|ext_id)`
+
+### 2.2 Collision & Duplicate Handling
+- **Exact Match**: If an incoming transaction generates a `txsig` already present in the database for the given `account_id`, it is REJECTED as a duplicate.
+- **Statement Overlap**: The `txsig` is the primary mechanism for handling overlapping bank statement imports. Duplicate imports will be caught by the `txsig` invariant.
+- **Collision Policy**: In the mathematically improbable event of a SHA-256 collision, the system will check the `source_sys`. If `source_sys` is different but `txsig` is the same, throw `INVARIANT_VIOLATION_TXSIG_COLLISION`.
+
+### 2.3 Exception Logic
+- If any required field for the `txsig` is missing, the system MUST throw `DESIGN_ERROR_INCOMPLETE_FINGERPRINT`.
+
+---

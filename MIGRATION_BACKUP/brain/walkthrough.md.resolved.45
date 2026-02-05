@@ -1,0 +1,36 @@
+# V5.2.6 Walkthrough: Advanced Grid Popout & Ref# Syncing
+
+I have implemented the advanced window detachment system and dynamic account renaming for RoboLedger V5.2.6.
+
+## 🔗 Ref# & Pill Syncing
+Renaming the account reference in the Action Bar now instantly propagates to the account switcher pills. This allows for rapid, unique identification of autodetected bank accounts.
+
+```javascript
+// Sync logic from app.js
+window.handleRefUpdate = (newRef) => {
+    const result = window.RoboLedger.Accounts.setRef(activeAcc.id, newRef.trim());
+    if (result.success) {
+      window.render(); // Pill refresh
+      // ...
+    }
+}
+```
+
+## 🚀 Surgical Grid Popout
+You can now detach the transaction grid into a standalone browser window.
+
+### Key Features:
+- **Blob URL Strategy**: No server-side files; the popout is generated dynamically via a Blob URL.
+- **Bidirectional Sync**: Edits made in the popout window are sent back to the main window via `postMessage`, updating the Ledger Truth Vault in real-time.
+- **Visual Parity**: The popout grid inherits the main app's CSS, including the **Rainbow Header** and color-coded amounts.
+- **Pop-In Bridge**: A heartbeat monitor automatically restores the local grid if the popout window is closed or "Docked".
+
+### 📸 Verification Data
+![Grid Popped Out Overlay](file:///C:/Users/asmia/.gemini/antigravity/brain/410a76b2-0025-4cfc-a894-2bba5b8c33e5/uploaded_media_1770185593497.png)
+
+> [!NOTE]
+> The image above shows the main window transitioning to the "Grid Popped Out" state, replacing the local grid with a "Bring it Back" bridge.
+
+## 🛠️ Performance & Persistence
+- **State Integrity**: All popout edits trigger a `localStorage` save in the main window.
+- **Auto-Restoration**: Closing the popout window instantly re-initializes the local Tabulator instance with the latest synced data.

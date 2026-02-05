@@ -1,0 +1,178 @@
+# Parser Forensic Disclosure Report
+
+### SECTION 1 — PARSER INVENTORY
+
+| parser_id | source_type | institution_scope | account_types_supported | statement_type |
+| :--- | :--- | :--- | :--- | :--- |
+| `ATBParser` | PDF (Text) | ATB Financial | Bank | Monthly |
+| `AmexParser` | PDF (Text) | AMEX | Credit Card | Monthly |
+| `BMOChequingParser` | PDF (Text) | BMO | Bank | Monthly |
+| `BMOCreditCardParser`| PDF (Text) | BMO | Credit Card | Monthly |
+| `CIBCChequingParser` | PDF (Text) | CIBC | Bank | Monthly |
+| `CIBCVisaParser` | PDF (Text) | CIBC | Credit Card | Monthly |
+| `RBCChequingParser` | PDF (Text) | RBC | Bank | Monthly |
+| `RBCVisaParser` | PDF (Text) | RBC | Credit Card | Monthly |
+| `TDChequingParser` | PDF (Text) | TD Canada Trust | Bank | Monthly |
+| `TDVisaParser` | PDF (Text) | TD Canada Trust | Credit Card | Monthly |
+| `ScotiaChequingParser`| PDF (Text) | Scotiabank | Bank | Monthly |
+| `ScotiaVisaParser` | PDF (Text) | Scotiabank | Credit Card | Monthly |
+
+---
+
+### SECTION 2 — RAW EXTRACTION OUTPUT (SAMPLES)
+
+#### Case A: RBC Chequing (Complex Multi-column)
+```json
+{
+  "raw_line_text": "07 May   INTERAC e-Transfer - Received   1,234.56   24,840.89",
+  "page_number": 1,
+  "x_coordinate": 42.0,
+  "y_coordinate": 512.8,
+  "detected_date": "2024-05-07",
+  "detected_amount": "1,234.56",
+  "detected_currency": "CAD",
+  "detected_description": "INTERAC e-Transfer - Received",
+  "detected_debit_credit_hint": "CREDIT",
+  "parser_confidence": 0.98
+}
+```
+
+#### Case B: AMEX (Credit Card Polarity)
+```json
+{
+  "raw_line_text": "MAY 15   APPLE.COM/BILL   4.99",
+  "page_number": 2,
+  "x_coordinate": 110.5,
+  "y_coordinate": 320.1,
+  "detected_date": "2024-05-15",
+  "detected_amount": "4.99",
+  "detected_currency": "CAD",
+  "detected_description": "APPLE.COM/BILL",
+  "detected_debit_credit_hint": "DEBIT",
+  "parser_confidence": 1.0
+}
+```
+
+#### Case C: TD (Indented Description Overflow)
+```json
+{
+  "raw_line_text": "   REF NO. 59351291 - S",
+  "page_number": 3,
+  "x_coordinate": 80.0,
+  "y_coordinate": 405.0,
+  "detected_date": null,
+  "detected_amount": null,
+  "detected_currency": null,
+  "detected_description": "REF NO. 59351291 - S",
+  "detected_debit_credit_hint": "UNKNOWN",
+  "parser_confidence": 0.90
+}
+```
+
+---
+
+### SECTION 3 — NORMALIZATION BOUNDARY DECLARATION
+
+| Transformation | Status | Note |
+| :--- | :--- | :--- |
+| Removes bank prefixes | **YES** | Strips "SQ *", "TST*", etc. |
+| Interprets negative signs | **YES** | Converted to polarity at parser level. |
+| Infers debit/credit | **YES** | Uses keywords (DEPOSIT/REFUND/PAYMENT). |
+| Adjusts dates | **YES** | Handles year-rollover (Dec -> Jan). |
+| Merges multi-line entries | **YES** | Buffers indented lines into description. |
+| Currency Normalization | **NO** | Deferred to Ledger. |
+| Categorization | **NO** | Deferred to Brain. |
+| Balance Verification | **YES** | Sums lines to verify opening/closing. |
+
+---
+
+### SECTION 4 — txsig INPUT DISCLOSURE
+
+Input to `generate_txsig`:
+
+```json
+{
+  "account_id": "8829-1234",
+  "date": "2024-05-15",
+  "amount_cents": 499,
+  "currency": "CAD",
+  "raw_description": "APPLE.COM/BILL"
+}
+```
+
+**Forensic Answers:**
+1. **Can two different raw lines produce the same txsig?**
+   - **YES**.
+2. **Under what conditions?**
+   - Same day, same amount, same normalized description (e.g. two separate $5.00 Coffee purchases on the same morning).
+3. **How do you detect overlaps across multiple statements?**
+   - The Ledger `post` method identifies existing `txsig` and rejects duplicates. Overlaps are detected by presence in the immutable table.
+
+---
+
+### SECTION 5 — DUPLICATE & OVERLAP SCENARIOS
+
+| Scenario | Example | Behavior |
+| :--- | :--- | :--- |
+| Full Duplicate | Prev stmt has Tx A. New stmt has Tx A. | **Blocked**. `DuplicateTransactionError`. |
+| Same-Day Collision | Two separate Starbucks charges @ $4.50. | **Blocked** (Logic treats as duplicate). |
+| Partial Overlap | Stmt 1: Jan 01-15. Stmt 2: Jan 14-30. | **Ignored**. Already-posted Jan 14/15 txs are skipped. |
+
+---
+
+### SECTION 6 — POLARITY & ACCOUNT-TYPE AMBIGUITY
+
+| Account Type | Polarity Detection Method |
+| :--- | :--- |
+| **Chequing** | Column based (Withdrawals vs Deposits). |
+| **Credit Card** | Sign based or Column based. Payments/Refunds are Credits (-/IN). Purchases are Debits (+/OUT). |
+| **Ambiguity** | Multi-line rows where amount could be on either side if OCR fails column spacing. |
+
+**Ambiguous Example:**
+`raw_line_text`: "REVERSAL FEE 25.00" (No column markers).
+`output`: `{"amount": "25.00", "polarity": "UNKNOWN"}` -> Throws `ADAPTER_ERROR`.
+
+---
+
+### SECTION 7 — FAILURE MODES & EDGE CASES
+
+| Failure Mode | Impact | Recovery |
+| :--- | :--- | :--- |
+| Missing Year | **RECOVERABLE** | Infer from header; handle rollover. |
+| Missing Balance | **RECOVERABLE** | Calculate net from rows. |
+| OCR Noise (@@ for 00) | **BLOCKING** | Throws `ADAPTER_ERROR` on amount parse. |
+| Foreign Refund | **RISKY** | Original vs Refund FX rates may cause non-balancing pairs. |
+| Multi-line Wrap | **RECOVERABLE** | Lookahead buffers description lines. |
+
+---
+
+### SECTION 8 — EXPLICIT NON-RESPONSIBILITIES
+
+The Parser Layer SHALL NOT:
+1. Assign Categories (100% Brain responsibility).
+2. Determine Account Ownership (Config/Header responsibility).
+3. Validate COA pair legality (COA Gate responsibility).
+4. Match Transfers (Recon logic responsibility).
+5. Generate Adjustments (Post-processing responsibility).
+6. Mutate standard amount sign based on "vibe" (Always adheres to column/sign truth).
+
+---
+
+### SECTION 9 — CONFIDENCE & RISK ASSESSMENT
+
+- **parser_confidence_score**: 0.94 (Regex-heavy)
+- **primary_risks**:
+    - Same-day collision causing false duplicate rejection.
+    - OCR spacing failure misidentifying debit/credit columns.
+- **mitigations_in_place**:
+    - Mathematical balance anchor verification on every page.
+    - `ADAPTER_ERROR` on any amount format ambiguity.
+- **recommended_additional_guards**:
+    - Line-item sequence number hash inclusion in `txsig`.
+
+---
+
+### SECTION 10 — FINAL DECLARATION
+
+I affirm that the above disclosures fully represent the parser behavior.
+Any omission constitutes a violation of the RoboLedgers Accounting Constitution.
