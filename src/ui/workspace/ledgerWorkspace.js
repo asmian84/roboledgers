@@ -106,6 +106,9 @@ LedgerWorkspace.moveTransaction = function(txId, targetAccountId){
 
   ledgers[targetAccountId].push(foundTx);
 
-  // Refresh current grid instantly
-  LedgerWorkspace.switchAccount(UI_STATE.selectedAccount);
+  // Refresh grid only if viewing the affected ledger
+  const currentAccount = UI_STATE.selectedAccount;
+  if (window.txnTable && (currentAccount === sourceLedger || currentAccount === targetAccountId)) {
+    window.txnTable.setData(LedgerWorkspace.getLedger(currentAccount));
+  }
 };

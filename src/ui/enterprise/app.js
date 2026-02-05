@@ -1238,7 +1238,7 @@
       // data: REMOVED - loaded via tableBuilt callback instead
       height: "100%", // Wall-to-Wall height
       layout: "fitColumns",
-      reactiveData: true, // Data sync
+      reactiveData: false, // DISABLED - LedgerWorkspace manages state
       index: "id", // Stable ID
       rowHeight: 32, // Professional V5 density
       headerFilterLiveFilterDelay: 600,
