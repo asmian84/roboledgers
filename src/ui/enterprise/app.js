@@ -1521,6 +1521,11 @@
       ]
     }); // End new Tabulator({...})
 
+    // Manually trigger tableBuilt since we didn't provide initial data
+    if (window.txnTable.options.tableBuilt) {
+      window.txnTable.options.tableBuilt.call(window.txnTable);
+    }
+
     // Attach Event Listeners
     window.txnTable.on("rowClick", function (e, row) {
       // Prevent audit drawer open if clicking action buttons or editors
