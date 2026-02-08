@@ -24,6 +24,7 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
 
     const canonicalData = transactionsOnly.map((tx, idx) => ({
         ...tx,
+        ref: tx.ref || `${tx.account_id || 'CHQ1'}-${String(idx + 1).padStart(3, '0')}`, // Generate ref if missing
         status: tx.status || statuses[idx % 4],
         payee: tx.description || tx.raw_description || 'Unknown',
         debit: tx.polarity === 'DEBIT' ? tx.amount_cents / 100 : null,
