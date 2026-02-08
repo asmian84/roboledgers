@@ -11,4 +11,5 @@ export type RawParsedTransaction = {
     raw_balance?: string;        // optional
     page?: number;               // optional (PDF)
     y_coord?: number;            // optional (PDF)
+    source_file_id?: string;     // optional (attached file id)
 };

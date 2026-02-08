@@ -13,7 +13,7 @@ window.LedgerWorkspace = (function () {
   // Virtual suspense ledger for unassigned transactions
   const TEMP_ACCOUNT_ID = "0000";
 
-  function log(...args){
+  function log(...args) {
     console.log("[LedgerWorkspace]", ...args);
   }
 
@@ -40,11 +40,11 @@ window.LedgerWorkspace = (function () {
     log("Workspace built. Ledgers:", Object.keys(store.ledgers));
   }
 
-  function getLedger(accountId){
+  function getLedger(accountId) {
     return store.ledgers[accountId] || [];
   }
 
-  function getAllLedgers(){
+  function getAllLedgers() {
     return store.ledgers;
   }
 
@@ -59,10 +59,10 @@ window.LedgerWorkspace = (function () {
 })();
 
 // STEP 2: Account Switch Engine
-LedgerWorkspace.switchAccount = function(accountId){
+LedgerWorkspace.switchAccount = function (accountId) {
 
-  if(!window.txnTable){
-    console.warn("Grid not ready yet");
+  if (!window.renderTransactionsGrid) {
+    console.warn("Grid engine (React) not ready yet");
     return;
   }
 
@@ -80,13 +80,20 @@ LedgerWorkspace.switchAccount = function(accountId){
 
   console.log("Switching to ledger:", accountId, "Rows:", data.length);
 
-  window.txnTable.setData(data);
+  if (window.renderTransactionsGrid) {
+    window.renderTransactionsGrid(data);
+  } else {
+    console.warn("[LedgerWorkspace] window.renderTransactionsGrid not found");
+  }
 
   UI_STATE.selectedAccount = accountId;
+  if (window.updateMetadataPanel) {
+    window.updateMetadataPanel();
+  }
 };
 
 // STEP 3: Transaction Movement Engine
-LedgerWorkspace.moveTransaction = function(txId, targetAccountId){
+LedgerWorkspace.moveTransaction = function (txId, targetAccountId) {
 
   const ledgers = LedgerWorkspace.store.ledgers;
 
@@ -96,21 +103,21 @@ LedgerWorkspace.moveTransaction = function(txId, targetAccountId){
   // Find transaction in any ledger
   Object.keys(ledgers).forEach(accId => {
     const index = ledgers[accId].findIndex(t => t.tx_id === txId);
-    if(index !== -1){
+    if (index !== -1) {
       foundTx = ledgers[accId][index];
       sourceLedger = accId;
       ledgers[accId].splice(index, 1);  // Remove from source
     }
   });
 
-  if(!foundTx){
+  if (!foundTx) {
     console.error("Transaction not found:", txId);
     return;
   }
 
   foundTx.account_id = targetAccountId;
 
-  if(!ledgers[targetAccountId]){
+  if (!ledgers[targetAccountId]) {
     ledgers[targetAccountId] = [];
   }
 
@@ -118,7 +125,7 @@ LedgerWorkspace.moveTransaction = function(txId, targetAccountId){
 
   // Refresh grid only if viewing the affected ledger
   const currentAccount = UI_STATE.selectedAccount;
-  if (window.txnTable && (currentAccount === sourceLedger || currentAccount === targetAccountId)) {
-    window.txnTable.setData(LedgerWorkspace.getLedger(currentAccount));
+  if (window.renderTransactionsGrid && (currentAccount === sourceLedger || currentAccount === targetAccountId)) {
+    window.renderTransactionsGrid(LedgerWorkspace.getLedger(currentAccount), (window.UI_STATE && UI_STATE.searchQuery) || '');
   }
 };

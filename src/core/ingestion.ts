@@ -5,6 +5,7 @@ import type { CanonicalTransaction } from '../types/transaction.ts';
 import { generateTxSig } from '../ledger/txsig.ts';
 import { ParserAdapter } from '../parsers/adapter.ts';
 import { LedgerService } from './ledger.ts';
+import { TransactionEnrichmentService } from '../intelligence/enrichment/TransactionEnrichmentService';
 
 /**
  * RoboLedgers: Ingestion Service
@@ -54,7 +55,7 @@ export class IngestionService {
 
         const now = new Date().toISOString();
 
-        return {
+        const canonicalTx = {
             tx_id: randomUUID(),
             account_id,
             date: normalized.date,
@@ -66,10 +67,13 @@ export class IngestionService {
             txsig,
             source_system: normalized.source_id,
             source_locator: normalized.source_locator,
+            source_file_id: normalized.source_file_id,
             created_at: now,
             updated_at: now,
             version: 1,
             status: TransactionStatus.RAW
         };
+
+        return TransactionEnrichmentService.enrich(canonicalTx);
     }
 }

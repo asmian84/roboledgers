@@ -28,7 +28,8 @@ window.RoboLedger = (function () {
         transactions: {}, // tx_id -> tx
         sigIndex: {},    // txsig -> tx_id
         accounts: [
-            { id: 'ACC-001', name: 'RBC Royal Bank', type: 'CHECKING', balance: 12500.50, openingBalance: 12500.50, inst: '003', transit: '12345', accountNumber: '8822991', ref: 'CHQ1' }
+            { id: 'ACC-001', name: 'RBC BUSINESS CHQ', type: 'CHECKING', balance: 12500.50, openingBalance: 12500.50, inst: '003', transit: '12345', accountNumber: '8822991', ref: 'CHQ1', bankName: 'Royal Bank of Canada', currency: 'CAD' },
+            { id: 'ACC-002', name: 'RBC AVION VISA', type: 'CREDIT_CARD', balance: 4821.50, openingBalance: 4821.50, inst: '003', transit: 'N/A', accountNumber: '4821', ref: 'VISA1', bankName: 'Royal Bank of Canada', currency: 'CAD', cardNetwork: 'Visa', statementClosingDay: '15th' }
         ],
         coa: {},         // account_code -> entry
         categoryPredictions: {}, // raw_desc -> account_code
@@ -148,12 +149,152 @@ window.RoboLedger = (function () {
             raw_description.trim()
         ].join('|');
 
+
         const encoder = new TextEncoder();
         const data = encoder.encode(source);
         const hashBuffer = await crypto.subtle.digest('SHA-256', data);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
+
+    // --- DESCRIPTION PARSER ---
+    function toTitleCase(str) {
+        return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    function parseTransactionDescription(rawDesc) {
+        if (!rawDesc) return { payee: null, transaction_type_label: null };
+
+        const upper = rawDesc.toUpperCase();
+
+        // E-Transfer patterns
+        if (upper.includes('INTERAC') || upper.includes('E-TRANSFER') || upper.includes('E-TRF')) {
+            const cleaned = rawDesc
+                .replace(/INTERAC/gi, '')
+                .replace(/e-Transfer/gi, '')
+                .replace(/E-TRANSFER/gi, '')
+                .replace(/E-TRF/gi, '')
+                .trim();
+
+            return {
+                payee: toTitleCase(cleaned) || 'E-Transfer',
+                transaction_type_label: 'e-transfer • direct deposit'
+            };
+        }
+
+        // Direct Deposit / Payroll
+        if (upper.includes('DD') || upper.includes('DIRECT DEP') || upper.includes('PAYROLL')) {
+            return {
+                payee: 'Payroll Deposit',
+                transaction_type_label: 'direct deposit • payroll'
+            };
+        }
+
+        // Subcontractor
+        if (upper.includes('SUBCONTRACTOR') || upper.includes('SUB-CONTRACT')) {
+            return {
+                payee: 'Contractor Payment',
+                transaction_type_label: 'e-transfer • sub-contract'
+            };
+        }
+
+        // VISA/MC Purchase
+        if (upper.includes('VISA') || upper.includes('MASTERCARD') || upper.includes('MC')) {
+            const cleaned = rawDesc
+                .replace(/VISA/gi, '')
+                .replace(/MASTERCARD/gi, '')
+                .replace(/MC/gi, '')
+                .replace(/PURCHASE/gi, '')
+                .trim();
+
+            return {
+                payee: toTitleCase(cleaned) || 'Purchase',
+                transaction_type_label: 'card purchase'
+            };
+        }
+
+        // Default: return cleaned up version
+        return {
+            payee: toTitleCase(rawDesc),
+            transaction_type_label: null
+        };
+    }
+
+    // --- AUTO-CATEGORIZATION ENGINE ---
+    const AUTO_CATEGORIZE_RULES = [
+        {
+            pattern: /e-transfer|interac|e-trf/i,
+            test: (tx) => tx.polarity === 'CREDIT',
+            category: '4000', // Revenue
+            confidence: 0.7,
+            status: 'needs_review'
+        },
+        {
+            pattern: /e-transfer|interac|e-trf/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '5100', // Direct Labor (sub-contractors)
+            confidence: 0.6,
+            status: 'needs_review'
+        },
+        {
+            pattern: /dd|direct dep|payroll/i,
+            category: '4100', // Consulting Income
+            confidence: 0.9,
+            status: 'auto_categorized'
+        },
+        {
+            pattern: /visa|mastercard|mc purchase/i,
+            category: '6000', // Operating Expenses
+            confidence: 0.5,
+            status: 'needs_review'
+        },
+        {
+            pattern: /fuel|gas station|petro-can|shell/i,
+            category: '8300', // Fuel
+            confidence: 0.8,
+            status: 'auto_categorized'
+        },
+        {
+            pattern: /restaurant|cafe|coffee|food/i,
+            category: '8550', // Meals & Entertainment
+            confidence: 0.7,
+            status: 'needs_review'
+        },
+        {
+            pattern: /amazon|office depot|staples/i,
+            category: '8400', // Office Supplies
+            confidence: 0.6,
+            status: 'needs_review'
+        },
+        {
+            pattern: /bank charge|service fee|monthly fee/i,
+            category: '8700', // Bank Charges
+            confidence: 0.9,
+            status: 'auto_categorized'
+        }
+    ];
+
+    function autoCategorizTransaction(tx) {
+        const desc = (tx.raw_description || tx.description || '').toUpperCase();
+
+        for (const rule of AUTO_CATEGORIZE_RULES) {
+            const matches = rule.pattern.test(desc);
+            const testPasses = !rule.test || rule.test(tx);
+
+            if (matches && testPasses) {
+                const coaEntry = state.coa[rule.category];
+                return {
+                    gl_account_code: rule.category,
+                    gl_account_name: coaEntry ? coaEntry.name : 'Unknown',
+                    confidence: rule.confidence,
+                    status: rule.status
+                };
+            }
+        }
+
+        return { status: 'needs_review', confidence: 0 };
+    }
+
 
     // --- LEDGER SERVICE ---
     const Ledger = {
@@ -295,6 +436,10 @@ window.RoboLedger = (function () {
                 acc.period = metadata.period || acc.period;
                 acc.holder = metadata.holder || acc.holder;
                 acc.brand = metadata.brand || acc.brand;
+                acc.bankName = metadata.bankName || acc.bankName || metadata.name;
+                acc.cardNetwork = metadata.cardNetwork || acc.cardNetwork;
+                acc.statementClosingDay = metadata.statementClosingDay || acc.statementClosingDay;
+                acc.currency = metadata.currency || acc.currency || 'CAD';
 
                 // SMART REF SELECTION: Don't stick with 'CHQ' if we know it's a CC
                 if (acc.brand === 'MASTERCARD' && acc.ref === 'CHQ1') acc.ref = 'MC1';
@@ -352,34 +497,241 @@ window.RoboLedger = (function () {
 
         /**
          * PDF.js Text Extraction (Forensic Reconstruction)
+         * Preserves line breaks by detecting Y-coordinate changes
          */
         extractTextFromPDF: async function (arrayBuffer) {
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             let fullText = '';
+
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const content = await page.getTextContent();
-                fullText += content.items.map(item => item.str).join(' ') + '\n';
+
+                // Group items by Y-coordinate (line detection)
+                const lines = [];
+                let currentLine = [];
+                let lastY = null;
+
+                content.items.forEach(item => {
+                    const y = Math.round(item.transform[5]); // Y-coordinate
+
+                    // New line if Y changes by more than 2 pixels
+                    if (lastY !== null && Math.abs(y - lastY) > 2) {
+                        if (currentLine.length > 0) {
+                            lines.push(currentLine.join(' '));
+                            currentLine = [];
+                        }
+                    }
+
+                    currentLine.push(item.str);
+                    lastY = y;
+                });
+
+                // Don't forget last line
+                if (currentLine.length > 0) {
+                    lines.push(currentLine.join(' '));
+                }
+
+                fullText += lines.join('\n') + '\n';
             }
+
             return fullText;
         },
 
         /**
-         * Smart Regex Parsers (RBC Example)
+         * Smart Parser Dispatcher (Routes to bank-specific parsers)
          */
-        parsePDFText: function (text) {
-            console.log("[FORENSICS] Scanning PDF text segment (First 200 chars):", text.substring(0, 200));
+        parsePDFText: async function (text) {
+            console.log("[FORENSICS] Scanning PDF text segment (First 300 chars):", text.substring(0, 300));
+
+            const upper = text.toUpperCase();
+            let result = null;
+
+            // ==================== RBC PARSERS ====================
+            if (upper.includes('RBC') || upper.includes('ROYAL BANK')) {
+                console.log('[PARSER] Detected RBC statement');
+
+                if (upper.includes('BUSINESS ACCOUNT STATEMENT') || upper.includes('CHEQU')) {
+                    console.log('[PARSER] Routing to RBC Chequing Parser');
+                    if (window.rbcChequingParser) {
+                        result = await window.rbcChequingParser.parseWithRegex(text);
+                        if (result) console.log('[PARSER] RBC Chequing returned:', result);
+                    }
+                } else if (upper.includes('MASTERCARD') || upper.includes('BUSINESS CASH BACK')) {
+                    console.log('[PARSER] Routing to RBC Mastercard Parser');
+                    if (window.rbcMastercardParser) {
+                        result = await window.rbcMastercardParser.parse(text);
+                        if (result) console.log('[PARSER] RBC Mastercard returned:', result);
+                    }
+                } else if (upper.includes('VISA')) {
+                    console.log('[PARSER] Routing to RBC Visa Parser');
+                    if (window.rbcVisaParser) {
+                        result = await window.rbcVisaParser.parse(text);
+                        if (result) console.log('[PARSER] RBC Visa returned:', result);
+                    }
+                }
+            }
+
+            // ==================== BMO PARSERS ====================
+            else if (upper.includes('BMO') || upper.includes('BANK OF MONTREAL')) {
+                console.log('[PARSER] Detected BMO statement');
+
+                if (upper.includes('CHEQU') || upper.includes('SAVINGS')) {
+                    console.log('[PARSER] Routing to BMO Chequing Parser');
+                    if (window.bmoChequingParser) {
+                        result = await window.bmoChequingParser.parse(text);
+                        if (result) console.log('[PARSER] BMO Chequing returned:', result);
+                    }
+                } else if (upper.includes('MASTERCARD')) {
+                    console.log('[PARSER] Routing to BMO Mastercard Parser');
+                    if (window.bmoMastercardParser) {
+                        result = await window.bmoMastercardParser.parse(text);
+                        if (result) console.log('[PARSER] BMO Mastercard returned:', result);
+                    }
+                } else if (upper.includes('VISA')) {
+                    console.log('[PARSER] Routing to BMO Visa Parser');
+                    if (window.bmoVisaParser) {
+                        result = await window.bmoVisaParser.parse(text);
+                        if (result) console.log('[PARSER] BMO Visa returned:', result);
+                    }
+                } else if (upper.includes('CREDIT CARD')) {
+                    console.log('[PARSER] Routing to BMO Credit Card Parser');
+                    if (window.bmoCreditCardParser) {
+                        result = await window.bmoCreditCardParser.parse(text);
+                        if (result) console.log('[PARSER] BMO CC returned:', result);
+                    }
+                } else if (upper.includes('USD') || upper.includes('US ACCOUNT')) {
+                    console.log('[PARSER] Routing to BMO US Account Parser');
+                    if (window.bmoUSParser) {
+                        result = await window.bmoUSParser.parse(text);
+                        if (result) console.log('[PARSER] BMO US returned:', result);
+                    }
+                }
+            }
+
+            // ==================== TD PARSERS ====================
+            else if (upper.includes('TD CANADA') || upper.includes('TD BANK')) {
+                console.log('[PARSER] Detected TD statement');
+
+                if (upper.includes('VISA')) {
+                    console.log('[PARSER] Routing to TD Visa Parser');
+                    if (window.tdVisaParser) {
+                        result = await window.tdVisaParser.parse(text);
+                        if (result) console.log('[PARSER] TD Visa returned:', result);
+                    }
+                } else {
+                    console.log('[PARSER] Routing to TD Chequing Parser');
+                    if (window.tdChequingParser) {
+                        result = await window.tdChequingParser.parse(text);
+                        if (result) console.log('[PARSER] TD Chequing returned:', result);
+                    }
+                }
+            }
+
+            // ==================== SCOTIA PARSERS ====================
+            else if (upper.includes('SCOTIA') || upper.includes('SCOTIABANK')) {
+                console.log('[PARSER] Detected Scotia statement');
+
+                if (upper.includes('AMEX') || upper.includes('AMERICAN EXPRESS')) {
+                    console.log('[PARSER] Routing to Scotia Amex Parser');
+                    if (window.scotiaAmexParser) {
+                        result = await window.scotiaAmexParser.parse(text);
+                        if (result) console.log('[PARSER] Scotia Amex returned:', result);
+                    }
+                } else if (upper.includes('MASTERCARD')) {
+                    console.log('[PARSER] Routing to Scotia Mastercard Parser');
+                    if (window.scotiaMastercardParser) {
+                        result = await window.scotiaMastercardParser.parse(text);
+                        if (result) console.log('[PARSER] Scotia MC returned:', result);
+                    }
+                } else if (upper.includes('VISA')) {
+                    console.log('[PARSER] Routing to Scotia Visa Parser');
+                    if (window.scotiaVisaParser) {
+                        result = await window.scotiaVisaParser.parse(text);
+                        if (result) console.log('[PARSER] Scotia Visa returned:', result);
+                    }
+                } else if (upper.includes('CREDIT CARD')) {
+                    console.log('[PARSER] Routing to Scotia Credit Card Parser');
+                    if (window.scotiaCreditCardParser) {
+                        result = await window.scotiaCreditCardParser.parse(text);
+                        if (result) console.log('[PARSER] Scotia CC returned:', result);
+                    }
+                } else {
+                    console.log('[PARSER] Routing to Scotia Chequing Parser');
+                    if (window.scotiaChequingParser) {
+                        result = await window.scotiaChequingParser.parse(text);
+                        if (result) console.log('[PARSER] Scotia Chequing returned:', result);
+                    }
+                }
+            }
+
+            // ==================== CIBC PARSERS ====================
+            else if (upper.includes('CIBC')) {
+                console.log('[PARSER] Detected CIBC statement');
+
+                if (upper.includes('VISA')) {
+                    console.log('[PARSER] Routing to CIBC Visa Parser');
+                    if (window.cibcVisaParser) {
+                        result = await window.cibcVisaParser.parse(text);
+                        if (result) console.log('[PARSER] CIBC Visa returned:', result);
+                    }
+                } else {
+                    console.log('[PARSER] Routing to CIBC Chequing Parser');
+                    if (window.cibcChequingParser) {
+                        result = await window.cibcChequingParser.parse(text);
+                        if (result) console.log('[PARSER] CIBC Chequing returned:', result);
+                    }
+                }
+            }
+
+            // ==================== AMEX PARSER ====================
+            else if (upper.includes('AMERICAN EXPRESS') || upper.includes('AMEX')) {
+                console.log('[PARSER] Detected Amex statement');
+                if (window.amexParser) {
+                    result = await window.amexParser.parse(text);
+                    if (result) console.log('[PARSER] Amex returned:', result);
+                }
+            }
+
+            // ==================== ATB PARSER ====================
+            else if (upper.includes('ATB FINANCIAL') || upper.includes('ATB')) {
+                console.log('[PARSER] Detected ATB statement');
+                if (window.atbParser) {
+                    result = await window.atbParser.parse(text);
+                    if (result) console.log('[PARSER] ATB returned:', result);
+                }
+            }
+
+            // ==================== HSBC PARSER ====================
+            else if (upper.includes('HSBC')) {
+                console.log('[PARSER] Detected HSBC statement');
+                if (window.hsbcParser) {
+                    result = await window.hsbcParser.parse(text);
+                    if (result) console.log('[PARSER] HSBC returned:', result);
+                }
+            }
+
+            // Fallback to legacy regex if no parser matched or returned nothing
+            if (!result || !result.transactions || result.transactions.length === 0) {
+                console.warn('[PARSER] No specialized parser matched or returned empty. Using legacy regex fallback.');
+                const legacyTransactions = this.legacyRegexParser(text);
+                result = {
+                    transactions: legacyTransactions,
+                    metadata: this.detectInstitution(text)
+                };
+            }
+
+            console.log(`[PARSER] Final result: ${result.transactions.length} transactions, metadata:`, result.metadata);
+            return result;
+        },
+
+        /**
+         * Legacy Regex Parser (Fallback)
+         */
+        legacyRegexParser: function (text) {
             const transactions = [];
-
-            // Matches RBC Pattern: D MMM (7 May) | Description | Amount
             const rbcRegex = /(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))\s+([^\n\r]*?)\s+(-?[\d,]+\.\d{2})/gi;
-
-            // Matches Mastercard Pattern: (Posting Date) (Activity Date) | Description | LongRef | Amount
-            // Example: MAR 25   MAR 26   COSTCO CANADA ... 55134424085800182155271  $704.36
-            const mcRegex = /([A-Z]{3})\s+(\d{1,2})\s+[A-Z]{3}\s+\d{1,2}\s+(.*?)\s+(\d{12,})\s+(-?\$[\d,]+\.\d{2}|-?[\d,]+\.\d{2}(?!\s*%))/gi;
-
             let match;
-            // 1. Scan for RBC Standard Deposits/Verbs
             while ((match = rbcRegex.exec(text)) !== null) {
                 transactions.push({
                     date: match[1].trim() + ' 2024',
@@ -388,27 +740,6 @@ window.RoboLedger = (function () {
                     ref: null
                 });
             }
-
-            // 2. Scan for Mastercard Signature (Business Dash)
-            if (transactions.length === 0) {
-                while ((match = mcRegex.exec(text)) !== null) {
-                    const monthRaw = match[1].toLowerCase();
-                    const day = match[2].padStart(2, '0');
-                    const desc = match[3].trim();
-                    const amountStr = match[5].replace(/[$,]/g, '');
-
-                    const month = monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1);
-
-                    transactions.push({
-                        date: `${day} ${month} 2024`,
-                        description: desc,
-                        amount: parseFloat(amountStr),
-                        ref: match[4].substring(match[4].length - 6)
-                    });
-                }
-            }
-
-            console.log(`[FORENSICS] Identified ${transactions.length} potential transitions.`);
             return transactions;
         },
 
@@ -492,17 +823,40 @@ window.RoboLedger = (function () {
             const sourceFileId = Accounts.storeFile(file);
 
             if (file.name.toLowerCase().endsWith('.pdf')) {
+                console.log('[INGEST] 📄 PDF detected:', file.name);
                 const buffer = await file.arrayBuffer();
-                const text = await this.extractTextFromPDF(buffer);
+                console.log('[INGEST] 📦 Buffer size:', buffer.byteLength, 'bytes');
 
-                metadata = this.detectInstitution(text);
+                const text = await this.extractTextFromPDF(buffer);
+                console.log('[INGEST] 📝 Extracted text length:', text.length, 'characters');
+                console.log('[INGEST] 📝 First 500 chars:', text.substring(0, 500));
+
+                // Try specialized parser first, fallback to detection
+                console.log('[INGEST] 🔍 Calling parsePDFText...');
+                const parseResult = await this.parsePDFText(text);
+                console.log('[INGEST] ✅ Parser returned:', parseResult);
+                console.log('[INGEST] 📊 Transactions found:', parseResult?.transactions?.length || 0);
+
+                if (parseResult && parseResult.metadata && Object.keys(parseResult.metadata).length > 0) {
+                    metadata = parseResult.metadata;
+                    rows = parseResult.transactions || [];
+                    console.log(`[INGEST] Parser extracted metadata:`, metadata);
+                } else {
+                    // Fallback to old detection method
+                    console.warn('[INGEST] ⚠️ Parser returned no metadata, using fallback detection');
+                    metadata = this.detectInstitution(text);
+                    rows = parseResult || [];
+                }
+
+                // Attach source file id to each parsed row so it flows through the pipeline
+                rows = rows.map(r => ({ ...r, source_file_id: sourceFileId }));
+
                 Accounts.updateMetadata(account_id, metadata);
                 console.log(`[INGEST] DETECTED & UPDATED: ${metadata.name} (Transit: ${metadata.transit})`);
-
-                rows = this.parsePDFText(text);
             } else {
                 const text = await file.text();
                 rows = this.parseCSV(text);
+                rows = rows.map(r => ({ ...r, source_file_id: sourceFileId }));
             }
 
             let importedCount = 0;
@@ -511,14 +865,36 @@ window.RoboLedger = (function () {
                 // Map common headers (CSV or PDF Regex)
                 const date = row.date || row.transaction_date;
                 const raw_description = row.description || row.memo || row.payee; // This is the Dirty Match
-                const amount = parseFloat(row.amount || 0);
+
+                // Check if parser already provided debit/credit breakdown
+                let amount, amount_cents, polarity;
+
+                if (row.debit !== undefined && row.credit !== undefined) {
+                    // Parser provided debit/credit columns (more accurate)
+                    const debitVal = parseFloat(row.debit || 0);
+                    const creditVal = parseFloat(row.credit || 0);
+
+                    if (debitVal > 0) {
+                        amount = debitVal;
+                        polarity = Polarity.DEBIT;
+                    } else if (creditVal > 0) {
+                        amount = creditVal;
+                        polarity = Polarity.CREDIT;
+                    } else {
+                        amount = parseFloat(row.amount || 0);
+                        polarity = amount >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
+                    }
+                } else {
+                    // Fallback to amount column
+                    amount = parseFloat(row.amount || 0);
+                }
 
                 if (!date || isNaN(amount)) continue;
 
                 // CLEAN THE NAME
                 const clean_description = Brain.cleanDescription(raw_description);
 
-                const amount_cents = Math.round(amount * 100);
+                amount_cents = Math.round(Math.abs(amount) * 100);
                 const tx_id = crypto.randomUUID();
 
                 const inputs = {
@@ -531,23 +907,18 @@ window.RoboLedger = (function () {
 
                 const txsig = await generateTxSig(inputs);
 
-                // 3. Trigger Categorization Brain (Decision Layer)
-                const predicted_code = Brain.predict(clean_description); // Predict based on clean name
-                const category = predicted_code ? COA.get(predicted_code) : null;
-
-                // SMARTER POLARITY DETECTION (V5.2.29 AUDIT)
-                const isLiability = metadata.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(metadata.name);
-
-                // 1. Initial polarity based on sign (Normal Assets: pos=Credit, neg=Debit)
-                // For Credit Cards (Liabilities), we flip this: pos=Debit (Purchase), neg=Credit (Payment)
-                let polarity;
-                if (isLiability) {
-                    polarity = amount_cents >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
-                } else {
-                    polarity = amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
+                // === POLARITY DETECTION (must happen before canonical object creation) ===
+                // If parser didn't provide polarity, detect it
+                if (!polarity) {
+                    const isLiability = metadata.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(metadata.name);
+                    if (isLiability) {
+                        polarity = amount_cents >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
+                    } else {
+                        polarity = amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
+                    }
                 }
 
-                // 2. Keyword Heuristic (Override for ambiguous markers)
+                // Keyword Heuristic (Override for ambiguous markers)
                 const upperDesc = raw_description.toUpperCase();
                 const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE', 'FX RATE'];
                 const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND', 'PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'CASH BACK'];
@@ -558,6 +929,14 @@ window.RoboLedger = (function () {
                     polarity = Polarity.CREDIT;
                 }
 
+                // 3. Trigger Categorization Brain (Decision Layer)
+                const predicted_code = Brain.predict(clean_description); // Predict based on clean name
+                const category = predicted_code ? COA.get(predicted_code) : null;
+
+                // === PHASE 3: APPLY DESCRIPTION PARSER ===
+                const parsedDesc = parseTransactionDescription(raw_description);
+
+                // Build canonical transaction object
                 const canonical = {
                     tx_id,
                     account_id,
@@ -565,9 +944,14 @@ window.RoboLedger = (function () {
                     ref: row.ref || null, // Capture Ref# from parser
                     amount_cents: Math.abs(amount_cents),
                     currency: 'CAD',
-                    polarity: polarity,
+                    polarity: polarity, // NOW polarity is defined!
+
+                    // Use parsed description or fallback to original
                     description: clean_description, // PRIMARY LINE (CLEAN)
+                    payee: parsedDesc.payee || clean_description, // Parsed name
+                    transaction_type_label: parsedDesc.transaction_type_label, // Parsed type
                     raw_description: raw_description, // SECONDARY LINE (DIRTY)
+
                     sourceFileId: sourceFileId, // Link to workbench blob
                     txsig,
                     metadata: {
@@ -581,6 +965,16 @@ window.RoboLedger = (function () {
                     version: 1,
                     created_at: new Date().toISOString()
                 };
+
+                // === PHASE 4: APPLY AUTO-CATEGORIZATION ===
+                const autoCat = autoCategorizTransaction(canonical);
+                if (autoCat.gl_account_code && !canonical.category_code) {
+                    // Only apply auto-categorization if no manual category exists
+                    canonical.gl_account_code = autoCat.gl_account_code;
+                    canonical.gl_account_name = autoCat.gl_account_name;
+                    canonical.category_confidence = autoCat.confidence;
+                    canonical.status = autoCat.status; // 'auto_categorized' or 'needs_review'
+                }
 
                 if (Ledger.post(canonical)) {
                     importedCount++;
@@ -709,7 +1103,9 @@ window.RoboLedger = (function () {
         COA,
         Brain,
         TransactionStatus,
-        Polarity
+        Polarity,
+        parseTransactionDescription,
+        autoCategorizTransaction
     };
 
 })();

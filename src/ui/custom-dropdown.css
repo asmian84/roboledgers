@@ -1,0 +1,130 @@
+/* Custom dropdown for COA selection - opens downward */
+
+.custom-coa-dropdown {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+    height: 100%;
+}
+
+.custom-coa-dropdown-trigger {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #3b82f6;
+    user-select: none;
+}
+
+.custom-coa-dropdown-trigger:hover {
+    background: #f9fafb;
+}
+
+.custom-coa-dropdown-trigger .dropdown-chevron {
+    display: inline-block;
+    margin-left: 6px;
+    transition: transform 0.18s ease;
+    transform: rotate(0deg);
+}
+
+.custom-coa-dropdown.open .custom-coa-dropdown-trigger .dropdown-chevron {
+    transform: rotate(180deg);
+} 
+
+.custom-coa-dropdown-menu {
+    position: fixed;
+    top: auto;
+    left: 0;
+    min-width: 240px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+    z-index: 9999;
+    max-height: 320px;
+    overflow-y: auto;
+    display: none;
+}
+
+.custom-coa-dropdown-menu.active {
+    display: block;
+    animation: dropdownSlide 0.2s ease;
+}
+
+@keyframes dropdownSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.custom-coa-dropdown-group {
+    padding-top: 8px;
+}
+
+.custom-coa-dropdown-group:first-child {
+    padding-top: 6px;
+}
+
+.custom-coa-dropdown-group-label {
+    padding: 8px 12px 6px 12px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #6b7280;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #f3f4f6;
+    background: #fafbfc;
+}
+
+.custom-coa-dropdown-option {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #1f2937;
+    transition: all 0.15s ease;
+    border-left: 3px solid transparent;
+    margin-left: 0;
+}
+
+.custom-coa-dropdown-option:hover {
+    background: #f3f4f6;
+    padding-left: 14px;
+    border-left-color: #d1d5db;
+}
+
+.custom-coa-dropdown-option.selected {
+    background: #eff6ff;
+    color: #0284c7;
+    border-left-color: #0284c7;
+    padding-left: 9px;
+}
+
+.custom-coa-dropdown-option[data-group="LIABILITY"]:hover {
+    background: #fce7f3;
+}
+
+.custom-coa-dropdown-option[data-group="REVENUE"]:hover {
+    background: #fef3c7;
+}
+
+.custom-coa-dropdown-option[data-group="EXPENSE"]:hover {
+    background: #fee2e2;
+}
+
+.custom-coa-dropdown-option[data-group="EQUITY"]:hover {
+    background: #dbeafe;
+}

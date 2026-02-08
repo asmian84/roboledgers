@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoboLedger | Financial OS</title>
     <link rel="stylesheet" href="src/ui/enterprise/system.css">
+    <link rel="stylesheet" href="src/ui/custom-dropdown.css">
     <!-- Restoration Assets -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -14,6 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
     <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
     <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+    <script src="src/ui/custom-dropdown.js"></script>
 
     <!-- AG Grid Community (Legacy Support) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/styles/ag-grid.css">
@@ -21,9 +23,49 @@
     <!-- PDF.js (V5 Forensic Extraction) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+
+    <!-- Export stack (REQUIRED ORDER) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <!-- React & TanStack Bridge (Restoration Layer) -->
+    <!-- React & TanStack Bridge (Vite Modernization) -->
+    <script type="module" src="/src/main.jsx"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body>
+    <!-- Mobile Menu Toggle -->
+    <button class="mobile-menu-toggle" onclick="window.toggleMobileSidebar()" aria-label="Toggle Menu">
+        <i class="ph ph-list" style="font-size: 24px;"></i>
+    </button>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" onclick="window.toggleMobileSidebar()"></div>
+
+    <script>
+        console.log('[BOOT] Checking globals...');
+        window.diagnoseTanStack = () => {
+            console.log("--- TANSTACK DIAGNOSTICS ---");
+            // Check all likely global names
+            const names = ['TanStackReactTable', 'ReactTable', 'TanStackTable', 'TableCore', 'TanStackReactVirtual', 'ReactVirtual', 'TanStackVirtual'];
+            names.forEach(name => {
+                const val = window[name];
+                console.log(`Global [${name}]:`, val ? `FOUND (${typeof val})` : 'MISSING');
+                if (val && typeof val === 'object') {
+                    console.log(`  Keys for [${name}]:`, Object.keys(val).slice(0, 10));
+                    if (val.ReactTable) console.log(`  Nested ReactTable found in [${name}]`);
+                    if (val.ReactVirtual) console.log(`  Nested ReactVirtual found in [${name}]`);
+                }
+            });
+            console.log("--- END DIAGNOSTICS ---");
+        };
+        window.addEventListener('load', () => {
+            console.log('[BOOT] Window Load. React:', !!window.React, 'ReactDOM:', !!window.ReactDOM, 'Babel:', !!window.Babel);
+            window.diagnoseTanStack();
+        });
+    </script>
+
     <div class="app-layout">
         <!-- Shared Grid Instance (Hidden Storage) -->
         <div id="shared-grid-storage" style="display: none; width: 100%;">
@@ -34,6 +76,10 @@
             <div class="sidebar-brand">
                 <div class="brand-logo-text">roboledgers <span
                         style="font-size: 10px; opacity: 0.5; margin-left: 4px;">v5.1</span></div>
+                <button id="sidebar-toggle" class="sidebar-toggle" onclick="window.toggleSidebar()"
+                    aria-label="Toggle Sidebar" title="Collapse">
+                    <i class="ph ph-caret-left"></i>
+                </button>
             </div>
 
             <nav class="sidebar-nav-content">
@@ -167,6 +213,20 @@
                 </button>
             </div>
         </div>
+        <!-- Audit & Receipt Panel -->
+        <div id="v5-audit-panel" style="padding: 12px 24px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <div
+                    style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.08em;">
+                    <i class="ph ph-shield-check" style="font-size: 14px;"></i>
+                    AUDIT ID
+                </div>
+                <span id="v5-audit-id"
+                    style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #1e293b;">---</span>
+            </div>
+            <div id="v5-receipt-zone"></div>
+            <div id="v5-receipt-preview" style="margin-top: 10px;"></div>
+        </div>
         <!-- Content Area -->
         <div id="v5-pdf-curtain-content" style="flex:1; overflow:hidden; position:relative; background:#f8fafc;">
             <div
@@ -202,12 +262,32 @@
         </button>
     </div>
 
+    <!-- Bank Parsers (MUST load before ledger.core.js) -->
+    <script src="src/parsers_raw/BaseBankParser.js"></script>
+    <script src="src/parsers_raw/RBCChequingParser.js"></script>
+    <script src="src/parsers_raw/RBCMastercardParser.js"></script>
+    <script src="src/parsers_raw/RBCVisaParser.js"></script>
+    <script src="src/parsers_raw/BMOChequingParser.js"></script>
+    <script src="src/parsers_raw/BMOMastercardParser.js"></script>
+    <script src="src/parsers_raw/BMOVisaParser.js"></script>
+    <script src="src/parsers_raw/TDChequingParser.js"></script>
+    <script src="src/parsers_raw/TDVisaParser.js"></script>
+    <script src="src/parsers_raw/ScotiaChequingParser.js"></script>
+    <script src="src/parsers_raw/ScotiaMastercardParser.js"></script>
+    <script src="src/parsers_raw/ScotiaVisaParser.js"></script>
+    <script src="src/parsers_raw/ScotiaAmexParser.js"></script>
+    <script src="src/parsers_raw/CIBCChequingParser.js"></script>
+    <script src="src/parsers_raw/CIBCVisaParser.js"></script>
+    <script src="src/parsers_raw/AmexParser.js"></script>
+    <script src="src/parsers_raw/ATBParser.js"></script>
+    <script src="src/parsers_raw/HSBCParser.js"></script>
+
     <script src="src/ui/enterprise/ledger.core.js"></script>
     <script src="src/ui/enterprise/app.js"></script>
-        <!-- Dev: DBG2 debug helper auto-inject -->
-        <script>
-        (function(){
-            if(window.__DBG2_ENABLED) return console.log('DBG2 already active');
+    <!-- Dev: DBG2 debug helper auto-inject -->
+    <script>
+        (function () {
+            if (window.__DBG2_ENABLED) return console.log('DBG2 already active');
             window.__DBG2_ENABLED = true;
             window.__DBG_LOGS = window.__DBG_LOGS || [];
             const pushLog = (level, msg, meta) => {
@@ -218,7 +298,7 @@
             };
             window.dumpState = () => {
                 try {
-                    pushLog('log','dumpState invoked');
+                    pushLog('log', 'dumpState invoked');
                     console.groupCollapsed('DBG dumpState');
                     console.log('UI_STATE', window.UI_STATE);
                     console.log('Ledger.getRawState', window.RoboLedger?.Ledger?.getRawState?.());
@@ -226,53 +306,57 @@
                     console.log('Accounts', window.RoboLedger?.Accounts?.getAll?.() || []);
                     console.log('txnTable', window.txnTable || null);
                     console.groupEnd();
-                    pushLog('log','dumpState complete');
-                } catch (e) { pushLog('error','dumpState error', e); console.error(e); }
+                    pushLog('log', 'dumpState complete');
+                } catch (e) { pushLog('error', 'dumpState error', e); console.error(e); }
             };
             window.dumpGrid = () => {
                 try {
                     const data = window.txnTable?.getData ? window.txnTable.getData() : (window.RoboLedger?.Ledger?.getAll?.() || []);
-                    pushLog('log','dumpGrid', { count: (data || []).length });
-                    console.table((data || []).slice(0,200));
+                    pushLog('log', 'dumpGrid', { count: (data || []).length });
+                    console.table((data || []).slice(0, 200));
                     return data;
-                } catch(e){ pushLog('error','dumpGrid error', e); console.error(e); }
+                } catch (e) { pushLog('error', 'dumpGrid error', e); console.error(e); }
             };
-            window.persistDbgLogs = () => { try { localStorage.setItem('robo_dbg_logs', JSON.stringify(window.__DBG_LOGS)); pushLog('log','persisted logs'); } catch(e){ pushLog('error','persist failed', e);} };
-            window.loadDbgLogs = () => { try { const raw = localStorage.getItem('robo_dbg_logs'); return raw ? JSON.parse(raw) : []; } catch(e){ pushLog('error','loadDbgLogs failed', e); return []; } };
-            window.tailDbg = (n=50) => { const slice = window.__DBG_LOGS.slice(-n); console.table(slice); return slice; };
+            window.persistDbgLogs = () => { try { localStorage.setItem('robo_dbg_logs', JSON.stringify(window.__DBG_LOGS)); pushLog('log', 'persisted logs'); } catch (e) { pushLog('error', 'persist failed', e); } };
+            window.loadDbgLogs = () => { try { const raw = localStorage.getItem('robo_dbg_logs'); return raw ? JSON.parse(raw) : []; } catch (e) { pushLog('error', 'loadDbgLogs failed', e); return []; } };
+            window.tailDbg = (n = 50) => { const slice = window.__DBG_LOGS.slice(-n); console.table(slice); return slice; };
             window.openDbgLogWindow = () => {
                 const w = window.open('', 'ROBO_DBG_LOGS', 'width=900,height=800');
                 const html = `<!doctype html><html><body style="font-family: system-ui, Arial; padding:12px;"><h3>Robo Debug Logs</h3><div id="content"></div><button id="refresh">Refresh</button><button id="download">Download JSON</button><pre id="pre" style="white-space: pre-wrap; background:#0f172a;color:#e6edf3;padding:12px;border-radius:6px;height:70vh;overflow:auto;"></pre><script>const pre=document.getElementById('pre');const render=()=>{pre.textContent=JSON.stringify(window.opener.__DBG_LOGS||[],null,2).slice(-200000);} ;document.getElementById('refresh').onclick=render;document.getElementById('download').onclick=()=>{const b=new Blob([JSON.stringify(window.opener.__DBG_LOGS||[],null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='robo_dbg_logs.json';a.click();URL.revokeObjectURL(u);} ;render();<\/script></body></html>`;
                 w.document.write(html); w.document.close();
             };
-            window.addEventListener('error', e => { pushLog('error','GLOBAL ERROR', { message: e.message, file: e.filename, line: e.lineno, col: e.colno, stack: (e.error && e.error.stack) || null }); });
-            window.addEventListener('unhandledrejection', e => { pushLog('error','UNHANDLED REJECTION', { reason: e.reason }); });
-            function instrument(obj, name) { try { if (!obj || !name || typeof obj[name] !== 'function') return false; const orig = obj[name]; if (orig.__dbg_instrumented) return true; obj[name] = function(...args) { const id = `${name}@${Date.now().toString(36)}`; pushLog('log', `enter ${name}`, { id, args }); try { const res = orig.apply(this, args); if (res && typeof res.then === 'function') { res.then(r => pushLog('log', `exit ${name} (async)`, { id })).catch(err => pushLog('error', `error ${name} (async)`, { id, err })); } else { pushLog('log', `exit ${name}`, { id }); } return res; } catch (err) { pushLog('error', `error ${name}`, { id, err }); throw err; } }; obj[name].__dbg_instrumented = true; return true; } catch (e) { pushLog('error','instrument failed', { name, e }); return false; } }
-            ['render','renderTransactionsRestored','initGrid','handleFiles','popOutGrid','popInGrid'].forEach(n => instrument(window, n));
-            if (window.RoboLedger?.Ledger) ['load','save','reset','getAll','getRawState'].forEach(n => instrument(window.RoboLedger.Ledger, n));
-            if (window.RoboLedger?.Accounts) ['getAll','setRef','setOpeningBalance'].forEach(n => instrument(window.RoboLedger.Accounts, n));
-            window.watchDOM = (selector='body') => { try { const root = document.querySelector(selector); if (!root) { pushLog('warn','watchDOM no selector', selector); return null; } const mo = new MutationObserver(muts => { muts.forEach(m => { pushLog('log','DOM mutation', { type: m.type, added: m.addedNodes?.length, removed: m.removedNodes?.length, attr: m.attributeName }); }); }); mo.observe(root, { childList: true, subtree: true, attributes: true, characterData: false }); pushLog('log','watchDOM started', selector); return mo; } catch(e){ pushLog('error','watchDOM failed', e); return null; } };
-            window.startDbgSnapshots = (ms=3000) => { if (window.__dbg_snapshot_timer) return pushLog('warn','snapshots already running'); window.__dbg_snapshot_timer = setInterval(() => { try { const snapshot = { t: new Date().toISOString(), ui: window.UI_STATE, ledger: window.RoboLedger?.Ledger?.getRawState?.(), }; localStorage.setItem('robo_dbg_snapshot_'+snapshot.t, JSON.stringify(snapshot)); const keys = Object.keys(localStorage).filter(k => k.startsWith('robo_dbg_snapshot_')).sort(); while (keys.length > 50) { localStorage.removeItem(keys.shift()); keys.shift(); } pushLog('log','snapshot saved', { time: snapshot.t }); } catch(e){ pushLog('error','snapshot failed', e); } }, ms); pushLog('log','startDbgSnapshots', { ms }); };
-            window.stopDbgSnapshots = () => { clearInterval(window.__dbg_snapshot_timer); window.__dbg_snapshot_timer = null; pushLog('log','stopDbgSnapshots'); };
-            window.dbg = { log: (m,d) => pushLog('log', m, d), warn: (m,d) => pushLog('warn', m, d), err: (m,d) => pushLog('error', m, d), persist: window.persistDbgLogs, load: window.loadDbgLogs, tail: window.tailDbg, dumpState: window.dumpState, dumpGrid: window.dumpGrid, open: window.openDbgLogWindow, watchDOM: window.watchDOM, startSnapshots: window.startDbgSnapshots, stopSnapshots: window.stopDbgSnapshots, instrument };
-            pushLog('log','DBG2 initialized');
+            window.addEventListener('error', e => { pushLog('error', 'GLOBAL ERROR', { message: e.message, file: e.filename, line: e.lineno, col: e.colno, stack: (e.error && e.error.stack) || null }); });
+            window.addEventListener('unhandledrejection', e => { pushLog('error', 'UNHANDLED REJECTION', { reason: e.reason }); });
+            function instrument(obj, name) { try { if (!obj || !name || typeof obj[name] !== 'function') return false; const orig = obj[name]; if (orig.__dbg_instrumented) return true; obj[name] = function (...args) { const id = `${name}@${Date.now().toString(36)}`; pushLog('log', `enter ${name}`, { id, args }); try { const res = orig.apply(this, args); if (res && typeof res.then === 'function') { res.then(r => pushLog('log', `exit ${name} (async)`, { id })).catch(err => pushLog('error', `error ${name} (async)`, { id, err })); } else { pushLog('log', `exit ${name}`, { id }); } return res; } catch (err) { pushLog('error', `error ${name}`, { id, err }); throw err; } }; obj[name].__dbg_instrumented = true; return true; } catch (e) { pushLog('error', 'instrument failed', { name, e }); return false; } }
+            // ['render', 'renderTransactionsRestored', 'initGrid', 'handleFiles', 'popOutGrid', 'popInGrid'].forEach(n => instrument(window, n));
+            // if (window.RoboLedger?.Ledger) ['load', 'save', 'reset', 'getAll', 'getRawState'].forEach(n => instrument(window.RoboLedger.Ledger, n));
+            // if (window.RoboLedger?.Accounts) ['getAll', 'setRef', 'setOpeningBalance'].forEach(n => instrument(window.RoboLedger.Accounts, n));
+            window.watchDOM = (selector = 'body') => { try { const root = document.querySelector(selector); if (!root) { pushLog('warn', 'watchDOM no selector', selector); return null; } const mo = new MutationObserver(muts => { muts.forEach(m => { pushLog('log', 'DOM mutation', { type: m.type, added: m.addedNodes?.length, removed: m.removedNodes?.length, attr: m.attributeName }); }); }); mo.observe(root, { childList: true, subtree: true, attributes: true, characterData: false }); pushLog('log', 'watchDOM started', selector); return mo; } catch (e) { pushLog('error', 'watchDOM failed', e); return null; } };
+            window.startDbgSnapshots = (ms = 3000) => { if (window.__dbg_snapshot_timer) return pushLog('warn', 'snapshots already running'); window.__dbg_snapshot_timer = setInterval(() => { try { const snapshot = { t: new Date().toISOString(), ui: window.UI_STATE, ledger: window.RoboLedger?.Ledger?.getRawState?.(), }; localStorage.setItem('robo_dbg_snapshot_' + snapshot.t, JSON.stringify(snapshot)); const keys = Object.keys(localStorage).filter(k => k.startsWith('robo_dbg_snapshot_')).sort(); while (keys.length > 50) { localStorage.removeItem(keys.shift()); keys.shift(); } pushLog('log', 'snapshot saved', { time: snapshot.t }); } catch (e) { pushLog('error', 'snapshot failed', e); } }, ms); pushLog('log', 'startDbgSnapshots', { ms }); };
+            window.stopDbgSnapshots = () => { clearInterval(window.__dbg_snapshot_timer); window.__dbg_snapshot_timer = null; pushLog('log', 'stopDbgSnapshots'); };
+            window.dbg = { log: (m, d) => pushLog('log', m, d), warn: (m, d) => pushLog('warn', m, d), err: (m, d) => pushLog('error', m, d), persist: window.persistDbgLogs, load: window.loadDbgLogs, tail: window.tailDbg, dumpState: window.dumpState, dumpGrid: window.dumpGrid, open: window.openDbgLogWindow, watchDOM: window.watchDOM, startSnapshots: window.startDbgSnapshots, stopSnapshots: window.stopDbgSnapshots, instrument };
+            pushLog('log', 'DBG2 initialized');
             console.log('DBG2 installed. Use dumpState(), dumpGrid(), dbg.tail(), dbg.open(), dbg.watchDOM(selector).');
         })();
-        </script>
+    </script>
 
-    <!-- Ledger Workspace Manager (Instant Account Switching) -->
+    <!-- TanStack components now bundled via Vite -->
+
     <script src="./src/ui/workspace/ledgerWorkspace.js"></script>
 
-    <!-- Column Management System (ES6 Modules) -->
-    <script type="module">
-        import { openColumnManager, exportCSV, exportXLSX, exportPDF } from './src/ui/components/columnManager.js';
-        
-        // Expose to window for onclick handlers
-        window.openColumnManager = openColumnManager;
-        window.exportCSV = exportCSV;
-        window.exportXLSX = exportXLSX;
-        window.exportPDF = exportPDF;
-    </script>
+    <script src="./src/ui/components/columnManager.js"></script>
+
+    <!-- Metadata Panel System -->
+    <script src="./src/ui/components/metadataPanel.js"></script>
+
+    <!-- Financial Balance Card -->
+    <script src="./src/ui/components/balanceCard.js"></script>
+
+    <!-- Receipt Manager System -->
+    <script src="./src/ui/components/receiptManager.js"></script>
+
+    <!-- Audit ID Manager System -->
+    <script src="./src/ui/components/auditIDManager.js"></script>
 </body>
 
 </html>

@@ -159,17 +159,16 @@ SMART PARSING RULES:
     // BOUNDARY FLAGS
     let insideTransactionBlock = false;
     const startMarkers = [/Account Activity Details/i, /Date\s+Description\s+Cheques/i];
-    const endMarkers = [/Closing balance/i, /Total\s+deposits/i, /Total\s+cheques/i, /Page\s+\d+\s+of\s+\d+/i];
+    const endMarkers = [/Closing balance/i, /Account Fees:/i];
 
-    // GARBAGE FILTERS (Strict)
-    const garbagePatterns = [
-      /Business Account Statement/i,
-      /Account number:/i,
-      /continued\s+\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i,
-      /Opening\s+balance/i,
-      /Please contact us/i,
+    // GARBAGE FILTERS - Only apply BEFORE entering transaction block
+    const preBlockGarbagePatterns = [
+      /Opening\s+balance\s+on/i,
+      /Total\s+deposits\s+&\s+credits/i,
+      /Total\s+cheques\s+&\s+debits/i,
+      /Please contact/i,
       /royalbank\.com/i,
-      /^\s*$/
+      /How to reach us/i
     ];
 
     for (let i = 0; i < lines.length; i++) {
@@ -179,42 +178,36 @@ SMART PARSING RULES:
       // 1. STATE MACHINE TRANSITIONS
       // Start Trigger: "Account Activity Details" OR Table Header
       if (!insideTransactionBlock) {
+        // Filter obvious garbage BEFORE entering block
+        if (preBlockGarbagePatterns.some(p => line.match(p))) {
+          continue;
+        }
+        
         if (startMarkers.some(m => line.match(m))) {
-          console.log(`[RBC] 🟢 Entered Transaction Block at line "${line}"`);
+          console.log(`[RBC] ✅ Started parsing transactions`);
           insideTransactionBlock = true;
           continue; // Skip the marker line itself
         }
-        // Fallback: If we see a clear date+amount line, maybe we missed the header? 
-        // Be careful not to trigger on the summary header.
-        // For now, rely on markers seen in the user's screenshot.
       }
 
-      // Stop Trigger: Summary lines or End of Page indicators
+      // Stop Trigger: Summary lines  
       if (insideTransactionBlock) {
         if (endMarkers.some(m => line.match(m))) {
-          if (line.match(/Page\s+\d/i)) {
-            // Page break? Just ignore this line, but don't strictly close block if it's multi-page...
-            // Actually, "continued" headers usually reappear. Let's effectively "pause" or just filter the noise.
-            // For "Closing balance", definitely stop.
-          } else if (line.match(/Closing balance/i)) {
-            console.log(`[RBC] 🔴 Exited Transaction Block at line "${line}"`);
-            insideTransactionBlock = false;
-            break; // Strictly stop at summary
-          }
+          console.log(`[RBC] ✅ Finished parsing at closing balance`);
+          insideTransactionBlock = false;
+          break;
         }
       }
 
-      // If we are NOT in the block yet, skip (unless we want to support headerless CSV-like dumps, but this is PDF)
+      // If we are NOT in the block yet, skip
       if (!insideTransactionBlock) continue;
 
-      // 2. STRICT LINE FILTERING
-      if (garbagePatterns.some(p => line.match(p))) {
-        console.log(`[RBC] 🗑️ Ignored garbage line: "${line}"`);
-        continue;
-      }
-
-      // Skip Table Headers inside the block (if repeated)
+      // Skip page break headers and repeated table headers INSIDE the block
+      if (line.match(/Business Account Statement/i)) continue;
+      if (line.match(/Account number:/i)) continue;
       if (line.match(/^Date\s+Description/i)) continue;
+      if (line.match(/ROYAL BANK OF CANADA/i)) continue;
+      if (line.match(/^Account Activity Details/i)) continue;
 
       // ===================================
       // CORE PARSING LOGIC (Existing logic adapted)

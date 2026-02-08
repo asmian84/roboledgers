@@ -4,7 +4,9 @@
  * Works directly with Tabulator's column show/hide methods
  */
 
-export function openColumnManager() {
+// --- Column Manager System ---
+
+function openColumnManager() {
   if (!window.txnTable) {
     console.error("[Column Manager] Grid not initialized");
     return;
@@ -132,19 +134,19 @@ export function openColumnManager() {
 }
 
 // Export functions
-export function exportCSV() {
+function exportCSV() {
   if (!window.txnTable) return;
   window.txnTable.download("csv", "roboledger-transactions.csv");
 }
 
-export function exportXLSX() {
+function exportXLSX() {
   if (!window.txnTable) return;
   window.txnTable.download("xlsx", "roboledger-transactions.xlsx", {
     sheetName: "RoboLedger"
   });
 }
 
-export function exportPDF() {
+function exportPDF() {
   if (!window.txnTable) return;
   window.txnTable.download("pdf", "roboledger-transactions.pdf", {
     orientation: "landscape"

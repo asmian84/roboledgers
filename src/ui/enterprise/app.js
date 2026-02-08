@@ -31,28 +31,44 @@
     recoveryPending: false,
     isSearchOpen: false,
     searchQuery: '',
+    selectedTx: null,
+    accountDropdownOpen: false,
+    panelState: 'collapsed', // 'closed', 'collapsed', 'expanded'
     version: '5.1.1'
   };
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
 
-  // Helper: Get unassigned transaction count (tx where gl_account_id is null)
-  function getUnassignedCount() {
-    if (!window.RoboLedger || !window.RoboLedger.Ledger) return 0;
-    return window.RoboLedger.Ledger.getAll().filter(txn => !txn.gl_account_id).length;
+  // Create global file input that persists across renders
+  const globalFileInput = document.createElement('input');
+  globalFileInput.type = 'file';
+  globalFileInput.id = 'fileInput';
+  globalFileInput.multiple = true;
+  globalFileInput.accept = '.pdf,.csv,.xlsx,.xls';
+  globalFileInput.style.display = 'none';
+  globalFileInput.addEventListener('change', function (event) {
+    window.handleFileSelect(event);
+  });
+  document.body.appendChild(globalFileInput);
+  console.log('[FILE] Global file input created');
+
+  // Protocol check - Log status but don't block
+  if (window.location.protocol === 'file:') {
+    console.log('✓ [APP] Running from file:// - Local storage mode active');
+  } else {
+    console.log('✓ [APP] Running on HTTP - Server-backed mode active');
   }
 
-  // Helper: Get activated bank accounts (unique account_id where gl_account_id is not null)
-  function getActivatedBankAccounts() {
-    if (!window.RoboLedger || !window.RoboLedger.Ledger) return [];
-    const all = window.RoboLedger.Ledger.getAll();
-    const activated = new Set(all.filter(txn => txn.gl_account_id).map(txn => txn.account_id));
-    console.log('[UI] Activated bank pills:', Array.from(activated));
-    return Array.from(activated);
-  }
-
-  window.getUnassignedCount = getUnassignedCount;
-  window.getActivatedBankAccounts = getActivatedBankAccounts;
+  // Expose file picker globally
+  window.openFilePicker = function () {
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+      fileInput.click();
+      console.log('[FILE] File picker opened');
+    } else {
+      console.error('[FILE] file input not found');
+    }
+  };
 
   // IMMEDIATE GLOBAL EXPOSURE (Fix ReferenceError)
   window.render = function () {
@@ -93,10 +109,109 @@
     render();
   };
 
+  window.toggleInspector = () => {
+    UI_STATE.panelState = UI_STATE.panelState === 'closed' ? 'collapsed' : (UI_STATE.panelState === 'collapsed' ? 'expanded' : 'closed');
+    console.log('[UI] Inspector state:', UI_STATE.panelState);
+    render();
+  };
+
   window.handleOpeningBalanceUpdate = (accId, val) => {
     const amount = parseFloat(val) || 0;
     window.RoboLedger.Accounts.setOpeningBalance(accId, amount * 100);
     render();
+  };
+
+  // Mobile sidebar toggle
+  // File upload handlers for drag-drop and browse
+  window.handleDropZone = (event) => {
+    event.preventDefault();
+    const files = event.dataTransfer.files;
+    if (files.length > 0) window.handleFilesSelected(files);
+  };
+
+  window.handleFileSelect = (event) => {
+    const files = event.target.files;
+    if (files.length > 0) window.handleFilesSelected(files);
+  };
+
+  window.handleFilesSelected = async (files) => {
+    console.log('[UPLOAD] Processing', files.length, 'file(s)');
+    UI_STATE.isIngesting = true;
+    UI_STATE.ingestionLabel = 'Importing files...';
+    UI_STATE.ingestionProgress = 0;
+    render();
+
+    // Get primary account for ingestion
+    const primaryAccount = window.RoboLedger.Accounts.getAll()[0];
+    const account_id = primaryAccount ? primaryAccount.id : 'ACC-001';
+
+    let totalImported = 0;
+
+    for (let idx = 0; idx < files.length; idx++) {
+      const file = files[idx];
+      try {
+        UI_STATE.ingestionLabel = `Processing: ${file.name}`;
+        UI_STATE.ingestionProgress = Math.round(((idx) / files.length) * 100);
+
+        // Optimistic render only if it's been more than 300ms since last (prevent flicker)
+        if (!window._lastRender || Date.now() - window._lastRender > 300) {
+          render();
+          window._lastRender = Date.now();
+        }
+
+        const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
+        totalImported += imported;
+        console.log(`[UPLOAD] ${file.name}: ${imported} transactions imported`);
+      } catch (err) {
+        console.error('[UPLOAD] Parse error:', file.name, err);
+      }
+    }
+
+    UI_STATE.isIngesting = false;
+    UI_STATE.ingestionProgress = 100;
+    console.log(`[UPLOAD] Complete. Total imported: ${totalImported}`);
+    render();
+    window._lastRender = Date.now();
+  };
+
+  // Keep inline COA dropdowns opening downward by centering the row
+  document.addEventListener('focusin', (e) => {
+    const target = e.target;
+    if (!target || !target.classList || !target.classList.contains('inline-coa-select')) return;
+    const rowEl = target.closest('.tabulator-row');
+    if (rowEl) {
+      rowEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  });
+
+  // Mobile sidebar toggle
+  window.toggleMobileSidebar = () => {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+
+    if (sidebar && overlay) {
+      sidebar.classList.toggle('mobile-open');
+      overlay.classList.toggle('active');
+    }
+  };
+
+  // Desktop sidebar collapse toggle
+  window.toggleSidebar = () => {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle');
+
+    if (sidebar) {
+      sidebar.classList.toggle('collapsed');
+
+      // Update button icon
+      if (sidebar.classList.contains('collapsed')) {
+        toggleBtn.innerHTML = '<i class="ph ph-caret-right"></i>';
+        toggleBtn.title = 'Expand';
+      } else {
+        toggleBtn.innerHTML = '<i class="ph ph-caret-left"></i>';
+        toggleBtn.title = 'Collapse';
+      }
+    }
   };
 
   // --- FORMATTING HELPERS ---
@@ -193,11 +308,16 @@
   };
 
   window.getDetachedColumns = function () {
-    // Return a set of column definitions for the detached Tabulator grid
     return [
-      { title: "Date", field: "date_iso", width: 120, hozAlign: "left", formatter: (cell) => cell.getValue() || '' },
-      { title: "Description", field: "raw_description", hozAlign: "left", responsive: 1 },
-      { title: "Debit", field: "debit_col", width: 120, hozAlign: "right", editor: "number", formatter: (cell) => {
+      { title: "Ref#", field: "ref", width: 100, editor: "input", formatter: (cell) => `<span style="color: #64748b;">${cell.getValue() || ''}</span>` },
+      { title: "Date", field: "date", width: 110, editor: "input", formatter: (cell) => `<span style="color: #0f172a;">${cell.getValue() || ''}</span>` },
+      {
+        title: "Description", field: "description", widthGrow: 3, editor: "input", formatter: (cell) => {
+          return `<div style="text-transform: uppercase; color: #0f172a; font-size: 13px;">${cell.getValue() || ''}</div>`;
+        }
+      },
+      {
+        title: "Debit", field: "debit_col", width: 120, hozAlign: "right", editor: "number", formatter: (cell) => {
           const row = cell.getRow().getData();
           if (row.polarity === 'DEBIT' && row.amount_cents > 0) {
             const val = (row.amount_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -206,7 +326,8 @@
           return `<span style="color: #e2e8f0;">-</span>`;
         }
       },
-      { title: "Credit", field: "credit_col", width: 120, hozAlign: "right", editor: "number", formatter: (cell) => {
+      {
+        title: "Credit", field: "credit_col", width: 120, hozAlign: "right", editor: "number", formatter: (cell) => {
           const row = cell.getRow().getData();
           if (row.polarity === 'CREDIT' && row.amount_cents > 0) {
             const val = (row.amount_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -215,7 +336,8 @@
           return `<span style="color: #e2e8f0;">-</span>`;
         }
       },
-      { title: "Balance", field: "balance", width: 140, hozAlign: "right", formatter: (cell) => {
+      {
+        title: "Balance", field: "balance", width: 140, hozAlign: "right", formatter: (cell) => {
           const val = cell.getValue() || 0;
           const formatted = (val / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
           return `<span style="color: #0f172a; font-weight: 600;">${formatted}</span>`;
@@ -258,38 +380,77 @@
     }
   };
 
+  // Open a specific transaction's source PDF and jump to the page + highlight the Y-coordinate
+  window.openStatement = async function (tx) {
+    if (!tx || !tx.source_file_id) return;
+    const fileId = tx.source_file_id;
+
+    UI_STATE.activeFileId = fileId;
+    window.toggleWorkbench(true, fileId);
+
+    const file = window.RoboLedger.Accounts.getFile(fileId);
+    if (!file) return;
+
+    const contentArea = document.getElementById('v5-pdf-curtain-content');
+    const filenameLabel = document.getElementById('v5-curtain-filename');
+
+    if (filenameLabel) filenameLabel.innerText = file.name;
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const pageNo = (tx.source_locator && tx.source_locator.page) ? tx.source_locator.page : 1;
+        const pdfPage = await pdf.getPage(pageNo);
+
+        const viewport = pdfPage.getViewport({ scale: 1.5 });
+        contentArea.innerHTML = `<canvas id="v5-stmt-canvas" style="width:100%; height:100%;"></canvas>`;
+        const canvas = document.getElementById('v5-stmt-canvas');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        const ctx = canvas.getContext('2d');
+
+        await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+
+        if (tx.source_locator && tx.source_locator.y_coord) {
+          const screenY = viewport.height - tx.source_locator.y_coord;
+          ctx.fillStyle = 'rgba(255,230,0,0.35)';
+          ctx.fillRect(0, screenY - 12, canvas.width, 28);
+        }
+
+      } catch (err) {
+        console.error('[VIEWER] Failed to render PDF page', err);
+        const url = URL.createObjectURL(file);
+        contentArea.innerHTML = `<iframe src="${url}#toolbar=0" style="width:100%; height:100%; border:none;"></iframe>`;
+      }
+    } else {
+      file.text().then(text => {
+        const lines = text.split('\n').slice(0, 50); // Preview first 50 lines
+        contentArea.innerHTML = `
+                <div style="padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #334155; line-height: 1.6; overflow: auto; height: 100%;">
+                    ${lines.map(line => `<div style="border-bottom: 1px solid #f1f5f9; padding: 4px 0;">${line}</div>`).join('')}
+                </div>
+            `;
+      });
+    }
+  };
+
+  // Convenience: open statement viewer by tx_id
+  window.openTxSourceById = function (tx_id) {
+    const tx = window.RoboLedger.Ledger.get(tx_id);
+    if (!tx) return;
+    window.openStatement(tx);
+  };
+
   window.toggleWorkbench = function (open, fileId) {
     UI_STATE.workbenchOpen = open;
     const curtain = document.getElementById('v5-pdf-curtain');
     const overlay = document.getElementById('v5-pdf-overlay');
 
-    if (open && fileId) {
-      UI_STATE.activeFileId = fileId;
+    if (open) {
       document.body.classList.add('workbench-active');
       if (curtain) curtain.style.right = '0';
       if (overlay) overlay.style.display = 'block';
-      // Render the PDF/file content
-      const file = window.RoboLedger.Accounts.getFile(fileId);
-      if (file) {
-        const contentArea = document.getElementById('v5-pdf-curtain-content');
-        const filenameLabel = document.getElementById('v5-curtain-filename');
-        if (filenameLabel) filenameLabel.innerText = file.name;
-        if (contentArea) {
-          if (file.name.toLowerCase().endsWith('.pdf')) {
-            renderWorkbenchPDF(fileId);
-          } else {
-            // CSV/Text Preview
-            file.text().then(text => {
-              const lines = text.split('\n').slice(0, 50);
-              contentArea.innerHTML = `
-                <div style="padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #334155; line-height: 1.6; overflow: auto; height: 100%;">
-                    ${lines.map(line => `<div style="border-bottom: 1px solid #f1f5f9; padding: 4px 0;">${line}</div>`).join('')}
-                </div>
-              `;
-            });
-          }
-        }
-      }
     } else {
       document.body.classList.remove('workbench-active');
       if (curtain) curtain.style.right = '-100%';
@@ -310,8 +471,45 @@
   };
 
   window.switchAccount = function (accId) {
+    console.log(`[V5 CONTROL] Switching to account: ${accId}`);
     UI_STATE.selectedAccount = accId;
-    LedgerWorkspace.switchAccount(accId);
+
+    // Always re-render the grid with proper filtering
+    const allTx = window.RoboLedger.Ledger.getAll();
+    const filtered = accId === 'ALL' ? allTx : allTx.filter(t => t.account_id === accId);
+
+    console.log(`[GRID RENDER] Filtered ${filtered.length} transactions for account: ${accId}`);
+
+    // Force a complete grid re-render
+    if (window.renderTransactionsGrid) {
+      window.renderTransactionsGrid(filtered, UI_STATE.searchQuery);
+    }
+
+    // Update header to reflect new account selection
+    render();
+  };
+
+  window.filterByCategory = function (rootCategory) {
+    UI_STATE.categoryFilter = rootCategory;
+    console.log(`[FILTER] Category filter set to: ${rootCategory || 'ALL'}`);
+
+    if (!rootCategory) {
+      // Show all for current account
+      window.switchAccount(UI_STATE.selectedAccount);
+      return;
+    }
+
+    // Filter by root category
+    const allTx = window.RoboLedger.Ledger.getAll();
+    const filtered = allTx.filter(tx => {
+      if (!tx.gl_account_code) return false;
+      const coa = window.RoboLedger.COA.get(tx.gl_account_code);
+      return coa && coa.root === rootCategory;
+    });
+
+    if (window.renderTransactionsGrid) {
+      window.renderTransactionsGrid(filtered, UI_STATE.searchQuery);
+    }
   };
 
   window.saveSettings = function () {
@@ -323,6 +521,15 @@
       document.body.className = UI_STATE.activeTheme.toLowerCase().replace(' ', '-') + '-theme';
     }
     toggleSettings(false);
+    render();
+  };
+
+  window.setDensity = function (density) {
+    UI_STATE.density = density;
+    // Pass density to React component via bridge
+    if (window.updateGridDensity) {
+      window.updateGridDensity(density);
+    }
     render();
   };
 
@@ -349,6 +556,15 @@
     document.querySelectorAll('.nav-item').forEach(item => {
       item.onclick = (e) => {
         const route = e.currentTarget.dataset.route;
+
+        // Close mobile sidebar when navigation is clicked
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (sidebar && sidebar.classList.contains('mobile-open')) {
+          sidebar.classList.remove('mobile-open');
+          if (overlay) overlay.classList.remove('active');
+        }
+
         if (route === 'settings') {
           toggleSettings(true);
           return;
@@ -484,7 +700,8 @@
     UI_STATE.isSearchOpen = (open !== undefined) ? open : !UI_STATE.isSearchOpen;
     if (!UI_STATE.isSearchOpen) {
       UI_STATE.searchQuery = '';
-      if (window.txnTable) window.txnTable.clearFilter(true);
+      const data = dataAdjustedForAccount();
+      if (window.renderTransactionsGrid) window.renderTransactionsGrid(data, UI_STATE.searchQuery);
     }
     render();
     if (UI_STATE.isSearchOpen) {
@@ -497,16 +714,71 @@
 
   window.handleSearch = function (query) {
     UI_STATE.searchQuery = query;
-    if (!window.txnTable) return;
+    const baseData = dataAdjustedForAccount();
+    if (window.renderTransactionsGrid) window.renderTransactionsGrid(baseData, query);
+  };
 
-    if (!query) {
-      window.txnTable.clearFilter(true);
+  // Account switcher dropdown
+  window.toggleAccountDropdown = function () {
+    UI_STATE.accountDropdownOpen = !UI_STATE.accountDropdownOpen;
+    const dropdown = document.getElementById('accountDropdown');
+    if (dropdown) {
+      dropdown.classList.toggle('open', UI_STATE.accountDropdownOpen);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.account-switcher') && UI_STATE.accountDropdownOpen) {
+      UI_STATE.accountDropdownOpen = false;
+      const dropdown = document.getElementById('accountDropdown');
+      if (dropdown) dropdown.classList.remove('open');
+    }
+  });
+
+  // Select transaction for coding panel
+  window.selectTransaction = function (txId) {
+    UI_STATE.selectedTx = txId;
+    // Auto-expand panel when selecting a transaction
+    if (UI_STATE.panelState === 'collapsed' || UI_STATE.panelState === 'closed') {
+      UI_STATE.panelState = 'expanded';
+    }
+    render();
+  };
+
+  // Toggle inspector panel states
+  window.togglePanel = function (targetState) {
+    if (targetState) {
+      UI_STATE.panelState = targetState;
     } else {
-      window.txnTable.setFilter([
-        { field: "description", type: "like", value: query },
-        { field: "ref", type: "like", value: query },
-        { field: "accountNumber", type: "like", value: query }
-      ], "or");
+      // Cycle through states: collapsed → expanded → closed → collapsed
+      if (UI_STATE.panelState === 'collapsed') {
+        UI_STATE.panelState = 'expanded';
+      } else if (UI_STATE.panelState === 'expanded') {
+        UI_STATE.panelState = 'closed';
+      } else {
+        UI_STATE.panelState = 'collapsed';
+      }
+    }
+    render();
+    // Redraw grid to handle column visibility
+    if (window.txnTable) {
+      setTimeout(() => window.txnTable.redraw(true), 350);
+    }
+  };
+
+  // Update transaction category from coding panel
+  window.updateTxCategory = function (txId, categoryCode) {
+    try {
+      const category = window.RoboLedger.COA.get(categoryCode);
+      window.RoboLedger.Ledger.updateMetadata(txId, {
+        category_code: categoryCode,
+        category_name: category ? category.name : 'UNCATEGORIZED',
+        status: categoryCode ? 'CONFIRMED' : 'RAW'
+      });
+      render();
+    } catch (err) {
+      console.error('[CODING] Failed to update category:', err);
     }
   };
 
@@ -603,15 +875,34 @@
     }
 
     if (UI_STATE.settingsTab === 'columns') {
-      const columns = [
-        { id: 'date', label: 'Date' },
-        { id: 'desc', label: 'Description' },
-        { id: 'debit', label: 'Debit' },
-        { id: 'credit', label: 'Credit' },
-        { id: 'balance', label: 'Balance' },
-        { id: 'account', label: 'Account' },
-        { id: 'ref', label: 'Ref#' }
+      // Get actual columns from Tabulator instance
+      let columns = [
+        { field: 'date', label: 'Date', visible: true },
+        { field: 'ref', label: 'Ref#', visible: true },
+        { field: 'description', label: 'Description', visible: true },
+        { field: 'debit_col', label: 'Debit', visible: true },
+        { field: 'credit_col', label: 'Credit', visible: true },
+        { field: 'balance', label: 'Balance', visible: true },
+        { field: 'coa_code', label: 'Category', visible: true }
       ];
+
+      // If table exists, get actual column visibility
+      if (window.txnTable) {
+        const tableCols = window.txnTable.getColumns();
+        columns = columns.map(col => {
+          const tableCol = tableCols.find(c => c.getField() === col.field);
+          if (tableCol) {
+            col.visible = tableCol.isVisible();
+          }
+          return col;
+        });
+      }
+
+      // Load saved preferences
+      const saved = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+      columns.forEach(col => {
+        if (saved[col.field] !== undefined) col.visible = saved[col.field];
+      });
 
       return `
             <div class="setting-group">
@@ -621,7 +912,7 @@
                     <div class="column-toggle">
                         <label>${col.label}</label>
                         <label class="switch">
-                            <input type="checkbox" checked onchange="window.toggleGridColumn('${col.id}', this.checked)">
+                            <input type="checkbox" ${col.visible ? 'checked' : ''} onchange="window.toggleGridColumn('${col.field}', this.checked)">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -662,21 +953,31 @@
     </div>`;
   }
 
-  window.toggleGridColumn = (colId, visible) => {
+  window.toggleGridColumn = (field, visible) => {
     if (!window.txnTable) return;
-    // Map simplified IDs to Tabulator fields
-    const fieldMap = {
-      'date': 'date',
-      'desc': 'raw_description',
-      'debit': 'Debit', // This is a bit tricky as Debit/Credit are formatters
-      'credit': 'Credit',
-      'balance': 'balance_cents',
-      'account': 'account',
-      'ref': 'ref'
-    };
 
-    console.log(`[V5 GRID CONTROL] Toggling ${colId} to ${visible}`);
-    // Optional: window.txnTable.toggleColumn(fieldMap[colId]);
+    console.log(`[SETTINGS] Toggling column ${field} to ${visible}`);
+
+    // Find column in Tabulator
+    const columns = window.txnTable.getColumns();
+    const targetCol = columns.find(c => c.getField() === field);
+
+    if (targetCol) {
+      if (visible) {
+        targetCol.show();
+      } else {
+        targetCol.hide();
+      }
+
+      // Save preference to localStorage
+      const saved = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+      saved[field] = visible;
+      localStorage.setItem('roboledger_column_prefs', JSON.stringify(saved));
+
+      console.log(`[SETTINGS] Column ${field} ${visible ? 'shown' : 'hidden'}`);
+    } else {
+      console.warn(`[SETTINGS] Column ${field} not found in table`);
+    }
   };
 
   function toggleCurtain(open, filename = null) {
@@ -785,7 +1086,6 @@
     UI_STATE.isIngesting = false;
     UI_STATE.ingestionLabel = null;
     UI_STATE.ingestionProgress = 100;
-
     render();
   }
 
@@ -889,36 +1189,16 @@
     const stage = document.getElementById('app-stage');
     stage.innerHTML = `<div class="fade-in">${renderPage()}</div>`;
 
-    // 4. Grid Init with Orchestration
+    // 4. Grid Init
     if (UI_STATE.currentRoute === 'import' && !UI_STATE.isIngesting && !UI_STATE.isPoppedOut) {
       const gridDiv = document.querySelector('#txnGrid');
       if (gridDiv) {
-        setTimeout(() => {
-          // Step 1: Initialize grid
-          initGrid();
-
-          // Step 2: Wait for Tabulator to finish building
-          const waitForGrid = setInterval(() => {
-            if (window.txnTable) {
-              clearInterval(waitForGrid);
-
-              // Step 3: Build workspace AFTER grid exists
-              LedgerWorkspace.buildFromEngine();
-
-              // Step 4: Default view → INBOX (0000)
-              LedgerWorkspace.switchAccount("0000");
-
-              // Step 5: Run lifecycle audit if installed
-              if (window.RL_DEBUG_AUDIT) {
-                setTimeout(window.RL_DEBUG_AUDIT, 50);
-              }
-            }
-          }, 25);
-        }, 50);
+        console.log('[UI] Grid shell found, initializing TanStack...');
+        // Immediate sync if possible, otherwise timeout
+        if (window.renderTransactionsGrid) initGrid();
+        else setTimeout(initGrid, 100);
       }
     }
-
-    // 5. Audit hook removed - now integrated into grid lifecycle above
   }
 
   function renderPage() {
@@ -930,285 +1210,163 @@
     }
   }
 
-  function renderTransactionsRestored() {
-    const data = window.RoboLedger.Ledger.getAll();
-    const accounts = window.RoboLedger.Accounts.getAll();
-    const unassignedCount = getUnassignedCount();
-    const activatedAccounts = getActivatedBankAccounts();
-    console.log('[UI] Unassigned count:', unassignedCount);
-    const hasAssignedTransactions = (accountId) =>
-      activatedAccounts.includes(accountId);
-    if (UI_STATE.selectedAccount === '0000' && unassignedCount === 0) {
-      UI_STATE.selectedAccount = accounts[0]?.id || 'ALL';
-    }
-    if (UI_STATE.selectedAccount !== 'ALL' && UI_STATE.selectedAccount !== '0000' &&
-        !hasAssignedTransactions(UI_STATE.selectedAccount)) {
-      UI_STATE.selectedAccount = unassignedCount > 0 ? '0000' : (accounts[0]?.id || 'ALL');
-    }
-    // OPTIMIZATION: Default to single account view if 'ALL' is bloated and accounts exist
-    if (UI_STATE.selectedAccount === 'ALL' && accounts.length > 0) {
-      UI_STATE.selectedAccount = unassignedCount > 0 ? '0000' : accounts[0].id;
-    }
-
-    const activeAcc = (UI_STATE.selectedAccount === 'ALL' || UI_STATE.selectedAccount === '0000')
-      ? null
-      : (accounts.find(a => a.id === UI_STATE.selectedAccount) || accounts[0]);
-    const hasData = data.length > 0;
-    const coa = window.RoboLedger.COA.getAll();
+  function renderCOAPage() {
+    const categories = [
+      { id: 'asset', label: 'Assets', sub: 'Cash, Inventory, Equipment', theme: 'theme-asset' },
+      { id: 'liability', label: 'Liabilities', sub: 'Loans, Payables, Credit Cards', theme: 'theme-liability' },
+      { id: 'equity', label: 'Equity', sub: "Owner's Capital, Retained Earnings", theme: 'theme-equity' },
+      { id: 'revenue', label: 'Revenue', sub: 'Sales, Services, Income', theme: 'theme-revenue' },
+      { id: 'expense', label: 'Expenses', sub: 'Advertising, Office, Travel', theme: 'theme-expense' }
+    ];
 
     return `
-      <!-- V5 MAIN CONTENT WRAPPER -->
-      <div style="display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0;">
-        
-        <!-- V5 UNIFIED ISLAND WRAPPER (1400px max-width) -->
-        <div style="width: 100%; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 0;">
-
-          <!-- MERGED HORIZONTAL HEADER CARD -->
-          <div class="v5-main-header fade-in" style="width: 100%; display: flex; align-items: stretch; gap: 12px; margin-bottom: 12px;">
-             <!-- Left: Account Info -->
-             <div class="header-card v5-glass" style="flex: 1; padding: 12px 20px; border-radius: 8px; display: flex; align-items: center; gap: 16px;">
-                 <div class="header-icon-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: white;">
-                    <i class="ph ph-bank" style="font-size: 24px;"></i>
-                 </div>
-                 <div class="header-text-group" style="flex: 1; min-width: 0;">
-                    ${!hasData ? `
-                        <h1 class="header-title" style="font-size: 1.1rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.01em;">
-                            Transactions
-                        </h1>
-                        <div style="font-size: 13px; font-weight: 600; color: #64748b; margin-top: 4px;">
-                            Waiting to get started<span class="animated-dots">...</span>
-                        </div>
-                    ` : `
-                        <h1 class="header-title" style="font-size: 1.1rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.01em;">
-                            ${activeAcc ? (activeAcc.name || 'Unknown Bank') : 'Transactions'} / ${activeAcc ? (activeAcc.accountType || 'CHECKING') : 'ALL'}
-                        </h1>
-                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8;">
-                            ${activeAcc ? `INST: ${activeAcc.inst || '---'} • TRANSIT: ${activeAcc.transit || '---'} • ACCOUNT: ${activeAcc.accountNumber || '---'}` : 'ALL ACCOUNTS'}
-                        </div>
-                    `}
+      <div class="ai-brain-page">
+          <div class="std-page-header">
+             <div class="header-brand">
+                 <div class="icon-box"><i class="ph ph-books"></i></div>
+                 <div>
+                     <h1 style="margin: 0; font-size: 1.1rem; font-weight: 700;">Chart of Accounts</h1>
+                     <p style="margin: 0; font-size: 0.8rem; color: #64748b;">Manage your financial categories</p>
                  </div>
              </div>
-             
-             <!-- Right: Upload Zone -->
-             <div class="upload-zone-v5 v5-glass" style="width: 420px; border: 1.5px dashed #cbd5e1; border-radius: 8px; background: rgba(248, 250, 252, 0.5); padding: 8px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer;" onclick="document.getElementById('fileInput').click()">
-                  <div style="display: flex; align-items: center; gap: 12px;">
-                      <i class="ph ph-cloud-arrow-up" style="color: #3b82f6; font-size: 22px;"></i>
-                      <div style="text-align: left;">
-                         <div style="font-size: 12px; font-weight: 800; color: #1e293b;">Drag and drop files here</div>
-                         <div style="font-size: 9.5px; color: #94a3b8; font-weight: 600; letter-spacing: 0.01em;">Limit 200MB per file • PDF, CSV, Excel</div>
-                      </div>
-                  </div>
-                  <button class="btn-browse-v5" style="background: #3b82f6; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer; margin-left: auto;">Browse</button>
-                  <input type="file" id="fileInput" multiple accept=".csv,.xlsx,.xls,.pdf" style="display: none" onchange="window.handleFiles(this.files)">
+             <div style="display: flex; gap: 8px;">
+                <button class="btn-restored" style="background: white; color: #334155; border: 1px solid #cbd5e1;">
+                    <i class="ph ph-export" style="margin-right:4px;"></i> Export
+                </button>
+                <button class="btn-restored" style="background: #3b82f6; color: white; border: none;">
+                    <i class="ph ph-plus" style="margin-right:4px;"></i> Add Account
+                </button>
              </div>
           </div>
 
-          <!-- INGESTION PROGRESS OVERLAY -->
-          ${UI_STATE.isIngesting ? `
-               <div class="v5-waiting-container v5-glass" style="width: 100%; min-height: 400px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
-                  <div style="margin-bottom: 24px;"><i class="ph ph-cpu pulsing" style="font-size: 60px; color: #3b82f6; opacity: 0.7;"></i></div>
-                  <div class="v5-waiting-title" style="font-size: 18px; font-weight: 800; color: #1e293b;">Forensic Ingestion In Progress</div>
-                  <div class="v5-waiting-subtitle" style="color: #64748b; margin-top: 16px; width: 320px;">
-                    <div class="v5-progress-label" style="font-size: 10px; font-weight: 700; margin-bottom: 8px; text-align: center; text-transform: uppercase;">${UI_STATE.ingestionLabel || 'Processing...'}</div>
-                    <div class="v5-progress-track" style="height: 6px; background: #e2e8f0; border-radius: 10px; overflow: hidden; width: 100%;">
-                        <div class="v5-progress-fill" style="width: ${UI_STATE.ingestionProgress}%; height: 100%; background: #3b82f6; transition: width 0.3s ease;"></div>
-                    </div>
-                  </div>
-              </div>
-          ` : ''}
-
-          <!-- EMPTY STATE -->
-          ${!hasData && !UI_STATE.isIngesting ? `
-               <div class="v5-waiting-container v5-glass" style="width: 100%; min-height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
-                  <div style="margin-bottom: 24px; color: #cbd5e1;"><i class="ph ph-book-open" style="font-size: 70px;"></i></div>
-                  <div class="v5-waiting-title" style="font-size: 1.5rem; font-weight: 800; color: #1e293b;">No transactions yet.</div>
-                  <div class="v5-waiting-subtitle" style="color: #64748b; font-size: 0.9rem; max-width: 440px; text-align: center; line-height: 1.6;">Import your bank statement or add your first entry manually to get started.</div>
-              </div>
-          ` : ''}
-          </div> <!-- End v5-main-header -->
-
-          ${hasData && !UI_STATE.isIngesting ? `
-          <!-- V5 ACTION BAR (Symmetrical Command Strip) -->
-          <div class="v5-action-bar v5-glass" style="width: 100%; max-width: 1400px; margin: 0 auto; padding: 0 24px; height: 53px; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
-            <!-- Left: Ref# Input -->
-            <div style="display: flex; align-items: center; gap: 10px; min-width: 170px;">
-                <span style="font-size: 13px; font-weight: 800; color: #94a3b8;">REF#</span>
-                <input type="text" class="cloudy-ref-input" 
-                       value="${activeAcc ? (activeAcc.ref || '') : ''}" 
-                       placeholder="AUTO"
-                       style="width: 100px; height: 34px; font-size: 14px; font-weight: 700;"
-                       onblur="window.handleRefUpdate(this.value)"
-                       onkeydown="if(event.key === 'Enter') this.blur()">
-            </div>
-
-            <!-- Center: ATI Metadata Line -->
-            <div class="v5-ati-line-center" style="flex: 1; display: flex; justify-content: center; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #64748b; letter-spacing: 0.01em; text-transform: uppercase;">
-                ${UI_STATE.selectedAccount === 'ALL' ? `
-                    <span style="color: #64748b; font-weight: 800; opacity: 0.7;">ALL LEDGERS • UNIFIED VIEW</span>
-                ` : (activeAcc ? (activeAcc.id === 'CC' || activeAcc.brand ? `
-                    BRAND: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.name || activeAcc.brand || 'CREDIT CARD'}</span>
-                    <span style="color: #cbd5e1; margin: 0 10px;">•</span>
-                    CARD#: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${formatCardNumber(activeAcc.accountNumber, activeAcc.brand)}</span>
-                ` : `
-                    INST: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.inst || '---'}</span>
-                    <span style="color: #cbd5e1; margin: 0 10px;">•</span>
-                    TRANSIT: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.transit || '---'}</span>
-                    <span style="color: #cbd5e1; margin: 0 10px;">•</span>
-                    ACC#: <span style="color: #1e293b; font-weight: 600; margin: 0 5px;">${activeAcc.accountNumber || '---'}</span>
-                `) : 'NO METADATA DETECTED')}
-            </div>
-
-            <!-- Right: Utility Icons -->
-            <div style="display: flex; align-items: center; gap: 6px; min-width: 170px; justify-content: flex-end;">
-                 ${UI_STATE.isSearchOpen ? `
-                    <input type="text" id="v5-search-input" 
-                           placeholder="Search..." 
-                           value="${UI_STATE.searchQuery}"
-                           style="width: 170px; height: 34px; border-radius: 4px; border: 1px solid #e2e8f0; padding: 0 10px; font-size: 13px; font-weight: 600; outline: none; transition: all 0.2s ease;"
-                           oninput="window.handleSearch(this.value)"
-                           onkeydown="if(event.key === 'Escape') window.toggleSearch(false)">
-                 ` : ''}
-                 <button class="cloudy-btn ${UI_STATE.isSearchOpen ? 'active' : ''}" style="height: 34px; width: 34px;" title="Search" onclick="window.toggleSearch()"><i class="ph ph-magnifying-glass" style="font-size: 18px;"></i></button>
-                 <button class="cloudy-btn" style="height: 34px; width: 34px;" title="Popout Grid" onclick="window.popOutGrid()"><i class="ph ph-arrow-square-out" style="font-size: 18px;"></i></button>
-                 <button class="cloudy-btn" style="height: 34px; width: 34px;" title="Grid Settings" onclick="window.toggleSettings(true)"><i class="ph ph-sliders-horizontal" style="font-size: 18px;"></i></button>
-                 
-                 <!-- Column Manager -->
-                 <button class="cloudy-btn" data-action="columns" title="Columns" style="height: 34px; width: 34px;">
-                   <i class="ph ph-columns" style="font-size: 18px;"></i>
-                 </button>
-                 
-                 <!-- Export Dropdown -->
-                 <div class="export-wrapper" style="position: relative;">
-                   <button class="cloudy-btn" data-action="export" title="Export" style="height: 34px; width: 34px;">
-                     <i class="ph ph-download-simple" style="font-size: 18px;"></i>
-                   </button>
-                   
-                   <div id="exportMenu" class="export-menu hidden">
-                     <div onclick="window.exportCSV()">Export CSV</div>
-                     <div onclick="window.exportXLSX()">Export Excel</div>
-                     <div onclick="window.exportPDF()">Export PDF</div>
-                   </div>
-                 </div>
-            </div>
-          </div>
-
-          <!-- V5 SWITCHER BAR (Account Pills & Recon Hub) -->
-          <div class="v5-switcher-bar v5-glass" style="width: 100%; max-width: 1400px; margin: 0 auto; padding: 8px 24px; border-radius: 0; border-bottom: none; display: flex; align-items: center; justify-content: space-between;">
-            <!-- Left: Account Pills -->
-            <div style="display: flex; align-items: center; gap: 10px;">
-                ${(() => {
-                  // Derive pill state from Ledger engine truth
-                  const allTx = window.RoboLedger.Ledger.getAll();
-                  const unassignedTx = allTx.filter(t => !t.gl_account_id);
-                  const assignedTx = allTx.filter(t => t.gl_account_id);
-                  const activatedAccounts = [...new Set(assignedTx.map(t => t.account_id))];
-
-                  console.log("[UI] Activated bank pills:", activatedAccounts);
-                  console.log("[UI] Unassigned count:", unassignedTx.length);
-
-                  let pillsHTML = "";
-
-                  // 1️⃣ UNASSIGNED (Inbox)
-                  if (unassignedTx.length > 0) {
-                    const active = UI_STATE.selectedAccount === "0000";
-                    pillsHTML += `
-                      <button class="cloudy-btn unassigned-glow ${active ? 'active' : ''}"
-                        style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
-                        onclick="window.switchAccount('0000')"
-                        title="Transactions waiting to be assigned">
-                        <span style="font-weight: 700; font-size: 13px;">INBOX <span class="pill-badge">${unassignedTx.length}</span></span>
-                      </button>
-                    `;
-                  }
-
-                  // 2️⃣ ALL (Only if activated accounts exist)
-                  if (activatedAccounts.length > 0) {
-                    const active = UI_STATE.selectedAccount === "ALL";
-                    pillsHTML += `
-                      <button class="cloudy-btn ${active ? 'active' : ''}"
-                        style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
-                        onclick="window.switchAccount('ALL')">
-                        <span style="font-weight: 700; font-size: 13px;">ALL</span>
-                      </button>
-                    `;
-                  }
-
-                  // 3️⃣ Activated bank ledgers with counts
-                  activatedAccounts.forEach(accId => {
-                    const count = assignedTx.filter(t => t.account_id === accId).length;
-                    const active = UI_STATE.selectedAccount === accId;
-                    pillsHTML += `
-                      <button class="cloudy-btn ${active ? 'active' : ''}"
-                        style="${active ? 'color: #3b82f6; background: #eff6ff;' : ''} width: auto; padding: 0 14px; height: 32px;"
-                        onclick="window.switchAccount('${accId}')">
-                        <span style="font-weight: 700; font-size: 13px;">${accId} (${count})</span>
-                      </button>
-                    `;
-                  });
-
-                  return pillsHTML;
-                })()}
-            </div>
-
-            <!-- Right: Recon Hub -->
-            ${UI_STATE.selectedAccount !== 'ALL' && UI_STATE.selectedAccount !== '0000' && activeAcc ? (() => {
-          const data = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === activeAcc.id);
-          const totalDebit = data.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + t.amount_cents, 0) / 100;
-          const totalCredit = data.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + t.amount_cents, 0) / 100;
-          const opening = activeAcc.openingBalance || 0;
-          const isLiability = activeAcc.id === 'CC' || activeAcc.brand || /VISA|MC|AMEX|CREDIT/i.test(activeAcc.type || '');
-          const ending = isLiability ? (opening + totalDebit - totalCredit) : (opening - totalDebit + totalCredit);
-
-          return `
-                <div class="v5-recon-hub" style="display: flex; align-items: center; gap: 15px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #64748b;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-weight: 800; color: #94a3b8; font-size: 10px; letter-spacing: 0.05em;">OPENING</span>
-                        <input type="number" class="cloudy-ref-input" 
-                               value="${opening}" 
-                               style="width: 85px; height: 29px; font-size: 13px; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.05); text-align: right; padding-right: 6px;"
-                               onblur="window.handleOpeningBalanceUpdate('${activeAcc.id}', this.value)"
-                               onkeydown="if(event.key === 'Enter') this.blur()">
-                    </div>
-                    <span style="color: #cbd5e1;">-</span>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                         <span style="font-weight: 800; color: #ef4444;">${totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                         <span style="font-size: 9px; font-weight: 800; opacity: 0.5;">DR</span>
-                    </div>
-                    <span style="color: #cbd5e1;">+</span>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                         <span style="font-weight: 800; color: #10b981;">${totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                         <span style="font-size: 9px; font-weight: 800; opacity: 0.5;">CR</span>
-                    </div>
-                    <span style="color: #cbd5e1;">=</span>
-                    <div style="background: rgba(15, 23, 42, 0.04); padding: 4px 12px; border-radius: 4px; display: flex; align-items: center; gap: 8px; border: 1px dashed rgba(0,0,0,0.1);">
-                         <span style="font-weight: 800; color: #94a3b8; font-size: 10px; letter-spacing: 0.05em;">ENDING</span>
-                         <span style="font-weight: 800; color: #1e293b; font-size: 15px;">${ending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                </div>
-              `;
-        })() : ''}
-          </div>
-
-          <!-- GRID CONTAINER -->
-          <div class="grid-container-wall" style="width: 100%; max-width: 1400px; margin: 0 auto; flex: 1; min-height: 0; display: flex; flex-direction: column;">
-              ${UI_STATE.isPoppedOut ? `
-                  <div class="v5-waiting-container" style="flex: 1; min-height: 400px; background: #f8fafc; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0;">
-                      <div style="margin-bottom: 24px;">
-                          <i class="ph ph-monitor-play" style="font-size: 80px; color: #3b82f6; opacity: 0.5;"></i>
+          <div class="coa-scroll-container">
+              ${categories.map(cat => `
+                  <div class="coa-row ${cat.theme}" id="row-${cat.id}">
+                    <div class="coa-row-header" onclick="window.toggleCoARow('${cat.id}')">
+                      <div class="row-info">
+                        <div class="row-title">
+                          ${cat.label} 
+                          <span class="row-desc-preview">${cat.sub}</span>
+                        </div>
                       </div>
-                      <div class="v5-waiting-title" style="color: #64748b;">Grid Popped Out</div>
-                      <div class="v5-waiting-subtitle" style="color: #94a3b8; margin-top: 12px;">Active in standalone window.</div>
-                      <button class="btn-restored" style="margin-top: 24px; background: #3b82f6; color: white; border: none;" onclick="window.popInGrid()">
-                          <i class="ph ph-arrow-square-down" style="margin-right: 6px;"></i> Restore
-                      </button>
+                      <i class="ph ph-caret-down row-chevron"></i>
+                    </div>
+                    <div class="coa-row-content" id="content-${cat.id}">
+                        <div class="coa-grid-placeholder" style="min-height: 300px;">
+                            <!-- The shared grid will be moved here on expansion -->
+                        </div>
+                    </div>
                   </div>
-              ` : `
-                  <div id="txnGrid" style="height: 100%; width: 100%;"></div>
-              `}
+              `).join('')}
           </div>
-          ` : ''}
+      </div>
+    `;
+  }
 
-      </div> <!-- End Main Content Wrapper -->
+  // Global shared grid state (Exposed for Forensic Debug)
+  window.coaTable = null;
+
+  function initCOAGrid() {
+    const gridDiv = document.querySelector('#sharedAccountsGrid');
+    if (!gridDiv || window.coaTable) return;
+
+    // Force width for Tabulator calculation
+    gridDiv.style.width = "100%";
+
+    window.coaTable = new Tabulator(gridDiv, {
+      data: [],
+      height: "auto",
+      layout: "fitColumns",
+      placeholder: "No Accounts Found",
+      columns: [
+        { title: "Account #", field: "code", width: 120, sorter: "number", headerSortStartingDir: "asc" },
+        { title: "Account Name", field: "name", widthGrow: 1, headerSort: false },
+        { title: "Type", field: "root", width: 120, formatter: (cell) => cell.getValue()?.toUpperCase() },
+        {
+          title: "Balance",
+          field: "balance",
+          width: 140,
+          hozAlign: "right",
+          formatter: "money",
+          formatterParams: { symbol: "$", decimal: ".", thousand: "," }
+        },
+        { title: "Tx", field: "tx_count", width: 80, hozAlign: "center", formatter: (cell) => cell.getValue() || "-" },
+        {
+          title: "",
+          field: "actions",
+          width: 60,
+          headerSort: false,
+          hozAlign: "center",
+          formatter: () => `<button class="btn-coa-delete"><i class="ph ph-x"></i></button>`
+        }
+      ]
+    });
+  }
+
+  // Global helper for COA expansion
+  window.toggleCoARow = function (catId) {
+    const row = document.getElementById(`row-${catId}`);
+    const content = document.getElementById(`content-${catId}`);
+    const placeholder = content.querySelector('.coa-grid-placeholder');
+    const sharedGrid = document.getElementById('sharedAccountsGrid');
+    const sharedGridStorage = document.getElementById('shared-grid-storage');
+
+    const isActive = row.classList.contains('active');
+
+    // Close others
+    document.querySelectorAll('.coa-row').forEach(r => {
+      if (r.id !== `row-${catId}`) {
+        r.classList.remove('active');
+        const otherContent = r.querySelector('.coa-row-content');
+        if (otherContent) {
+          otherContent.style.height = '0px';
+          otherContent.style.minHeight = '0px'; // Critical fix
+          otherContent.style.overflow = 'hidden';
+          const otherPlaceholder = otherContent.querySelector('.coa-grid-placeholder');
+          if (otherPlaceholder && otherPlaceholder.contains(sharedGrid)) {
+            sharedGridStorage.appendChild(sharedGrid);
+          }
+        }
+      }
+    });
+
+    if (!isActive) {
+      row.classList.add('active');
+      placeholder.appendChild(sharedGrid);
+
+      if (!window.coaTable) initCOAGrid();
+
+      // Update grid data
+      const allAccounts = window.RoboLedger.COA.getAll();
+      const filtered = allAccounts.filter(a => a.root.toLowerCase() === catId);
+
+      if (window.coaTable) {
+        // Use a small delay to ensure container is fully rendered
+        setTimeout(() => {
+          window.coaTable.setData(filtered);
+          window.coaTable.redraw();
+        }, 100);
+      }
+
+      content.style.height = 'auto';
+      content.style.minHeight = '300px';
+      content.style.overflow = 'visible';
+    } else {
+      row.classList.remove('active');
+      content.style.height = '0px';
+      content.style.minHeight = '0px'; // Critical fix
+      content.style.overflow = 'hidden';
+      sharedGridStorage.appendChild(sharedGrid);
+    }
+  };
+
+  function renderHome() {
+    return `
+      <div class="empty-state" style="background: white; border: 1px solid var(--border-color);">
+        <i class="ph ph-house empty-icon" style="color: #3b82f6;"></i>
+        <div class="empty-title">Welcome to RoboLedger V5</div>
+        <div class="empty-subtitle">Live system wired. Ready for high-performance operations.</div>
+      </div>
     `;
   }
 
@@ -1222,30 +1380,428 @@
     `;
   }
 
+
+  // --- WORKSPACE HTML GENERATORS ---
+
+  function getAccountWorkspaceHeaderHTML() {
+    const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const isLiability = acc && (acc.type === 'CREDIT_CARD' || acc.brand === 'VISA' || acc.brand === 'MASTERCARD' || acc.brand === 'AMEX');
+
+    // Metrics Calculation
+    const allTxns = window.RoboLedger.Ledger.getAll();
+    const filteredTxns = UI_STATE.selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === UI_STATE.selectedAccount);
+
+    // Activity metrics (30d)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentTxns = filteredTxns.filter(t => new Date(t.date_iso || t.date) >= thirtyDaysAgo);
+
+    const debitTxns = recentTxns.filter(t => t.polarity === 'DEBIT');
+    const creditTxns = recentTxns.filter(t => t.polarity === 'CREDIT');
+
+    const inflow = creditTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+    const outflow = debitTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+
+    // Balance logic for specific account
+    const openingBalance = acc ? (acc.openingBalance || 0) : 0;
+    const endingBalance = openingBalance - (filteredTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100) + (filteredTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100);
+
+    // ALL MODE: Calculate aggregate totals across all accounts
+    const isAllMode = UI_STATE.selectedAccount === 'ALL';
+    let aggTotalBalance = 0;
+    let aggTotalDebits = 0;
+    let aggTotalCredits = 0;
+    let aggNetActivity = 0;
+    let aggTxnCount = 0;
+
+    if (isAllMode) {
+      accounts.forEach(account => {
+        const accTxns = allTxns.filter(t => t.account_id === account.id);
+        const accOpening = account.openingBalance || 0;
+        const accDebits = accTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+        const accCredits = accTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+        const accBalance = accOpening - accDebits + accCredits;
+
+        aggTotalBalance += accBalance;
+        aggTotalDebits += accDebits;
+        aggTotalCredits += accCredits;
+        aggTxnCount += accTxns.length;
+      });
+      aggNetActivity = aggTotalCredits - aggTotalDebits;
+    }
+
+    // Helper function to check if account is reconciled
+    const isAccountReconciled = (account) => {
+      const accTxns = allTxns.filter(t => t.account_id === account.id);
+      const accOpening = account.openingBalance || 0;
+      const accDebits = accTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+      const accCredits = accTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+      const accCalculated = accOpening - accDebits + accCredits;
+      const accExpected = account.expectedBalance || accCalculated;
+      return Math.abs(accCalculated - accExpected) < 0.01;
+    };
+
+    // Bank icon mapping
+    const getBankIcon = (bankName) => {
+      const name = (bankName || '').toUpperCase();
+      if (name.includes('RBC') || name.includes('ROYAL')) return '🏦'; // RBC
+      if (name.includes('BMO') || name.includes('MONTREAL')) return '🏛️'; // BMO
+      if (name.includes('TD') || name.includes('DOMINION')) return '🏢'; // TD
+      if (name.includes('CIBC')) return '🏬'; // CIBC
+      if (name.includes('SCOTIA')) return '🏪'; // Scotia
+      return '🏦'; // Default bank icon
+    };
+
+    const terminalFont = "'Courier New', Courier, monospace";
+
+    return `
+      <!-- Professional Account Dashboard Header -->
+      <div id="account-header-root" style="background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 12px 24px; gap: 12px;">
+        
+        <!-- Header Top: Account Type & Selector -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <select onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase;">
+                <option value="ALL" ${UI_STATE.selectedAccount === 'ALL' ? 'selected' : ''}>ALL ACCOUNTS</option>
+                ${accounts.map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${a.name || a.ref}</option>`).join('')}
+              </select>
+              <i class="ph ph-caret-down" style="font-size: 14px; color: #64748b;"></i>
+            </div>
+            <div style="font-size: 11px; font-weight: 500; color: #94a3b8; margin-top: 2px; text-transform: uppercase;">
+              ${acc ? acc.bankName || 'Royal Bank of Canada' : 'Consolidated View'} • ${acc ? acc.currency || 'CAD' : 'CAD'}
+            </div>
+          </div>
+          <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500;">Header V5.2 • Active Session</div>
+        </div>
+
+        <!-- Professional Account Context Strip (Unified 2-Card) -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: stretch; min-height: 64px; overflow: hidden;">
+          
+          <!-- LEFT: Reconciliation Status -->
+          <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 24px; display: flex; flex-direction: column; justify-content: center; gap: 2px;">
+            <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Reconciliation</div>
+            
+            ${isAllMode ? `
+              <!-- ALL MODE: Aggregate Totals -->
+              <div style="display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: #1e293b;">
+                <div style="font-weight: 700;">
+                  Total Balance: <span style="font-family: 'JetBrains Mono', monospace; color: #0f766e;">$${aggTotalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="font-weight: 400; color: #64748b; margin-left: 4px;">(${accounts.length} accounts)</span>
+                </div>
+                <div style="font-weight: 500; font-size: 11px; color: #64748b;">
+                  Total Debits: <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> •
+                  Total Credits: <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div style="font-weight: 600; font-size: 11px; color: #475569;">
+                  Net Activity: <span style="font-family: 'JetBrains Mono', monospace; color: ${aggNetActivity >= 0 ? '#10b981' : '#ef4444'};">$${aggNetActivity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            ` : !acc ? `
+              <div style="font-family: ${terminalFont}; font-size: 13px; color: #db2777; opacity: 0.6;">&gt; Select an account to reconcile...</div>
+            ` : `
+              <div style="display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; color: #1e293b;">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 11px; color: #64748b; font-weight: 500;">Opening</span>
+                  <input 
+                    type="text" 
+                    id="header-opening-input"
+                    value="$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}" 
+                    style="border: none; background: transparent; font-size: 14px; font-weight: 700; color: #1e293b; width: 90px; font-family: 'JetBrains Mono', monospace; outline: none; padding: 0;" 
+                    oninput="window.updateOpeningBalance(this.value)"
+                  />
+                </div>
+                
+                <div style="color: #cbd5e1; font-weight: 300;">+</div>
+                
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 11px; color: #64748b; font-weight: 500;">Debits</span>
+                  <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div style="color: #cbd5e1; font-weight: 300;">-</div>
+
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 11px; color: #64748b; font-weight: 500;">Credits</span>
+                  <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${inflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                <div style="color: #cbd5e1; font-weight: 300;">=</div>
+
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 11px; color: #64748b; font-weight: 500;">Closing</span>
+                  <span id="header-closing-balance" style="color: #1e293b; font-weight: 800; font-family: 'JetBrains Mono', monospace;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: #10b981; margin-top: 1px;">
+                <i class="ph ph-check-circle" style="font-size: 13px;"></i>
+                <span>Difference: $0.00 • Reconciled</span>
+              </div>
+            `}
+          </div>
+
+          <!-- RIGHT: Identity & Actions -->
+          <div style="flex: 1.5; padding: 8px 24px; display: flex; align-items: center; justify-content: space-between;">
+            ${isAllMode ? `
+              <!-- ALL MODE: Scrollable Account List -->
+              <div style="display: flex; flex-direction: column; width: 100%; gap: 2px;">
+                <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Accounts</div>
+                <div style="max-height: 48px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px;">
+                  ${accounts.map(a => {
+      const isReconciled = isAccountReconciled(a);
+      return `
+                      <div onclick="window.switchAccount('${a.id}')" style="cursor: pointer; padding: 2px 0; font-size: 12px; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 6px; hover: background: #f1f5f9;">
+                        <span>${a.name || a.ref}</span>
+                        ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 13px; color: #10b981;"></i>' : ''}
+                      </div>
+                    `;
+    }).join('')}
+                </div>
+              </div>
+            ` : `
+              <!-- SELECTED ACCOUNT: Identity with Bank Icon -->
+              <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                ${acc ? `
+                  <div style="font-size: 28px;">${getBankIcon(acc.bankName)}</div>
+                  <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; flex: 1;">
+                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #1e293b;">
+                      ${acc.bankName || 'RBC'} ${isLiability ? 'Credit Card' : 'Chequing'}${acc.brand ? ' • ' + acc.brand : ''}
+                    </div>
+                    <div style="font-size: 11px; font-weight: 500; color: #64748b;">
+                      ${isLiability ? `
+                        •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}
+                      ` : `
+                        Transit ${acc.transit || '00000'} • Inst ${acc.inst || '000'} • Account •••• ${(acc.accountNumber || '').slice(-4) || '0000'}
+                      `}
+                    </div>
+                  </div>
+                ` : `
+                  <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px;">
+                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
+                    <div style="font-family: ${terminalFont}; font-size: 12px; color: #64748b; opacity: 0.6;">&gt; No account selected</div>
+                  </div>
+                `}
+              </div>
+            `}
+
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+                <span>Synced 2m ago</span>
+                <i class="ph ph-check" style="color: #10b981;"></i>
+              </div>
+              <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <i class="ph ph-plus-circle" style="font-size: 14px;"></i>
+                Import
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    `;
+
+
+  }
+
+  function getFilterToolbarHTML() {
+    return `
+      <!-- Sticky Filter Toolbar -->
+        <div style="position: sticky; top: 0; z-index: 30; height: 44px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 12px;">
+          <!-- LEFT: Search + Filters -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="position: relative;">
+              <i class="ph ph-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 14px;"></i>
+              <input type="text" id="v5-search-input" placeholder="Search transactions..." value="${UI_STATE.searchQuery || ''}" oninput="window.handleSearch(this.value)" style="padding: 6px 12px 6px 32px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; width: 240px; background: white;" />
+            </div>
+            <select onchange="window.filterByCategory(this.value)" style="padding: 6px 28px 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; color: #64748b; background: white; cursor: pointer; appearance: none;">
+              <option value="">All categories</option>
+              <option value="ASSET">💰 Assets</option>
+              <option value="LIABILITY">📊 Liabilities</option>
+              <option value="EQUITY">📈 Equity</option>
+              <option value="REVENUE">💵 Revenue</option>
+              <option value="EXPENSE">💳 Expenses</option>
+            </select>
+            <select style="padding: 6px 28px 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; color: #64748b; background: white; cursor: pointer; appearance: none;">
+              <option>All dates</option>
+            </select>
+          </div>
+
+          <!-- RIGHT: View Controls -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; border: 1px solid #e2e8f0; border-radius: 6px; background: white; overflow: hidden;">
+              <button onclick="window.setDensity('compact')" style="padding: 5px 12px; border: none; background: ${UI_STATE.density === 'compact' ? '#eff6ff' : 'transparent'}; color: ${UI_STATE.density === 'compact' ? '#3b82f6' : '#64748b'}; font-size: 11px; font-weight: 600; cursor: pointer; border-right: 1px solid #e2e8f0;">Compact</button>
+              <button onclick="window.setDensity('comfortable')" style="padding: 5px 12px; border: none; background: ${!UI_STATE.density || UI_STATE.density === 'comfortable' ? '#eff6ff' : 'transparent'}; color: ${!UI_STATE.density || UI_STATE.density === 'comfortable' ? '#3b82f6' : '#64748b'}; font-size: 11px; font-weight: 600; cursor: pointer; border-right: 1px solid #e2e8f0;">Comfortable</button>
+              <button onclick="window.setDensity('spacious')" style="padding: 5px 12px; border: none; background: ${UI_STATE.density === 'spacious' ? '#eff6ff' : 'transparent'}; color: ${UI_STATE.density === 'spacious' ? '#3b82f6' : '#64748b'}; font-size: 11px; font-weight: 600; cursor: pointer;">Spacious</button>
+            </div>
+            <button onclick="window.toggleSettings(true)" style="padding: 6px 12px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <i class="ph ph-columns" style="font-size: 14px; color: #64748b;"></i>
+              <span style="font-size: 12px; color: #64748b; font-weight: 600;">Columns</span>
+            </button>
+          </div>
+        </div>
+    `;
+  }
+
+  // Real-time opening balance update helper
+  window.updateOpeningBalance = function (val) {
+    const raw = val.replace(/[^0-9.-]/g, '');
+    const num = parseFloat(raw);
+    if (!isNaN(num)) {
+      const activeAcc = window.RoboLedger.Accounts.getAll().find(a => a.id === UI_STATE.selectedAccount);
+      if (activeAcc) {
+        activeAcc.openingBalance = num;
+
+        // SURGICAL UPDATE: Recalculate and update DOM directly to avoid grid unmount
+        const allTxns = window.RoboLedger.Ledger.getAll();
+        const filteredTxns = allTxns.filter(t => t.account_id === activeAcc.id);
+        const totalDebits = filteredTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+        const totalCredits = filteredTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+
+        const newEndingBalance = num - totalDebits + totalCredits;
+
+        const elClosing = document.getElementById('header-closing-balance');
+        if (elClosing) {
+          elClosing.innerText = `$${newEndingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} `;
+        }
+      }
+    }
+  };
+
+
+
+
+  function getTxnIngestionHTML() {
+    const progress = UI_STATE.ingestionProgress || 0;
+    const label = UI_STATE.ingestionLabel || 'Parsing bank statement...';
+
+    return `
+      <div class="header-card v5-glass" style="display: flex; flex-direction: column; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: white; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); margin: 0 20px 20px 20px;">
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%);">
+          <!-- Animated Icon -->
+          <div style="margin-bottom: 32px; position: relative;">
+            <i class="ph ph-file-text pulsing" style="font-size: 64px; color: #3b82f6; opacity: 0.9;"></i>
+            <div style="position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; background: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <i class="ph ph-check" style="font-size: 14px; color: white; font-weight: bold;"></i>
+            </div>
+          </div>
+
+          <!-- Title -->
+          <div style="font-size: 20px; font-weight: 800; color: #1e293b; margin-bottom: 8px;">Processing Statement</div>
+          <div style="font-size: 13px; color: #64748b; margin-bottom: 32px;">${label}</div>
+
+          <!-- Progress Bar -->
+          <div style="width: 100%; max-width: 400px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Progress</span>
+              <span style="font-size: 12px; font-weight: 800; color: #3b82f6;">${Math.round(progress)}%</span>
+            </div>
+            <div style="height: 8px; background: #e2e8f0; border-radius: 10px; overflow: hidden; width: 100%; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);">
+              <div style="width: ${progress}%; height: 100%; background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%); transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 10px;"></div>
+            </div>
+          </div>
+
+          <!-- Status Messages -->
+          <div style="margin-top: 24px; font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.6;">
+            <div>✓ Extracting transaction data</div>
+            <div>✓ Identifying patterns and accounts</div>
+            <div style="opacity: ${progress > 50 ? 1 : 0.3};">✓ Calculating balances</div>
+          </div>
+        </div>
+      </div >
+      `;
+  }
+
+  function getTxnEmptyStateHTML() {
+    return `
+      <div class="grid-card-empty">
+        <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 24px; opacity: 0.5;">
+          <path d="M30 25 L30 95 C30 97.2 31.8 99 34 99 L86 99 C88.2 99 90 97.2 90 95 L90 25 C90 22.8 88.2 21 86 21 L34 21 C31.8 21 30 22.8 30 25 Z" stroke="#94a3b8" stroke-width="6" fill="none" stroke-linejoin="round"/>
+          <line x1="60" y1="21" x2="60" y2="99" stroke="#94a3b8" stroke-width="3"/>
+          <line x1="70" y1="40" x2="82" y2="40" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+          <line x1="70" y1="52" x2="82" y2="52" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+          <line x1="70" y1="64" x2="82" y2="64" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+          <path d="M55 105 L60 110 L65 105" stroke="#94a3b8" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 8px;">No transactions yet.</div>
+        <div style="font-size: 14px; color: #64748b; max-width: 480px; text-align: center; line-height: 1.5;">Import your bank statement or add your first entry manually to get started.</div>
+      </div>
+      `;
+  }
+
+  function renderTransactionsRestored() {
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const allTransactions = window.RoboLedger.Ledger.getAll();
+    const filteredData = UI_STATE.selectedAccount === 'ALL' ? allTransactions : allTransactions.filter(t => t.account_id === UI_STATE.selectedAccount);
+    const hasData = filteredData.length > 0;
+
+    // Flat workspace structure - NO CARDS
+    let mainContent = "";
+    if (UI_STATE.isIngesting) {
+      mainContent = `
+        ${getTxnIngestionHTML()}
+    <div id="txnGrid" style="flex: 1; min-height: 480px; position: relative; background: #ffffff;">
+      ${getTxnEmptyStateHTML()}
+    </div>
+    `;
+    } else if (!hasData) {
+      mainContent = `
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: #fafbfc;">
+        ${getTxnEmptyStateHTML()}
+      </div>
+      `;
+    } else {
+      // Edge-to-edge grid
+      mainContent = `
+      <div style="flex: 1; display: flex; flex-direction: column; background: white;">
+        <div id="txnGrid" style="height: 100%; width: 100%; display: flex; flex-direction: column;"></div>
+      </div>
+      `;
+    }
+
+    return `
+      <div class="transactions-workspace" style="width: 100%; height: 100%; display: flex; flex-direction: column; background: #ffffff;">
+        ${getAccountWorkspaceHeaderHTML()}
+        ${hasData ? getFilterToolbarHTML() : ''}
+        ${mainContent}
+      </div>
+      `;
+  }
+
   window.txnTable = null;
 
-  function initGrid() {
+  function initGrid(passedData) {
     const gridDiv = document.querySelector('#txnGrid');
     if (!gridDiv) return;
 
-    // Clear existing
+    // Clear existing Tabulator if it exists
     if (window.txnTable) {
       window.txnTable.destroy();
       window.txnTable = null;
     }
 
-    // Get filtered and repaired transaction data
-    let data = window.RoboLedger.Ledger.getAll();
-    const accounts = window.RoboLedger.Accounts.getAll();
+    // Use passed data or fetch all from Ledger
+    let data = passedData || window.RoboLedger.Ledger.getAll();
+    if (!data || data.length === 0) return;
 
-    // ACCOUNT FILTERING (FIX)
-    if (UI_STATE.selectedAccount && UI_STATE.selectedAccount !== 'ALL') {
-      data = data.filter(t => t.account_id === UI_STATE.selectedAccount);
+    // React Mounting Logic (TanStack Table - Vite Bundled)
+    const canUseReact = window.mountTransactionsTable && !window.location.protocol.startsWith('file');
+
+    if (canUseReact) {
+      console.log("[GRID] Attempting React/TanStack mount...");
+      window.mountTransactionsTable(data, UI_STATE.searchQuery);
+      return;
     }
+
+    // Fallback to Vanilla Tabulator if React bridge is missing or we are on file://
+    console.warn("[GRID] React bridge missing or incompatible. Falling back to Vanilla Tabulator.");
+
+    console.log("[GRID] Initializing data for", data.length, "transactions");
 
     // YEAR REPAIR (2026 -> 2023) - AGGRESSIVE
     data.forEach(txn => {
-      // Force repair all potential date fields to 2023
       const repair = (val) => {
         if (typeof val === 'string' && val.includes('2026')) return val.replace(/2026/g, '2023');
         return val;
@@ -1255,375 +1811,68 @@
       txn.raw_date = repair(txn.raw_date);
     });
 
-    console.log("[GRID] Raw data from Ledger:", data.length, "transactions");
-    console.log("[GRID DEBUG] First transaction:", data[0]);
-    console.log("[GRID DEBUG] Date field:", data[0]?.date_iso || data[0]?.date);
-    console.log("[GRID DEBUG] Account field:", data[0]?.account_id);
-
     // Calculate running balance based on account type (Asset vs Liability)
-    const activeAcc = accounts.find(a => a.id === UI_STATE.selectedAccount);
+    const allAccounts = window.RoboLedger?.Accounts?.getAll() || [];
+    const activeAcc = allAccounts.find(a => a.id === UI_STATE.selectedAccount);
     const isLiability = activeAcc && (activeAcc.brand || /VISA|MC|AMEX|CREDIT/i.test(activeAcc.name || ''));
 
     let runningBalance = activeAcc ? (Math.round((activeAcc.openingBalance || 0) * 100)) : 0;
 
     data.forEach((txn, index) => {
       if (isLiability) {
-        // Liability: Debits increase balance, Credits decrease it
         if (txn.polarity === 'DEBIT') runningBalance += txn.amount_cents || 0;
         else if (txn.polarity === 'CREDIT') runningBalance -= txn.amount_cents || 0;
       } else {
-        // Asset: Credits increase balance, Debits decrease it
         if (txn.polarity === 'CREDIT') runningBalance += txn.amount_cents || 0;
         else if (txn.polarity === 'DEBIT') runningBalance -= txn.amount_cents || 0;
       }
       txn.balance = runningBalance;
     });
 
-    // Inject sequence and source_ref (FORCE Recalculate for current prefix visibility)
     data.forEach((txn, index) => {
-      const acc = accounts.find(a => a.id === txn.account_id);
+      const acc = allAccounts.find(a => a.id === txn.account_id);
       const prefix = acc ? (acc.ref || "TXN") : "TXN";
-      txn.source_ref = `${prefix}-${String(index + 1).padStart(3, '0')}`;
+      txn.source_ref = `${prefix} -${String(index + 1).padStart(3, '0')} `;
     });
 
-    console.log("[GRID] Initializing Tabulator v5.5 on", gridDiv);
-
-    // Dynamic Ref# Generator
-    const getRefPrefix = () => {
-      const input = document.querySelector('.cloudy-ref-input');
-      return input ? input.value || "TXN" : "TXN";
-    };
-
-    window.txnTable = new Tabulator(gridDiv, {
-      // data: REMOVED - loaded via tableBuilt callback instead
-      height: "100%", // Wall-to-Wall height
-      layout: "fitColumns",
-      reactiveData: false, // DISABLED - LedgerWorkspace manages state
-      index: "id", // Stable ID
-      rowHeight: 32, // Professional V5 density
-      headerFilterLiveFilterDelay: 600,
-      headerSort: true, // Enable column sorting
-      headerSortTristate: true, // Allow asc, desc, none
-      pagination: "local",
-      paginationSize: 50,
-      paginationSizeSelector: [50, 100, 200, 300, 500],
-      paginationCounter: "rows",
-      rowHeader: { headerSort: false, resizable: false, minWidth: 20, width: 25, rowHandle: true, formatter: "handle" },
-      movableRows: true, // Cool reshuffle effect
-      renderHorizontal: "virtual",
-      progressiveRender: true,
-
-      cellEdited: function (cell) {
-        console.log("[GRID] Cell edited, persisting change.");
-        window.RoboLedger.Ledger.save();
-      },
-
-      dataSorted: function (sorters, rows) {
-        // Re-sequence Ref# live after sort
-        if (window.txnTable) window.txnTable.redraw(true);
-      },
-
-      // 🚨 CRITICAL FIX — BOOT SEQUENCE
-      tableBuilt: function () {
-        console.log("[Tabulator] Table fully built");
-        // Workspace orchestration now happens in render() lifecycle
-
-        // Restore hidden columns from localStorage
-        try {
-          const hiddenColumns = JSON.parse(localStorage.getItem("rl_hidden_columns") || "[]");
-          if (hiddenColumns.length > 0) {
-            const columns = window.txnTable.getColumns();
-            columns.forEach(col => {
-              const field = col.getField();
-              if (field && hiddenColumns.includes(field)) {
-                col.hide();
-              }
-            });
-            console.log("[Column Manager] Restored hidden columns:", hiddenColumns);
-          }
-        } catch (e) {
-          console.error("[Column Manager] Failed to restore hidden columns", e);
-        }
-      },
-
-      // Column Definitions
-      columns: [
-        
-        // 1. Ref# (Dynamic)
-        {
-          title: "Ref#",
-          field: "ref",
-          width: 120, // INCREASED
-          headerSort: true,
-          headerHozAlign: "left",
-          formatter: (cell) => {
-            // If explicitly set, use it. Else calc dynamic.
-            const val = cell.getValue();
-            if (val) return `<span style="color: #64748b;">${val}</span>`;
-
-            const rowIndex = cell.getRow().getPosition(true) + 1; // 1-based index
-            const prefix = getRefPrefix();
-            const code = `${prefix} -${String(rowIndex).padStart(3, '0')} `;
-            return `<span style="color: #94a3b8;">${code}</span>`;
-          }
-        },
-
-        // 2. Source (Prefix Only - e.g., "MC1-001")
-        {
-          title: "Source",
-          field: "source_ref",
-          width: 145, // WIDENED significantly
-          headerSort: true,
-          headerHozAlign: "left",
-          formatter: (cell) => {
-            const val = cell.getValue() || "CSV";
-            return `<span style="font-weight: 700; color: #64748b; font-size: 10px;">${val}</span>`;
-          }
-        },
-        // 3. Date
-        {
-          title: "Date",
-          field: "date",
-          width: 130,
-          headerSort: true,
-          headerHozAlign: "left",
-          formatter: (cell) => {
-            const val = cell.getValue();
-            if (!val) return '<span style="color: #cbd5e1;">---</span>';
-            // Clean M/D/YYYY or DD MMM
-            return `<span style="font-weight: 600; color: #475569;">${val}</span>`;
-          }
-        },
-
-        // 4. Payee / Description (2-Line: Name top, Description bottom, Sentence Case, No Dates)
-        {
-          title: "Payee / Description",
-          field: "description",
-          widthGrow: 2,
-          headerSort: true,
-          headerHozAlign: "left",
-          editor: "input",
-          formatter: (cell) => {
-            const row = cell.getRow().getData();
-            const cleanName = row.description || "Unknown";
-            const rawDetail = row.raw_description || "";
-            
-            // Convert to sentence case helper
-            const toSentenceCase = (str) => {
-              if (!str) return '';
-              return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-            };
-            
-            // Extract clean name (sentence case)
-            const displayName = toSentenceCase(cleanName);
-            
-            // Clean description: remove dates, account numbers, redundant words
-            const datePattern = /\b(\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{2,4}|\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})\b/gi;
-            const accountPattern = /\b(acc|account|ref|#)[-:\s]*\w+\b/gi;
-            
-            // Extract words from name to filter from description
-            const nameWords = cleanName.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-            const rawWords = rawDetail.split(/\s+/);
-            
-            const filteredWords = rawWords.filter(word => {
-              const wordLower = word.toLowerCase().replace(/[^a-z0-9]/g, '');
-              if (wordLower.length < 2) return false;
-              // Remove if it's a duplicate from name
-              const isDupe = nameWords.some(nw => {
-                const clean = nw.replace(/[^a-z0-9]/g, '');
-                return clean && wordLower.includes(clean);
-              });
-              return !isDupe;
-            });
-            
-            let cleanDetail = filteredWords.join(' ')
-              .replace(datePattern, '')
-              .replace(accountPattern, '')
-              .replace(/\s{2,}/g, ' ')
-              .trim();
-            
-            const displayDetail = toSentenceCase(cleanDetail);
-            
-            return `
-              <div style="display: flex; flex-direction: column; gap: 2px;">
-                <div style="font-weight: 700; color: #1e293b; font-size: 13px; line-height: 1.2;">
-                  ${displayName}
-                </div>
-                <div style="font-size: 11px; color: #64748b; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                  ${displayDetail || '—'}
-                </div>
-              </div>
-            `;
-          }
-        },
-
-        // 5. Debit (Split Accounting)
-        {
-          title: "Debit",
-          field: "debit_col",
-          width: 110,
-          headerSort: true,
-          headerHozAlign: "left",
-          hozAlign: "right",
-          editor: "number",
-          editorParams: { min: 0, step: 0.01 },
-          formatter: (cell) => {
-            const row = cell.getRow().getData();
-            if (row.polarity === 'DEBIT' && row.amount_cents > 0) {
-              const val = (row.amount_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-              return `<span style="color: #ef4444;">${val}</span>`; // RED DEBIT
-            }
-            return `<span style="color: #e2e8f0;">-</span>`;
-          },
-          cellEdited: (cell) => {
-            const val = parseFloat(cell.getValue());
-            const row = cell.getRow();
-            if (!isNaN(val) && val > 0) {
-              // SET DEBIT
-              row.update({
-                polarity: 'DEBIT',
-                amount_cents: Math.round(val * 100)
-              });
-            } else {
-              // CLEAR (If user deleted val)
-              // If it was debit, clear it.
-              const curr = row.getData();
-              if (curr.polarity === 'DEBIT') row.update({ amount_cents: 0 });
-            }
-          },
-          cssClass: "amount-negative" // Dark gray
-        },
-
-        // 6. Credit (Split Accounting)
-        {
-          title: "Credit",
-          field: "credit_col",
-          width: 110,
-          headerSort: true,
-          headerHozAlign: "left",
-          hozAlign: "right",
-          editor: "number",
-          editorParams: { min: 0, step: 0.01 },
-          formatter: (cell) => {
-            const row = cell.getRow().getData();
-            if (row.polarity === 'CREDIT' && row.amount_cents > 0) {
-              const val = (row.amount_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-              return `<span style="color: #10b981;">${val}</span>`;
-            }
-            return `<span style="color: #e2e8f0;">-</span>`;
-          },
-          cellEdited: (cell) => {
-            const val = parseFloat(cell.getValue());
-            const row = cell.getRow();
-            if (!isNaN(val) && val > 0) {
-              // SET CREDIT (Mutually exclusive)
-              row.update({
-                polarity: 'CREDIT',
-                amount_cents: Math.round(val * 100)
-              });
-            } else {
-              const curr = row.getData();
-              if (curr.polarity === 'CREDIT') row.update({ amount_cents: 0 });
-            }
-          }
-        },
-
-        // 7. Balance (Running Total)
-        {
-          title: "Balance",
-          field: "balance",
-          width: 110,
-          headerSort: true,
-          headerHozAlign: "left",
-          hozAlign: "right",
-          formatter: (cell) => {
-            const balance = cell.getValue() || 0;
-            const formatted = (balance / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-            return `<span style="color: #0f172a;">${formatted}</span>`; // BLACK BALANCE
-          }
-        },
-
-        // 8. Category (COA Assignment)
-        {
-          title: "Category",
-          field: "gl_account_id",
-          width: 250,
-          headerSort: true,
-          headerHozAlign: "left",
-          editor: "select",
-          editorParams: {
-            values: function (cell) {
-              return window.RoboLedger.COA.getAll().map(cat => ({
-                label: `(${cat.code}) ${cat.name}`,
-                value: cat.code
-              }));
-            },
-            search: true
-          },
-          formatter: (cell) => {
-            const val = cell.getValue();
-            const coa = window.RoboLedger.COA.get(val);
-            const label = coa ? coa.name : "Suspense (Uncategorized)";
-            const color = coa ? "#3b82f6" : "#94a3b8";
-
-            return `
-              <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 100%; color: ${color}; font-weight: 600; font-style: ${coa ? 'normal' : 'italic'};">
-                <span>${label}</span>
-                <i class="ph ph-caret-down" style="font-size: 10px; margin-left: auto; opacity: 0.4;"></i>
-              </div>
-            `;
-          },
-          cellEdited: function (cell) {
-            const code = cell.getValue();
-            const coa = window.RoboLedger.COA.get(code);
-            const rowData = cell.getRow().getData();
-
-            try {
-              window.RoboLedger.Ledger.updateMetadata(rowData.tx_id, {
-                gl_account_id: code,
-                category_name: coa ? coa.name : "UNCATEGORIZED",
-                category_code: code,
-                status: 'CONFIRMED'
-              });
-            } catch (err) {
-              console.error("[LEDGER] Failed to update metadata", err);
-            }
-
-            if (UI_STATE.selectedAccount === "0000" && code) {
-              cell.getRow().delete();
-              if (getUnassignedCount() === 0) {
-                UI_STATE.selectedAccount = "ALL";
-              }
-              window.render();
-            }
-          }
-        }
-      ]
-    }); // End new Tabulator({...})
-
-    // Manually trigger tableBuilt after renderer is ready
-    setTimeout(() => {
-      if (window.txnTable.options.tableBuilt) {
-        window.txnTable.options.tableBuilt.call(window.txnTable);
-      }
-    }, 10);
-
-    // Attach Event Listeners
-    window.txnTable.on("rowClick", function (e, row) {
-      // Prevent audit drawer open if clicking action buttons or editors
-      if (e.target.closest('.action-btn') || 
-          e.target.closest('.tabulator-editable')) return;
-
-      const data = row.getData();
-      if (data.sourceFileId) {
-        window.toggleWorkbench(true, data.sourceFileId);
-      }
-    });
-
-    // Event Hook removed from repetitive init loop to prevent re-registration bugs
+    data._initialized = true;
+    initGrid(data);
   }
 
-  // renderWorkbenchPDF helper function (toggleWorkbench already defined above)
+  // --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
+  /* These are now wired via the React bridge and global state */
+
+
+  // Global exports for Action Bar
+  window.bulkCategorize = () => {
+    // Updated for React: This will need to pull selection from React state or a shared selection store
+    console.warn("[Bulk] bulkCategorize invoked. Selection handling pending React integration.");
+    // window.showAIAuditPanel(targets, 'selected');
+  };
+
+  window.bulkDelete = () => {
+    console.warn("[Bulk] bulkDelete invoked. Selection handling pending React integration.");
+    /*
+    const targets = []; // Get from React selection
+    if (confirm(`Delete ${ targets.length } transactions ? `)) {
+      targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
+      window.render();
+    }
+    */
+  };
+
+  window.toggleWorkbench = function (isOpen, fileId = null) {
+    UI_STATE.workbenchOpen = isOpen;
+    UI_STATE.activeFileId = fileId || UI_STATE.activeFileId;
+
+    if (isOpen) {
+      document.body.classList.add('workbench-active');
+      renderWorkbenchPDF(UI_STATE.activeFileId);
+    } else {
+      document.body.classList.remove('workbench-active');
+    }
+  };
+
   async function renderWorkbenchPDF(fileId) {
     const container = document.getElementById('v5-pdf-curtain-content');
     const label = document.getElementById('v5-curtain-filename');
@@ -1671,46 +1920,46 @@
     }
     const modeLabel = mode === 'selected' ? `${targets.length} Selected Vendors` : `${targets.length} Vendors for Forensic Audit`;
     panel.innerHTML = `
-    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
-    <div style="background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); max-width: 500px; width: 90%; overflow: hidden;">
+      <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
+      <div style="background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); max-width: 500px; width: 90%; overflow: hidden;">
 
-      <div style="padding: 24px; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
-        <div style="display: flex; align-items: center; gap: 8px; background: #8b5cf6; padding: 6px 14px; border-radius: 20px; width: fit-content; margin-bottom: 16px;">
-          <i class="ph ph-sparkle" style="color: white; font-size: 14px;"></i>
-          <span style="color: white; font-weight: 700; font-size: 11px; text-transform: uppercase;">Turbo AI Audit</span>
-        </div>
-        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">Run Classification</h3>
-        <p style="margin: 4px 0 0; color: #64748b; font-size: 0.85rem;">${modeLabel}</p>
-      </div>
-
-      <div style="padding: 24px;">
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-          <div style="padding: 16px; border: 2px solid #8b5cf6; background: #f5f3ff; border-radius: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer;">
-            <i class="ph ph-sparkle" style="color: #8b5cf6; font-size: 20px;"></i>
-            <div style="flex: 1;">
-              <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Google Gemini AI</div>
-              <div style="font-size: 0.8rem; color: #64748b;">Context-aware, 99% accuracy</div>
-            </div>
-            <i class="ph ph-check-circle" style="color: #8b5cf6; font-size: 20px;"></i>
+        <div style="padding: 24px; border-bottom: 1px solid #f1f5f9; background: #fafafa;">
+          <div style="display: flex; align-items: center; gap: 8px; background: #8b5cf6; padding: 6px 14px; border-radius: 20px; width: fit-content; margin-bottom: 16px;">
+            <i class="ph ph-sparkle" style="color: white; font-size: 14px;"></i>
+            <span style="color: white; font-weight: 700; font-size: 11px; text-transform: uppercase;">Turbo AI Audit</span>
           </div>
+          <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">Run Classification</h3>
+          <p style="margin: 4px 0 0; color: #64748b; font-size: 0.85rem;">${modeLabel}</p>
+        </div>
 
-          <div style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.6; cursor: not-allowed;">
-            <i class="ph ph-lightning" style="color: #f59e0b; font-size: 20px;"></i>
-            <div style="flex: 1;">
-              <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Local Logic</div>
-              <div style="font-size: 0.8rem; color: #64748b;">Fast, pattern-based (v5.0 default)</div>
+        <div style="padding: 24px;">
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="padding: 16px; border: 2px solid #8b5cf6; background: #f5f3ff; border-radius: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer;">
+              <i class="ph ph-sparkle" style="color: #8b5cf6; font-size: 20px;"></i>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Google Gemini AI</div>
+                <div style="font-size: 0.8rem; color: #64748b;">Context-aware, 99% accuracy</div>
+              </div>
+              <i class="ph ph-check-circle" style="color: #8b5cf6; font-size: 20px;"></i>
+            </div>
+
+            <div style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.6; cursor: not-allowed;">
+              <i class="ph ph-lightning" style="color: #f59e0b; font-size: 20px;"></i>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Local Logic</div>
+                <div style="font-size: 0.8rem; color: #64748b;">Fast, pattern-based (v5.0 default)</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div style="padding: 16px 24px 24px; display: flex; gap: 12px; justify-content: flex-end;">
-        <button onclick="document.getElementById('ai-audit-panel').remove()" style="padding: 10px 20px; background: transparent; border: none; font-weight: 600; color: #64748b; cursor: pointer;">Cancel</button>
-        <button id="start-audit-btn" style="padding: 10px 24px; background: #8b5cf6; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);">Start Analysis</button>
+        <div style="padding: 16px 24px 24px; display: flex; gap: 12px; justify-content: flex-end;">
+          <button onclick="document.getElementById('ai-audit-panel').remove()" style="padding: 10px 20px; background: transparent; border: none; font-weight: 600; color: #64748b; cursor: pointer;">Cancel</button>
+          <button id="start-audit-btn" style="padding: 10px 24px; background: #8b5cf6; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);">Start Analysis</button>
+        </div>
       </div>
-    </div>
       </div >
-    `;
+      `;
 
     document.getElementById('start-audit-btn').onclick = () => {
       panel.remove();
@@ -1733,35 +1982,17 @@
   };
 
   // Expose toggle helpers to window scope
-  window.toggleSettings = toggleSettings;
+  if (typeof toggleSettings !== 'undefined') window.toggleSettings = toggleSettings;
   window.toggleWorkbench = window.toggleWorkbench;
   window.openSourceFile = (id) => window.toggleWorkbench(true, id);
 
-  // Wire Column Manager and Export dropdown
-  document.addEventListener("click", (e) => {
-    const exportBtn = e.target.closest('[data-action="export"]');
-    const columnsBtn = e.target.closest('[data-action="columns"]');
-    const menu = document.getElementById("exportMenu");
-
-    // Export button clicked → toggle menu
-    if (exportBtn) {
-      e.stopPropagation();
-      menu?.classList.toggle("hidden");
-      return;
-    }
-
-    // Columns button clicked → open manager
-    if (columnsBtn) {
-      e.stopPropagation();
-      window.openColumnManager?.();
-      return;
-    }
-
-    // Click anywhere else → close menu
-    if (menu && !menu.contains(e.target)) {
-      menu.classList.add("hidden");
+  // Keyboard shortcut: Cmd+. to toggle inspector panel
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+      e.preventDefault();
+      if (window.togglePanel) window.togglePanel();
     }
   });
 
-  init();
+  if (typeof init === 'function') init();
 })();

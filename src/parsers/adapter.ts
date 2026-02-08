@@ -16,6 +16,7 @@ export interface NormalizedTransaction {
         page: number;
         y_coord: number;
     };
+    source_file_id?: string;
 }
 
 export class ParserAdapter {
@@ -28,7 +29,8 @@ export class ParserAdapter {
             date: this.normalizeDate(raw.raw_date),
             raw_description: raw.raw_description.trim(),
             amount_cents: this.parseAmount(raw.raw_amount),
-            currency: currency.toUpperCase()
+            currency: currency.toUpperCase(),
+            source_file_id: raw.source_file_id
         };
 
         if (raw.page !== undefined && raw.y_coord !== undefined) {

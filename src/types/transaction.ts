@@ -37,6 +37,7 @@ export interface CanonicalTransaction {
         page: number;
         y_coord: number;
     };
+    readonly source_file_id?: string;
     readonly created_at: string;     // RFC-3339
 
     // VERSIONED
