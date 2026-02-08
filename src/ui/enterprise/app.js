@@ -1836,7 +1836,7 @@
     });
 
     data._initialized = true;
-    initGrid(data);
+    // Grid initialization complete - data is processed and ready
   }
 
   // --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
