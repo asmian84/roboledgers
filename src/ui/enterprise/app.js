@@ -483,12 +483,6 @@
     // Force a complete grid re-render
     if (window.renderTransactionsGrid) {
       window.renderTransactionsGrid(filtered, UI_STATE.searchQuery);
-    } else if (window.mountTransactionsTable) {
-      // Fallback to mount function if renderTransactionsGrid not available
-      console.warn('[GRID] renderTransactionsGrid missing, using mountTransactionsTable');
-      window.mountTransactionsTable(filtered, UI_STATE.searchQuery);
-    } else {
-      console.error('[GRID] No grid rendering function available!');
     }
 
     // Update header to reflect new account selection
@@ -1557,20 +1551,10 @@
                 <div style="max-height: 48px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px;">
                   ${accounts.map(a => {
       const isReconciled = isAccountReconciled(a);
-      const isLiabilityAcc = a.brand || /VISA|MC|AMEX|CREDIT/i.test(a.name || '');
-      const accountDetails = isLiabilityAcc
-        ? `•••• ${a.accountNumber ? a.accountNumber.slice(-4) : 'XXXX'}`
-        : `Transit ${a.transit || '00000'} • Inst ${a.inst || '000'} • Account •••• ${(a.accountNumber || '').slice(-4) || '0000'}`;
-
       return `
-                      <div onclick="window.switchAccount('${a.id}')" style="cursor: pointer; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid #f1f5f9;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                          <span style="font-size: 12px; font-weight: 600; color: #1e293b;">${a.name || a.ref}</span>
-                          ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 13px; color: #10b981;"></i>' : ''}
-                        </div>
-                        <div style="font-size: 10px; font-weight: 500; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
-                          ${accountDetails}
-                        </div>
+                      <div onclick="window.switchAccount('${a.id}')" style="cursor: pointer; padding: 2px 0; font-size: 12px; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 6px; hover: background: #f1f5f9;">
+                        <span>${a.name || a.ref}</span>
+                        ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 13px; color: #10b981;"></i>' : ''}
                       </div>
                     `;
     }).join('')}
@@ -1852,28 +1836,7 @@
     });
 
     data._initialized = true;
-
-    // Initialize Tabulator with processed data
-    window.txnTable = new Tabulator(gridDiv, {
-      data: data,
-      layout: "fitColumns",
-      height: "100%",
-      placeholder: "No Data Available",
-      columns: [
-        { title: "Date", field: "date", width: 100 },
-        { title: "Ref#", field: "source_ref", width: 100 },
-        { title: "Description", field: "description", width: 250 },
-        { title: "Debit", field: "debit_col", width: 100, formatter: "money", formatterParams: { precision: 2 } },
-        { title: "Credit", field: "credit_col", width: 100, formatter: "money", formatterParams: { precision: 2 } },
-        {
-          title: "Balance", field: "balance", width: 120, formatter: (cell) => {
-            const val = cell.getValue();
-            return `$${(val / 100).toFixed(2)}`;
-          }
-        },
-        { title: "Category", field: "coa_code", width: 150 }
-      ]
-    });
+    initGrid(data);
   }
 
   // --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
