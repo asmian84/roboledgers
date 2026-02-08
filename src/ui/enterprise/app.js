@@ -1635,7 +1635,7 @@
           </div>
         </div>
 
-        ${allTx.length > 0 ? `
+        ${filteredTxns.length > 0 ? `
         <!-- Professional Account Context Strip (Unified 2-Card) -->
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: stretch; min-height: 64px; overflow: hidden;">
           
