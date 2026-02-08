@@ -967,11 +967,16 @@ window.RoboLedger = (function () {
 
 
 
-
             // Bank Accounts: Use transit + account last 4
             if (metadata.transit && metadata.transit !== 'N/A' && metadata.transit !== '-----' && metadata.transit !== 'UNKNOWN') {
                 const accountNum = (metadata.accountNumber || metadata.account_num || '').replace(/\D/g, '');
                 const last4 = accountNum.slice(-4) || '0000';
+                return `BANK-${metadata.transit}-${last4}`;
+            }
+
+            // Fallback: timestamp-based ID
+            return `ACC-${Date.now()}`;
+        },
 
         processUpload: async function (file, account_id) {
             // Note: We'll generate account_id AFTER parsing metadata
