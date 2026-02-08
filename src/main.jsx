@@ -13,10 +13,16 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
         window._txGridRoot = ReactDOM.createRoot(container);
     }
 
+    // Filter out opening balance rows (reference points, not transactions)
+    const transactionsOnly = data.filter(tx => {
+        const desc = (tx.description || tx.raw_description || '').toLowerCase();
+        return !desc.includes('opening balance');
+    });
+
     // Mock status for better demo feel (keeping parity with index.html version)
     const statuses = ['Matched', 'Pending', 'Flagged', 'Imported'];
 
-    const canonicalData = data.map((tx, idx) => ({
+    const canonicalData = transactionsOnly.map((tx, idx) => ({
         ...tx,
         status: tx.status || statuses[idx % 4],
         payee: tx.description || tx.raw_description || 'Unknown',

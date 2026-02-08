@@ -159,7 +159,7 @@ const columns = [
 export function TransactionsTable({ data: initialData, globalFilter: initialGlobalFilter }) {
     const [data, setData] = useState(initialData || []);
     const [sorting, setSorting] = useState([{ id: 'date', desc: true }]);
-    const [columnVisibility, setColumnVisibility] = useState({});
+    const [columnVisibility, setColumnVisibility] = useState({ status: false }); // Hide status by default
     const [globalFilter, setGlobalFilter] = useState(initialGlobalFilter || '');
     const [rowSelection, setRowSelection] = useState({});
     const [density, setDensity] = useState('comfortable'); // compact | comfortable | spacious
