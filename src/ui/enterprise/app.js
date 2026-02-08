@@ -472,21 +472,27 @@
 
   window.switchAccount = function (accId) {
     console.log(`[V5 CONTROL] Switching to account: ${accId}`);
+    const previousAccount = UI_STATE.selectedAccount;
     UI_STATE.selectedAccount = accId;
 
-    // Always re-render the grid with proper filtering
+    // Get filtered transactions for the new account
     const allTx = window.RoboLedger.Ledger.getAll();
     const filtered = accId === 'ALL' ? allTx : allTx.filter(t => t.account_id === accId);
 
     console.log(`[GRID RENDER] Filtered ${filtered.length} transactions for account: ${accId}`);
 
-    // Force a complete grid re-render
+    // Update grid data ONLY (don't re-render entire page)
     if (window.renderTransactionsGrid) {
       window.renderTransactionsGrid(filtered, UI_STATE.searchQuery);
+    } else {
+      console.warn('[GRID] renderTransactionsGrid not available, grid will not update');
     }
 
-    // Update header to reflect new account selection
-    render();
+    // ONLY update the header section (not the entire page)
+    const headerContainer = document.querySelector('.v5-account-workspace-header');
+    if (headerContainer && previousAccount !== accId) {
+      headerContainer.outerHTML = getAccountWorkspaceHeaderHTML();
+    }
   };
 
   window.filterByCategory = function (rootCategory) {

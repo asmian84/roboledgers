@@ -33,4 +33,7 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     );
 };
 
+// Alias for backward compatibility
+window.renderTransactionsGrid = window.mountTransactionsTable;
+
 console.log('[VITE] React bridge established.');
