@@ -939,18 +939,34 @@ window.RoboLedger = (function () {
         // Generate unique account ID based on metadata
         generateAccountId: function (metadata) {
             // Credit Cards: Use brand + last 4 digits
-            if ((metadata._tag || metadata.tag || '').toUpperCase().includes('MASTERCARD')) {
-                const last4 = metadata.accountNumber?.slice(-4) || metadata._acct?.slice(-4) || '0000';
-                return `CC-MC-${last4}`;
+            // Credit Cards: Strip non-digits, validate length, use last 4
+            const tag = (metadata._tag || metadata.tag || metadata.cardNetwork || "").toUpperCase();
+            if (tag.includes("MASTERCARD") || tag.includes("VISA")) {
+                const cardNum = (metadata._acct || metadata.accountNumber || "").replace(/\D/g, "");
+                if (cardNum.length === 16) {
+                    const last4 = cardNum.slice(-4);
+                    return tag.includes("MASTERCARD") ? `CC-MC-${last4}` : `CC-VISA-${last4}`;
+                }
             }
-            if ((metadata._tag || metadata.tag || '').toUpperCase().includes('VISA')) {
-                const last4 = metadata.accountNumber?.slice(-4) || metadata._acct?.slice(-4) || '0000';
-                return `CC-VISA-${last4}`;
+            if (tag.includes("AMEX")) {
+                const cardNum = (metadata._acct || metadata.accountNumber || "").replace(/\D/g, "");
+                if (cardNum.length === 15) {
+                    const last4 = cardNum.slice(-4);
+                    return `CC-AMEX-${last4}`;
+                }
             }
-            if ((metadata._tag || metadata.tag || '').toUpperCase().includes('AMEX')) {
-                const last4 = metadata.accountNumber?.slice(-4) || metadata._acct?.slice(-4) || '0000';
-                return `CC-AMEX-${last4}`;
-            }
+
+
+
+
+
+
+
+
+
+
+
+
 
             // Bank Accounts: Use transit + account last 4
             if (metadata.transit && metadata.transit !== 'N/A' && metadata.transit !== '-----' && metadata.transit !== 'UNKNOWN') {
