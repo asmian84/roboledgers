@@ -939,16 +939,16 @@ window.RoboLedger = (function () {
         // Generate unique account ID based on metadata
         generateAccountId: function (metadata) {
             // Credit Cards: Use brand + last 4 digits
-            if (metadata.brand === 'MASTERCARD' || metadata.cardNetwork === 'MASTERCARD') {
-                const last4 = metadata.accountNumber?.slice(-4) || '0000';
+            if ((metadata._tag || metadata.tag || '').toUpperCase().includes('MASTERCARD')) {
+                const last4 = metadata.accountNumber?.slice(-4) || metadata._acct?.slice(-4) || '0000';
                 return `CC-MC-${last4}`;
             }
-            if (metadata.brand === 'VISA' || metadata.cardNetwork === 'VISA') {
-                const last4 = metadata.accountNumber?.slice(-4) || '0000';
+            if ((metadata._tag || metadata.tag || '').toUpperCase().includes('VISA')) {
+                const last4 = metadata.accountNumber?.slice(-4) || metadata._acct?.slice(-4) || '0000';
                 return `CC-VISA-${last4}`;
             }
-            if (metadata.brand === 'AMEX' || metadata.cardNetwork === 'AMEX') {
-                const last4 = metadata.accountNumber?.slice(-4) || '0000';
+            if ((metadata._tag || metadata.tag || '').toUpperCase().includes('AMEX')) {
+                const last4 = metadata.accountNumber?.slice(-4) || metadata._acct?.slice(-4) || '0000';
                 return `CC-AMEX-${last4}`;
             }
 
