@@ -635,7 +635,7 @@
     localStorage.setItem('roboledger_refPrefix', UI_STATE.refPrefix);
 
     // Trigger grid re-render to update ref numbers
-    window.render();
+    window.mountTanStackGrid();
     console.log(`[REF PREFIX] Updated to: ${UI_STATE.refPrefix}`);
   };
 
