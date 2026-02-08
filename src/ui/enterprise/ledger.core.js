@@ -501,12 +501,14 @@ window.RoboLedger = (function () {
         },
         updateMetadata: function (id, metadata) {
             let acc = this.get(id);
+            const isNewAccount = !acc;
+
             if (!acc) {
                 console.log(`[ACCOUNTS] Creating new account record: ${id}`);
                 acc = {
                     id: id,
                     name: metadata.name || 'New Account',
-                    ref: 'CHQ1',
+                    ref: 'TEMP', // Will be auto-assigned below
                     openingBalance: 0,
                     expectedBalance: 0,
                     currency: 'CAD',
@@ -515,9 +517,9 @@ window.RoboLedger = (function () {
                 state.accounts.push(acc);
             }
 
+            // Update metadata fields
             acc.inst = metadata.id || acc.inst;
             acc.transit = metadata.transit || acc.transit;
-            acc.name = metadata.name || acc.name;
             acc.accountNumber = metadata.accountNumber || acc.accountNumber || metadata.account_num;
             acc.accountType = metadata.accountType || acc.accountType;
             acc.period = metadata.period || acc.period;
@@ -528,10 +530,49 @@ window.RoboLedger = (function () {
             acc.statementClosingDay = metadata.statementClosingDay || acc.statementClosingDay;
             acc.currency = metadata.currency || acc.currency || 'CAD';
 
-            // SMART REF SELECTION: Don't stick with 'CHQ' if we know it's a CC
-            if (acc.brand === 'MASTERCARD' && acc.ref === 'CHQ1') acc.ref = 'MC1';
-            else if (acc.brand === 'VISA' && acc.ref === 'CHQ1') acc.ref = 'VISA1';
-            else if (acc.brand === 'AMEX' && acc.ref === 'CHQ1') acc.ref = 'AMEX1';
+            // Auto-assign ref# for new accounts based on type
+            if (isNewAccount || acc.ref === 'TEMP' || acc.ref === 'CHQ1') {
+                const brand = acc.brand || acc.cardNetwork;
+                let refPrefix = 'CHQ'; // Default
+
+                if (brand === 'MASTERCARD') refPrefix = 'MC';
+                else if (brand === 'VISA') refPrefix = 'VISA';
+                else if (brand === 'AMEX') refPrefix = 'AMEX';
+                else if (acc.accountType === 'SAVINGS') refPrefix = 'SAV';
+
+                // Count existing accounts with same prefix
+                const existing = state.accounts.filter(a =>
+                    a.id !== id && a.ref && a.ref.startsWith(refPrefix)
+                );
+                const nextNum = existing.length + 1;
+                acc.ref = `${refPrefix}${nextNum}`;
+                console.log(`[ACCOUNTS] Auto-assigned ref#: ${acc.ref}`);
+            }
+
+            // Generate short display name
+            const bankShortNames = {
+                'Royal Bank of Canada': 'RBC',
+                'Toronto-Dominion Bank': 'TD',
+                'Toronto-Dominion': 'TD',
+                'Canadian Imperial Bank of Commerce': 'CIBC',
+                'CIBC': 'CIBC',
+                'Bank of Montreal': 'BMO',
+                'Scotiabank': 'Scotia',
+                'The Bank of Nova Scotia': 'Scotia'
+            };
+            const bankShort = bankShortNames[acc.bankName] || acc.bankName || metadata.name || 'Bank';
+            const last4 = acc.accountNumber?.slice(-4) || '0000';
+
+            if (acc.brand || acc.cardNetwork) {
+                // Credit Card
+                const brand = (acc.brand || acc.cardNetwork).split(' ')[0]; // "MASTERCARD" -> "MASTERCARD"
+                const brandShort = brand === 'MASTERCARD' ? 'MC' : brand;
+                acc.name = `${bankShort} - ${brandShort} #${last4}`;
+            } else {
+                // Bank Account
+                const typeShort = acc.accountType === 'SAVINGS' ? 'Savings' : 'Chequing';
+                acc.name = `${bankShort} - ${typeShort} #${last4}`;
+            }
 
             save();
         },
@@ -895,12 +936,36 @@ window.RoboLedger = (function () {
             return { id: '000', name: 'GENERIC PARSER', transit: 'UNKNOWN' };
         },
 
-        processUpload: async function (file, account_id) {
-            // Fix Ingestion Routing (Resolve 'ALL' to primary account)
-            if (account_id === 'ALL') {
-                const primary = Accounts.getAll()[0];
-                account_id = primary ? primary.id : 'ACC-001';
+        // Generate unique account ID based on metadata
+        generateAccountId: function (metadata) {
+            // Credit Cards: Use brand + last 4 digits
+            if (metadata.brand === 'MASTERCARD' || metadata.cardNetwork === 'MASTERCARD') {
+                const last4 = metadata.accountNumber?.slice(-4) || '0000';
+                return `CC-MC-${last4}`;
             }
+            if (metadata.brand === 'VISA' || metadata.cardNetwork === 'VISA') {
+                const last4 = metadata.accountNumber?.slice(-4) || '0000';
+                return `CC-VISA-${last4}`;
+            }
+            if (metadata.brand === 'AMEX' || metadata.cardNetwork === 'AMEX') {
+                const last4 = metadata.accountNumber?.slice(-4) || '0000';
+                return `CC-AMEX-${last4}`;
+            }
+
+            // Bank Accounts: Use transit + account last 4
+            if (metadata.transit && metadata.transit !== 'N/A' && metadata.transit !== '-----' && metadata.transit !== 'UNKNOWN') {
+                const last4 = metadata.accountNumber?.slice(-4) || metadata.account_num?.slice(-4) || '0000';
+                return `BANK-${metadata.transit}-${last4}`;
+            }
+
+            // Fallback: timestamp-based ID
+            return `ACC-${Date.now()}`;
+        },
+
+        processUpload: async function (file, account_id) {
+            // Note: We'll generate account_id AFTER parsing metadata
+            // Keep original account_id for now as placeholder
+            let originalAccountId = account_id;
 
             let rows = [];
             let metadata = { name: 'CSV File', transit: 'N/A' };
@@ -936,6 +1001,12 @@ window.RoboLedger = (function () {
 
                 // Attach source file id to each parsed row so it flows through the pipeline
                 rows = rows.map(r => ({ ...r, source_file_id: sourceFileId }));
+
+                // ===== INTELLIGENT ACCOUNT ID GENERATION =====
+                if (originalAccountId === 'ALL' || !originalAccountId) {
+                    account_id = this.generateAccountId(metadata);
+                    console.log(`[INGEST] Generated account_id: ${account_id} from metadata`);
+                }
 
                 Accounts.updateMetadata(account_id, metadata);
                 console.log(`[INGEST] DETECTED & UPDATED: ${metadata.name} (Transit: ${metadata.transit})`);
