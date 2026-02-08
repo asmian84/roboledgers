@@ -467,7 +467,7 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
                                                 borderRight: `1px solid ${GRID_TOKENS.borderColor}`
                                             }}
                                         >
-                                            <div className="w-full overflow-hidden">
+                                            <div className="w-full">
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                             </div>
                                         </div>
