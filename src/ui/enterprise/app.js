@@ -1977,7 +1977,7 @@
               id="ref-prefix-input" 
               placeholder="CHQ1" 
               value="${refPrefix}" 
-              oninput="window.updateRefPrefix(this.value)" 
+              onblur="window.updateRefPrefix(this.value)" maxlength="8" 
               style="padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 11px; width: 60px; background: white; font-family: 'JetBrains Mono', monospace; font-weight: 600; text-transform: uppercase; text-align: center;" 
             />
           </div>
