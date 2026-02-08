@@ -1801,6 +1801,13 @@
     };
 
     const terminalFont = "'Courier New', Courier, monospace";
+    const aggTotalBalance = accounts.reduce((sum, a) => sum + (a.openingBalance || 0), 0);
+    const aggTotalDebits = filteredTxns.filter(t => t.polarity === "DEBIT").reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+    const aggTotalCredits = filteredTxns.filter(t => t.polarity === "CREDIT").reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+    const aggNetActivity = aggTotalCredits - aggTotalDebits;
+
+
+    // Aggregate calculations for ALL accounts mode
 
 
     return `
@@ -1831,7 +1838,7 @@
 
         ${filteredTxns.length > 0 ? `
         <!-- Professional Account Context Strip (Unified 2-Card) -->
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: stretch; min-height: 64px; overflow: hidden;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: stretch; min-height: 64px; overflow: hidden; margin: 8px 16px; border: 1px solid transparent; background-image: linear-gradient(white, white), linear-gradient(135deg, #e2e8f0, #cbd5e1); background-origin: padding-box, border-box; background-clip: padding-box, border-box;">
           
           <!-- LEFT: Reconciliation Status -->
           <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 24px; display: flex; flex-direction: column; justify-content: center; gap: 2px;">
