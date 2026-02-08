@@ -1836,55 +1836,7 @@
     });
 
     data._initialized = true;
-
-    // NOW actually create the Tabulator table
-    window.txnTable = new Tabulator(gridDiv, {
-      data: data,
-      layout: "fitColumns",
-      height: "100%",
-      placeholder: "No Data Available",
-      columns: [
-        { title: "Date", field: "date", width: 100 },
-        { title: "Ref#", field: "source_ref", width: 100 },
-        { title: "Description", field: "description", width: 250 },
-        {
-          title: "Debit",
-          field: "debit_col",
-          width: 100,
-          formatter: (cell) => {
-            const txn = cell.getRow().getData();
-            if (txn.polarity === 'DEBIT') {
-              return `$${((txn.amount_cents || 0) / 100).toFixed(2)}`;
-            }
-            return '';
-          }
-        },
-        {
-          title: "Credit",
-          field: "credit_col",
-          width: 100,
-          formatter: (cell) => {
-            const txn = cell.getRow().getData();
-            if (txn.polarity === 'CREDIT') {
-              return `$${((txn.amount_cents || 0) / 100).toFixed(2)}`;
-            }
-            return '';
-          }
-        },
-        {
-          title: "Balance",
-          field: "balance",
-          width: 120,
-          formatter: (cell) => {
-            const val = cell.getValue();
-            return `$${(val / 100).toFixed(2)}`;
-          }
-        },
-        { title: "Category", field: "coa_code", width: 150 }
-      ]
-    });
-
-    console.log('[GRID] Tabulator table initialized with', data.length, 'rows');
+    // Grid initialization complete - data is processed and ready
   }
 
   // --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
