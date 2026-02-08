@@ -213,7 +213,7 @@
 
     // Get primary account for ingestion
     const primaryAccount = window.RoboLedger.Accounts.getAll()[0];
-    const account_id = primaryAccount ? primaryAccount.id : 'ACC-001';
+    const account_id = primaryAccount ? primaryAccount.id : 'ALL';
 
     let totalImported = 0;
 
