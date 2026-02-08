@@ -1770,17 +1770,9 @@
       `;
   }
 
-  window.txnTable = null;
-
   function initGrid(passedData) {
     const gridDiv = document.querySelector('#txnGrid');
     if (!gridDiv) return;
-
-    // Clear existing Tabulator if it exists
-    if (window.txnTable) {
-      window.txnTable.destroy();
-      window.txnTable = null;
-    }
 
     // Use passed data or fetch all from Ledger
     let data = passedData || window.RoboLedger.Ledger.getAll();
@@ -1790,53 +1782,13 @@
     const canUseReact = window.mountTransactionsTable && !window.location.protocol.startsWith('file');
 
     if (canUseReact) {
-      console.log("[GRID] Attempting React/TanStack mount...");
+      console.log("[GRID] Mounting React/TanStack grid...");
       window.mountTransactionsTable(data, UI_STATE.searchQuery);
       return;
     }
 
-    // Fallback to Vanilla Tabulator if React bridge is missing or we are on file://
-    console.warn("[GRID] React bridge missing or incompatible. Falling back to Vanilla Tabulator.");
-
-    console.log("[GRID] Initializing data for", data.length, "transactions");
-
-    // YEAR REPAIR (2026 -> 2023) - AGGRESSIVE
-    data.forEach(txn => {
-      const repair = (val) => {
-        if (typeof val === 'string' && val.includes('2026')) return val.replace(/2026/g, '2023');
-        return val;
-      };
-      txn.date = repair(txn.date);
-      txn.date_iso = repair(txn.date_iso);
-      txn.raw_date = repair(txn.raw_date);
-    });
-
-    // Calculate running balance based on account type (Asset vs Liability)
-    const allAccounts = window.RoboLedger?.Accounts?.getAll() || [];
-    const activeAcc = allAccounts.find(a => a.id === UI_STATE.selectedAccount);
-    const isLiability = activeAcc && (activeAcc.brand || /VISA|MC|AMEX|CREDIT/i.test(activeAcc.name || ''));
-
-    let runningBalance = activeAcc ? (Math.round((activeAcc.openingBalance || 0) * 100)) : 0;
-
-    data.forEach((txn, index) => {
-      if (isLiability) {
-        if (txn.polarity === 'DEBIT') runningBalance += txn.amount_cents || 0;
-        else if (txn.polarity === 'CREDIT') runningBalance -= txn.amount_cents || 0;
-      } else {
-        if (txn.polarity === 'CREDIT') runningBalance += txn.amount_cents || 0;
-        else if (txn.polarity === 'DEBIT') runningBalance -= txn.amount_cents || 0;
-      }
-      txn.balance = runningBalance;
-    });
-
-    data.forEach((txn, index) => {
-      const acc = allAccounts.find(a => a.id === txn.account_id);
-      const prefix = acc ? (acc.ref || "TXN") : "TXN";
-      txn.source_ref = `${prefix} -${String(index + 1).padStart(3, '0')} `;
-    });
-
-    data._initialized = true;
-    // Grid initialization complete - data is processed and ready
+    // No React bridge available
+    console.error("[GRID] React bridge missing. Grid cannot render. Make sure you're accessing via Vite dev server (port 5173).");
   }
 
   // --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
