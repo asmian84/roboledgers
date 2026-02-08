@@ -233,41 +233,104 @@ window.RoboLedger = (function () {
             confidence: 0.6,
             status: 'needs_review'
         },
+        // High-confidence rules (auto_categorized)
         {
-            pattern: /dd|direct dep|payroll/i,
-            category: '4100', // Consulting Income
-            confidence: 0.9,
+            pattern: /^e-transfer.*autodeposit$/i,
+            category: '4100', // Revenue
+            confidence: 0.95,
             status: 'auto_categorized'
         },
         {
-            pattern: /visa|mastercard|mc purchase/i,
-            category: '6000', // Operating Expenses
-            confidence: 0.5,
-            status: 'needs_review'
-        },
-        {
-            pattern: /fuel|gas station|petro-can|shell/i,
+            pattern: /petro|shell|esso|gas station|fuel/i,
             category: '8300', // Fuel
             confidence: 0.8,
             status: 'auto_categorized'
         },
         {
-            pattern: /restaurant|cafe|coffee|food/i,
+            pattern: /bank charge|service fee|monthly fee|transaction fee/i,
+            category: '8700', // Bank Charges
+            confidence: 0.9,
+            status: 'auto_categorized'
+        },
+        {
+            pattern: /payroll|salary|wages|cpp|ei deduction/i,
+            category: '7100', // Payroll Expenses
+            confidence: 0.85,
+            status: 'auto_categorized'
+        },
+        {
+            pattern: /rent|lease payment|landlord/i,
+            category: '8200', // Rent
+            confidence: 0.8,
+            status: 'auto_categorized'
+        },
+
+        // Medium-confidence rules (needs_review)
+        {
+            pattern: /restaurant|cafe|coffee|tim hortons|starbucks|food|dining/i,
             category: '8550', // Meals & Entertainment
             confidence: 0.7,
             status: 'needs_review'
         },
         {
-            pattern: /amazon|office depot|staples/i,
+            pattern: /amazon|office depot|staples|supplies/i,
             category: '8400', // Office Supplies
             confidence: 0.6,
             status: 'needs_review'
         },
         {
-            pattern: /bank charge|service fee|monthly fee/i,
-            category: '8700', // Bank Charges
-            confidence: 0.9,
-            status: 'auto_categorized'
+            pattern: /grocery|supermarket|safeway|walmart|loblaws|sobeys/i,
+            category: '8410', // Groceries (if business)
+            confidence: 0.65,
+            status: 'needs_review'
+        },
+        {
+            pattern: /insurance|liability coverage|policy premium/i,
+            category: '8600', // Insurance
+            confidence: 0.75,
+            status: 'needs_review'
+        },
+        {
+            pattern: /contractor|freelancer|consulting|professional services/i,
+            category: '7200', // Contract Labor
+            confidence: 0.7,
+            status: 'needs_review'
+        },
+        {
+            pattern: /software|saas|subscription|microsoft|adobe|google workspace/i,
+            category: '8450', // Software & Subscriptions
+            confidence: 0.75,
+            status: 'needs_review'
+        },
+        {
+            pattern: /fedex|ups|purolator|canada post|shipping|freight/i,
+            category: '8350', // Shipping & Delivery
+            confidence: 0.8,
+            status: 'needs_review'
+        },
+        {
+            pattern: /advertising|marketing|google ads|facebook ads|promotion/i,
+            category: '8100', // Advertising & Marketing
+            confidence: 0.75,
+            status: 'needs_review'
+        },
+        {
+            pattern: /lawyer|legal|attorney|accounting|bookkeeping|cpa/i,
+            category: '8500', // Professional Fees
+            confidence: 0.8,
+            status: 'needs_review'
+        },
+        {
+            pattern: /telus|rogers|bell|phone|mobile|internet|data plan/i,
+            category: '8650', // Telecommunications
+            confidence: 0.75,
+            status: 'needs_review'
+        },
+        {
+            pattern: /utility|hydro|electric|water|gas bill|energy/i,
+            category: '8250', // Utilities
+            confidence: 0.75,
+            status: 'needs_review'
         }
     ];
 
