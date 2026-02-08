@@ -149,9 +149,9 @@ const columns = [
     // 2. Ref # (e.g., CHQ1-001)
     columnHelper.accessor('ref', {
         header: 'REF #',
-        size: 90,
-        minSize: 80,
-        maxSize: 100,
+        size: 110,
+        minSize: 100,
+        maxSize: 120,
         cell: info => (
             <span
                 style={{
@@ -170,9 +170,9 @@ const columns = [
     // 3. Date
     columnHelper.accessor('date', {
         header: 'DATE',
-        size: 105,
-        minSize: 95,
-        maxSize: 110,
+        size: 120,
+        minSize: 110,
+        maxSize: 130,
         cell: info => (
             <span
                 style={{
