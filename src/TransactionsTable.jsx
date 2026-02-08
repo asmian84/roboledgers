@@ -32,17 +32,27 @@ function StatusChip({ status }) {
 }
 
 function PayeeCell({ row }) {
-    const mainText = row.payee || row.description || 'No Description';
-    const subText = row.transaction_type_label || ''; // Don't fallback to raw_description
+    // Parse description to extract payee and type
+    const fullDesc = row.payee || row.description || 'No Description';
+
+    // Split on comma to separate name from type (e.g., "Tessa Vos, E-Transfer - Autodeposit")
+    let payeeName = fullDesc;
+    let transactionType = row.transaction_type_label || '';
+
+    if (fullDesc.includes(',')) {
+        const parts = fullDesc.split(',');
+        payeeName = parts[0].trim();
+        transactionType = parts.slice(1).join(',').trim();
+    }
 
     return (
         <div className="flex flex-col leading-tight py-1 overflow-hidden">
             <span className="text-[13.5px] font-bold text-[#1e293b] truncate">
-                {mainText}
+                {payeeName}
             </span>
-            {subText && (
+            {transactionType && (
                 <span className="text-[11px] text-[#64748b] truncate opacity-80">
-                    {subText}
+                    {transactionType}
                 </span>
             )}
         </div>
