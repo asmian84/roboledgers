@@ -34,7 +34,17 @@
     selectedTx: null,
     accountDropdownOpen: false,
     panelState: 'collapsed', // 'closed', 'collapsed', 'expanded'
-    version: '5.1.1'
+    version: '5.1.1',
+    // Settings Persistence
+    dexterity: 3,
+    fontSize: 13,
+    density: 'comfortable',
+    autocatEnabled: true,
+    confidenceThreshold: 0.8,
+    refOverride: 'TXN',
+    dateFormat: 'MM/DD/YYYY',
+    province: 'ON',
+    gstEnabled: true
   };
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
@@ -127,6 +137,45 @@
     event.preventDefault();
     const files = event.dataTransfer.files;
     if (files.length > 0) window.handleFilesSelected(files);
+  };
+
+  window.exportData = function (format) {
+    const data = window.RoboLedger.Ledger.getAll();
+    if (!data || data.length === 0) {
+      alert("No data available to export.");
+      return;
+    }
+
+    let blob;
+    let filename = `roboledger_export_${new Date().toISOString().split('T')[0]}`;
+
+    if (format === 'json') {
+      blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      filename += '.json';
+    } else if (format === 'csv') {
+      const headers = ['Date', 'Ref', 'Description', 'Category', 'Debit', 'Credit', 'Tax', 'Balance'];
+      const rows = data.map(tx => [
+        tx.date,
+        tx.ref || '',
+        tx.description,
+        tx.gl_account_name || 'Uncategorized',
+        tx.polarity === 'DEBIT' ? tx.amount_cents / 100 : '',
+        tx.polarity === 'CREDIT' ? tx.amount_cents / 100 : '',
+        (tx.tax_cents || 0) / 100,
+        (tx.balance || 0)
+      ]);
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      blob = new Blob([csvContent], { type: 'text/csv' });
+      filename += '.csv';
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    console.log(`[EXPORT] ${format.toUpperCase()} exported successfully.`);
   };
 
   window.handleFileSelect = (event) => {
@@ -603,14 +652,53 @@
 
   window.saveSettings = function () {
     console.log("[SETTINGS] Persisting V5 Configuration...");
-    const themeSelect = document.querySelector('.v5-select');
-    if (themeSelect) {
-      UI_STATE.activeTheme = themeSelect.value;
-      // Apply Theme logic here... (e.g., adding class to body)
-      document.body.className = UI_STATE.activeTheme.toLowerCase().replace(' ', '-') + '-theme';
+
+    // Collect from IDs
+    const themeSelect = document.getElementById('theme-selector');
+    const dexteritySlider = document.getElementById('settings-dexterity');
+    const fontsizeSlider = document.getElementById('settings-fontsize');
+    const autocatEnabled = document.getElementById('settings-autocat-enabled');
+    const autocatThreshold = document.getElementById('settings-autocat-threshold');
+    const refOverride = document.getElementById('settings-ref-override');
+    const dateFormat = document.getElementById('settings-date-format');
+    const provinceSelect = document.getElementById('settings-province');
+    const gstEnabled = document.getElementById('settings-gst-enabled');
+
+    if (themeSelect) UI_STATE.activeTheme = themeSelect.value;
+    if (dexteritySlider) UI_STATE.dexterity = parseInt(dexteritySlider.value);
+    if (fontsizeSlider) UI_STATE.fontSize = parseInt(fontsizeSlider.value);
+    if (autocatEnabled) UI_STATE.autocatEnabled = autocatEnabled.checked;
+    if (autocatThreshold) UI_STATE.confidenceThreshold = parseInt(autocatThreshold.value) / 100;
+    if (refOverride) UI_STATE.refOverride = refOverride.value;
+    if (dateFormat) UI_STATE.dateFormat = dateFormat.value;
+    if (provinceSelect) UI_STATE.province = provinceSelect.value;
+    if (gstEnabled) UI_STATE.gstEnabled = gstEnabled.checked;
+
+    // Apply immediate changes
+    document.body.classList.remove('rainbow-theme', 'postit-theme');
+    if (UI_STATE.activeTheme && UI_STATE.activeTheme !== 'default') {
+      document.body.classList.add(`${UI_STATE.activeTheme}-theme`);
     }
+
+    // Persist to unified settings object
+    const settings = {
+      activeTheme: UI_STATE.activeTheme,
+      dexterity: UI_STATE.dexterity,
+      fontSize: UI_STATE.fontSize,
+      density: UI_STATE.density,
+      autocatEnabled: UI_STATE.autocatEnabled,
+      confidenceThreshold: UI_STATE.confidenceThreshold,
+      refOverride: UI_STATE.refOverride,
+      dateFormat: UI_STATE.dateFormat,
+      province: UI_STATE.province,
+      gstEnabled: UI_STATE.gstEnabled
+    };
+
+    localStorage.setItem('roboledger_v5_settings', JSON.stringify(settings));
+
+    // Close drawer
     toggleSettings(false);
-    // Don't call render() - it destroys the grid
+    console.log("[SETTINGS] Configuration saved and applied.");
   };
 
   window.setDensity = function (density) {
@@ -652,10 +740,23 @@
       UI_STATE.recoveryPending = true;
     }
 
-    // Apply saved theme on page load
-    const savedTheme = localStorage.getItem('roboledger_theme');
+    // Load saved settings
+    const savedSettings = localStorage.getItem('roboledger_v5_settings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        Object.assign(UI_STATE, settings);
+        console.log('[SETTINGS] Loaded user preferences.');
+      } catch (e) {
+        console.error('[SETTINGS] Failed to parse saved settings', e);
+      }
+    }
+
+    // Apply saved theme on page load (legacy support + immediate apply)
+    const savedTheme = localStorage.getItem('roboledger_theme') || UI_STATE.activeTheme;
     if (savedTheme && savedTheme !== 'default') {
       UI_STATE.activeTheme = savedTheme;
+      document.body.classList.remove('rainbow-theme', 'postit-theme');
       document.body.classList.add(`${savedTheme}-theme`);
       console.log(`[THEME] Loaded saved theme: ${savedTheme}`);
     }
@@ -986,7 +1087,7 @@
             <div class="setting-group">
                 <div class="setting-group-title"><i class="ph ph-magnifying-glass-plus"></i> Workspace Dexterity (The Focus Lens)</div>
                 <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Slide to focus the magnification of bookkeeping detail.</div>
-                <input type="range" min="1" max="5" value="3" style="width: 100%; margin-bottom: 24px;">
+                <input type="range" id="settings-dexterity" min="1" max="5" value="${UI_STATE.dexterity}" style="width: 100%; margin-bottom: 24px;">
                 
                 <div class="setting-group-title"><i class="ph ph-palette"></i> Appearance</div>
                 <div style="margin-bottom: 16px;">
@@ -1001,16 +1102,16 @@
                 <div style="display: flex; gap: 16px;">
                     <div style="flex: 1;">
                         <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">FONT SIZE</label>
-                        <input type="range" class="v5-input" style="padding: 0;">
+                        <input type="range" id="settings-fontsize" min="10" max="18" value="${UI_STATE.fontSize}" class="v5-input" style="padding: 0;">
                     </div>
                 </div>
             </div>
             <div class="setting-group">
                 <div class="setting-group-title">Row Density</div>
                 <div style="display: flex; gap: 8px;">
-                    <button class="btn-restored" style="flex: 1; background: white; color: #64748b; border: 1px solid #e2e8f0; font-size: 11px; padding: 6px; box-shadow: none;" onclick="window.setDensity('compact')">Compact</button>
-                    <button class="btn-restored" style="flex: 1; font-size: 11px; padding: 6px;" onclick="window.setDensity('comfortable')">Comfortable</button>
-                    <button class="btn-restored" style="flex: 1; background: white; color: #64748b; border: 1px solid #e2e8f0; font-size: 11px; padding: 6px; box-shadow: none;" onclick="window.setDensity('spacious')">Spacious</button>
+                    <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'compact' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('compact')">Compact</button>
+                    <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'comfortable' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('comfortable')">Comfortable</button>
+                    <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'spacious' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('spacious')">Spacious</button>
                 </div>
             </div>
         `;
@@ -1022,6 +1123,7 @@
         { field: 'date', label: 'Date', visible: true },
         { field: 'ref', label: 'Ref#', visible: true },
         { field: 'description', label: 'Description', visible: true },
+        { field: 'tax_cents', label: 'Sales Tax', visible: true },
         { field: 'debit_col', label: 'Debit', visible: true },
         { field: 'credit_col', label: 'Credit', visible: true },
         { field: 'balance', label: 'Balance', visible: true },
@@ -1063,28 +1165,94 @@
         `;
     }
 
+    if (UI_STATE.settingsTab === 'autocat') {
+      return `
+            <div class="setting-group">
+                <div class="setting-group-title">Engine Control</div>
+                <div class="column-toggle">
+                    <label>Enable Auto-Categorization</label>
+                    <label class="switch">
+                        <input type="checkbox" id="settings-autocat-enabled" ${UI_STATE.autocatEnabled ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div style="margin-top: 16px;">
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">CONFIDENCE THRESHOLD (${Math.round(UI_STATE.confidenceThreshold * 100)}%)</label>
+                    <input type="range" id="settings-autocat-threshold" min="0" max="100" value="${UI_STATE.confidenceThreshold * 100}" style="width: 100%;">
+                </div>
+            </div>
+            <div class="setting-group">
+                <div class="setting-group-title">Active Rule Sets</div>
+                <div style="font-size: 12px; color: #1e293b;">
+                    <div style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;">
+                        <span>Business Expenses</span>
+                        <span style="color: #10b981; font-weight: 600;">ACTIVE</span>
+                    </div>
+                    <div style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;">
+                        <span>Personal / Living</span>
+                        <span style="color: #64748b;">DISABLED</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     if (UI_STATE.settingsTab === 'preferences') {
       return `
             <div class="setting-group">
                 <div class="setting-group-title">REF Override</div>
-                <input type="text" class="v5-input" value="TXN" style="font-family: 'JetBrains Mono';">
+                <input type="text" id="settings-ref-override" class="v5-input" value="${UI_STATE.refOverride}" style="font-family: 'JetBrains Mono';">
                 <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Auto-updates when bank is detected</div>
             </div>
             <div class="setting-group">
                 <div class="setting-group-title">Date Format</div>
-                <select class="v5-select">
-                    <option>MM/DD/YYYY</option>
-                    <option>DD/MM/YYYY</option>
-                    <option>YYYY-MM-DD</option>
+                <select id="settings-date-format" class="v5-select">
+                    <option value="MM/DD/YYYY" ${UI_STATE.dateFormat === 'MM/DD/YYYY' ? 'selected' : ''}>MM/DD/YYYY</option>
+                    <option value="DD/MM/YYYY" ${UI_STATE.dateFormat === 'DD/MM/YYYY' ? 'selected' : ''}>DD/MM/YYYY</option>
+                    <option value="YYYY-MM-DD" ${UI_STATE.dateFormat === 'YYYY-MM-DD' ? 'selected' : ''}>YYYY-MM-DD</option>
                 </select>
             </div>
             <div class="setting-group">
-                <div class="setting-group-title">Province (Tax Calculation)</div>
-                <select class="v5-select">
-                    <option>Ontario (13% HST)</option>
-                    <option>BC (12% HST/PST)</option>
-                </select>
-                 <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Used for the Sales Tax column calculations [Amount / (1+r) * r]</div>
+                <div class="setting-group-title">Region & Tax</div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">PROVINCE</label>
+                    <select id="settings-province" class="v5-select">
+                        <option value="ON" ${UI_STATE.province === 'ON' ? 'selected' : ''}>Ontario (13% HST)</option>
+                        <option value="BC" ${UI_STATE.province === 'BC' ? 'selected' : ''}>British Columbia (5% GST + 7% PST)</option>
+                        <option value="AB" ${UI_STATE.province === 'AB' ? 'selected' : ''}>Alberta (5% GST)</option>
+                        <option value="QC" ${UI_STATE.province === 'QC' ? 'selected' : ''}>Quebec (5% GST + 9.975% QST)</option>
+                    </select>
+                </div>
+                <div class="column-toggle">
+                    <label>Enable GST/HST Extraction</label>
+                    <label class="switch">
+                        <input type="checkbox" id="settings-gst-enabled" ${UI_STATE.gstEnabled ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                 <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Calculates tax amounts based on regional rates.</div>
+            </div>
+        `;
+    }
+
+    if (UI_STATE.settingsTab === 'advanced') {
+      return `
+            <div class="setting-group">
+                <div class="setting-group-title">Data Management</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                    <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('json')">Export JSON</button>
+                    <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('csv')">Export CSV</button>
+                </div>
+                <button class="btn-restored" style="width: 100%; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; margin-top: 8px;" onclick="window.devReset()">Purge Local Cache</button>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">This will reset the application state and clear all transactions.</div>
+            </div>
+            <div class="setting-group">
+                <div class="setting-group-title">System Info</div>
+                <div style="font-size: 11px; color: #64748b;">
+                    <div>Session ID: ${crypto.randomUUID().slice(0, 8)}</div>
+                    <div>Engine Version: ${UI_STATE.version}</div>
+                    <div>Mode: ${window.location.protocol === 'file:' ? 'Native/Local' : 'Enterprise/Web'}</div>
+                </div>
             </div>
         `;
     }
@@ -1103,6 +1271,7 @@
       'date': 'date',
       'ref': 'select', // Ref maps to select column in React
       'description': 'payee',
+      'tax_cents': 'tax_cents',
       'debit_col': 'debit',
       'credit_col': 'credit',
       'balance': 'balance',

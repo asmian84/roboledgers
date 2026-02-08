@@ -1026,14 +1026,47 @@ window.RoboLedger = (function () {
                     created_at: new Date().toISOString()
                 };
 
-                // === PHASE 4: APPLY AUTO-CATEGORIZATION ===
-                const autoCat = autoCategorizTransaction(canonical);
-                if (autoCat.gl_account_code && !canonical.category_code) {
-                    // Only apply auto-categorization if no manual category exists
-                    canonical.gl_account_code = autoCat.gl_account_code;
-                    canonical.gl_account_name = autoCat.gl_account_name;
-                    canonical.category_confidence = autoCat.confidence;
-                    canonical.status = autoCat.status; // 'auto_categorized' or 'needs_review'
+                // === PHASE 4: APPLY AUTO-CATEGORIZATION (Respect Settings) ===
+                const settings = window.UI_STATE || {};
+                const isAutocatOn = settings.autocatEnabled !== false; // Default true
+                const minConfidence = settings.confidenceThreshold || 0.8;
+
+                if (isAutocatOn) {
+                    const autoCat = autoCategorizTransaction(canonical);
+                    if (autoCat.gl_account_code && !canonical.category_code) {
+                        // Check confidence vs threshold
+                        if (autoCat.confidence >= minConfidence) {
+                            canonical.gl_account_code = autoCat.gl_account_code;
+                            canonical.gl_account_name = autoCat.gl_account_name;
+                            canonical.category_confidence = autoCat.confidence;
+                            canonical.status = autoCat.status;
+                        } else {
+                            // Low confidence -> needs review
+                            canonical.status = 'needs_review';
+                            canonical.category_confidence = autoCat.confidence;
+                        }
+                    }
+                }
+
+                // === PHASE 5: SALES TAX (GST/HST) CALCULATION ===
+                if (settings.gstEnabled) {
+                    const province = settings.province || 'ON';
+                    const taxRates = {
+                        'ON': 0.13,
+                        'BC': 0.05, // Just GST for now, PST usually ignored in simple ledger
+                        'AB': 0.05,
+                        'QC': 0.05
+                    };
+                    const rate = taxRates[province] || 0.13;
+
+                    // Tax = Total / (1 + rate) * rate
+                    // We only calculate tax if it's a debit (expense)
+                    if (canonical.polarity === 'DEBIT') {
+                        const amount = canonical.amount_cents / 100;
+                        const taxAmount = (amount / (1 + rate)) * rate;
+                        canonical.tax_cents = Math.round(taxAmount * 100);
+                        console.log(`[TAX] Calculated ${province} tax: $${taxAmount.toFixed(2)} on $${amount.toFixed(2)}`);
+                    }
                 }
 
                 if (Ledger.post(canonical)) {

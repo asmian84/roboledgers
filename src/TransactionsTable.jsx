@@ -142,6 +142,15 @@ const columns = [
             return val ? <span className="text-[#10b981] font-bold">${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> : '-';
         }
     }),
+    columnHelper.accessor('tax_cents', {
+        header: 'Sales Tax',
+        minSize: 100,
+        maxSize: 120,
+        cell: info => {
+            const val = info.getValue();
+            return val ? <span className="text-[#64748b] font-mono text-[12px]">${(val / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> : '-';
+        }
+    }),
     columnHelper.accessor('balance', {
         header: 'Balance',
         minSize: 110,
