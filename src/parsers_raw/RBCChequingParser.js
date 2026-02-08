@@ -111,13 +111,6 @@ SMART PARSING RULES:
       acctFromText = keywordMatch[1];
     }
 
-    // Detect account type (Savings vs Chequing) from statement text
-    const isSavings = text.includes('Savings Account') || text.includes('SAVINGS');
-    const accountType = isSavings ? 'SAVINGS' : 'Chequing';
-
-    console.log(`[RBC Parser Debug] Raw Header Sample (First 100 chars): ${headerLines.substring(0, 100).replace(/\n/g, ' ')}`);
-    console.log(`[RBC Parser Debug] Extracted -> Transit: ${transit}, Account: ${acctFromText}`);
-    console.log('[RBC Parser Debug] Account Type:', accountType);
 
     if (window.ProcessingEngine) {
       window.ProcessingEngine.log('info', '[RBC Parser] Extraction Result', { transit, acct: acctFromText });
