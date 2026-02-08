@@ -134,12 +134,32 @@
     if (files.length > 0) window.handleFilesSelected(files);
   };
 
+  // Progress bar helpers (no full-page render - eliminates flickering)
+  window.showProgressBar = () => {
+    const overlay = document.getElementById('parsing-progress-overlay');
+    if (overlay) overlay.style.display = 'flex';
+  };
+
+  window.hideProgressBar = () => {
+    const overlay = document.getElementById('parsing-progress-overlay');
+    if (overlay) overlay.style.display = 'none';
+  };
+
+  window.updateProgressBar = (current, total, fileName, stage, txnCount) => {
+    const percent = Math.round((current / total) * 100);
+    document.getElementById('progress-bar-fill').style.width = `${percent}%`;
+    document.getElementById('progress-title').textContent = stage;
+    document.getElementById('progress-subtitle').textContent = fileName;
+    document.getElementById('progress-file-count').textContent = `${current} / ${total} files`;
+    document.getElementById('progress-txn-count').textContent = `${txnCount} transactions`;
+  };
+
   window.handleFilesSelected = async (files) => {
     console.log('[UPLOAD] Processing', files.length, 'file(s)');
-    UI_STATE.isIngesting = true;
-    UI_STATE.ingestionLabel = 'Importing files...';
-    UI_STATE.ingestionProgress = 0;
-    render();
+
+    // Show progress bar instead of render()
+    window.showProgressBar();
+    window.updateProgressBar(0, files.length, 'Initializing...', 'Preparing to parse', 0);
 
     // Get primary account for ingestion
     const primaryAccount = window.RoboLedger.Accounts.getAll()[0];
@@ -150,28 +170,50 @@
     for (let idx = 0; idx < files.length; idx++) {
       const file = files[idx];
       try {
-        UI_STATE.ingestionLabel = `Processing: ${file.name}`;
-        UI_STATE.ingestionProgress = Math.round(((idx) / files.length) * 100);
-
-        // Optimistic render only if it's been more than 300ms since last (prevent flicker)
-        if (!window._lastRender || Date.now() - window._lastRender > 300) {
-          render();
-          window._lastRender = Date.now();
-        }
+        // Update progress bar (lightweight, no flicker)
+        window.updateProgressBar(
+          idx + 1,
+          files.length,
+          file.name,
+          'Parsing PDF...',
+          totalImported
+        );
 
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
         totalImported += imported;
+
+        // Update with results
+        window.updateProgressBar(
+          idx + 1,
+          files.length,
+          file.name,
+          `✅ Imported ${imported} transactions`,
+          totalImported
+        );
+
         console.log(`[UPLOAD] ${file.name}: ${imported} transactions imported`);
       } catch (err) {
         console.error('[UPLOAD] Parse error:', file.name, err);
+        window.updateProgressBar(
+          idx + 1,
+          files.length,
+          file.name,
+          `❌ Parse failed`,
+          totalImported
+        );
       }
     }
 
-    UI_STATE.isIngesting = false;
-    UI_STATE.ingestionProgress = 100;
+    // Final update
+    window.updateProgressBar(files.length, files.length, 'Complete!', `Imported ${totalImported} transactions`, totalImported);
+
+    // Hide progress bar after brief delay, then refresh grid
+    setTimeout(() => {
+      window.hideProgressBar();
+      render(); // Single render at the end
+    }, 1500);
+
     console.log(`[UPLOAD] Complete. Total imported: ${totalImported}`);
-    render();
-    window._lastRender = Date.now();
   };
 
   // Keep inline COA dropdowns opening downward by centering the row
