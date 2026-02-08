@@ -460,6 +460,9 @@
   };
 
   window.handleRecovery = function (action) {
+    const modal = document.getElementById('recovery-modal');
+    if (modal) modal.remove();
+
     if (action === 'continue') {
       UI_STATE.recoveryPending = false;
       render();
@@ -469,6 +472,44 @@
       render();
     }
   };
+
+  function showRecoveryPrompt() {
+    const existingData = window.RoboLedger.Ledger.getAll();
+    const overlay = document.createElement('div');
+    overlay.id = 'recovery-modal';
+    overlay.innerHTML = `
+      <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 99999; display: flex; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 32px; max-width: 480px; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div style="background: #eff6ff; padding: 12px; border-radius: 10px;">
+              <i class="ph ph-database" style="font-size: 28px; color: #3b82f6;"></i>
+            </div>
+            <div>
+              <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #1e293b;">Previous Data Detected</h2>
+              <p style="margin: 4px 0 0; font-size: 0.875rem; color: #64748b;">Found ${existingData.length} transactions from your last session</p>
+            </div>
+          </div>
+          
+          <p style="color: #475569; font-size: 0.9375rem; line-height: 1.6; margin: 20px 0 24px;">
+            Would you like to <strong>continue where you left off</strong>, or <strong>start fresh with a clean workspace</strong>?
+          </p>
+          
+          <div style="display: flex; gap: 12px;">
+            <button onclick="window.handleRecovery('reset')" style="flex: 1; padding: 12px 20px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; font-weight: 600; font-size: 0.9375rem; color: #475569; cursor: pointer; transition: all 0.15s;">
+              <i class="ph ph-trash" style="margin-right: 6px;"></i>
+              Start Fresh
+            </button>
+            <button onclick="window.handleRecovery('continue')" style="flex: 1; padding: 12px 20px; background: #3b82f6; border: none; border-radius: 8px; font-weight: 600; font-size: 0.9375rem; color: white; cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+              <i class="ph ph-arrow-clockwise" style="margin-right: 6px;"></i>
+              Load Previous Data
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  }
+
 
   window.switchAccount = function (accId) {
     console.log(`[V5 CONTROL] Switching to account: ${accId}`);
@@ -1195,7 +1236,13 @@
     const stage = document.getElementById('app-stage');
     stage.innerHTML = `<div class="fade-in">${renderPage()}</div>`;
 
-    // 4. Grid Init
+    // 4. Show recovery prompt if data exists from previous session
+    if (UI_STATE.recoveryPending) {
+      showRecoveryPrompt();
+      return; // Don't initialize grid until user chooses
+    }
+
+    // 5. Grid Init
     if (UI_STATE.currentRoute === 'import' && !UI_STATE.isIngesting && !UI_STATE.isPoppedOut) {
       const gridDiv = document.querySelector('#txnGrid');
       if (gridDiv) {
