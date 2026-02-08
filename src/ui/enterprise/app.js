@@ -581,6 +581,25 @@
   };
 
   function init() {
+    // STATE VERSION CHECK: Prevent cache hallucination
+    const STATE_VERSION = '5.2.0';
+    const savedData = localStorage.getItem('roboledger_v5_data');
+
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        if (parsed.version && parsed.version !== STATE_VERSION) {
+          console.warn(`[STATE] Version mismatch: saved=${parsed.version}, current=${STATE_VERSION}`);
+          console.warn('[STATE] Clearing incompatible cache to prevent bugs');
+          localStorage.clear();
+          window.RoboLedger.Ledger.reset();
+        }
+      } catch (e) {
+        console.error('[STATE] Corrupt localStorage detected, clearing', e);
+        localStorage.clear();
+      }
+    }
+
     setupNav();
     setupActions();
 
@@ -630,6 +649,17 @@
       };
     });
   }
+
+  // DEV RESET: Clean slate for testing (only in dev mode)
+  window.devReset = function () {
+    if (!confirm('⚠️ DEV RESET: This will clear ALL localStorage and reset the ledger. Continue?')) {
+      return;
+    }
+    console.warn('[DEV RESET] Clearing all state...');
+    localStorage.clear();
+    window.RoboLedger.Ledger.reset();
+    location.reload();
+  };
 
   function setupActions() {
     const stage = document.getElementById('app-stage');
@@ -1532,7 +1562,12 @@
               ${acc ? acc.bankName || 'Royal Bank of Canada' : 'Consolidated View'} • ${acc ? acc.currency || 'CAD' : 'CAD'}
             </div>
           </div>
-          <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500;">Header V5.2 • Active Session</div>
+          <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 12px;">
+            <button onclick="window.devReset()" style="padding: 4px 8px; background: #fee2e2; color: #991b1b; border: 1px solid #fec aca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;" title="Clear all localStorage and reset (Dev only)">
+              ⚠️ DEV RESET
+            </button>
+            <span>Header V5.2 • Active Session</span>
+          </div>
         </div>
 
         ${allTx.length > 0 ? `
