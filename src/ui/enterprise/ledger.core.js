@@ -27,10 +27,7 @@ window.RoboLedger = (function () {
     let state = {
         transactions: {}, // tx_id -> tx
         sigIndex: {},    // txsig -> tx_id
-        accounts: [
-            { id: 'ACC-001', name: 'RBC BUSINESS CHQ', type: 'CHECKING', balance: 12500.50, openingBalance: 12500.50, inst: '003', transit: '12345', accountNumber: '8822991', ref: 'CHQ1', bankName: 'Royal Bank of Canada', currency: 'CAD' },
-            { id: 'ACC-002', name: 'RBC AVION VISA', type: 'CREDIT_CARD', balance: 4821.50, openingBalance: 4821.50, inst: '003', transit: 'N/A', accountNumber: '4821', ref: 'VISA1', bankName: 'Royal Bank of Canada', currency: 'CAD', cardNetwork: 'Visa', statementClosingDay: '15th' }
-        ],
+        accounts: [],
         coa: {},         // account_code -> entry
         categoryPredictions: {}, // raw_desc -> account_code
         fileStorage: new Map()   // fileId -> Blob (In-memory for v5.1)
