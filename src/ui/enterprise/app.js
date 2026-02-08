@@ -1801,11 +1801,6 @@
     };
 
     const terminalFont = "'Courier New', Courier, monospace";
-    const aggTotalBalance = accounts.reduce((sum, a) => sum + (a.openingBalance || 0), 0);
-    const aggTotalDebits = filteredTxns.filter(t => t.polarity === "DEBIT").reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-    const aggTotalCredits = filteredTxns.filter(t => t.polarity === "CREDIT").reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-    const aggNetActivity = aggTotalCredits - aggTotalDebits;
-
 
     // Aggregate calculations for ALL accounts mode
 
