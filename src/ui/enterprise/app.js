@@ -1852,7 +1852,28 @@
     });
 
     data._initialized = true;
-    initGrid(data);
+
+    // Initialize Tabulator with processed data
+    window.txnTable = new Tabulator(gridDiv, {
+      data: data,
+      layout: "fitColumns",
+      height: "100%",
+      placeholder: "No Data Available",
+      columns: [
+        { title: "Date", field: "date", width: 100 },
+        { title: "Ref#", field: "source_ref", width: 100 },
+        { title: "Description", field: "description", width: 250 },
+        { title: "Debit", field: "debit_col", width: 100, formatter: "money", formatterParams: { precision: 2 } },
+        { title: "Credit", field: "credit_col", width: 100, formatter: "money", formatterParams: { precision: 2 } },
+        {
+          title: "Balance", field: "balance", width: 120, formatter: (cell) => {
+            const val = cell.getValue();
+            return `$${(val / 100).toFixed(2)}`;
+          }
+        },
+        { title: "Category", field: "coa_code", width: 150 }
+      ]
+    });
   }
 
   // --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
