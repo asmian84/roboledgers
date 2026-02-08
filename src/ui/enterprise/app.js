@@ -31,6 +31,7 @@
     recoveryPending: false,
     isSearchOpen: false,
     searchQuery: '',
+    refPrefix: 'CHQ1', // Default ref prefix for transaction numbering
     selectedTx: null,
     accountDropdownOpen: false,
     panelState: 'collapsed', // 'closed', 'collapsed', 'expanded'
@@ -625,6 +626,17 @@
     if (headerContainer && previousAccount !== accId) {
       headerContainer.outerHTML = getAccountWorkspaceHeaderHTML();
     }
+  };
+
+  // Update Ref# prefix for transaction numbering
+  window.updateRefPrefix = function (newPrefix) {
+    const sanitized = newPrefix.toUpperCase().trim().substr(0, 8); // Limit to 8 chars
+    UI_STATE.refPrefix = sanitized || 'CHQ1';
+    localStorage.setItem('roboledger_refPrefix', UI_STATE.refPrefix);
+
+    // Trigger grid re-render to update ref numbers
+    window.render();
+    console.log(`[REF PREFIX] Updated to: ${UI_STATE.refPrefix}`);
   };
 
   window.filterByCategory = function (rootCategory) {
@@ -1949,36 +1961,49 @@
   }
 
   function getFilterToolbarHTML() {
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const refPrefix = UI_STATE.refPrefix || 'CHQ1';
+    
     return `
       <!-- Sticky Filter Toolbar -->
-        <div style="position: sticky; top: 0; z-index: 30; height: 44px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 12px;">
-          <!-- LEFT: Search + Filters -->
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="position: relative;">
-              <i class="ph ph-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 14px;"></i>
-              <input type="text" id="v5-search-input" placeholder="Search transactions..." value="${UI_STATE.searchQuery || ''}" oninput="window.handleSearch(this.value)" style="padding: 6px 12px 6px 32px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; width: 240px; background: white;" />
-            </div>
-            <select onchange="window.filterByCategory(this.value)" style="padding: 6px 28px 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; color: #64748b; background: white; cursor: pointer; appearance: none;">
-              <option value="">All categories</option>
-              <option value="ASSET">💰 Assets</option>
-              <option value="LIABILITY">📊 Liabilities</option>
-              <option value="EQUITY">📈 Equity</option>
-              <option value="REVENUE">💵 Revenue</option>
-              <option value="EXPENSE">💳 Expenses</option>
-            </select>
-            <select style="padding: 6px 28px 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; color: #64748b; background: white; cursor: pointer; appearance: none;">
-              <option>All dates</option>
-            </select>
+      <div style="position: sticky; top: 0; z-index: 30; height: 44px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 12px;">
+        <!-- LEFT: Ref Prefix + Search + Account Filter -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <!-- Ref# Prefix Input -->
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <label style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase;">Ref#</label>
+            <input 
+              type="text" 
+              id="ref-prefix-input" 
+              placeholder="CHQ1" 
+              value="${refPrefix}" 
+              oninput="window.updateRefPrefix(this.value)" 
+              style="padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 11px; width: 60px; background: white; font-family: 'JetBrains Mono', monospace; font-weight: 600; text-transform: uppercase; text-align: center;" 
+            />
           </div>
-
-          <!-- RIGHT: Grid Settings Icon Only -->
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button onclick="window.toggleSettings(true)" style="padding: 7px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'" title="Grid Settings (Appearance & Columns)">
-              <i class="ph ph-gear-six" style="font-size: 16px; color: #64748b;"></i>
-            </button>
+          
+          <!-- Search -->
+          <div style="position: relative;">
+            <i class="ph ph-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 14px;"></i>
+            <input type="text" id="v5-search-input" placeholder="Search transactions..." value="${UI_STATE.searchQuery || ''}" oninput="window.handleSearch(this.value)" style="padding: 6px 12px 6px 32px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; width: 220px; background: white;" />
           </div>
+          
+          <!-- Account Filter -->
+          <select onchange="window.switchAccount(this.value)" style="padding: 6px 28px 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; color: #64748b; background: white; cursor: pointer; appearance: none;">
+            <option value="ALL" ${UI_STATE.selectedAccount === 'ALL' ? 'selected' : ''}>All Accounts</option>
+            ${accounts.map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${a.ref || a.name || a.id}</option>`).join('')}
+          </select>
         </div>
+
+        <!-- RIGHT: Grid Settings Icon Only -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button onclick="window.toggleSettings(true)" style="padding: 7px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'" title="Grid Settings (Appearance & Columns)">
+            <i class="ph ph-gear-six" style="font-size: 16px; color: #64748b;"></i>
+          </button>
+        </div>
+      </div>
     `;
+  }
   }
 
   // Real-time opening balance update helper

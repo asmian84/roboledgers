@@ -22,9 +22,12 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     // Mock status for better demo feel (keeping parity with index.html version)
     const statuses = ['Matched', 'Pending', 'Flagged', 'Imported'];
 
+    // Get current ref prefix from UI state (default CHQ1)
+    const refPrefix = (window.UI_STATE && window.UI_STATE.refPrefix) || 'CHQ1';
+
     const canonicalData = transactionsOnly.map((tx, idx) => ({
         ...tx,
-        ref: tx.ref || `${tx.account_id || 'CHQ1'}-${String(idx + 1).padStart(3, '0')}`, // Generate ref if missing
+        ref: tx.ref || `${refPrefix}-${String(idx + 1).padStart(3, '0')}`, // Simple sequential: CHQ1-001, CHQ1-002, CHQ1-003
         status: tx.status || statuses[idx % 4],
         payee: tx.description || tx.raw_description || 'Unknown',
         debit: tx.polarity === 'DEBIT' ? tx.amount_cents / 100 : null,
