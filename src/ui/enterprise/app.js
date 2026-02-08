@@ -568,7 +568,7 @@
       document.body.className = UI_STATE.activeTheme.toLowerCase().replace(' ', '-') + '-theme';
     }
     toggleSettings(false);
-    render();
+    // Don't call render() - it destroys the grid
   };
 
   window.setDensity = function (density) {
@@ -577,7 +577,7 @@
     if (window.updateGridDensity) {
       window.updateGridDensity(density);
     }
-    render();
+    // Don't call render() - density is handled by React bridge
   };
 
   function init() {
