@@ -1887,7 +1887,36 @@
           <path d="M55 105 L60 110 L65 105" stroke="#94a3b8" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <div style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 8px;">No transactions yet.</div>
-        <div style="font-size: 14px; color: #64748b; max-width: 480px; text-align: center; line-height: 1.5;">Import your bank statement or add your first entry manually to get started.</div>
+        <div style="font-size: 14px; color: #64748b; max-width: 480px; text-align: center; line-height: 1.5; margin-bottom: 24px;">Import your bank statement or add your first entry manually to get started.</div>
+        
+        <!-- Upload Button -->
+        <button 
+          onclick="document.getElementById('fileInput').click()" 
+          style="
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+          "
+          onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(59, 130, 246, 0.4)';"
+          onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.3)';"
+        >
+          <i class="ph ph-upload-simple" style="font-size: 20px;"></i>
+          Import Bank Statement
+        </button>
+        
+        <div style="margin-top: 16px; font-size: 12px; color: #94a3b8;">
+          Supports PDF statements from RBC, TD, BMO, Scotiabank, CIBC
+        </div>
       </div>
       `;
   }
