@@ -149,16 +149,17 @@ const columns = [
     // 2. Ref # (e.g., CHQ1-001)
     columnHelper.accessor('ref', {
         header: 'REF #',
-        size: 100,
-        minSize: 90,
-        maxSize: 120,
+        size: 90,
+        minSize: 80,
+        maxSize: 100,
         cell: info => (
             <span
                 style={{
                     fontSize: GRID_TOKENS.cellFontSize,
                     fontWeight: GRID_TOKENS.cellFontWeight,
                     color: GRID_TOKENS.cellColor,
-                    fontVariantNumeric: 'tabular-nums'
+                    fontVariantNumeric: 'tabular-nums',
+                    whiteSpace: 'nowrap'
                 }}
             >
                 {info.getValue() || '-'}
@@ -169,16 +170,17 @@ const columns = [
     // 3. Date
     columnHelper.accessor('date', {
         header: 'DATE',
-        size: 110,
-        minSize: 100,
-        maxSize: 130,
+        size: 105,
+        minSize: 95,
+        maxSize: 110,
         cell: info => (
             <span
                 style={{
                     fontSize: GRID_TOKENS.cellFontSize,
                     fontWeight: GRID_TOKENS.cellFontWeight,
                     color: GRID_TOKENS.cellColor,
-                    fontVariantNumeric: 'tabular-nums'
+                    fontVariantNumeric: 'tabular-nums',
+                    whiteSpace: 'nowrap'
                 }}
             >
                 {info.getValue()}
