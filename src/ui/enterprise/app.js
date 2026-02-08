@@ -913,9 +913,9 @@
             <div class="setting-group">
                 <div class="setting-group-title">Row Density</div>
                 <div style="display: flex; gap: 8px;">
-                    <button class="btn-restored" style="flex: 1; background: white; color: #64748b; border: 1px solid #e2e8f0; font-size: 11px; padding: 6px; box-shadow: none;">Compact</button>
-                    <button class="btn-restored" style="flex: 1; font-size: 11px; padding: 6px;">Comfortable</button>
-                    <button class="btn-restored" style="flex: 1; background: white; color: #64748b; border: 1px solid #e2e8f0; font-size: 11px; padding: 6px; box-shadow: none;">Spacious</button>
+                    <button class="btn-restored" style="flex: 1; background: white; color: #64748b; border: 1px solid #e2e8f0; font-size: 11px; padding: 6px; box-shadow: none;" onclick="window.setDensity('compact')">Compact</button>
+                    <button class="btn-restored" style="flex: 1; font-size: 11px; padding: 6px;" onclick="window.setDensity('comfortable')">Comfortable</button>
+                    <button class="btn-restored" style="flex: 1; background: white; color: #64748b; border: 1px solid #e2e8f0; font-size: 11px; padding: 6px; box-shadow: none;" onclick="window.setDensity('spacious')">Spacious</button>
                 </div>
             </div>
         `;
