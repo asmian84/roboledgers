@@ -1802,11 +1802,6 @@
 
     const terminalFont = "'Courier New', Courier, monospace";
 
-    // ===== AGGREGATE CALCULATIONS FOR ALL ACCOUNTS MODE =====
-    const aggTotalBalance = accounts.reduce((sum, a) => sum + a.openingBalance, 0);
-    const aggTotalDebits = filteredTxns.reduce((sum, t) => sum + (t.debit || 0), 0);
-    const aggTotalCredits = filteredTxns.reduce((sum, t) => sum + (t.credit || 0), 0);
-    const aggNetActivity = agg TotalCredits - aggTotalDebits;
 
     return `
       <!-- Professional Account Dashboard Header -->
@@ -1912,7 +1907,7 @@
       const isReconciled = isAccountReconciled(a);
       return `
                       <div onclick="window.switchAccount('${a.id}')" style="cursor: pointer; padding: 2px 0; font-size: 12px; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 6px; hover: background: #f1f5f9;">
-                        <span>${a.name || a.ref}</span>
+                        <span style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;">${a.ref || 'N/A'}</span><span>${a.name || a.ref}</span>
                         ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 13px; color: #10b981;"></i>' : ''}
                       </div>
                     `;
