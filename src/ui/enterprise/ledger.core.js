@@ -533,19 +533,19 @@ window.RoboLedger = (function () {
             // Auto-assign ref# for new accounts based on type
             if (isNewAccount || acc.ref === 'TEMP' || acc.ref === 'CHQ1') {
                 const brand = (acc.brand || acc.cardNetwork || acc._tag || '').toUpperCase();
+                const accountName = (acc.name || acc.bankName || '').toUpperCase();
                 let refPrefix = 'CHQ'; // Default
 
                 if (brand.includes('MASTERCARD') || brand.includes('MC')) refPrefix = 'MC';
                 else if (brand.includes('VISA')) refPrefix = 'VISA';
                 else if (brand.includes('AMEX')) refPrefix = 'AMEX';
-                else if (acc.accountType === 'SAVINGS') refPrefix = 'SAV';
+                else if (acc.accountType === 'SAVINGS' || accountName.includes('SAVINGS')) refPrefix = 'SAV';
 
                 // Count existing accounts with same prefix
                 const existing = state.accounts.filter(a =>
                     a.id !== id && a.ref && a.ref.startsWith(refPrefix)
-                );
-                const nextNum = existing.length + 1;
-                acc.ref = `${refPrefix}${nextNum}`;
+                ).length;
+                acc.ref = `${refPrefix}${existing + 1}`;
                 console.log(`[ACCOUNTS] Auto-assigned ref#: ${acc.ref}`);
             }
 
