@@ -954,8 +954,8 @@ window.RoboLedger = (function () {
 
             // Bank Accounts: Use transit + account last 4
             if (metadata.transit && metadata.transit !== 'N/A' && metadata.transit !== '-----' && metadata.transit !== 'UNKNOWN') {
-                const last4 = metadata.accountNumber?.slice(-4) || metadata.account_num?.slice(-4) || '0000';
-                return `BANK-${metadata.transit}-${last4}`;
+                const accountNum = (metadata.accountNumber || metadata.account_num || '').replace(/\D/g, '');
+                const last4 = accountNum.slice(-4) || '0000';
             }
 
             // Fallback: timestamp-based ID
