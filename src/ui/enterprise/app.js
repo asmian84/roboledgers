@@ -1194,9 +1194,11 @@
       const gridDiv = document.querySelector('#txnGrid');
       if (gridDiv) {
         console.log('[UI] Grid shell found, initializing TanStack...');
-        // Immediate sync if possible, otherwise timeout
-        if (window.renderTransactionsGrid) initGrid();
-        else setTimeout(initGrid, 100);
+        // Always pass current ledger data to ensure grid has the latest
+        const ledgerData = window.RoboLedger.Ledger.getAll();
+        console.log(`[UI] Passing ${ledgerData.length} transactions to grid`);
+        if (window.renderTransactionsGrid) initGrid(ledgerData);
+        else setTimeout(() => initGrid(ledgerData), 100);
       }
     }
   }
