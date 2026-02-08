@@ -1715,20 +1715,25 @@
     const allTxns = window.RoboLedger.Ledger.getAll();
     const filteredTxns = UI_STATE.selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === UI_STATE.selectedAccount);
 
-    // Activity metrics (30d)
+    // Activity metrics - Show ALL time if 30d is empty (Better for statements)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentTxns = filteredTxns.filter(t => new Date(t.date_iso || t.date) >= thirtyDaysAgo);
+    let metricsTxns = filteredTxns.filter(t => new Date(t.date_iso || t.date) >= thirtyDaysAgo);
 
-    const debitTxns = recentTxns.filter(t => t.polarity === 'DEBIT');
-    const creditTxns = recentTxns.filter(t => t.polarity === 'CREDIT');
+    // Fallback to all filtered txns if no recent activity
+    if (metricsTxns.length === 0) metricsTxns = filteredTxns;
+
+    const debitTxns = metricsTxns.filter(t => t.polarity === 'DEBIT');
+    const creditTxns = metricsTxns.filter(t => t.polarity === 'CREDIT');
 
     const inflow = creditTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
     const outflow = debitTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
 
     // Balance logic for specific account
     const openingBalance = acc ? (acc.openingBalance || 0) : 0;
-    const endingBalance = openingBalance - (filteredTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100) + (filteredTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100);
+    const totalDebits = filteredTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+    const totalCredits = filteredTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+    const endingBalance = openingBalance - totalDebits + totalCredits;
 
     // ALL MODE: Calculate aggregate totals across all accounts
     const isAllMode = UI_STATE.selectedAccount === 'ALL';
@@ -1786,10 +1791,10 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; flex-direction: column;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <select onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase;">
+              <select onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 4px 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase; outline: none; transition: opacity 0.2s;">
                 <option value="ALL" ${UI_STATE.selectedAccount === 'ALL' ? 'selected' : ''}>ALL ACCOUNTS</option>
-                ${accounts.map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${a.name || a.ref}</option>`).join('')}
-              </select>
+                ${accounts.map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${(a.name || a.ref).toUpperCase()}</option>`).join('')}
+              </select>>
               <i class="ph ph-caret-down" style="font-size: 14px; color: #64748b;"></i>
             </div>
             <div style="font-size: 11px; font-weight: 500; color: #94a3b8; margin-top: 2px; text-transform: uppercase;">
@@ -1982,7 +1987,8 @@
     if (!isNaN(num)) {
       const activeAcc = window.RoboLedger.Accounts.getAll().find(a => a.id === UI_STATE.selectedAccount);
       if (activeAcc) {
-        activeAcc.openingBalance = num;
+        // Use formal setter for persistence
+        window.RoboLedger.Accounts.setOpeningBalance(activeAcc.id, Math.round(num * 100));
 
         // SURGICAL UPDATE: Recalculate and update DOM directly to avoid grid unmount
         const allTxns = window.RoboLedger.Ledger.getAll();
@@ -1993,8 +1999,14 @@
         const newEndingBalance = num - totalDebits + totalCredits;
 
         const elClosing = document.getElementById('header-closing-balance');
-        if (elClosing) {
-          elClosing.innerText = `$${newEndingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} `;
+        if (elClosing) elClosing.innerText = `$${newEndingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} `;
+
+        // Also update activity colors if they exist
+        const elNet = document.getElementById('header-net-activity');
+        if (elNet) {
+          const net = totalCredits - totalDebits;
+          elNet.innerText = `$${net.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+          elNet.style.color = net >= 0 ? '#10b981' : '#ef4444';
         }
       }
     }

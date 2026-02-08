@@ -373,13 +373,27 @@ window.RoboLedger = (function () {
             // Sort ASCENDING for benchmark parity (oldest first)
             const raw = Object.values(state.transactions).sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));
 
-            let currentBalance = 0;
-            return raw.map((tx, i) => {
-                // Opening Balance Logic: Balance reflects state BEFORE this transaction
-                tx.calculated_balance = currentBalance;
+            // Map of starting balances per account
+            const startingBalances = {};
+            state.accounts.forEach(acc => {
+                startingBalances[acc.id] = (acc.openingBalance || 0) * 100; // to cents
+            });
 
-                // Update for next row's opening
-                currentBalance += (tx.polarity === Polarity.CREDIT ? tx.amount_cents : -tx.amount_cents);
+            // If in "ALL" mode, we track balances per account while mapping
+            const runBalances = { ...startingBalances };
+
+            return raw.map((tx) => {
+                const accId = tx.account_id || 'ACC-001';
+
+                // Initialize if not exists (defensive)
+                if (runBalances[accId] === undefined) runBalances[accId] = 0;
+
+                // Balance represents state BEFORE this transaction in current view?
+                // Actually, standard ledgers show the balance AFTER the transaction.
+                runBalances[accId] += (tx.polarity === Polarity.CREDIT ? tx.amount_cents : -tx.amount_cents);
+
+                tx.balance_cents = runBalances[accId];
+                tx.calculated_balance = runBalances[accId]; // Keep legacy support
 
                 return tx;
             });
@@ -486,28 +500,40 @@ window.RoboLedger = (function () {
             return state.accounts.find(a => a.id === id);
         },
         updateMetadata: function (id, metadata) {
-            const acc = this.get(id);
-            if (acc) {
-                acc.inst = metadata.id || acc.inst;
-                acc.transit = metadata.transit || acc.transit;
-                acc.name = metadata.name || acc.name;
-                acc.accountNumber = metadata.accountNumber || acc.accountNumber || metadata.account_num;
-                acc.accountType = metadata.accountType || acc.accountType;
-                acc.period = metadata.period || acc.period;
-                acc.holder = metadata.holder || acc.holder;
-                acc.brand = metadata.brand || acc.brand;
-                acc.bankName = metadata.bankName || acc.bankName || metadata.name;
-                acc.cardNetwork = metadata.cardNetwork || acc.cardNetwork;
-                acc.statementClosingDay = metadata.statementClosingDay || acc.statementClosingDay;
-                acc.currency = metadata.currency || acc.currency || 'CAD';
-
-                // SMART REF SELECTION: Don't stick with 'CHQ' if we know it's a CC
-                if (acc.brand === 'MASTERCARD' && acc.ref === 'CHQ1') acc.ref = 'MC1';
-                else if (acc.brand === 'VISA' && acc.ref === 'CHQ1') acc.ref = 'VISA1';
-                else if (acc.brand === 'AMEX' && acc.ref === 'CHQ1') acc.ref = 'AMEX1';
-
-                save();
+            let acc = this.get(id);
+            if (!acc) {
+                console.log(`[ACCOUNTS] Creating new account record: ${id}`);
+                acc = {
+                    id: id,
+                    name: metadata.name || 'New Account',
+                    ref: 'CHQ1',
+                    openingBalance: 0,
+                    expectedBalance: 0,
+                    currency: 'CAD',
+                    created_at: new Date().toISOString()
+                };
+                state.accounts.push(acc);
             }
+
+            acc.inst = metadata.id || acc.inst;
+            acc.transit = metadata.transit || acc.transit;
+            acc.name = metadata.name || acc.name;
+            acc.accountNumber = metadata.accountNumber || acc.accountNumber || metadata.account_num;
+            acc.accountType = metadata.accountType || acc.accountType;
+            acc.period = metadata.period || acc.period;
+            acc.holder = metadata.holder || acc.holder;
+            acc.brand = metadata.brand || acc.brand;
+            acc.bankName = metadata.bankName || acc.bankName || metadata.name;
+            acc.cardNetwork = metadata.cardNetwork || acc.cardNetwork;
+            acc.statementClosingDay = metadata.statementClosingDay || acc.statementClosingDay;
+            acc.currency = metadata.currency || acc.currency || 'CAD';
+
+            // SMART REF SELECTION: Don't stick with 'CHQ' if we know it's a CC
+            if (acc.brand === 'MASTERCARD' && acc.ref === 'CHQ1') acc.ref = 'MC1';
+            else if (acc.brand === 'VISA' && acc.ref === 'CHQ1') acc.ref = 'VISA1';
+            else if (acc.brand === 'AMEX' && acc.ref === 'CHQ1') acc.ref = 'AMEX1';
+
+            save();
         },
         setOpeningBalance: function (id, amountCents) {
             const acc = this.get(id);
