@@ -300,12 +300,11 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
                             return (
                                 <div
                                     key={row.id}
-                                    className={`flex border-b border-[#f1f5f9] absolute top-0 left-0 w-full transition-colors cursor-pointer group ${isSelected ? 'bg-blue-50/50' : 'hover:bg-[#f8fafc] bg-white'}`}
+                                    className={`flex border-b border-[#f1f5f9] absolute top-0 left-0 w-full transition-colors group ${isSelected ? 'bg-blue-50/50' : 'hover:bg-[#f8fafc] bg-white'}`}
                                     style={{
                                         height: `${density === 'compact' ? 40 : 52}px`,
                                         transform: `translateY(${virtualRow.start}px)`
                                     }}
-                                    onClick={() => row.toggleSelected()}
                                 >
                                     {row.getVisibleCells().map(cell => (
                                         <div

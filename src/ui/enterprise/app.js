@@ -674,11 +674,18 @@
     if (provinceSelect) UI_STATE.province = provinceSelect.value;
     if (gstEnabled) UI_STATE.gstEnabled = gstEnabled.checked;
 
-    // Apply immediate changes
-    document.body.classList.remove('rainbow-theme', 'postit-theme');
-    if (UI_STATE.activeTheme && UI_STATE.activeTheme !== 'default') {
-      document.body.classList.add(`${UI_STATE.activeTheme}-theme`);
-    }
+    // Apply saved theme to grid container only (grid-specific setting)
+    const applyThemeToGrid = () => {
+      const gridContainer = document.getElementById('txnGrid');
+      if (gridContainer) {
+        gridContainer.classList.remove('rainbow-theme', 'postit-theme', 'default-theme');
+        if (UI_STATE.activeTheme !== 'default') {
+          gridContainer.classList.add(`${UI_STATE.activeTheme}-theme`);
+        }
+      }
+    };
+    // Will be applied after grid renders
+    setTimeout(applyThemeToGrid, 100);
 
     // Persist to unified settings object
     const settings = {
@@ -753,12 +760,11 @@
     }
 
     // Apply saved theme on page load (legacy support + immediate apply)
-    const savedTheme = localStorage.getItem('roboledger_theme') || UI_STATE.activeTheme;
-    if (savedTheme && savedTheme !== 'default') {
+    const savedTheme = localStorage.getItem('roboledger_theme') || 'default';
+    if (savedTheme) { // Check if savedTheme is not null/undefined
       UI_STATE.activeTheme = savedTheme;
-      document.body.classList.remove('rainbow-theme', 'postit-theme');
-      document.body.classList.add(`${savedTheme}-theme`);
-      console.log(`[THEME] Loaded saved theme: ${savedTheme}`);
+      // Theme will be applied to grid container after render, not to body
+      console.log(`[INIT] Theme restored: ${savedTheme}`);
     }
 
     window.render();
@@ -937,8 +943,8 @@
 
   window.handleSearch = function (query) {
     UI_STATE.searchQuery = query;
-    const baseData = dataAdjustedForAccount();
-    if (window.renderTransactionsGrid) window.renderTransactionsGrid(baseData, query);
+    // Re-render the current view with the search query
+    window.render();
   };
 
   // Account switcher dropdown
@@ -1059,24 +1065,25 @@
       };
     });
 
-    // Wire theme switcher
+    // Wire theme switcher - GRID SCOPED ONLY
     const themeSelector = drawer.querySelector('#theme-selector');
     if (themeSelector) {
       themeSelector.addEventListener('change', (e) => {
         const theme = e.target.value;
         UI_STATE.activeTheme = theme;
 
-        // Remove all theme classes
-        document.body.classList.remove('rainbow-theme', 'postit-theme');
-
-        // Apply selected theme
-        if (theme !== 'default') {
-          document.body.classList.add(`${theme}-theme`);
+        // Apply theme to GRID CONTAINER ONLY, not to body
+        const gridContainer = document.getElementById('txnGrid');
+        if (gridContainer) {
+          gridContainer.classList.remove('rainbow-theme', 'postit-theme', 'default-theme');
+          if (theme !== 'default') {
+            gridContainer.classList.add(`${theme}-theme`);
+          }
         }
 
         // Persist to localStorage
         localStorage.setItem('roboledger_theme', theme);
-        console.log(`[THEME] Applied: ${theme}`);
+        console.log(`[THEME] Applied to grid only: ${theme}`);
       });
     }
   }
@@ -1964,16 +1971,10 @@
             </select>
           </div>
 
-          <!-- RIGHT: View Controls -->
+          <!-- RIGHT: Grid Settings Icon Only -->
           <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="display: flex; align-items: center; border: 1px solid #e2e8f0; border-radius: 6px; background: white; overflow: hidden;">
-              <button onclick="window.setDensity('compact')" style="padding: 5px 12px; border: none; background: ${UI_STATE.density === 'compact' ? '#eff6ff' : 'transparent'}; color: ${UI_STATE.density === 'compact' ? '#3b82f6' : '#64748b'}; font-size: 11px; font-weight: 600; cursor: pointer; border-right: 1px solid #e2e8f0;">Compact</button>
-              <button onclick="window.setDensity('comfortable')" style="padding: 5px 12px; border: none; background: ${!UI_STATE.density || UI_STATE.density === 'comfortable' ? '#eff6ff' : 'transparent'}; color: ${!UI_STATE.density || UI_STATE.density === 'comfortable' ? '#3b82f6' : '#64748b'}; font-size: 11px; font-weight: 600; cursor: pointer; border-right: 1px solid #e2e8f0;">Comfortable</button>
-              <button onclick="window.setDensity('spacious')" style="padding: 5px 12px; border: none; background: ${UI_STATE.density === 'spacious' ? '#eff6ff' : 'transparent'}; color: ${UI_STATE.density === 'spacious' ? '#3b82f6' : '#64748b'}; font-size: 11px; font-weight: 600; cursor: pointer;">Spacious</button>
-            </div>
-            <button onclick="window.toggleSettings(true)" style="padding: 6px 12px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-              <i class="ph ph-columns" style="font-size: 14px; color: #64748b;"></i>
-              <span style="font-size: 12px; color: #64748b; font-weight: 600;">Columns</span>
+            <button onclick="window.toggleSettings(true)" style="padding: 7px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'" title="Grid Settings (Appearance & Columns)">
+              <i class="ph ph-gear-six" style="font-size: 16px; color: #64748b;"></i>
             </button>
           </div>
         </div>
@@ -2155,6 +2156,17 @@
     if (canUseReact) {
       console.log("[GRID] Mounting React/TanStack grid...");
       window.mountTransactionsTable(data, UI_STATE.searchQuery);
+
+      // Apply grid-scoped theme after grid renders
+      setTimeout(() => {
+        const gridContainer = document.getElementById('txnGrid');
+        if (gridContainer && UI_STATE.activeTheme && UI_STATE.activeTheme !== 'default') {
+          gridContainer.classList.remove('rainbow-theme', 'postit-theme', 'default-theme');
+          gridContainer.classList.add(`${UI_STATE.activeTheme}-theme`);
+          console.log(`[THEME] Applied to grid: ${UI_STATE.activeTheme}`);
+        }
+      }, 100);
+
       return;
     }
 
