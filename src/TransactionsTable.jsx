@@ -159,8 +159,16 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
         window.updateGridDensity = (newDensity) => {
             setDensity(newDensity);
         };
+        // Expose column visibility control
+        window.setGridColumnVisibility = (columnId, visible) => {
+            setColumnVisibility(prev => ({
+                ...prev,
+                [columnId]: !visible // TanStack uses inverted logic - false = visible
+            }));
+        };
         return () => {
             delete window.updateGridDensity;
+            delete window.setGridColumnVisibility;
         };
     }, []);
     const [showColManager, setShowColManager] = useState(false);

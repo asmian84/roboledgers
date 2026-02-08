@@ -1001,29 +1001,33 @@
   }
 
   window.toggleGridColumn = (field, visible) => {
-    if (!window.txnTable) return;
-
     console.log(`[SETTINGS] Toggling column ${field} to ${visible}`);
 
-    // Find column in Tabulator
-    const columns = window.txnTable.getColumns();
-    const targetCol = columns.find(c => c.getField() === field);
+    // Map field names from settings UI to React column IDs
+    const fieldMapping = {
+      'date': 'date',
+      'ref': 'select', // Ref maps to select column in React
+      'description': 'payee',
+      'debit_col': 'debit',
+      'credit_col': 'credit',
+      'balance': 'balance',
+      'coa_code': 'category'
+    };
 
-    if (targetCol) {
-      if (visible) {
-        targetCol.show();
-      } else {
-        targetCol.hide();
-      }
+    const columnId = fieldMapping[field] || field;
+
+    // Use React bridge if available
+    if (window.setGridColumnVisibility) {
+      window.setGridColumnVisibility(columnId, visible);
 
       // Save preference to localStorage
       const saved = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
       saved[field] = visible;
       localStorage.setItem('roboledger_column_prefs', JSON.stringify(saved));
 
-      console.log(`[SETTINGS] Column ${field} ${visible ? 'shown' : 'hidden'}`);
+      console.log(`[SETTINGS] Column ${columnId} ${visible ? 'shown' : 'hidden'} via React bridge`);
     } else {
-      console.warn(`[SETTINGS] Column ${field} not found in table`);
+      console.warn(`[SETTINGS] React bridge not available yet`);
     }
   };
 
