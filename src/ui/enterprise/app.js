@@ -2004,7 +2004,6 @@
       </div>
     `;
   }
-  }
 
   // Real-time opening balance update helper
   window.updateOpeningBalance = function (val) {
