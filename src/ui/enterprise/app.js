@@ -483,6 +483,12 @@
     // Force a complete grid re-render
     if (window.renderTransactionsGrid) {
       window.renderTransactionsGrid(filtered, UI_STATE.searchQuery);
+    } else if (window.mountTransactionsTable) {
+      // Fallback to mount function if renderTransactionsGrid not available
+      console.warn('[GRID] renderTransactionsGrid missing, using mountTransactionsTable');
+      window.mountTransactionsTable(filtered, UI_STATE.searchQuery);
+    } else {
+      console.error('[GRID] No grid rendering function available!');
     }
 
     // Update header to reflect new account selection
@@ -1551,10 +1557,20 @@
                 <div style="max-height: 48px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px;">
                   ${accounts.map(a => {
       const isReconciled = isAccountReconciled(a);
+      const isLiabilityAcc = a.brand || /VISA|MC|AMEX|CREDIT/i.test(a.name || '');
+      const accountDetails = isLiabilityAcc
+        ? `•••• ${a.accountNumber ? a.accountNumber.slice(-4) : 'XXXX'}`
+        : `Transit ${a.transit || '00000'} • Inst ${a.inst || '000'} • Account •••• ${(a.accountNumber || '').slice(-4) || '0000'}`;
+
       return `
-                      <div onclick="window.switchAccount('${a.id}')" style="cursor: pointer; padding: 2px 0; font-size: 12px; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 6px; hover: background: #f1f5f9;">
-                        <span>${a.name || a.ref}</span>
-                        ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 13px; color: #10b981;"></i>' : ''}
+                      <div onclick="window.switchAccount('${a.id}')" style="cursor: pointer; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid #f1f5f9;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                          <span style="font-size: 12px; font-weight: 600; color: #1e293b;">${a.name || a.ref}</span>
+                          ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 13px; color: #10b981;"></i>' : ''}
+                        </div>
+                        <div style="font-size: 10px; font-weight: 500; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
+                          ${accountDetails}
+                        </div>
                       </div>
                     `;
     }).join('')}
