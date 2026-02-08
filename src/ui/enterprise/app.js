@@ -1903,7 +1903,7 @@
             ${isAllMode ? `
               <!-- ALL MODE: Scrollable Account List -->
               <div style="display: flex; flex-direction: column; width: 100%; gap: 2px;">
-                <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Summary</div>
+                <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Accounts</div>
                 <div style="max-height: 48px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px;">
                   ${accounts.map(a => {
       const isReconciled = isAccountReconciled(a);
@@ -1922,7 +1922,7 @@
                 ${acc ? `
                   <div style="font-size: 28px;">${getBankIcon(acc.bankName)}</div>
                   <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; flex: 1;">
-                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Metadata</div>
+                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
                     <div style="font-size: 13px; font-weight: 700; color: #1e293b;">
                       ${acc.bankName || 'RBC'} ${isLiability ? 'Credit Card' : 'Chequing'}${acc.brand ? ' • ' + acc.brand : ''}
                     </div>
@@ -1936,7 +1936,7 @@
                   </div>
                 ` : `
                   <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px;">
-                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Metadata</div>
+                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
                     <div style="font-family: ${terminalFont}; font-size: 12px; color: #64748b; opacity: 0.6;">&gt; No account selected</div>
                   </div>
                 `}
