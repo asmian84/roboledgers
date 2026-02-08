@@ -1535,6 +1535,7 @@
           <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500;">Header V5.2 • Active Session</div>
         </div>
 
+        ${allTx.length > 0 ? `
         <!-- Professional Account Context Strip (Unified 2-Card) -->
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: stretch; min-height: 64px; overflow: hidden;">
           
@@ -1659,6 +1660,7 @@
           </div>
 
         </div>
+        ` : ''}
       </div>
     `;
 
