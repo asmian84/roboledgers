@@ -524,20 +524,20 @@ window.RoboLedger = (function () {
             acc.accountType = metadata.accountType || acc.accountType;
             acc.period = metadata.period || acc.period;
             acc.holder = metadata.holder || acc.holder;
-            acc.brand = metadata.brand || acc.brand;
-            acc.bankName = metadata.bankName || acc.bankName || metadata.name;
+            acc.brand = metadata.brand || metadata._tag || metadata.tag || metadata.cardNetwork || acc.brand;
+            acc.bankName = metadata.bankName || metadata._bank || metadata.name || acc.bankName;
             acc.cardNetwork = metadata.cardNetwork || acc.cardNetwork;
             acc.statementClosingDay = metadata.statementClosingDay || acc.statementClosingDay;
             acc.currency = metadata.currency || acc.currency || 'CAD';
 
             // Auto-assign ref# for new accounts based on type
             if (isNewAccount || acc.ref === 'TEMP' || acc.ref === 'CHQ1') {
-                const brand = acc.brand || acc.cardNetwork;
+                const brand = (acc.brand || acc.cardNetwork || acc._tag || '').toUpperCase();
                 let refPrefix = 'CHQ'; // Default
 
-                if (brand === 'MASTERCARD') refPrefix = 'MC';
-                else if (brand === 'VISA') refPrefix = 'VISA';
-                else if (brand === 'AMEX') refPrefix = 'AMEX';
+                if (brand.includes('MASTERCARD') || brand.includes('MC')) refPrefix = 'MC';
+                else if (brand.includes('VISA')) refPrefix = 'VISA';
+                else if (brand.includes('AMEX')) refPrefix = 'AMEX';
                 else if (acc.accountType === 'SAVINGS') refPrefix = 'SAV';
 
                 // Count existing accounts with same prefix
