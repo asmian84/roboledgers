@@ -678,7 +678,13 @@ window.RoboLedger = (function () {
             if (upper.includes('RBC') || upper.includes('ROYAL BANK')) {
                 console.log('[PARSER] Detected RBC statement');
 
-                if (upper.includes('BUSINESS ACCOUNT STATEMENT') || upper.includes('CHEQU')) {
+                if (upper.includes('SAVINGS ACCOUNT') || upper.includes('BUSINESS ESSENTIALS') && upper.includes('SAVINGS')) {
+                    console.log('[PARSER] Routing to RBC Savings Parser');
+                    if (window.rbcSavingsParser) {
+                        result = await window.rbcSavingsParser.parseWithRegex(text);
+                        if (result) console.log('[PARSER] RBC Savings returned:', result);
+                    }
+                } else if (upper.includes('BUSINESS ACCOUNT STATEMENT') || upper.includes('CHEQU')) {
                     console.log('[PARSER] Routing to RBC Chequing Parser');
                     if (window.rbcChequingParser) {
                         result = await window.rbcChequingParser.parseWithRegex(text);
