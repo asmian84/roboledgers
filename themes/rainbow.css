@@ -1,0 +1,42 @@
+/* Rainbow Theme - Vibrant gradient-based aesthetic */
+
+body.rainbow-theme {
+    --primary-gradient: linear-gradient(135deg, #667ee a 0%, #764ba2 100%);
+    --accent-color: #f093fb;
+    --background-primary: #ffecd2;
+    --background-secondary: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    --card-bg: rgba(255, 255, 255, 0.95);
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: rgba(102, 126, 234, 0.2);
+    --shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
+}
+
+/* Apply gradient to header */
+body.rainbow-theme .header {
+    background: var(--primary-gradient) !important;
+    color: white !important;
+}
+
+body.rainbow-theme .breadcrumbs {
+    background: var(--background-secondary) !important;
+}
+
+/* Buttons */
+body.rainbow-theme .btn-restored {
+    background: var(--primary-gradient) !important;
+    border: none !important;
+    color: white !important;
+}
+
+/* Cards and panels */
+body.rainbow-theme .stage,
+body.rainbow-theme .settings-drawer {
+    background: var(--background-primary) !important;
+}
+
+/* Accent elements */
+body.rainbow-theme .nav-item.active {
+    background: var(--accent-color) !important;
+    color: white !important;
+}

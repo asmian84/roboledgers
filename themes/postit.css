@@ -1,0 +1,60 @@
+/* Post-it Theme - Sticky note aesthetic */
+
+body.postit-theme {
+    --sticky-yellow: #fff740;
+    --sticky-pink: #ff6ec4;
+    --sticky-bg: #fffef0;
+    --sticky-border: #e5d700;
+    --text-primary: #1a1a1a;
+    --text-secondary: #4a4a4a;
+    --shadow-postit: 2px 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Apply sticky note look */
+body.postit-theme {
+    background: var(--sticky-bg) !important;
+}
+
+body.postit-theme .header {
+    background: var(--sticky-yellow) !important;
+    color: var(--text-primary) !important;
+    box-shadow: var(--shadow-postit) !important;
+    border-bottom: 2px solid var(--sticky-border) !important;
+}
+
+body.postit-theme .breadcrumbs {
+    background: var(--sticky-pink) !important;
+    color: white !important;
+}
+
+/* Cards with sticky note effect */
+body.postit-theme .stage,
+body.postit-theme .settings-drawer,
+body.postit-theme .card {
+    background: var(--sticky-yellow) !important;
+    box-shadow: var(--shadow-postit) !important;
+    border: 1px solid var(--sticky-border) !important;
+}
+
+/* Buttons */
+body.postit-theme .btn-restored {
+    background: var(--sticky-pink) !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: var(--shadow-postit) !important;
+}
+
+/* Nav items */
+body.postit-theme .nav-item {
+    background: transparent !important;
+}
+
+body.postit-theme .nav-item.active {
+    background: var(--sticky-pink) !important;
+    color: white !important;
+}
+
+/* Grid styling */
+body.postit-theme table {
+    background: #fffdf0 !important;
+}

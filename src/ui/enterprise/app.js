@@ -652,9 +652,12 @@
       UI_STATE.recoveryPending = true;
     }
 
-    // Set default theme on body
-    if (UI_STATE.activeTheme) {
-      document.body.className = UI_STATE.activeTheme.toLowerCase().replace(' ', '-') + '-theme';
+    // Apply saved theme on page load
+    const savedTheme = localStorage.getItem('roboledger_theme');
+    if (savedTheme && savedTheme !== 'default') {
+      UI_STATE.activeTheme = savedTheme;
+      document.body.classList.add(`${savedTheme}-theme`);
+      console.log(`[THEME] Loaded saved theme: ${savedTheme}`);
     }
 
     window.render();
@@ -924,7 +927,7 @@
   function renderSettingsDrawer() {
     const drawer = document.getElementById('settings-drawer');
     drawer.innerHTML = `
-      <div class="drawer-header">
+      <div class="drawer-header" style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 12px;">
               <div style="background: #f1f5f9; padding: 8px; border-radius: 8px; color: #64748b;"><i class="ph ph-gear-six" style="font-size: 1.2rem;"></i></div>
               <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0;">Settings</h2>
@@ -954,6 +957,27 @@
         renderSettingsDrawer();
       };
     });
+
+    // Wire theme switcher
+    const themeSelector = drawer.querySelector('#theme-selector');
+    if (themeSelector) {
+      themeSelector.addEventListener('change', (e) => {
+        const theme = e.target.value;
+        UI_STATE.activeTheme = theme;
+
+        // Remove all theme classes
+        document.body.classList.remove('rainbow-theme', 'postit-theme');
+
+        // Apply selected theme
+        if (theme !== 'default') {
+          document.body.classList.add(`${theme}-theme`);
+        }
+
+        // Persist to localStorage
+        localStorage.setItem('roboledger_theme', theme);
+        console.log(`[THEME] Applied: ${theme}`);
+      });
+    }
   }
 
   function renderSettingsTabContent() {
@@ -967,11 +991,10 @@
                 <div class="setting-group-title"><i class="ph ph-palette"></i> Appearance</div>
                 <div style="margin-bottom: 16px;">
                     <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">THEME</label>
-                    <select class="v5-select">
-                        <option ${UI_STATE.activeTheme === 'Rainbow' ? 'selected' : ''}>Rainbow</option>
-                        <option>Wave Blue</option>
-                        <option>Subliminal Dark</option>
-                        <option>Classic Blue</option>
+                    <select class="v5-select theme-selector" id="theme-selector">
+                        <option value="default" ${!UI_STATE.activeTheme || UI_STATE.activeTheme === 'default' ? 'selected' : ''}>Default</option>
+                        <option value="rainbow" ${UI_STATE.activeTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
+                        <option value="postit" ${UI_STATE.activeTheme === 'postit' ? 'selected' : ''}>Post-it</option>
                     </select>
                 </div>
 
