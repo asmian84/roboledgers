@@ -1802,6 +1802,12 @@
 
     const terminalFont = "'Courier New', Courier, monospace";
 
+    // ===== AGGREGATE CALCULATIONS FOR ALL ACCOUNTS MODE =====
+    const aggTotalBalance = accounts.reduce((sum, a) => sum + a.openingBalance, 0);
+    const aggTotalDebits = filteredTxns.reduce((sum, t) => sum + (t.debit || 0), 0);
+    const aggTotalCredits = filteredTxns.reduce((sum, t) => sum + (t.credit || 0), 0);
+    const aggNetActivity = agg TotalCredits - aggTotalDebits;
+
     return `
       <!-- Professional Account Dashboard Header -->
       <div id="account-header-root" style="background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 12px 24px; gap: 12px;">
