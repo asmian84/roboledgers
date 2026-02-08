@@ -1162,7 +1162,7 @@ window.RoboLedger = (function () {
                         const amount = canonical.amount_cents / 100;
                         const taxAmount = (amount / (1 + rate)) * rate;
                         canonical.tax_cents = Math.round(taxAmount * 100);
-                        console.log(`[TAX] Calculated ${province} tax: $${taxAmount.toFixed(2)} on $${amount.toFixed(2)}`);
+                        // console.log(`[TAX] Calculated ${province} tax: $${taxAmount.toFixed(2)} on $${amount.toFixed(2)}`);
                     }
                 }
 
