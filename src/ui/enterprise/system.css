@@ -322,7 +322,7 @@ body {
 /* Main Stage */
 .stage {
     flex: 1;
-    padding: 0;
+    padding: 24px;  /* Container padding - prevents UI bleeding */
     /* Maximize width of the stages */
     background: #f8fafc;
     overflow: hidden;
