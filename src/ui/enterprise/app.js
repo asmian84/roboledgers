@@ -650,23 +650,10 @@
       console.warn('[GRID] renderTransactionsGrid not available, grid will not update');
     }
 
-    // ONLY update the header section (not the entire page)
-    const headerContainer = document.querySelector('.v5-account-workspace-header');
-    if (headerContainer && previousAccount !== accId) {
-      headerContainer.outerHTML = getAccountWorkspaceHeaderHTML();
-
-      // CRITICAL: Sync the dropdown <select> element to reflect the current account
-      // Query the NEW header element (just inserted by outerHTML) using its ID
-      const newHeader = document.getElementById('account-header-root');
-      if (newHeader) {
-        const dropdown = newHeader.querySelector('select');
-        if (dropdown) {
-          dropdown.value = accId;
-          console.log(`[SYNC] Dropdown synced to: ${accId}`);
-        } else {
-          console.warn('[SYNC] Dropdown not found in new header');
-        }
-      }
+    // Update header DATA ONLY (no re-rendering of structure)
+    if (window.updateHeaderData && previousAccount !== accId) {
+      console.log('[HEADER] Updating header data (no re-render)');
+      window.updateHeaderData();
     }
   };
 
