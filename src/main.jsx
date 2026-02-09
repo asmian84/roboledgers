@@ -9,8 +9,17 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     const container = document.getElementById('txnGrid');
     if (!container) return;
 
+    // If the old root's container was detached from the DOM (e.g. by render() replacing innerHTML),
+    // we must create a fresh root on the new container node.
+    if (window._txGridRoot && window._txGridRootContainer && !document.body.contains(window._txGridRootContainer)) {
+        try { window._txGridRoot.unmount(); } catch (e) { /* ignore */ }
+        window._txGridRoot = null;
+        window._txGridRootContainer = null;
+    }
+
     if (!window._txGridRoot) {
         window._txGridRoot = ReactDOM.createRoot(container);
+        window._txGridRootContainer = container; // Track which DOM node the root is bound to
     }
 
     // Filter out opening balance rows (reference points, not transactions)
