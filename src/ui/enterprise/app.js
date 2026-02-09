@@ -1896,10 +1896,15 @@
     const metaContent = document.getElementById('metadata-content');
     if (metaContent) {
       if (isAllMode) {
-        // ALL MODE: Show "Consolidated View" in metadata
-        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.4;">' +
-          '<div style="color: #64748b; font-weight: 600; font-size: 11px;">Consolidated View</div>' +
-          '<div style="color: #94a3b8; margin-top: 2px;">' + accounts.length + ' accounts \u2022 CAD</div>' +
+        // ALL MODE: Consolidated View + clickable account badges
+        var badgesList = accounts.map(function (a) {
+          var isRecon = isAccountReconciled(a);
+          return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>';
+        }).join(' ');
+
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.6;">' +
+          '<div style="color: #64748b; font-weight: 600; font-size: 11px; margin-bottom: 4px;">Consolidated View \u2022 CAD</div>' +
+          '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + badgesList + '</div>' +
           '</div>';
       } else if (acc) {
         // SINGLE MODE: Compact 3-line metadata with bank icon
@@ -1922,6 +1927,11 @@
         // NO ACCOUNT SELECTED
         metaContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 10px; color: #1e293b;">&gt; No account</div>`;
       }
+    }
+
+    // Re-populate import section after header re-render
+    if (typeof updateImportSection === 'function') {
+      updateImportSection();
     }
   };
 
@@ -2070,8 +2080,13 @@
         </div>
 
         ${filteredTxns.length > 0 ? `
-        <!-- Compact Terminal Strip (STATIC CONTAINERS) -->
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 90px; overflow: hidden; margin: 8px 16px;">
+        <!-- Breadcrumb Navigation -->
+        <div style="font-family: 'JetBrains Mono', 'SF Mono', 'Courier New', monospace; font-size: 10px; color: #64748b; margin: 0 16px 4px 16px; display: flex; align-items: center; gap: 4px;">
+          <span onclick="window.switchAccount('ALL')" style="cursor: pointer; color: ${UI_STATE.selectedAccount === 'ALL' ? '#1e293b; font-weight: 600' : '#3b82f6'};">${UI_STATE.selectedAccount === 'ALL' ? 'ALL' : 'ALL'}</span>
+          ${acc ? '<span style="color: #94a3b8; margin: 0 2px;">\u2192</span><span style="color: #1e293b; font-weight: 600;">' + (acc.ref || acc.name || 'Account') + '</span>' : ''}
+        </div>
+        <!-- Compact Terminal Strip -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 90px; overflow: hidden; margin: 0 16px 8px 16px;">
           
           <!-- LEFT: Reconciliation (40%) -->
           <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 16px; display: flex; flex-direction: column; justify-content: center;">
