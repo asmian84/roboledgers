@@ -211,11 +211,6 @@
     window.showProgressBar();
     window.updateProgressBar(0, files.length, 'Initializing...', 'Preparing to parse', 0);
 
-    // Also show header strip progress bar
-    if (window.showParsingProgress) {
-      window.showParsingProgress(0, 'Preparing...');
-    }
-
     // Get primary account for ingestion
     const primaryAccount = window.RoboLedger.Accounts.getAll()[0];
     const account_id = primaryAccount ? primaryAccount.id : 'ALL';
@@ -224,9 +219,8 @@
 
     for (let idx = 0; idx < files.length; idx++) {
       const file = files[idx];
-      const percentDone = Math.round(((idx) / files.length) * 100);
       try {
-        // Update progress bars (lightweight, no flicker)
+        // Update progress bar (lightweight, no flicker)
         window.updateProgressBar(
           idx + 1,
           files.length,
@@ -234,14 +228,9 @@
           'Parsing PDF...',
           totalImported
         );
-        if (window.showParsingProgress) {
-          window.showParsingProgress(percentDone, `Parsing ${idx + 1}/${files.length}: ${file.name}`);
-        }
 
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
         totalImported += imported;
-
-        const percentAfter = Math.round(((idx + 1) / files.length) * 100);
 
         // Update with results
         window.updateProgressBar(
@@ -251,9 +240,6 @@
           `✅ Imported ${imported} transactions`,
           totalImported
         );
-        if (window.showParsingProgress) {
-          window.showParsingProgress(percentAfter, `✅ ${file.name} (${imported} txns)`);
-        }
 
         console.log(`[UPLOAD] ${file.name}: ${imported} transactions imported`);
       } catch (err) {
@@ -265,17 +251,13 @@
           `❌ Parse failed`,
           totalImported
         );
-        if (window.showParsingProgress) {
-          window.showParsingProgress(Math.round(((idx + 1) / files.length) * 100), `❌ ${file.name} failed`);
-        }
+
       }
     }
 
     // Final update
     window.updateProgressBar(files.length, files.length, 'Complete!', `Imported ${totalImported} transactions`, totalImported);
-    if (window.showParsingProgress) {
-      window.showParsingProgress(100, `✅ Complete: ${totalImported} transactions`);
-    }
+
 
     // Hide progress bar after brief delay, then refresh grid
     setTimeout(() => {
@@ -1875,7 +1857,7 @@
         }).join('');
 
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b; line-height: 1.7;">' +
-          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">RECONCILIATION' + badgesHTML + '</div>' +
+          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
           '<div>Total Balance: <span style="font-weight: 600;">$' + totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '<div>Total Debits: <span style="font-weight: 600; color: #ef4444;">$' + aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span> \u2022 Total Credits: <span style="font-weight: 600; color: #10b981;">$' + aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '<div>Net Activity: <span style="font-weight: 600;">$' + netActivity.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
@@ -1979,33 +1961,11 @@
         '<i class="ph ph-upload" style="font-size: 18px; color: #3b82f6;"></i>' +
         '<div style="font-size: 9px; font-weight: 600; color: #64748b; text-align: center;">Browse / Drag &amp; Drop</div>' +
         '</div>' +
-        '<div id="parsing-progress" style="display: none; width: 100%; padding: 2px 0;">' +
-        '<div style="font-size: 8px; font-weight: 600; color: #64748b; text-align: center; margin-bottom: 2px;" id="parsing-progress-text">Parsing...</div>' +
-        '<div style="width: 100%; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">' +
-        '<div id="parsing-progress-bar" style="width: 0%; height: 100%; background: #3b82f6; border-radius: 2px; transition: width 0.3s ease;"></div>' +
-        '</div>' +
-        '</div>' +
         '</div>';
     }
   };
 
-  // Global function to show/update/hide parsing progress
-  window.showParsingProgress = function (percent, text) {
-    var progressDiv = document.getElementById('parsing-progress');
-    var progressBar = document.getElementById('parsing-progress-bar');
-    var progressText = document.getElementById('parsing-progress-text');
-    if (!progressDiv) return;
-    if (percent < 0 || percent === null || percent === undefined) {
-      progressDiv.style.display = 'none';
-      return;
-    }
-    progressDiv.style.display = 'block';
-    if (progressBar) progressBar.style.width = Math.min(percent, 100) + '%';
-    if (progressText) progressText.textContent = text || ('Parsing... ' + Math.round(percent) + '%');
-    if (percent >= 100) {
-      setTimeout(function () { progressDiv.style.display = 'none'; }, 1500);
-    }
-  };
+
 
   // Call import section update
   updateImportSection();

@@ -948,26 +948,23 @@ window.RoboLedger = (function () {
 
         // Generate unique account ID based on metadata
         generateAccountId: function (metadata) {
-            // Credit Cards: Use brand + last 4 digits
-            // Credit Cards: Strip non-digits, validate length, use last 4
-            const tag = (metadata._tag || metadata.tag || metadata.cardNetwork || "").toUpperCase();
-            if (tag.includes("MASTERCARD") || tag.includes("VISA")) {
+            // Credit Cards: Use brand + last 4 digits (handles masked numbers like 5526 12** **** 1999)
+            const tag = (metadata._tag || metadata.tag || metadata.cardNetwork || metadata.brand || "").toUpperCase();
+            if (tag.includes("MASTERCARD") || tag.includes("VISA") || tag.includes("MC")) {
                 const cardNum = (metadata._acct || metadata.accountNumber || "").replace(/\D/g, "");
-                if (cardNum.length === 16) {
+                if (cardNum.length >= 4) {
                     const last4 = cardNum.slice(-4);
-                    return tag.includes("MASTERCARD") ? `CC-MC-${last4}` : `CC-VISA-${last4}`;
+                    const brand = (tag.includes("MASTERCARD") || tag.includes("MC")) ? "MC" : "VISA";
+                    return `CC-${brand}-${last4}`;
                 }
             }
-            if (tag.includes("AMEX")) {
+            if (tag.includes("AMEX") || tag.includes("AMERICAN EXPRESS")) {
                 const cardNum = (metadata._acct || metadata.accountNumber || "").replace(/\D/g, "");
-                if (cardNum.length === 15) {
+                if (cardNum.length >= 4) {
                     const last4 = cardNum.slice(-4);
                     return `CC-AMEX-${last4}`;
                 }
             }
-
-
-
 
 
 
