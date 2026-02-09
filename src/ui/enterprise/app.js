@@ -1832,7 +1832,7 @@
     // Update reconciliation content
     const reconContent = document.getElementById('reconciliation-content');
     if (reconContent) {
-      // TERMINAL-STYLE RECONCILIATION - Simple text with colored numbers
+      // 2-COLUMN RECONCILIATION LAYOUT
       if (isAllMode) {
         // ALL MODE: Aggregate calculations
         const allTxns = window.RoboLedger.Ledger.getAll();
@@ -1840,52 +1840,54 @@
         const creditTxns = allTxns.filter(t => t.credit);
         const aggTotalDebits = debitTxns.reduce((sum, t) => sum + t.debit, 0);
         const aggTotalCredits = creditTxns.reduce((sum, t) => sum + t.credit, 0);
-
-        // Calculate aggregate opening balance from all accounts
         const aggOpeningBalance = accounts.reduce((sum, a) => sum + (a.openingBalance || 0), 0);
-        const aggEndingBalance = aggOpeningBalance + aggTotalDebits - aggTotalCredits;
-        const isReconciled = Math.abs(aggEndingBalance) < 0.01; // Within 1 cent
+        const aggEndingBalance = aggOpeningBalance - aggTotalDebits + aggTotalCredits;
 
         reconContent.innerHTML = `
-          <div style="font-family: ${terminalFont}; font-size: 11px; color: #475569; line-height: 1.6;">
-            <div>Total Balance: <span style="color: #0f766e; font-weight: 700;">$${aggEndingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> <span style="color: #94a3b8;">(${accounts.length} account${accounts.length !== 1 ? 's' : ''})</span></div>
-            <div>Total Debits: <span style="color: #ef4444;">$${aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> • Total Credits: <span style="color: #10b981;">$${aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-            <div>Net Activity: <span style="color: ${(aggTotalCredits - aggTotalDebits) >= 0 ? '#10b981' : '#ef4444'};font-weight: 700;">$${(aggTotalCredits - aggTotalDebits).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+          <div style="font-family: ${terminalFont}; font-size: 11px; color: #1e293b; line-height: 1.6;">
+            <div style="display: flex; gap: 16px;">
+              <div style="flex: 1;">Opening: <span style="font-weight: 600;">$${aggOpeningBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+              <div style="flex: 1;">Debit: <span style="font-weight: 600; color: #ef4444;">$${aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            </div>
+            <div style="display: flex; gap: 16px;">
+              <div style="flex: 1;">Ending: <span style="font-weight: 600;">$${aggEndingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+              <div style="flex: 1;">Credit: <span style="font-weight: 600; color: #10b981;">$${aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            </div>
+            <div style="text-align: center; margin-top: 4px; font-size: 10px;"><span style="color: #94a3b8;">(${accounts.length} accounts)</span></div>
           </div>
         `;
       } else if (!acc) {
-        reconContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 13px; color: #db2777; opacity: 0.6;">&gt; Select an account to reconcile...</div>`;
+        reconContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 11px; color: #1e293b;">&gt; Select account...</div>`;
       } else {
-        // SINGLE MODE: Full Reconciliation Logic
+        // SINGLE MODE: 2-column layout with editable fields
         const txns = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === acc.id);
         const debitTxns = txns.filter(t => t.debit);
         const creditTxns = txns.filter(t => t.credit);
         const totalDebits = debitTxns.reduce((sum, t) => sum + t.debit, 0);
         const totalCredits = creditTxns.reduce((sum, t) => sum + t.credit, 0);
         const openingBalance = acc.openingBalance || 0;
-
-        // Calculated ending = Opening - Debit + Credit
         const calculatedEnding = openingBalance - totalDebits + totalCredits;
-
-        // Actual ending from user (0 means auto-reconcile)
         const actualEnding = acc.actualEndingBalance || 0;
         const isAutoReconciled = actualEnding === 0;
         const discrepancy = isAutoReconciled ? 0 : (actualEnding - calculatedEnding);
         const isReconciled = Math.abs(discrepancy) < 0.01;
 
         reconContent.innerHTML = `
-          <div style="font-family: ${terminalFont}; font-size: 12px; color: #475569; line-height: 1.8;">
-            <div>Opening Balance: <span style="color: #0f766e; font-weight: 700;">$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-            <div>Debit: <span style="color: #ef4444; font-weight: 700;">$${totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> • Credit: <span style="color: #10b981; font-weight: 700;">$${totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-            <div>Calculated Ending: <span style="color: #0f766e; font-weight: 700;">$${calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-            ${!isAutoReconciled ? `<div>Actual Ending: <span style="color: #0f766e; font-weight: 700;">$${actualEnding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>` : ''}
-            <div style="margin-top: 4px;">
-              ${isAutoReconciled ?
-            `<span style="color: #10b981; font-weight: 700;">✓ AUTO-RECONCILED</span>` :
-            (isReconciled ?
-              `<span style="color: #10b981; font-weight: 700;">✓ RECONCILED</span>` :
-              `<span style="color: #ef4444; font-weight: 700;">✗ DISCREPANCY: $${Math.abs(discrepancy).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>`
-            )
+          <div style="font-family: ${terminalFont}; font-size: 11px; color: #1e293b; line-height: 1.6;">
+            <!-- 2-Column Layout -->
+            <div style="display: flex; gap: 24px; margin-bottom: 2px;">
+              <div style="flex: 1;">Opening: <input type="text" value="$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ${terminalFont}; font-size: 11px; font-weight: 600; color: #1e293b; width: 100px; padding: 2px 4px;" onclick="this.select()" /></div>
+              <div style="flex: 1;">Debit: <span style="font-weight: 600; color: #ef4444;">$${totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            </div>
+            <div style="display: flex; gap: 24px; margin-bottom: 4px;">
+              <div style="flex: 1;">Ending: <input type="text" value="$${endingBalanceValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ${terminalFont}; font-size: 11px; font-weight: 600; color: ${endingBalanceColor}; width: 100px; padding: 2px 4px;" onclick="this.select()" /></div>
+              <div style="flex: 1;">Credit: <span style="font-weight: 600; color: #10b981;">$${totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            </div>
+            <!-- Status -->
+            <div style="text-align: center; font-size: 10px; font-weight: 600;">
+              ${isAutoReconciled || isReconciled ?
+            `<span style="color: #10b981;">\u2713 RECONCILED</span>` :
+            `<span style="color: #ef4444;">\u2717 DISCREPANCY: $${Math.abs(discrepancy).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>`
           }
             </div>
           </div>
@@ -1897,45 +1899,21 @@
     const metaContent = document.getElementById('metadata-content');
     if (metaContent) {
       if (isAllMode) {
-        // ALL MODE: Show account badges (same div structure)
+        // ALL MODE: Compact account badges
         metaContent.innerHTML = `
-          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-            <div style="display: flex; flex-direction: column; gap: 3px; flex: 1;">
-              <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
-              <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                ${accounts.map(a => {
+          <div style="font-family: ${terminalFont}; font-size: 10px; color: #1e293b; line-height: 1.4;">
+            <div style="color: #1e293b; margin-bottom: 4px; font-weight: 600;">ALL ACCOUNTS</div>
+            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+              ${accounts.map(a => {
           const isReconciled = isAccountReconciled(a);
-          return `
-                  <span 
-                    onclick="window.switchAccount('${a.id}')" 
-                    title="${a.name || a.ref}"
-                    style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 3px;"
-                    onmouseover="this.style.background='#2563eb'"
-                    onmouseout="this.style.background='#3b82f6'">
-                    ${a.ref || 'N/A'}
-                    ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 10px; color: #10b981;"></i>' : ''}
-                  </span>
-                `;
+          return `<span onclick="window.switchAccount('${a.id}')" title="${a.name || a.ref}" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; cursor: pointer;">${a.ref || 'N/A'}${isReconciled ? ' ✓' : ''}</span>`;
         }).join('')}
-              </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
-              <div style="text-align: right; color: #94a3b8; font-size: 10px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-                <i class="ph ph-check-circle-fill" style="color: #10b981; font-size: 12px;"></i>
-                <span>Synced</span>
-              </div>
-              <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                <i class="ph ph-plus-circle" style="font-size: 13px;"></i>
-                Import
-              </button>
             </div>
           </div>
         `;
       } else if (acc) {
-        // SINGLE MODE: Improved terminal-style metadata
+        // SINGLE MODE: Compact 3-line metadata
         const isLiability = acc.type === 'liability' || acc.type === 'creditcard';
-
-        // Get actual date range from transactions
         const accTxns = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === acc.id);
         let periodText = 'No transactions';
         if (accTxns.length > 0) {
@@ -1946,151 +1924,139 @@
         }
 
         metaContent.innerHTML = `
-          <div style="font-family: ${terminalFont}; font-size: 12px; color: #475569; line-height: 1.8;">
-            <!-- Breadcrumb -->
-            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 8px;">
-              <span onclick="window.switchAccount('ALL')" style="cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">ALL</span>
-              <i class="ph ph-caret-right" style="font-size: 10px;"></i>
-              <span style="color: #1e293b; font-weight: 700;">${acc.ref || 'CHQ1'}</span>
-            </div>
-            
-            <!-- Account Badge + Bank Name -->
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-              <span style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;">
-                ${acc.ref || 'CHQ1'}
-              </span>
-              <span style="color: #475569; font-weight: 500;">${(acc.bankName || 'Royal Bank of Canada')}</span>
-            </div>
-            
-            <!-- Account Numbers -->
-            <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">
-              ${isLiability ?
-            `Card •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}` :
-            `Transit ${acc.transit || '00000'} • Inst ${acc.inst || '003'} • Acct ••••${(acc.accountNumber || '').slice(-4) || '2443'}`
-          }
-            </div>
-            
-            <!-- Period Covered with label -->
-            <div style="color: #64748b; font-size: 10px; font-weight: 600;">
-              <span style="color: #94a3b8;">Period covered:</span> <span style="color: #475569;">${periodText}</span>
-            </div>
+          <div style="font-family: ${terminalFont}; font-size: 10px; color: #1e293b; line-height: 1.4;">
+            <div><span style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px;">${acc.ref || 'CHQ1'}</span> <span style="color: #1e293b; font-weight: 500;">${acc.bankName || 'Royal Bank of Canada'}</span></div>
+            <div style="color: #1e293b;">${isLiability ? `Card •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}` : `Transit ${acc.transit || '00000'} • Inst ${acc.inst || '003'} • Acct ••••${(acc.accountNumber || '').slice(-4) || '2443'}`}</div>
+            <div style="color: #1e293b;">Period: <span style="font-weight: 600;">${periodText}</span></div>
           </div>
         `;
       } else {
         // NO ACCOUNT SELECTED
-        metaContent.innerHTML = `
-          <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px;">
-            <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Metadata</div>
-            <div style="font-family: ${terminalFont}; font-size: 12px; color: #64748b; opacity: 0.6;">&gt; No account selected</div>
-          </div>
-        `;
+        metaContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 10px; color: #1e293b;">&gt; No account</div>`;
       }
     }
   };
 
-  // --- WORKSPACE HTML GENERATORS ---
-
-  function getAccountWorkspaceHeaderHTML() {
-    const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
-    const accounts = window.RoboLedger.Accounts.getAll();
-    const isLiability = acc && (acc.type === 'CREDIT_CARD' || acc.brand === 'VISA' || acc.brand === 'MASTERCARD' || acc.brand === 'AMEX');
-
-    // Metrics Calculation
-    const allTxns = window.RoboLedger.Ledger.getAll();
-    const filteredTxns = UI_STATE.selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === UI_STATE.selectedAccount);
-
-    // Activity metrics - Show ALL time if 30d is empty (Better for statements)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    let metricsTxns = filteredTxns.filter(t => new Date(t.date_iso || t.date) >= thirtyDaysAgo);
-
-    // Fallback to all filtered txns if no recent activity
-    if (metricsTxns.length === 0) metricsTxns = filteredTxns;
-
-    const debitTxns = metricsTxns.filter(t => t.polarity === 'DEBIT');
-    const creditTxns = metricsTxns.filter(t => t.polarity === 'CREDIT');
-
-    const inflow = creditTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-    const outflow = debitTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-
-    // Balance logic for specific account
-    const openingBalance = acc ? (acc.openingBalance || 0) : 0;
-    const totalDebits = filteredTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-    const totalCredits = filteredTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-    const endingBalance = openingBalance - totalDebits + totalCredits;
-
-    // ALL MODE: Calculate aggregate totals across all accounts
-    const isAllMode = UI_STATE.selectedAccount === 'ALL';
-    let aggTotalBalance = 0;
-    let aggTotalDebits = 0;
-    let aggTotalCredits = 0;
-    let aggNetActivity = 0;
-    let aggTxnCount = 0;
-
-    if (isAllMode) {
-      accounts.forEach(account => {
-        const accTxns = allTxns.filter(t => t.account_id === account.id);
-        const accOpening = account.openingBalance || 0;
-        const accDebits = accTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-        const accCredits = accTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-        const accBalance = accOpening - accDebits + accCredits;
-
-        aggTotalBalance += accBalance;
-        aggTotalDebits += accDebits;
-        aggTotalCredits += accCredits;
-        aggTxnCount += accTxns.length;
-      });
-      aggNetActivity = aggTotalCredits - aggTotalDebits;
+  // Update import section content
+  const updateImportSection = () => {
+    const importContent = document.getElementById('import-content');
+    if (importContent) {
+      importContent.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer;" onclick="window.openFilePicker()">
+            <i class="ph ph-upload" style="font-size: 16px; color: #3b82f6;"></i>
+            <div style="font-size: 9px; font-weight: 600; color: #64748b; text-align: center;">Import</div>
+          </div>
+        `;
     }
+  };
 
-    // Helper function to check if account is reconciled
-    const isAccountReconciled = (account) => {
+  // Call import section update
+  updateImportSection();
+};
+
+// --- WORKSPACE HTML GENERATORS ---
+
+function getAccountWorkspaceHeaderHTML() {
+  const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
+  const accounts = window.RoboLedger.Accounts.getAll();
+  const isLiability = acc && (acc.type === 'CREDIT_CARD' || acc.brand === 'VISA' || acc.brand === 'MASTERCARD' || acc.brand === 'AMEX');
+
+  // Metrics Calculation
+  const allTxns = window.RoboLedger.Ledger.getAll();
+  const filteredTxns = UI_STATE.selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === UI_STATE.selectedAccount);
+
+  // Activity metrics - Show ALL time if 30d is empty (Better for statements)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  let metricsTxns = filteredTxns.filter(t => new Date(t.date_iso || t.date) >= thirtyDaysAgo);
+
+  // Fallback to all filtered txns if no recent activity
+  if (metricsTxns.length === 0) metricsTxns = filteredTxns;
+
+  const debitTxns = metricsTxns.filter(t => t.polarity === 'DEBIT');
+  const creditTxns = metricsTxns.filter(t => t.polarity === 'CREDIT');
+
+  const inflow = creditTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+  const outflow = debitTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+
+  // Balance logic for specific account
+  const openingBalance = acc ? (acc.openingBalance || 0) : 0;
+  const totalDebits = filteredTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+  const totalCredits = filteredTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+  const endingBalance = openingBalance - totalDebits + totalCredits;
+
+  // ALL MODE: Calculate aggregate totals across all accounts
+  const isAllMode = UI_STATE.selectedAccount === 'ALL';
+  let aggTotalBalance = 0;
+  let aggTotalDebits = 0;
+  let aggTotalCredits = 0;
+  let aggNetActivity = 0;
+  let aggTxnCount = 0;
+
+  if (isAllMode) {
+    accounts.forEach(account => {
       const accTxns = allTxns.filter(t => t.account_id === account.id);
       const accOpening = account.openingBalance || 0;
       const accDebits = accTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
       const accCredits = accTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-      const accCalculated = accOpening - accDebits + accCredits;
-      const accExpected = account.expectedBalance || accCalculated;
-      return Math.abs(accCalculated - accExpected) < 0.01;
-    };
+      const accBalance = accOpening - accDebits + accCredits;
 
-    // Bank icon mapping
-    const getBankIcon = (bankName) => {
-      const name = (bankName || '').toUpperCase();
-      if (name.includes('RBC') || name.includes('ROYAL')) return '🏦'; // RBC
-      if (name.includes('BMO') || name.includes('MONTREAL')) return '🏛️'; // BMO
-      if (name.includes('TD') || name.includes('DOMINION')) return '🏢'; // TD
-      if (name.includes('CIBC')) return '🏬'; // CIBC
-      if (name.includes('SCOTIA')) return '🏪'; // Scotia
-      return '🏦'; // Default bank icon
-    };
+      aggTotalBalance += accBalance;
+      aggTotalDebits += accDebits;
+      aggTotalCredits += accCredits;
+      aggTxnCount += accTxns.length;
+    });
+    aggNetActivity = aggTotalCredits - aggTotalDebits;
+  }
 
-    const terminalFont = "'Courier New', Courier, monospace";
+  // Helper function to check if account is reconciled
+  const isAccountReconciled = (account) => {
+    const accTxns = allTxns.filter(t => t.account_id === account.id);
+    const accOpening = account.openingBalance || 0;
+    const accDebits = accTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+    const accCredits = accTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+    const accCalculated = accOpening - accDebits + accCredits;
+    const accExpected = account.expectedBalance || accCalculated;
+    return Math.abs(accCalculated - accExpected) < 0.01;
+  };
 
-    // Period range calculation helper
-    const getAccountPeriodRange = (accountId) => {
-      const txns = allTxns
-        .filter(t => t.account_id === accountId)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
+  // Bank icon mapping
+  const getBankIcon = (bankName) => {
+    const name = (bankName || '').toUpperCase();
+    if (name.includes('RBC') || name.includes('ROYAL')) return '🏦'; // RBC
+    if (name.includes('BMO') || name.includes('MONTREAL')) return '🏛️'; // BMO
+    if (name.includes('TD') || name.includes('DOMINION')) return '🏢'; // TD
+    if (name.includes('CIBC')) return '🏬'; // CIBC
+    if (name.includes('SCOTIA')) return '🏪'; // Scotia
+    return '🏦'; // Default bank icon
+  };
 
-      if (txns.length === 0) return null;
+  const terminalFont = "'Courier New', Courier, monospace";
 
-      const first = new Date(txns[0].date);
-      const last = new Date(txns[txns.length - 1].date);
+  // Period range calculation helper
+  const getAccountPeriodRange = (accountId) => {
+    const txns = allTxns
+      .filter(t => t.account_id === accountId)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-      const formatDate = (d) => d.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
+    if (txns.length === 0) return null;
 
-      return `${formatDate(first)} - ${formatDate(last)}`;
-    };
+    const first = new Date(txns[0].date);
+    const last = new Date(txns[txns.length - 1].date);
 
-    // Aggregate calculations for ALL accounts mode
+    const formatDate = (d) => d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    return `${formatDate(first)} - ${formatDate(last)}`;
+  };
+
+  // Aggregate calculations for ALL accounts mode
 
 
-    return `
+  return `
       <!-- Professional Account Dashboard Header -->
       <div id="account-header-root" class="v5-account-workspace-header" style="background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 12px 24px; gap: 12px;">
         
@@ -2117,18 +2083,22 @@
         </div>
 
         ${filteredTxns.length > 0 ? `
-        <!-- Professional Account Context Strip (STATIC CONTAINERS - Never re-renders) -->
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: stretch; min-height: 64px; overflow: hidden; margin: 8px 16px; border: 1px solid transparent; background-image: linear-gradient(white, white), linear-gradient(135deg, #e2e8f0, #cbd5e1); background-origin: padding-box, border-box; background-clip: padding-box, border-box;">
+        <!-- Compact Terminal Strip (STATIC CONTAINERS - Never re-renders) -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; height: 60px; overflow: hidden; margin: 8px 16px;">
           
-          <!-- LEFT: Reconciliation Status (STATIC CONTAINER) -->
-          <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 6px 24px; display: flex; flex-direction: column; justify-content: center; gap: 2px;">
-            <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Reconciliation</div>
+          <!-- LEFT: Reconciliation (40%) -->
+          <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 16px; display: flex; flex-direction: column; justify-content: center;">
             <div id="reconciliation-content"></div>
           </div>
 
-          <!-- RIGHT: Identity & Actions (STATIC CONTAINER) -->
-          <div style="flex: 1.5; padding: 6px 24px; display: flex; align-items: center; justify-content: space-between;">
-            <div id="metadata-content" style="flex: 1; display: flex; align-items: center; justify-content: space-between;"></div>
+          <!-- MIDDLE: Metadata (40%) -->
+          <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 16px; display: flex; flex-direction: column; justify-content: center;">
+            <div id="metadata-content"></div>
+          </div>
+
+          <!-- RIGHT: Import (20%) -->
+          <div style="flex: 1; padding: 8px 16px; display: flex; align-items: center; justify-content: center;">
+            <div id="import-content"></div>
           </div>
 
         </div>
@@ -2137,13 +2107,13 @@
     `;
 
 
-  }
+}
 
-  function getFilterToolbarHTML() {
-    const accounts = window.RoboLedger.Accounts.getAll();
-    const refPrefix = UI_STATE.refPrefix || 'CHQ1';
+function getFilterToolbarHTML() {
+  const accounts = window.RoboLedger.Accounts.getAll();
+  const refPrefix = UI_STATE.refPrefix || 'CHQ1';
 
-    return `
+  return `
       <!-- Sticky Filter Toolbar -->
       <div style="position: sticky; top: 0; z-index: 30; height: 44px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 12px;">
         <!-- LEFT: Ref Prefix + Search + Account Filter -->
@@ -2182,48 +2152,48 @@
         </div>
       </div>
     `;
-  }
+}
 
-  // Real-time opening balance update helper
-  window.updateOpeningBalance = function (val) {
-    const raw = val.replace(/[^0-9.-]/g, '');
-    const num = parseFloat(raw);
-    if (!isNaN(num)) {
-      const activeAcc = window.RoboLedger.Accounts.getAll().find(a => a.id === UI_STATE.selectedAccount);
-      if (activeAcc) {
-        // Use formal setter for persistence
-        window.RoboLedger.Accounts.setOpeningBalance(activeAcc.id, Math.round(num * 100));
+// Real-time opening balance update helper
+window.updateOpeningBalance = function (val) {
+  const raw = val.replace(/[^0-9.-]/g, '');
+  const num = parseFloat(raw);
+  if (!isNaN(num)) {
+    const activeAcc = window.RoboLedger.Accounts.getAll().find(a => a.id === UI_STATE.selectedAccount);
+    if (activeAcc) {
+      // Use formal setter for persistence
+      window.RoboLedger.Accounts.setOpeningBalance(activeAcc.id, Math.round(num * 100));
 
-        // SURGICAL UPDATE: Recalculate and update DOM directly to avoid grid unmount
-        const allTxns = window.RoboLedger.Ledger.getAll();
-        const filteredTxns = allTxns.filter(t => t.account_id === activeAcc.id);
-        const totalDebits = filteredTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
-        const totalCredits = filteredTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+      // SURGICAL UPDATE: Recalculate and update DOM directly to avoid grid unmount
+      const allTxns = window.RoboLedger.Ledger.getAll();
+      const filteredTxns = allTxns.filter(t => t.account_id === activeAcc.id);
+      const totalDebits = filteredTxns.filter(t => t.polarity === 'DEBIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+      const totalCredits = filteredTxns.filter(t => t.polarity === 'CREDIT').reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
 
-        const newEndingBalance = num - totalDebits + totalCredits;
+      const newEndingBalance = num - totalDebits + totalCredits;
 
-        const elClosing = document.getElementById('header-closing-balance');
-        if (elClosing) elClosing.innerText = `$${newEndingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} `;
+      const elClosing = document.getElementById('header-closing-balance');
+      if (elClosing) elClosing.innerText = `$${newEndingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} `;
 
-        // Also update activity colors if they exist
-        const elNet = document.getElementById('header-net-activity');
-        if (elNet) {
-          const net = totalCredits - totalDebits;
-          elNet.innerText = `$${net.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-          elNet.style.color = net >= 0 ? '#10b981' : '#ef4444';
-        }
+      // Also update activity colors if they exist
+      const elNet = document.getElementById('header-net-activity');
+      if (elNet) {
+        const net = totalCredits - totalDebits;
+        elNet.innerText = `$${net.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        elNet.style.color = net >= 0 ? '#10b981' : '#ef4444';
       }
     }
-  };
+  }
+};
 
 
 
 
-  function getTxnIngestionHTML() {
-    const progress = UI_STATE.ingestionProgress || 0;
-    const label = UI_STATE.ingestionLabel || 'Parsing bank statement...';
+function getTxnIngestionHTML() {
+  const progress = UI_STATE.ingestionProgress || 0;
+  const label = UI_STATE.ingestionLabel || 'Parsing bank statement...';
 
-    return `
+  return `
       <div class="header-card v5-glass" style="display: flex; flex-direction: column; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: white; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); margin: 0 20px 20px 20px;">
         <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%);">
           <!-- Animated Icon -->
@@ -2258,10 +2228,10 @@
         </div>
       </div >
       `;
-  }
+}
 
-  function getTxnEmptyStateHTML() {
-    return `
+function getTxnEmptyStateHTML() {
+  return `
       <div class="grid-card-empty">
         <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 24px; opacity: 0.5;">
           <path d="M30 25 L30 95 C30 97.2 31.8 99 34 99 L86 99 C88.2 99 90 97.2 90 95 L90 25 C90 22.8 88.2 21 86 21 L34 21 C31.8 21 30 22.8 30 25 Z" stroke="#94a3b8" stroke-width="6" fill="none" stroke-linejoin="round"/>
@@ -2304,32 +2274,32 @@
         </div>
       </div>
       `;
-  }
+}
 
-  function renderTransactionsRestored() {
-    const accounts = window.RoboLedger.Accounts.getAll();
-    const allTransactions = window.RoboLedger.Ledger.getAll();
-    const filteredData = UI_STATE.selectedAccount === 'ALL' ? allTransactions : allTransactions.filter(t => t.account_id === UI_STATE.selectedAccount);
-    const hasData = filteredData.length > 0;
+function renderTransactionsRestored() {
+  const accounts = window.RoboLedger.Accounts.getAll();
+  const allTransactions = window.RoboLedger.Ledger.getAll();
+  const filteredData = UI_STATE.selectedAccount === 'ALL' ? allTransactions : allTransactions.filter(t => t.account_id === UI_STATE.selectedAccount);
+  const hasData = filteredData.length > 0;
 
-    // Flat workspace structure - NO CARDS
-    let mainContent = "";
-    if (UI_STATE.isIngesting) {
-      mainContent = `
+  // Flat workspace structure - NO CARDS
+  let mainContent = "";
+  if (UI_STATE.isIngesting) {
+    mainContent = `
         ${getTxnIngestionHTML()}
     <div id="txnGrid" style="flex: 1; min-height: 480px; position: relative; background: #ffffff;">
       ${getTxnEmptyStateHTML()}
     </div>
     `;
-    } else if (!hasData) {
-      mainContent = `
+  } else if (!hasData) {
+    mainContent = `
       <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: #fafbfc;">
         ${getTxnEmptyStateHTML()}
       </div>
       `;
-    } else {
-      // Edge-to-edge grid
-      mainContent = `
+  } else {
+    // Edge-to-edge grid
+    mainContent = `
       <div style="flex: 1; display: flex; flex-direction: column; background: white;">
         <!-- Inline Progress Bar (above grid) -->
         <div id="parsing-progress-inline" style="display: none; background: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px 24px; margin: 16px 24px; border-radius: 8px;">
@@ -2351,130 +2321,130 @@
         <div id="txnGrid" style="height: 100%; width: 100%; display: flex; flex-direction: column;"></div>
       </div>
       `;
-    }
+  }
 
-    return `
+  return `
       <div class="transactions-workspace" style="width: 100%; height: 100%; display: flex; flex-direction: column; background: #ffffff;">
         ${getAccountWorkspaceHeaderHTML()}
         ${hasData ? getFilterToolbarHTML() : ''}
         ${mainContent}
       </div>
       `;
+}
+
+function initGrid(passedData) {
+  const gridDiv = document.querySelector('#txnGrid');
+  if (!gridDiv) return;
+
+  // Use passed data or fetch all from Ledger
+  let data = passedData || window.RoboLedger.Ledger.getAll();
+  if (!data || data.length === 0) return;
+
+  // React Mounting Logic (TanStack Table - Vite Bundled)
+  const canUseReact = window.mountTransactionsTable && !window.location.protocol.startsWith('file');
+
+  if (canUseReact) {
+    console.log("[GRID] Mounting React/TanStack grid...");
+    window.mountTransactionsTable(data, UI_STATE.searchQuery);
+
+    // Apply grid-scoped theme after grid renders
+    setTimeout(() => {
+      const gridContainer = document.getElementById('txnGrid');
+      if (gridContainer && UI_STATE.activeTheme && UI_STATE.activeTheme !== 'default') {
+        gridContainer.classList.remove('rainbow-theme', 'postit-theme', 'default-theme');
+        gridContainer.classList.add(`${UI_STATE.activeTheme}-theme`);
+        console.log(`[THEME] Applied to grid: ${UI_STATE.activeTheme}`);
+      }
+    }, 100);
+
+    return;
   }
 
-  function initGrid(passedData) {
-    const gridDiv = document.querySelector('#txnGrid');
-    if (!gridDiv) return;
+  // No React bridge available
+  console.error("[GRID] React bridge missing. Grid cannot render. Make sure you're accessing via Vite dev server (port 5173).");
+}
 
-    // Use passed data or fetch all from Ledger
-    let data = passedData || window.RoboLedger.Ledger.getAll();
-    if (!data || data.length === 0) return;
+// --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
+/* These are now wired via the React bridge and global state */
 
-    // React Mounting Logic (TanStack Table - Vite Bundled)
-    const canUseReact = window.mountTransactionsTable && !window.location.protocol.startsWith('file');
 
-    if (canUseReact) {
-      console.log("[GRID] Mounting React/TanStack grid...");
-      window.mountTransactionsTable(data, UI_STATE.searchQuery);
+// Global exports for Action Bar
+window.bulkCategorize = () => {
+  // Updated for React: This will need to pull selection from React state or a shared selection store
+  console.warn("[Bulk] bulkCategorize invoked. Selection handling pending React integration.");
+  // window.showAIAuditPanel(targets, 'selected');
+};
 
-      // Apply grid-scoped theme after grid renders
-      setTimeout(() => {
-        const gridContainer = document.getElementById('txnGrid');
-        if (gridContainer && UI_STATE.activeTheme && UI_STATE.activeTheme !== 'default') {
-          gridContainer.classList.remove('rainbow-theme', 'postit-theme', 'default-theme');
-          gridContainer.classList.add(`${UI_STATE.activeTheme}-theme`);
-          console.log(`[THEME] Applied to grid: ${UI_STATE.activeTheme}`);
-        }
-      }, 100);
+window.bulkDelete = () => {
+  console.warn("[Bulk] bulkDelete invoked. Selection handling pending React integration.");
+  /*
+  const targets = []; // Get from React selection
+  if (confirm(`Delete ${ targets.length } transactions ? `)) {
+    targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
+    window.render();
+  }
+  */
+};
 
-      return;
-    }
+window.toggleWorkbench = function (isOpen, fileId = null) {
+  UI_STATE.workbenchOpen = isOpen;
+  UI_STATE.activeFileId = fileId || UI_STATE.activeFileId;
 
-    // No React bridge available
-    console.error("[GRID] React bridge missing. Grid cannot render. Make sure you're accessing via Vite dev server (port 5173).");
+  if (isOpen) {
+    document.body.classList.add('workbench-active');
+    renderWorkbenchPDF(UI_STATE.activeFileId);
+  } else {
+    document.body.classList.remove('workbench-active');
+  }
+};
+
+async function renderWorkbenchPDF(fileId) {
+  const container = document.getElementById('v5-pdf-curtain-content');
+  const label = document.getElementById('v5-curtain-filename');
+  if (!container) return;
+
+  const fileBlob = window.RoboLedger.Accounts.getFile(fileId);
+  if (!fileBlob) {
+    container.innerHTML = `<div style="padding: 40px; color: #94a3b8;">Source file not found in memory.</div>`;
+    return;
   }
 
-  // --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
-  /* These are now wired via the React bridge and global state */
+  label.innerText = fileBlob.name;
+  container.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center;"><i class="ph ph-circle-notch ph-spin"></i> Rendering PDF...</div>`;
 
+  try {
+    const arrayBuffer = await fileBlob.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.5 });
 
-  // Global exports for Action Bar
-  window.bulkCategorize = () => {
-    // Updated for React: This will need to pull selection from React state or a shared selection store
-    console.warn("[Bulk] bulkCategorize invoked. Selection handling pending React integration.");
-    // window.showAIAuditPanel(targets, 'selected');
-  };
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+    canvas.style.width = "100%";
+    canvas.style.height = "auto";
 
-  window.bulkDelete = () => {
-    console.warn("[Bulk] bulkDelete invoked. Selection handling pending React integration.");
-    /*
-    const targets = []; // Get from React selection
-    if (confirm(`Delete ${ targets.length } transactions ? `)) {
-      targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
-      window.render();
-    }
-    */
-  };
+    container.innerHTML = '';
+    container.appendChild(canvas);
+    container.style.overflowY = 'auto';
 
-  window.toggleWorkbench = function (isOpen, fileId = null) {
-    UI_STATE.workbenchOpen = isOpen;
-    UI_STATE.activeFileId = fileId || UI_STATE.activeFileId;
-
-    if (isOpen) {
-      document.body.classList.add('workbench-active');
-      renderWorkbenchPDF(UI_STATE.activeFileId);
-    } else {
-      document.body.classList.remove('workbench-active');
-    }
-  };
-
-  async function renderWorkbenchPDF(fileId) {
-    const container = document.getElementById('v5-pdf-curtain-content');
-    const label = document.getElementById('v5-curtain-filename');
-    if (!container) return;
-
-    const fileBlob = window.RoboLedger.Accounts.getFile(fileId);
-    if (!fileBlob) {
-      container.innerHTML = `<div style="padding: 40px; color: #94a3b8;">Source file not found in memory.</div>`;
-      return;
-    }
-
-    label.innerText = fileBlob.name;
-    container.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center;"><i class="ph ph-circle-notch ph-spin"></i> Rendering PDF...</div>`;
-
-    try {
-      const arrayBuffer = await fileBlob.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 1.5 });
-
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      canvas.style.width = "100%";
-      canvas.style.height = "auto";
-
-      container.innerHTML = '';
-      container.appendChild(canvas);
-      container.style.overflowY = 'auto';
-
-      await page.render({ canvasContext: context, viewport: viewport }).promise;
-    } catch (e) {
-      console.error("PDF Render Error:", e);
-      container.innerHTML = `<div style="padding: 40px; color: #ef4444;">Failed to render PDF. Browser may be blocking background tasks.</div>`;
-    }
+    await page.render({ canvasContext: context, viewport: viewport }).promise;
+  } catch (e) {
+    console.error("PDF Render Error:", e);
+    container.innerHTML = `<div style="padding: 40px; color: #ef4444;">Failed to render PDF. Browser may be blocking background tasks.</div>`;
   }
+}
 
-  window.showAIAuditPanel = function (targets, mode) {
-    let panel = document.getElementById('ai-audit-panel');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'ai-audit-panel';
-      document.body.appendChild(panel);
-    }
-    const modeLabel = mode === 'selected' ? `${targets.length} Selected Vendors` : `${targets.length} Vendors for Forensic Audit`;
-    panel.innerHTML = `
+window.showAIAuditPanel = function (targets, mode) {
+  let panel = document.getElementById('ai-audit-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'ai-audit-panel';
+    document.body.appendChild(panel);
+  }
+  const modeLabel = mode === 'selected' ? `${targets.length} Selected Vendors` : `${targets.length} Vendors for Forensic Audit`;
+  panel.innerHTML = `
       <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
       <div style="background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); max-width: 500px; width: 90%; overflow: hidden;">
 
@@ -2516,76 +2486,76 @@
       </div >
       `;
 
-    document.getElementById('start-audit-btn').onclick = () => {
-      panel.remove();
-      UI_STATE.isIngesting = true;
-      UI_STATE.ingestionProgress = 0;
-      UI_STATE.ingestionLabel = "AI Analysis in progress...";
-      render();
+  document.getElementById('start-audit-btn').onclick = () => {
+    panel.remove();
+    UI_STATE.isIngesting = true;
+    UI_STATE.ingestionProgress = 0;
+    UI_STATE.ingestionLabel = "AI Analysis in progress...";
+    render();
 
-      // Mock processing
-      let intv = setInterval(() => {
-        UI_STATE.ingestionProgress += 10;
-        if (UI_STATE.ingestionProgress >= 100) {
-          clearInterval(intv);
-          UI_STATE.isIngesting = false;
-          render();
-        }
+    // Mock processing
+    let intv = setInterval(() => {
+      UI_STATE.ingestionProgress += 10;
+      if (UI_STATE.ingestionProgress >= 100) {
+        clearInterval(intv);
+        UI_STATE.isIngesting = false;
         render();
-      }, 300);
-    };
+      }
+      render();
+    }, 300);
   };
+};
 
-  // Expose toggle helpers to window scope
-  if (typeof toggleSettings !== 'undefined') window.toggleSettings = toggleSettings;
-  window.toggleWorkbench = window.toggleWorkbench;
-  window.openSourceFile = (id) => window.toggleWorkbench(true, id);
+// Expose toggle helpers to window scope
+if (typeof toggleSettings !== 'undefined') window.toggleSettings = toggleSettings;
+window.toggleWorkbench = window.toggleWorkbench;
+window.openSourceFile = (id) => window.toggleWorkbench(true, id);
 
-  // Keyboard shortcut: Cmd+. to toggle inspector panel
-  document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === '.') {
-      e.preventDefault();
-      if (window.togglePanel) window.togglePanel();
-    }
-  });
+// Keyboard shortcut: Cmd+. to toggle inspector panel
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+    e.preventDefault();
+    if (window.togglePanel) window.togglePanel();
+  }
+});
 
-  // Global click handler for account ref badges
-  // Makes any blue badge (CHQ1, SAV1, etc.) clickable to switch accounts
-  document.addEventListener('click', (e) => {
-    const target = e.target;
+// Global click handler for account ref badges
+// Makes any blue badge (CHQ1, SAV1, etc.) clickable to switch accounts
+document.addEventListener('click', (e) => {
+  const target = e.target;
 
-    // Check if clicked element is a blue account ref badge using computed styles
-    if (target.tagName === 'SPAN') {
-      const computedStyle = window.getComputedStyle(target);
-      const bgColor = computedStyle.backgroundColor;
-      const fontFamily = computedStyle.fontFamily;
+  // Check if clicked element is a blue account ref badge using computed styles
+  if (target.tagName === 'SPAN') {
+    const computedStyle = window.getComputedStyle(target);
+    const bgColor = computedStyle.backgroundColor;
+    const fontFamily = computedStyle.fontFamily;
 
-      // Check for blue badge: rgb(59, 130, 246) = #3b82f6
-      if (bgColor && bgColor.includes('59, 130, 246') &&
-        fontFamily && fontFamily.includes('JetBrains Mono')) {
+    // Check for blue badge: rgb(59, 130, 246) = #3b82f6
+    if (bgColor && bgColor.includes('59, 130, 246') &&
+      fontFamily && fontFamily.includes('JetBrains Mono')) {
 
-        // Find the account ID from the closest parent with onclick or data attribute
-        let parent = target.parentElement;
-        let accountId = null;
+      // Find the account ID from the closest parent with onclick or data attribute
+      let parent = target.parentElement;
+      let accountId = null;
 
-        // Try to extract account ID from parent's onclick attribute
-        if (parent && parent.onclick) {
-          const onclickStr = parent.onclick.toString();
-          const match = onclickStr.match(/switchAccount\('([^']+)'\)/);
-          if (match) accountId = match[1];
-        }
+      // Try to extract account ID from parent's onclick attribute
+      if (parent && parent.onclick) {
+        const onclickStr = parent.onclick.toString();
+        const match = onclickStr.match(/switchAccount\('([^']+)'\)/);
+        if (match) accountId = match[1];
+      }
 
-        // If we found an account ID, switch to it
-        if (accountId) {
-          console.log(`[BADGE CLICK] Switching to: ${accountId}`);
-          window.switchAccount(accountId);
-        } else {
-          console.warn('[BADGE CLICK] Could not determine account ID from badge');
-        }
+      // If we found an account ID, switch to it
+      if (accountId) {
+        console.log(`[BADGE CLICK] Switching to: ${accountId}`);
+        window.switchAccount(accountId);
+      } else {
+        console.warn('[BADGE CLICK] Could not determine account ID from badge');
       }
     }
-  });
+  }
+});
 
-  if (typeof init === 'function') init();
-})();
+if (typeof init === 'function') init();
+}) ();
 
