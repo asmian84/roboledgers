@@ -1896,18 +1896,20 @@
     const metaContent = document.getElementById('metadata-content');
     if (metaContent) {
       if (isAllMode) {
-        // ALL MODE: Consolidated View + clickable account badges
+        // ALL MODE: ACCOUNT METADATA heading + ALL breadcrumb + Consolidated View + badges
         var badgesList = accounts.map(function (a) {
           var isRecon = isAccountReconciled(a);
           return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>';
         }).join(' ');
 
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.6;">' +
+          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
+          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #1e293b; font-weight: 600; margin-bottom: 4px;">ALL</div>' +
           '<div style="color: #64748b; font-weight: 600; font-size: 11px; margin-bottom: 4px;">Consolidated View \u2022 CAD</div>' +
           '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + badgesList + '</div>' +
           '</div>';
       } else if (acc) {
-        // SINGLE MODE: Compact 3-line metadata with bank icon
+        // SINGLE MODE: ACCOUNT METADATA heading + breadcrumb + icon (48px) + text
         var isLiability = acc.type === 'liability' || acc.type === 'creditcard';
         var accTxns = window.RoboLedger.Ledger.getAll().filter(function (t) { return t.account_id === acc.id; });
         var periodText = 'No transactions';
@@ -1916,16 +1918,29 @@
           periodText = dates[0].toISOString().split('T')[0] + ' TO ' + dates[dates.length - 1].toISOString().split('T')[0];
         }
         var bankIcon = getBankIcon(acc.bankName);
+        // Replace icon size to 48px for large display
+        bankIcon = bankIcon.replace(/width: 28px; height: 28px;/, 'width: 48px; height: 48px;').replace(/border-radius: 4px;/, 'border-radius: 6px;');
         var transitInfo = isLiability ? 'Card \u2022\u2022\u2022\u2022 ' + (acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX') : 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
 
-        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.4;">' +
-          '<div>' + bankIcon + ' <span style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px;">' + (acc.ref || 'CHQ1') + '</span> <span style="color: #1e293b; font-weight: 500;">' + (acc.bankName || 'Royal Bank of Canada') + '</span></div>' +
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b;">' +
+          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
+          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #64748b; margin-bottom: 6px;">' +
+          '<span onclick="window.switchAccount(\'ALL\')" style="cursor: pointer; color: #3b82f6;">ALL</span>' +
+          '<span style="color: #94a3b8; margin: 0 4px;">\u2192</span>' +
+          '<span style="color: #1e293b; font-weight: 600;">' + (acc.ref || acc.name || 'Account') + '</span>' +
+          '</div>' +
+          '<div style="display: flex; align-items: flex-start; gap: 10px;">' +
+          bankIcon +
+          '<div style="line-height: 1.5;">' +
+          '<div><span style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px;">' + (acc.ref || 'CHQ1') + '</span> <span style="color: #1e293b; font-weight: 500;">' + (acc.bankName || 'Royal Bank of Canada') + '</span></div>' +
           '<div style="color: #1e293b;">' + transitInfo + '</div>' +
           '<div style="color: #1e293b;">Period: <span style="font-weight: 600;">' + periodText + '</span></div>' +
+          '</div>' +
+          '</div>' +
           '</div>';
       } else {
         // NO ACCOUNT SELECTED
-        metaContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 10px; color: #1e293b;">&gt; No account</div>`;
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b;">&gt; No account</div>';
       }
     }
 
@@ -2080,13 +2095,8 @@
         </div>
 
         ${filteredTxns.length > 0 ? `
-        <!-- Breadcrumb Navigation -->
-        <div style="font-family: 'JetBrains Mono', 'SF Mono', 'Courier New', monospace; font-size: 10px; color: #64748b; margin: 0 16px 4px 16px; display: flex; align-items: center; gap: 4px;">
-          <span onclick="window.switchAccount('ALL')" style="cursor: pointer; color: ${UI_STATE.selectedAccount === 'ALL' ? '#1e293b; font-weight: 600' : '#3b82f6'};">${UI_STATE.selectedAccount === 'ALL' ? 'ALL' : 'ALL'}</span>
-          ${acc ? '<span style="color: #94a3b8; margin: 0 2px;">\u2192</span><span style="color: #1e293b; font-weight: 600;">' + (acc.ref || acc.name || 'Account') + '</span>' : ''}
-        </div>
         <!-- Compact Terminal Strip -->
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 90px; overflow: hidden; margin: 0 16px 8px 16px;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 90px; overflow: hidden; margin: 8px 16px;">
           
           <!-- LEFT: Reconciliation (40%) -->
           <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 16px; display: flex; flex-direction: column; justify-content: center;">
