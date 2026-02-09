@@ -521,18 +521,33 @@ window.RoboLedger = (function () {
                 state.accounts.push(acc);
             }
 
-            // Update metadata fields
-            acc.inst = metadata.id || acc.inst;
-            acc.transit = metadata.transit || acc.transit;
-            acc.accountNumber = metadata.accountNumber || acc.accountNumber || metadata.account_num;
-            acc.accountType = metadata.accountType || acc.accountType;
-            acc.period = metadata.period || acc.period;
-            acc.holder = metadata.holder || acc.holder;
-            acc.brand = metadata.brand || metadata._tag || metadata.tag || metadata.cardNetwork || acc.brand;
-            acc.bankName = metadata.bankName || metadata._bank || metadata.name || acc.bankName;
-            acc.cardNetwork = metadata.cardNetwork || acc.cardNetwork;
-            acc.statementClosingDay = metadata.statementClosingDay || acc.statementClosingDay;
-            acc.currency = metadata.currency || acc.currency || 'CAD';
+            // Update metadata fields - ONLY if provided (prevent contamination)
+            if (metadata.id !== undefined) acc.inst = metadata.id;
+            if (metadata.transit !== undefined) acc.transit = metadata.transit;
+            if (metadata.accountNumber !== undefined) acc.accountNumber = metadata.accountNumber;
+            if (metadata.account_num !== undefined && !acc.accountNumber) acc.accountNumber = metadata.account_num;
+            if (metadata.accountType !== undefined) acc.accountType = metadata.accountType;
+            if (metadata.period !== undefined) acc.period = metadata.period;
+            if (metadata.holder !== undefined) acc.holder = metadata.holder;
+
+            // Brand/cardNetwork: For credit cards ONLY
+            if (metadata.cardNetwork !== undefined) {
+                acc.cardNetwork = metadata.cardNetwork;
+                acc.brand = metadata.cardNetwork; // Normalize to brand
+            } else if (metadata.brand !== undefined) {
+                acc.brand = metadata.brand;
+            } else if (metadata._tag !== undefined && !acc.brand) {
+                acc.brand = metadata._tag;
+            }
+
+            // Bank name
+            if (metadata.bankName !== undefined) acc.bankName = metadata.bankName;
+            else if (metadata._bank !== undefined && !acc.bankName) acc.bankName = metadata._bank;
+            else if (metadata.name !== undefined && !acc.bankName) acc.bankName = metadata.name;
+
+            if (metadata.statementClosingDay !== undefined) acc.statementClosingDay = metadata.statementClosingDay;
+            if (metadata.currency !== undefined) acc.currency = metadata.currency;
+            if (!acc.currency) acc.currency = 'CAD';
 
             // Auto-assign ref# ONLY for brand-new accounts (never re-assign existing refs)
             if (isNewAccount || acc.ref === 'TEMP') {
