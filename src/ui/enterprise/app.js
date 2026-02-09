@@ -1870,16 +1870,16 @@
         const statusHTML = (isAutoReconciled || isReconciled) ? '<span style="color: #10b981;">\u2713 RECONCILED</span>' : '<span style="color: #ef4444;">\u2717 DISCREPANCY: $' + Math.abs(discrepancy).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span>';
 
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b; line-height: 1.7;">' +
-          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">RECONCILIATION</div>' +
-          '<div style="display: flex; gap: 16px;">' +
-          '<div style="flex: 1;">Opening: <input type="text" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 100px; padding: 2px 4px;" onclick="this.select()" /></div>' +
-          '<div style="flex: 1;">Debit: <span style="font-weight: 600; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
+          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
+          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 600; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
-          '<div style="display: flex; gap: 16px;">' +
-          '<div style="flex: 1;">Ending: <input type="text" value="$' + endingVal.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 100px; padding: 2px 4px;" onclick="this.select()" /></div>' +
-          '<div style="flex: 1;">Credit: <span style="font-weight: 600; color: #10b981;">$' + totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
+          '<div style="flex: 1; white-space: nowrap;">Ending: <input type="text" value="$' + endingVal.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Credit: <span style="font-weight: 600; color: #10b981;">$' + totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
-          '<div style="font-size: 10px; font-weight: 600; margin-top: 2px;">' + statusHTML + '</div>' +
+          '<div style="font-size: 10px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">' + statusHTML + '</div>' +
           '</div>';
       }
     }
@@ -1901,24 +1901,22 @@
           </div>
         `;
       } else if (acc) {
-        // SINGLE MODE: Compact 3-line metadata
-        const isLiability = acc.type === 'liability' || acc.type === 'creditcard';
-        const accTxns = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === acc.id);
-        let periodText = 'No transactions';
+        // SINGLE MODE: Compact 3-line metadata with bank icon
+        var isLiability = acc.type === 'liability' || acc.type === 'creditcard';
+        var accTxns = window.RoboLedger.Ledger.getAll().filter(function (t) { return t.account_id === acc.id; });
+        var periodText = 'No transactions';
         if (accTxns.length > 0) {
-          const dates = accTxns.map(t => new Date(t.date_iso || t.date)).sort((a, b) => a - b);
-          const minDate = dates[0].toISOString().split('T')[0];
-          const maxDate = dates[dates.length - 1].toISOString().split('T')[0];
-          periodText = `${minDate} TO ${maxDate}`;
+          var dates = accTxns.map(function (t) { return new Date(t.date_iso || t.date); }).sort(function (a, b) { return a - b; });
+          periodText = dates[0].toISOString().split('T')[0] + ' TO ' + dates[dates.length - 1].toISOString().split('T')[0];
         }
+        var bankIcon = getBankIcon(acc.bankName);
+        var transitInfo = isLiability ? 'Card \u2022\u2022\u2022\u2022 ' + (acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX') : 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
 
-        metaContent.innerHTML = `
-          <div style="font-family: ${terminalFont}; font-size: 10px; color: #1e293b; line-height: 1.4;">
-            <div><span style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px;">${acc.ref || 'CHQ1'}</span> <span style="color: #1e293b; font-weight: 500;">${acc.bankName || 'Royal Bank of Canada'}</span></div>
-            <div style="color: #1e293b;">${isLiability ? `Card •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}` : `Transit ${acc.transit || '00000'} • Inst ${acc.inst || '003'} • Acct ••••${(acc.accountNumber || '').slice(-4) || '2443'}`}</div>
-            <div style="color: #1e293b;">Period: <span style="font-weight: 600;">${periodText}</span></div>
-          </div>
-        `;
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.4;">' +
+          '<div>' + bankIcon + ' <span style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px;">' + (acc.ref || 'CHQ1') + '</span> <span style="color: #1e293b; font-weight: 500;">' + (acc.bankName || 'Royal Bank of Canada') + '</span></div>' +
+          '<div style="color: #1e293b;">' + transitInfo + '</div>' +
+          '<div style="color: #1e293b;">Period: <span style="font-weight: 600;">' + periodText + '</span></div>' +
+          '</div>';
       } else {
         // NO ACCOUNT SELECTED
         metaContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 10px; color: #1e293b;">&gt; No account</div>`;
@@ -1930,12 +1928,10 @@
   const updateImportSection = () => {
     const importContent = document.getElementById('import-content');
     if (importContent) {
-      importContent.innerHTML = `
-          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer;" onclick="window.openFilePicker()">
-            <i class="ph ph-upload" style="font-size: 16px; color: #3b82f6;"></i>
-            <div style="font-size: 9px; font-weight: 600; color: #64748b; text-align: center;">Import</div>
-          </div>
-        `;
+      importContent.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border: 2px dashed #cbd5e1; border-radius: 8px; padding: 8px 12px; width: 100%; height: 100%; box-sizing: border-box; transition: border-color 0.2s, background 0.2s;" onclick="window.openFilePicker()" onmouseover="this.style.borderColor=\'#3b82f6\'; this.style.background=\'#eff6ff\'" onmouseout="this.style.borderColor=\'#cbd5e1\'; this.style.background=\'transparent\'">' +
+        '<i class="ph ph-upload" style="font-size: 18px; color: #3b82f6;"></i>' +
+        '<div style="font-size: 9px; font-weight: 600; color: #64748b; text-align: center;">Browse / Drag &amp; Drop</div>' +
+        '</div>';
     }
   };
 
@@ -2071,8 +2067,13 @@
         </div>
 
         ${filteredTxns.length > 0 ? `
+        <!-- Breadcrumb Navigation -->
+        <div id="account-breadcrumb" style="font-family: 'JetBrains Mono', 'SF Mono', 'Courier New', monospace; font-size: 10px; color: #64748b; margin: 0 16px 4px 16px; display: flex; align-items: center; gap: 4px;">
+          <span onclick="window.switchAccount('ALL')" style="cursor: pointer; color: ${UI_STATE.selectedAccount === 'ALL' ? '#1e293b; font-weight: 600' : '#3b82f6'}; text-decoration: ${UI_STATE.selectedAccount === 'ALL' ? 'none' : 'none'};">ALL</span>
+          ${acc ? '<span style="color: #94a3b8; margin: 0 2px;">→</span><span style="color: #1e293b; font-weight: 600;">' + (acc.ref || acc.name || 'Account') + '</span>' : ''}
+        </div>
         <!-- Compact Terminal Strip (STATIC CONTAINERS - Never re-renders) -->
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; height: 60px; overflow: hidden; margin: 8px 16px;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 90px; overflow: hidden; margin: 0 16px 8px 16px;">
           
           <!-- LEFT: Reconciliation (40%) -->
           <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 16px; display: flex; flex-direction: column; justify-content: center;">
@@ -2084,9 +2085,9 @@
             <div id="metadata-content"></div>
           </div>
 
-          <!-- RIGHT: Import (20%) -->
-          <div style="flex: 1; padding: 8px 16px; display: flex; align-items: center; justify-content: center;">
-            <div id="import-content"></div>
+          <!-- RIGHT: Import/Drop Zone (20%) -->
+          <div style="flex: 1; padding: 8px; display: flex; align-items: center; justify-content: center;">
+            <div id="import-content" style="width: 100%; height: 100%;"></div>
           </div>
 
         </div>
