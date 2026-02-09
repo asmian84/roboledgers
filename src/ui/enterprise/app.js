@@ -627,10 +627,16 @@
       headerContainer.outerHTML = getAccountWorkspaceHeaderHTML();
 
       // CRITICAL: Sync the dropdown <select> element to reflect the current account
-      // This ensures bidirectional sync - clicking badge updates dropdown, and vice versa
-      const dropdown = document.querySelector('.v5-account-workspace-header select');
-      if (dropdown) {
-        dropdown.value = accId;
+      // Query the NEW header element (just inserted by outerHTML) using its ID
+      const newHeader = document.getElementById('account-header-root');
+      if (newHeader) {
+        const dropdown = newHeader.querySelector('select');
+        if (dropdown) {
+          dropdown.value = accId;
+          console.log(`[SYNC] Dropdown synced to: ${accId}`);
+        } else {
+          console.warn('[SYNC] Dropdown not found in new header');
+        }
       }
     }
   };
