@@ -1896,17 +1896,17 @@
     const metaContent = document.getElementById('metadata-content');
     if (metaContent) {
       if (isAllMode) {
-        // ALL MODE: ACCOUNT METADATA heading + ALL breadcrumb + Consolidated View + badges
+        // ALL MODE: ACCOUNT METADATA heading + Consolidated View + badge row (ALL as badge)
+        var allBadge = '<span style="background: #1e293b; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace;">ALL</span>';
         var badgesList = accounts.map(function (a) {
           var isRecon = isAccountReconciled(a);
           return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>';
         }).join(' ');
 
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.6;">' +
-          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
-          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #1e293b; font-weight: 600; margin-bottom: 4px;">ALL</div>' +
-          '<div style="color: #64748b; font-weight: 600; font-size: 11px; margin-bottom: 4px;">Consolidated View \u2022 CAD</div>' +
-          '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + badgesList + '</div>' +
+          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">ACCOUNT METADATA</div>' +
+          '<div style="color: #64748b; font-weight: 600; font-size: 10px; margin-bottom: 4px;">Consolidated View \u2022 CAD</div>' +
+          '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + allBadge + ' ' + badgesList + '</div>' +
           '</div>';
       } else if (acc) {
         // SINGLE MODE: ACCOUNT METADATA heading + breadcrumb + icon (48px) + text
@@ -1954,10 +1954,36 @@
   const updateImportSection = () => {
     const importContent = document.getElementById('import-content');
     if (importContent) {
-      importContent.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border: 2px dashed #cbd5e1; border-radius: 8px; padding: 8px 12px; width: 100%; height: 100%; box-sizing: border-box; transition: border-color 0.2s, background 0.2s;" onclick="window.openFilePicker()" onmouseover="this.style.borderColor=\'#3b82f6\'; this.style.background=\'#eff6ff\'" onmouseout="this.style.borderColor=\'#cbd5e1\'; this.style.background=\'transparent\'">' +
+      importContent.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; box-sizing: border-box; gap: 4px;">' +
+        '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border: 2px dashed #cbd5e1; border-radius: 8px; padding: 8px 12px; width: 100%; flex: 1; box-sizing: border-box; transition: border-color 0.2s, background 0.2s;" onclick="window.openFilePicker()" onmouseover="this.style.borderColor=\'#3b82f6\'; this.style.background=\'#eff6ff\'" onmouseout="this.style.borderColor=\'#cbd5e1\'; this.style.background=\'transparent\'">' +
         '<i class="ph ph-upload" style="font-size: 18px; color: #3b82f6;"></i>' +
         '<div style="font-size: 9px; font-weight: 600; color: #64748b; text-align: center;">Browse / Drag &amp; Drop</div>' +
+        '</div>' +
+        '<div id="parsing-progress" style="display: none; width: 100%; padding: 2px 0;">' +
+        '<div style="font-size: 8px; font-weight: 600; color: #64748b; text-align: center; margin-bottom: 2px;" id="parsing-progress-text">Parsing...</div>' +
+        '<div style="width: 100%; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">' +
+        '<div id="parsing-progress-bar" style="width: 0%; height: 100%; background: #3b82f6; border-radius: 2px; transition: width 0.3s ease;"></div>' +
+        '</div>' +
+        '</div>' +
         '</div>';
+    }
+  };
+
+  // Global function to show/update/hide parsing progress
+  window.showParsingProgress = function (percent, text) {
+    var progressDiv = document.getElementById('parsing-progress');
+    var progressBar = document.getElementById('parsing-progress-bar');
+    var progressText = document.getElementById('parsing-progress-text');
+    if (!progressDiv) return;
+    if (percent < 0 || percent === null || percent === undefined) {
+      progressDiv.style.display = 'none';
+      return;
+    }
+    progressDiv.style.display = 'block';
+    if (progressBar) progressBar.style.width = Math.min(percent, 100) + '%';
+    if (progressText) progressText.textContent = text || ('Parsing... ' + Math.round(percent) + '%');
+    if (percent >= 100) {
+      setTimeout(function () { progressDiv.style.display = 'none'; }, 1500);
     }
   };
 
