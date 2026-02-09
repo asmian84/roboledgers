@@ -1951,7 +1951,6 @@
 
   // Call import section update
   updateImportSection();
-};
 
 // --- WORKSPACE HTML GENERATORS ---
 
