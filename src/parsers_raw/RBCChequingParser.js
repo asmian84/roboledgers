@@ -121,12 +121,13 @@ SMART PARSING RULES:
       institutionCode: '003',
       transit: transit,
       accountNumber: acctFromText,
-      brand: 'RBC',
+      brand: null,         // brand = card network (VISA/MC/AMEX) — null for chequing
+      bankName: 'RBC',     // bank name for display
       bank: 'RBC',
       tag: 'Chequing',
-      accountType: 'Chequing', // [NEW] Added for downstream categorization
+      accountType: 'Chequing',
       openingBalance: openingBalance,
-      debug_raw_header: headerLines // Store for UI debugging
+      debug_raw_header: headerLines
     };
 
     // Calculate metadata similar to before (abbreviated for this replacement to focus on grid logic)
