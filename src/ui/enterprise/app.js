@@ -1142,8 +1142,19 @@
                     <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">THEME</label>
                     <select class="v5-select theme-selector" id="theme-selector">
                         <option value="default" ${!UI_STATE.activeTheme || UI_STATE.activeTheme === 'default' ? 'selected' : ''}>Default</option>
-                        <option value="rainbow" ${UI_STATE.activeTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
-                        <option value="postit" ${UI_STATE.activeTheme === 'postit' ? 'selected' : ''}>Post-it</option>
+                        <optgroup label="Fun Themes">
+                          <option value="rainbow" ${UI_STATE.activeTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
+                          <option value="postit" ${UI_STATE.activeTheme === 'postit' ? 'selected' : ''}>Post-it</option>
+                        </optgroup>
+                        <optgroup label="Professional (Caseware)">
+                          <option value="caseware-blue" ${UI_STATE.activeTheme === 'caseware-blue' ? 'selected' : ''}>Caseware Blue</option>
+                          <option value="caseware-gray" ${UI_STATE.activeTheme === 'caseware-gray' ? 'selected' : ''}>Caseware Gray</option>
+                          <option value="caseware-green" ${UI_STATE.activeTheme === 'caseware-green' ? 'selected' : ''}>Caseware Green</option>
+                        </optgroup>
+                        <optgroup label="Productivity">
+                          <option value="excel" ${UI_STATE.activeTheme === 'excel' ? 'selected' : ''}>Excel Classic</option>
+                          <option value="dark" ${UI_STATE.activeTheme === 'dark' ? 'selected' : ''}>Dark Mode</option>
+                        </optgroup>
                     </select>
                 </div>
 
