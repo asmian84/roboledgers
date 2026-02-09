@@ -61,7 +61,32 @@
     window.handleFileSelect(event);
   });
   document.body.appendChild(globalFileInput);
-  console.log('[FILE] Global file input created');
+
+  // Folder input for directory-level uploads
+  const globalFolderInput = document.createElement('input');
+  globalFolderInput.type = 'file';
+  globalFolderInput.id = 'folderInput';
+  globalFolderInput.setAttribute('webkitdirectory', '');
+  globalFolderInput.setAttribute('directory', '');
+  globalFolderInput.multiple = true;
+  globalFolderInput.style.display = 'none';
+  globalFolderInput.addEventListener('change', function (event) {
+    // Filter to only PDF/CSV files from the folder tree
+    const allFiles = Array.from(event.target.files);
+    const validFiles = allFiles.filter(f => /\.(pdf|csv|xlsx?)$/i.test(f.name));
+    console.log(`[FOLDER] Selected folder contains ${allFiles.length} files, ${validFiles.length} are bank statements`);
+    if (validFiles.length > 0) {
+      // Sort files by path so statements from the same account are grouped
+      validFiles.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+      window.handleFilesSelected(validFiles);
+    } else {
+      alert('No PDF or CSV files found in the selected folder.');
+    }
+    // Reset so same folder can be re-selected
+    event.target.value = '';
+  });
+  document.body.appendChild(globalFolderInput);
+  console.log('[FILE] Global file + folder inputs created');
 
   // Protocol check - Log status but don't block
   if (window.location.protocol === 'file:') {
@@ -78,6 +103,16 @@
       console.log('[FILE] File picker opened');
     } else {
       console.error('[FILE] file input not found');
+    }
+  };
+
+  window.openFolderPicker = function () {
+    const folderInput = document.getElementById('folderInput');
+    if (folderInput) {
+      folderInput.click();
+      console.log('[FILE] Folder picker opened');
+    } else {
+      console.error('[FILE] folder input not found');
     }
   };
 
@@ -133,12 +168,68 @@
   };
 
   // Mobile sidebar toggle
-  // File upload handlers for drag-drop and browse
-  window.handleDropZone = (event) => {
+  // File upload handlers for drag-drop and browse (supports folders)
+  window.handleDropZone = async (event) => {
     event.preventDefault();
+    const items = event.dataTransfer.items;
+    // Check if any dropped items are directories
+    if (items && items.length > 0) {
+      const entries = [];
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
+        if (entry) entries.push(entry);
+      }
+      if (entries.some(e => e.isDirectory)) {
+        // Recursively collect all PDF/CSV files from directories
+        console.log('[DROP] Folder drop detected, scanning recursively...');
+        const allFiles = await collectFilesFromEntries(entries);
+        const validFiles = allFiles.filter(f => /\.(pdf|csv|xlsx?)$/i.test(f.name));
+        console.log(`[DROP] Found ${allFiles.length} files, ${validFiles.length} are bank statements`);
+        if (validFiles.length > 0) {
+          validFiles.sort((a, b) => (a._path || a.name).localeCompare(b._path || b.name));
+          window.handleFilesSelected(validFiles);
+        } else {
+          alert('No PDF or CSV files found in the dropped folder.');
+        }
+        return;
+      }
+    }
+    // Fallback: regular file drop
     const files = event.dataTransfer.files;
     if (files.length > 0) window.handleFilesSelected(files);
   };
+
+  // Recursively traverse filesystem entries from drag-drop
+  async function collectFilesFromEntries(entries) {
+    const files = [];
+    async function traverseEntry(entry, path) {
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+        file._path = path + '/' + file.name;
+        files.push(file);
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const dirEntries = await new Promise((resolve, reject) => {
+          const allEntries = [];
+          function readBatch() {
+            reader.readEntries(batch => {
+              if (batch.length === 0) { resolve(allEntries); return; }
+              allEntries.push(...batch);
+              readBatch(); // Chrome returns max 100 entries per readEntries call
+            }, reject);
+          }
+          readBatch();
+        });
+        for (const child of dirEntries) {
+          await traverseEntry(child, path + '/' + entry.name);
+        }
+      }
+    }
+    for (const entry of entries) {
+      await traverseEntry(entry, '');
+    }
+    return files;
+  }
 
   window.exportData = function (format) {
     const data = window.RoboLedger.Ledger.getAll();
@@ -1957,9 +2048,12 @@
     const importContent = document.getElementById('import-content');
     if (importContent) {
       importContent.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; box-sizing: border-box; gap: 4px;">' +
-        '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border: 2px dashed #cbd5e1; border-radius: 8px; padding: 8px 12px; width: 100%; flex: 1; box-sizing: border-box; transition: border-color 0.2s, background 0.2s;" onclick="window.openFilePicker()" onmouseover="this.style.borderColor=\'#3b82f6\'; this.style.background=\'#eff6ff\'" onmouseout="this.style.borderColor=\'#cbd5e1\'; this.style.background=\'transparent\'">' +
-        '<i class="ph ph-upload" style="font-size: 18px; color: #3b82f6;"></i>' +
-        '<div style="font-size: 9px; font-weight: 600; color: #64748b; text-align: center;">Browse / Drag &amp; Drop</div>' +
+        '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; border: 2px dashed #cbd5e1; border-radius: 8px; padding: 6px 8px; width: 100%; flex: 1; box-sizing: border-box; transition: border-color 0.2s, background 0.2s;" onclick="window.openFilePicker()" onmouseover="this.style.borderColor=\'#3b82f6\'; this.style.background=\'#eff6ff\'" onmouseout="this.style.borderColor=\'#cbd5e1\'; this.style.background=\'transparent\'">' +
+        '<i class="ph ph-upload" style="font-size: 16px; color: #3b82f6;"></i>' +
+        '<div style="font-size: 8px; font-weight: 600; color: #64748b; text-align: center;">Browse Files</div>' +
+        '</div>' +
+        '<div style="cursor: pointer; font-size: 8px; font-weight: 600; color: #3b82f6; text-align: center; padding: 2px 6px; border-radius: 4px; transition: background 0.2s;" onclick="window.openFolderPicker()" onmouseover="this.style.background=\'#eff6ff\'" onmouseout="this.style.background=\'transparent\'">' +
+        '<i class="ph ph-folder-open" style="margin-right: 3px;"></i>Select Folder' +
         '</div>' +
         '</div>';
     }
