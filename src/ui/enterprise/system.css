@@ -275,6 +275,12 @@ body {
     /* Width of the forensic drawer */
 }
 
+/* Responsive: Main wrapper adjusts when sidebar collapses */
+.sidebar.collapsed~.main-wrapper {
+    margin-left: 70px;
+    max-width: calc(100vw - 70px);
+}
+
 /* Breadcrumb (Restored White Bar - FULL WIDTH) */
 .breadcrumb-bar {
     width: 100%;
@@ -322,7 +328,8 @@ body {
 /* Main Stage */
 .stage {
     flex: 1;
-    padding: 24px;  /* Container padding - prevents UI bleeding */
+    padding: 24px;
+    /* Container padding - prevents UI bleeding */
     /* Maximize width of the stages */
     background: #f8fafc;
     overflow: hidden;
@@ -4118,6 +4125,7 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
 /* === RESPONSIVE LAYOUT: Grid Expansion (Phase 2) === */
 
 /* When sidebar is collapsed, expand grid and cards to fill the space */
@@ -4125,9 +4133,11 @@ body.sidebar-collapsed .grid-container-wall,
 body.sidebar-collapsed .v5-main-header,
 body.sidebar-collapsed .v5-action-bar,
 body.sidebar-collapsed .v5-switcher-bar {
-    width: calc(100% - 80px - 220px) !important; /* Account for collapsed sidebar (70px) + utility bar (220px) */
+    width: calc(100% - 80px - 220px) !important;
+    /* Account for collapsed sidebar (70px) + utility bar (220px) */
     margin-left: 40px !important;
-    margin-right: 260px !important; /* Space for utility bar */ 
+    margin-right: 260px !important;
+    /* Space for utility bar */
     transition: width 0.3s ease, margin-right 0.3s ease;
 }
 
@@ -4151,7 +4161,8 @@ body.sidebar-collapsed .v5-switcher-bar {
     padding: 20px;
     box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
     z-index: 90;
-    display: none; /* Hidden by default */
+    display: none;
+    /* Hidden by default */
     flex-direction: column;
     gap: 16px;
     overflow-y: auto;
