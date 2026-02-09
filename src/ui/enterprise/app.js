@@ -1871,31 +1871,35 @@
         const endingBalance = openingBalance + outflow - inflow;
 
         reconContent.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; color: #1e293b;">
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span style="font-size: 11px; color: #64748b; font-weight: 500;">Opening</span>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+            <!-- Row 1: Opening Balance -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: #f8fafc; border-radius: 6px;">
+              <span style="font-weight: 600; color: #64748b; font-size: 11px;">OPENING</span>
               <input 
                 type="text" 
                 id="header-opening-input"
                 value="$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}" 
-                style="border: none; background: transparent; font-size: 14px; font-weight: 700; color: #1e293b; width: 90px; font-family: 'JetBrains Mono', monospace; outline: none; padding: 0; cursor: text;" 
+                style="border: none; background: transparent; font-size: 13px; font-weight: 700; color: #1e293b; width: 100px; font-family: 'JetBrains Mono', monospace; outline: none; padding: 0; cursor: text; text-align: right;" 
                 oninput="window.updateOpeningBalance(this.value)"
               />
             </div>
-            <div style="color: #cbd5e1; font-weight: 300;">+</div>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span style="font-size: 11px; color: #64748b; font-weight: 500;">Debits</span>
-              <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            
+            <!-- Row 2: Debits -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-left: 3px solid #ef4444; background: #fef2f2; border-radius: 6px;">
+              <span style="font-weight: 600; color: #991b1b; font-size: 11px;">DEBITS</span>
+              <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;">$${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
-            <div style="color: #cbd5e1; font-weight: 300;">-</div>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span style="font-size: 11px; color: #64748b; font-weight: 500;">Credits</span>
-              <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${inflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            
+            <!-- Row 3: Credits -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-left: 3px solid #10b981; background: #f0fdf4; border-radius: 6px;">
+              <span style="font-weight: 600; color: #065f46; font-size: 11px;">CREDITS</span>
+              <span style="color: #10b981; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;">$${inflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
-            <div style="color: #cbd5e1; font-weight: 300;">=</div>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span style="font-size: 11px; color: #64748b; font-weight: 500;">Closing</span>
-              <span style="color: #1e293b; font-weight: 800; font-family: 'JetBrains Mono', monospace;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            
+            <!-- Row 4: Closing Balance (Highlighted) -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); border-radius: 6px; box-shadow: 0 2px 4px rgba(14, 165, 233, 0.2);">
+              <span style="font-weight: 700; color: white; font-size: 11px; letter-spacing: 0.05em;">CLOSING</span>
+              <span style="color: white; font-weight: 800; font-family: 'JetBrains Mono', monospace; font-size: 14px;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
         `;
@@ -1939,38 +1943,57 @@
           </div>
         `;
       } else if (acc) {
-        // SINGLE MODE: Metadata + Synced/Import
+        // SINGLE MODE: Metadata + Synced/Import with PROMINENT BANK ICON
         const isLiability = acc.type === 'liability' || acc.type === 'creditcard';
 
         metaContent.innerHTML = `
-          <div style="display: flex; align-items: stretch; gap: 0; width: 100%;">
-            <div style="display: flex; align-items: center; justify-content: center; padding: 6px 24px; border-right: 1px solid #e2e8f0; font-size: 36px;">
-              ${getBankIcon(acc.bankName)}
-            </div>
-            <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; flex: 1; padding: 6px 24px; font-family: ${terminalFont};">
-              <div style="font-size: 12px; font-weight: 700; color: #1e293b; letter-spacing: 0.02em;">
-                ${(acc.bankName || 'ROYAL BANK OF CANADA').toUpperCase()} - ${isLiability ? 'CREDIT CARD' : 'CHEQUING'}
+          <div style="display: flex; align-items: center; gap: 16px; width: 100%;">
+            <!-- PROMINENT BANK ICON -->
+            <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius: 12px; border: 2px solid #e2e8f0; flex-shrink: 0;">
+              <div style="font-size: 48px; line-height: 1;">
+                ${getBankIcon(acc.bankName)}
               </div>
-              <div style="font-size: 11px; font-weight: 500; color: #64748b;">
+            </div>
+            
+            <!-- ACCOUNT DETAILS -->
+            <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px; flex: 1; min-width: 0;">
+              <!-- Line 1: Bank Name + Account Type (Large & Bold) -->
+              <div style="font-size: 13px; font-weight: 800; color: #0f172a; letter-spacing: 0.01em; line-height: 1.2;">
+                ${(acc.bankName || 'ROYAL BANK OF CANADA').toUpperCase()}
+              </div>
+              
+              <!-- Line 2: Account Type Badge -->
+              <div style="display: flex; align-items: center; gap: 6px; margin: 2px 0;">
+                <span style="background: ${isLiability ? '#fee2e2' : '#dbeafe'}; color: ${isLiability ? '#991b1b' : '#1e40af'}; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em;">
+                  ${isLiability ? 'CREDIT CARD' : 'CHEQUING'}
+                </span>
+              </div>
+              
+              <!-- Line 3: Account Numbers (Subtle) -->
+              <div style="font-size: 10px; font-weight: 500; color: #94a3b8; font-family: ${terminalFont};">
                 ${isLiability ?
-            `Card: •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}${acc.inst ? ' • IIN: ' + acc.inst : ''}` :
-            `Transit: ${acc.transit || '00000'} • Institution: ${acc.inst || '003'} • Account: ••••${(acc.accountNumber || '').slice(-4) || '2443'}`
+            `Card: •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}` :
+            `Transit ${acc.transit || '00000'} • Inst ${acc.inst || '003'} • Acct ••••${(acc.accountNumber || '').slice(-4) || '2443'}`
           }
               </div>
-              <div style="font-size: 10px; font-weight: 500; color: #94a3b8;">
-                ${getAccountPeriodRange(acc.id) ? `Period: ${getAccountPeriodRange(acc.id)}` : 'Period: No transactions'}
+              
+              <!-- Line 4: Period Range -->
+              <div style="font-size: 9px; font-weight: 600; color: #cbd5e1; text-transform: uppercase;">
+                ${getAccountPeriodRange(acc.id) ? `${getAccountPeriodRange(acc.id)}` : 'No transactions'}
               </div>
             </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 16px;">
-            <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-              <span>Synced 2m ago</span>
-              <i class="ph ph-check" style="color: #10b981;"></i>
+            
+            <!-- SYNC & IMPORT BUTTONS  -->
+            <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
+              <div style="text-align: right; color: #94a3b8; font-size: 10px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+                <i class="ph ph-check-circle-fill" style="color: #10b981; font-size: 12px;"></i>
+                <span>Synced</span>
+              </div>
+              <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <i class="ph ph-plus-circle" style="font-size: 13px;"></i>
+                Import
+              </button>
             </div>
-            <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-              <i class="ph ph-plus-circle" style="font-size: 14px;"></i>
-              Import
-            </button>
           </div>
         `;
       } else {
