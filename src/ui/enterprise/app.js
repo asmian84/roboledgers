@@ -1903,7 +1903,7 @@
             ${isAllMode ? `
               <!-- ALL MODE: Scrollable Account List -->
               <div style="display: flex; flex-direction: column; width: 100%; gap: 2px;">
-                <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Accounts</div>
+                <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
                 <div style="max-height: 48px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px;">
                   ${accounts.map(a => {
       const isReconciled = isAccountReconciled(a);
@@ -1966,7 +1966,7 @@
   function getFilterToolbarHTML() {
     const accounts = window.RoboLedger.Accounts.getAll();
     const refPrefix = UI_STATE.refPrefix || 'CHQ1';
-    
+
     return `
       <!-- Sticky Filter Toolbar -->
       <div style="position: sticky; top: 0; z-index: 30; height: 44px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 12px;">
