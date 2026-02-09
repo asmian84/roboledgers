@@ -1856,21 +1856,38 @@
       } else if (!acc) {
         reconContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 13px; color: #db2777; opacity: 0.6;">&gt; Select an account to reconcile...</div>`;
       } else {
-        // SINGLE MODE: Same layout, account-specific data
+        // SINGLE MODE: Full Reconciliation Logic
         const txns = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === acc.id);
         const debitTxns = txns.filter(t => t.debit);
         const creditTxns = txns.filter(t => t.credit);
         const totalDebits = debitTxns.reduce((sum, t) => sum + t.debit, 0);
         const totalCredits = creditTxns.reduce((sum, t) => sum + t.credit, 0);
         const openingBalance = acc.openingBalance || 0;
-        const endingBalance = openingBalance + totalDebits - totalCredits;
-        const isReconciled = Math.abs(endingBalance) < 0.01; // Within 1 cent
+
+        // Calculated ending = Opening - Debit + Credit
+        const calculatedEnding = openingBalance - totalDebits + totalCredits;
+
+        // Actual ending from user (0 means auto-reconcile)
+        const actualEnding = acc.actualEndingBalance || 0;
+        const isAutoReconciled = actualEnding === 0;
+        const discrepancy = isAutoReconciled ? 0 : (actualEnding - calculatedEnding);
+        const isReconciled = Math.abs(discrepancy) < 0.01;
 
         reconContent.innerHTML = `
-          <div style="font-family: ${terminalFont}; font-size: 11px; color: #475569; line-height: 1.6;">
-            <div>Total Balance: <span style="color: #0f766e; font-weight: 700;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-            <div>Total Debits: <span style="color: #ef4444;">$${totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> • Total Credits: <span style="color: #10b981;">$${totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-            <div>Net Activity: <span style="color: ${(totalDebits - totalCredits) >= 0 ? '#10b981' : '#ef4444'}; font-weight: 700;">$${(totalDebits - totalCredits).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+          <div style="font-family: ${terminalFont}; font-size: 12px; color: #475569; line-height: 1.8;">
+            <div>Opening Balance: <span style="color: #0f766e; font-weight: 700;">$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            <div>Debit: <span style="color: #ef4444; font-weight: 700;">$${totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> • Credit: <span style="color: #10b981; font-weight: 700;">$${totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            <div>Calculated Ending: <span style="color: #0f766e; font-weight: 700;">$${calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            ${!isAutoReconciled ? `<div>Actual Ending: <span style="color: #0f766e; font-weight: 700;">$${actualEnding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>` : ''}
+            <div style="margin-top: 4px;">
+              ${isAutoReconciled ?
+            `<span style="color: #10b981; font-weight: 700;">✓ AUTO-RECONCILED</span>` :
+            (isReconciled ?
+              `<span style="color: #10b981; font-weight: 700;">✓ RECONCILED</span>` :
+              `<span style="color: #ef4444; font-weight: 700;">✗ DISCREPANCY: $${Math.abs(discrepancy).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>`
+            )
+          }
+            </div>
           </div>
         `;
       }
@@ -1915,36 +1932,47 @@
           </div>
         `;
       } else if (acc) {
-        // SINGLE MODE: Terminal-style metadata with breadcrumb + badge
+        // SINGLE MODE: Improved terminal-style metadata
         const isLiability = acc.type === 'liability' || acc.type === 'creditcard';
 
+        // Get actual date range from transactions
+        const accTxns = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === acc.id);
+        let periodText = 'No transactions';
+        if (accTxns.length > 0) {
+          const dates = accTxns.map(t => new Date(t.date_iso || t.date)).sort((a, b) => a - b);
+          const minDate = dates[0].toISOString().split('T')[0];
+          const maxDate = dates[dates.length - 1].toISOString().split('T')[0];
+          periodText = `${minDate} TO ${maxDate}`;
+        }
+
         metaContent.innerHTML = `
-          <div style="font-family: ${terminalFont}; font-size: 11px; color: #475569; line-height: 1.6;">
+          <div style="font-family: ${terminalFont}; font-size: 12px; color: #475569; line-height: 1.8;">
             <!-- Breadcrumb -->
-            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 6px;">
+            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 8px;">
               <span onclick="window.switchAccount('ALL')" style="cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">ALL</span>
               <i class="ph ph-caret-right" style="font-size: 10px;"></i>
               <span style="color: #1e293b; font-weight: 700;">${acc.ref || 'CHQ1'}</span>
             </div>
             
-            <!-- Account Badge + Info -->
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
-              <span style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;">
+            <!-- Account Badge + Bank Name -->
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+              <span style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;">
                 ${acc.ref || 'CHQ1'}
               </span>
-              <span style="color: #64748b;">${(acc.bankName || 'Royal Bank of Canada')}</span>
+              <span style="color: #475569; font-weight: 500;">${(acc.bankName || 'Royal Bank of Canada')}</span>
             </div>
             
-            <!-- Account Details -->
-            <div style="color: #94a3b8; font-size: 10px;">
+            <!-- Account Numbers -->
+            <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">
               ${isLiability ?
             `Card •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}` :
             `Transit ${acc.transit || '00000'} • Inst ${acc.inst || '003'} • Acct ••••${(acc.accountNumber || '').slice(-4) || '2443'}`
           }
             </div>
             
-            <div style="color: #cbd5e1; font-size: 9px; text-transform: uppercase; margin-top: 2px;">
-              ${getAccountPeriodRange(acc.id) ? `${getAccountPeriodRange(acc.id)}` : 'No transactions'}
+            <!-- Period Covered with label -->
+            <div style="color: #64748b; font-size: 10px; font-weight: 600;">
+              <span style="color: #94a3b8;">Period covered:</span> <span style="color: #475569;">${periodText}</span>
             </div>
           </div>
         `;
