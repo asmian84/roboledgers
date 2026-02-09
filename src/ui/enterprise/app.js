@@ -1880,7 +1880,7 @@
               <div style="flex: 1;">Debit: <span style="font-weight: 600; color: #ef4444;">$${totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
             </div>
             <div style="display: flex; gap: 24px; margin-bottom: 4px;">
-              <div style="flex: 1;">Ending: <input type="text" value="$${endingBalanceValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ${terminalFont}; font-size: 11px; font-weight: 600; color: ${endingBalanceColor}; width: 100px; padding: 2px 4px;" onclick="this.select()" /></div>
+              <div style="flex: 1;">Ending: <input type="text" value="$${isAutoReconciled ? calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) : actualEnding.toLocaleString(undefined, { minimumFractionDigits: 2 })}" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ${terminalFont}; font-size: 11px; font-weight: 600; color: #1e293b; width: 100px; padding: 2px 4px;" onclick="this.select()" /></div>
               <div style="flex: 1;">Credit: <span style="font-weight: 600; color: #10b981;">$${totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
             </div>
             <!-- Status -->
