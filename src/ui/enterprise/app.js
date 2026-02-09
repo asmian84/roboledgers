@@ -211,6 +211,11 @@
     window.showProgressBar();
     window.updateProgressBar(0, files.length, 'Initializing...', 'Preparing to parse', 0);
 
+    // Also show header strip progress bar
+    if (window.showParsingProgress) {
+      window.showParsingProgress(0, 'Preparing...');
+    }
+
     // Get primary account for ingestion
     const primaryAccount = window.RoboLedger.Accounts.getAll()[0];
     const account_id = primaryAccount ? primaryAccount.id : 'ALL';
@@ -219,8 +224,9 @@
 
     for (let idx = 0; idx < files.length; idx++) {
       const file = files[idx];
+      const percentDone = Math.round(((idx) / files.length) * 100);
       try {
-        // Update progress bar (lightweight, no flicker)
+        // Update progress bars (lightweight, no flicker)
         window.updateProgressBar(
           idx + 1,
           files.length,
@@ -228,9 +234,14 @@
           'Parsing PDF...',
           totalImported
         );
+        if (window.showParsingProgress) {
+          window.showParsingProgress(percentDone, `Parsing ${idx + 1}/${files.length}: ${file.name}`);
+        }
 
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
         totalImported += imported;
+
+        const percentAfter = Math.round(((idx + 1) / files.length) * 100);
 
         // Update with results
         window.updateProgressBar(
@@ -240,6 +251,9 @@
           `✅ Imported ${imported} transactions`,
           totalImported
         );
+        if (window.showParsingProgress) {
+          window.showParsingProgress(percentAfter, `✅ ${file.name} (${imported} txns)`);
+        }
 
         console.log(`[UPLOAD] ${file.name}: ${imported} transactions imported`);
       } catch (err) {
@@ -251,11 +265,17 @@
           `❌ Parse failed`,
           totalImported
         );
+        if (window.showParsingProgress) {
+          window.showParsingProgress(Math.round(((idx + 1) / files.length) * 100), `❌ ${file.name} failed`);
+        }
       }
     }
 
     // Final update
     window.updateProgressBar(files.length, files.length, 'Complete!', `Imported ${totalImported} transactions`, totalImported);
+    if (window.showParsingProgress) {
+      window.showParsingProgress(100, `✅ Complete: ${totalImported} transactions`);
+    }
 
     // Hide progress bar after brief delay, then refresh grid
     setTimeout(() => {
