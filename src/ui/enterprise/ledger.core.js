@@ -121,6 +121,8 @@ window.RoboLedger = (function () {
                 const parsed = JSON.parse(saved);
                 state.transactions = parsed.transactions || {};
                 state.sigIndex = parsed.sigIndex || {};
+                state.accounts = parsed.accounts || [];
+                state.coa = parsed.coa || DEFAULT_COA_TEMPLATE;
                 console.log('[LEDGER] State loaded.');
             } catch (e) {
                 console.error('[LEDGER] Failed to load state', e);
@@ -131,7 +133,9 @@ window.RoboLedger = (function () {
     function save() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             transactions: state.transactions,
-            sigIndex: state.sigIndex
+            sigIndex: state.sigIndex,
+            accounts: state.accounts,
+            coa: state.coa
         }));
     }
 
