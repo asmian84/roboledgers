@@ -36,12 +36,14 @@ RBC MASTERCARD FORMAT:
         const cleanAcct = rawAcct.replace(/[-\s*]/g, '');
 
         const parsedMetadata = {
-            _inst: '003', _transit: '-----', institutionCode: '003', transit: '-----',
             _acct: cleanAcct,
             accountNumber: cleanAcct,
             displayAccountNumber: rawAcct, // Masked version for UI
-            _brand: 'RBC', _bank: 'RBC Mastercard', _tag: 'Mastercard',
-            accountType: 'CreditCard' // Flag for UI
+            _tag: 'Mastercard',
+            cardNetwork: 'Mastercard',
+            accountType: 'CreditCard',
+            bankName: 'RBC'
+            // NO transit, NO institutionCode - these are for bank accounts only
         };
 
         const monthMap = {

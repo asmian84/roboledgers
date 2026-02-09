@@ -35,16 +35,14 @@ RBC VISA FORMAT:
         }
 
         const parsedMetadata = {
-            _inst: '003', // RBC Institution Code
-            _transit: '-----',
             _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            institutionCode: '003',
-            transit: '-----',
             accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            _brand: 'RBC',
-            _bank: 'RBC Visa',
             _tag: 'Visa',
+            cardNetwork: 'Visa',
+            accountType: 'CreditCard',
+            bankName: 'RBC',
             openingBalance: openingBalance
+            // NO transit, NO institutionCode - these are for bank accounts only
         };
         console.warn('🏁 [RBC-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
