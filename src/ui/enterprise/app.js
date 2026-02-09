@@ -1888,7 +1888,6 @@
               ${isAutoReconciled || isReconciled ?
             `<span style="color: #10b981;">\u2713 RECONCILED</span>` :
             `<span style="color: #ef4444;">\u2717 DISCREPANCY: $${Math.abs(discrepancy).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>`
-          }
             </div>
           </div>
         `;
