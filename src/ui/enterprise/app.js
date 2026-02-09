@@ -1159,9 +1159,9 @@
                         <option value="default" ${!UI_STATE.activeTheme || UI_STATE.activeTheme === 'default' ? 'selected' : ''}>Default</option>
                         <option value="rainbow" ${UI_STATE.activeTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
                         <option value="postit" ${UI_STATE.activeTheme === 'postit' ? 'selected' : ''}>Post-it</option>
-                        <option value="caseware-blue" ${UI_STATE.activeTheme === 'caseware-blue' ? 'selected' : ''}>Caseware Blue</option>
-                        <option value="caseware-gray" ${UI_STATE.activeTheme === 'caseware-gray' ? 'selected' : ''}>Caseware Gray</option>
-                        <option value="caseware-green" ${UI_STATE.activeTheme === 'caseware-green' ? 'selected' : ''}>Caseware Green</option>
+                        <option value="caseware-blue" ${UI_STATE.activeTheme === 'caseware-blue' ? 'selected' : ''}>Corporate</option>
+                        <option value="caseware-gray" ${UI_STATE.activeTheme === 'caseware-gray' ? 'selected' : ''}>Neutral</option>
+                        <option value="caseware-green" ${UI_STATE.activeTheme === 'caseware-green' ? 'selected' : ''}>Balanced</option>
                         <option value="excel" ${UI_STATE.activeTheme === 'excel' ? 'selected' : ''}>Excel Classic</option>
                         <option value="dark" ${UI_STATE.activeTheme === 'dark' ? 'selected' : ''}>Dark Mode</option>
                     </select>
