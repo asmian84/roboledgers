@@ -1,248 +1,220 @@
 /* ====================================
    GRID THEME SYSTEM (Scoped to #txnGrid)
+   Targets React-rendered elements inside container
    ==================================== */
 
 /* DEFAULT THEME - Clean slate white */
-#txnGrid.default-theme,
-#txnGrid:not([class*="-theme"]) {
-    --grid-bg: #ffffff;
-    --grid-header-bg: #f8fafc;
-    --grid-border: #e2e8f0;
-    --grid-row-hover: #f1f5f9;
-    --grid-row-selected: #dbeafe;
-    --grid-text: #0f172a;
-    --grid-text-secondary: #64748b;
+#txnGrid:not([class*="-theme"]) table,
+#txnGrid.default-theme table {
+    background: #ffffff;
+}
+
+#txnGrid:not([class*="-theme"]) thead,
+#txnGrid.default-theme thead {
+    background: #f8fafc;
 }
 
 /* RAINBOW THEME - Colorful professional */
-#txnGrid.rainbow-theme {
-    --grid-bg: #fefce8;
-    --grid-header-bg: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    --grid-border: #fbbf24;
-    --grid-row-hover: #fef9c3;
-    --grid-row-selected: #fef08a;
-    --grid-text: #713f12;
-    --grid-text-secondary: #92400e;
-}
-
-#txnGrid.rainbow-theme thead {
-    background: var(--grid-header-bg);
-    border-bottom: 2px solid var(--grid-border);
-}
-
-#txnGrid.rainbow-theme tbody tr:nth-child(odd) {
-    background: #fffbeb;
-}
-
-#txnGrid.rainbow-theme tbody tr:nth-child(even) {
+#txnGrid.rainbow-theme table {
     background: #fefce8;
 }
 
+#txnGrid.rainbow-theme thead {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-bottom: 2px solid #fbbf24;
+}
+
+#txnGrid.rainbow-theme thead th {
+    color: #713f12 !important;
+    font-weight: 700;
+}
+
+#txnGrid.rainbow-theme tbody tr:nth-child(odd) {
+    background: #fffbeb !important;
+}
+
+#txnGrid.rainbow-theme tbody tr:nth-child(even) {
+    background: #fefce8 !important;
+}
+
 #txnGrid.rainbow-theme tbody tr:hover {
-    background: var(--grid-row-hover) !important;
+    background: #fef9c3 !important;
     box-shadow: inset 0 0 0 1px #fbbf24;
 }
 
 /* POST-IT THEME - Yellow note aesthetic */
-#txnGrid.postit-theme {
-    --grid-bg: #fef9c3;
-    --grid-header-bg: #fde047;
-    --grid-border: #facc15;
-    --grid-row-hover: #fef08a;
-    --grid-row-selected: #fde047;
-    --grid-text: #713f12;
-    --grid-text-secondary: #854d0e;
+#txnGrid.postit-theme table {
+    background: #fef9c3;
 }
 
 #txnGrid.postit-theme thead {
-    background: var(--grid-header-bg);
-    border-bottom: 2px solid var(--grid-border);
+    background: #fde047;
+    border-bottom: 2px solid #facc15;
     box-shadow: 0 2px 4px rgba(234, 179, 8, 0.2);
 }
 
+#txnGrid.postit-theme thead th {
+    color: #713f12 !important;
+    font-weight: 700;
+}
+
 #txnGrid.postit-theme tbody tr {
-    background: var(--grid-bg);
+    background: #fef9c3 !important;
     border-bottom: 1px solid #fde047;
 }
 
 #txnGrid.postit-theme tbody tr:hover {
-    background: var(--grid-row-hover) !important;
+    background: #fef08a !important;
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(234, 179, 8, 0.15);
     transition: all 0.15s ease;
 }
 
-/* CASEWARE BLUE - Professional accounting blue */
-#txnGrid.caseware-blue-theme {
-    --grid-bg: #f0f9ff;
-    --grid-header-bg: #0369a1;
-    --grid-border: #0284c7;
-    --grid-row-hover: #e0f2fe;
-    --grid-row-selected: #bae6fd;
-    --grid-text: #0c4a6e;
-    --grid-text-secondary: #075985;
+/* CORPORATE (Caseware Blue) - Professional accounting blue */
+#txnGrid.caseware-blue-theme,
+#txnGrid.caseware-blue-theme table {
+    background: #f0f9ff;
 }
 
 #txnGrid.caseware-blue-theme thead {
-    background: var(--grid-header-bg);
-    color: white;
-    border-bottom: 3px solid var(--grid-border);
-    font-weight: 700;
+    background: #0369a1 !important;
+    border-bottom: 3px solid #0284c7;
 }
 
 #txnGrid.caseware-blue-theme thead th {
-    color: white !important;
-    font-weight: 700;
+    color: #ffffff !important;
+    font-weight: 700 !important;
     padding: 12px 16px;
 }
 
 #txnGrid.caseware-blue-theme tbody tr:nth-child(odd) {
-    background: #ffffff;
+    background: #ffffff !important;
 }
 
 #txnGrid.caseware-blue-theme tbody tr:nth-child(even) {
-    background: #f0f9ff;
+    background: #f0f9ff !important;
 }
 
 #txnGrid.caseware-blue-theme tbody tr:hover {
-    background: var(--grid-row-hover) !important;
+    background: #e0f2fe !important;
     border-left: 3px solid #0284c7;
 }
 
-/* CASEWARE GRAY - Professional neutral */
-#txnGrid.caseware-gray-theme {
-    --grid-bg: #f8fafc;
-    --grid-header-bg: #475569;
-    --grid-border: #64748b;
-    --grid-row-hover: #e2e8f0;
-    --grid-row-selected: #cbd5e1;
-    --grid-text: #0f172a;
-    --grid-text-secondary: #475569;
+#txnGrid.caseware-blue-theme tbody td {
+    color: #0c4a6e;
+}
+
+/* NEUTRAL (Caseware Gray) - Professional neutral */
+#txnGrid.caseware-gray-theme,
+#txnGrid.caseware-gray-theme table {
+    background: #f8fafc;
 }
 
 #txnGrid.caseware-gray-theme thead {
-    background: var(--grid-header-bg);
-    color: white;
-    border-bottom: 3px solid var(--grid-border);
-    font-weight: 700;
+    background: #475569 !important;
+    border-bottom: 3px solid #64748b;
 }
 
 #txnGrid.caseware-gray-theme thead th {
-    color: white !important;
-    font-weight: 700;
+    color: #ffffff !important;
+    font-weight: 700 !important;
     padding: 12px 16px;
 }
 
 #txnGrid.caseware-gray-theme tbody tr:nth-child(odd) {
-    background: #ffffff;
+    background: #ffffff !important;
 }
 
 #txnGrid.caseware-gray-theme tbody tr:nth-child(even) {
-    background: #f8fafc;
+    background: #f8fafc !important;
 }
 
 #txnGrid.caseware-gray-theme tbody tr:hover {
-    background: var(--grid-row-hover) !important;
+    background: #e2e8f0 !important;
     border-left: 3px solid #64748b;
 }
 
-/* CASEWARE GREEN - Balanced ledger green */
-#txnGrid.caseware-green-theme {
-    --grid-bg: #f0fdf4;
-    --grid-header-bg: #059669;
-    --grid-border: #10b981;
-    --grid-row-hover: #dcfce7;
-    --grid-row-selected: #bbf7d0;
-    --grid-text: #064e3b;
-    --grid-text-secondary: #047857;
+#txnGrid.caseware-gray-theme tbody td {
+    color: #0f172a;
+}
+
+/* BALANCED (Caseware Green) - Balanced ledger green */
+#txnGrid.caseware-green-theme,
+#txnGrid.caseware-green-theme table {
+    background: #f0fdf4;
 }
 
 #txnGrid.caseware-green-theme thead {
-    background: var(--grid-header-bg);
-    color: white;
-    border-bottom: 3px solid var(--grid-border);
-    font-weight: 700;
+    background: #059669 !important;
+    border-bottom: 3px solid #10b981;
 }
 
 #txnGrid.caseware-green-theme thead th {
-    color: white !important;
-    font-weight: 700;
+    color: #ffffff !important;
+    font-weight: 700 !important;
     padding: 12px 16px;
 }
 
 #txnGrid.caseware-green-theme tbody tr:nth-child(odd) {
-    background: #ffffff;
+    background: #ffffff !important;
 }
 
 #txnGrid.caseware-green-theme tbody tr:nth-child(even) {
-    background: #f0fdf4;
+    background: #f0fdf4 !important;
 }
 
 #txnGrid.caseware-green-theme tbody tr:hover {
-    background: var(--grid-row-hover) !important;
+    background: #dcfce7 !important;
     border-left: 3px solid #10b981;
 }
 
+#txnGrid.caseware-green-theme tbody td {
+    color: #064e3b;
+}
+
 /* EXCEL CLASSIC - Familiar spreadsheet look */
-#txnGrid.excel-theme {
-    --grid-bg: #ffffff;
-    --grid-header-bg: #217346;
-    --grid-border: #107c41;
-    --grid-row-hover: #e6f4ea;
-    --grid-row-selected: #c6e7d0;
-    --grid-text: #1a1a1a;
-    --grid-text-secondary: #333333;
+#txnGrid.excel-theme,
+#txnGrid.excel-theme table {
+    background: #ffffff;
 }
 
 #txnGrid.excel-theme thead {
-    background: var(--grid-header-bg);
-    color: white;
-    border-bottom: 3px solid var(--grid-border);
-    font-weight: 700;
+    background: #217346 !important;
+    border-bottom: 3px solid #107c41;
     font-family: 'Calibri', 'Arial', sans-serif;
 }
 
 #txnGrid.excel-theme thead th {
-    color: white !important;
-    font-weight: 700;
+    color: #ffffff !important;
+    font-weight: 700 !important;
     padding: 12px 16px;
     border-right: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 #txnGrid.excel-theme tbody tr {
-    background: white;
+    background: #ffffff !important;
     border-bottom: 1px solid #d0d0d0;
 }
 
 #txnGrid.excel-theme tbody tr:hover {
-    background: var(--grid-row-hover) !important;
+    background: #e6f4ea !important;
     box-shadow: inset 0 0 0 1px #107c41;
 }
 
 #txnGrid.excel-theme tbody td {
     border-right: 1px solid #e6e6e6;
+    color: #1a1a1a;
 }
 
 /* DARK MODE THEME - Eye comfort */
-#txnGrid.dark-theme {
-    --grid-bg: #1e293b;
-    --grid-header-bg: #0f172a;
-    --grid-border: #334155;
-    --grid-row-hover: #334155;
-    --grid-row-selected: #475569;
-    --grid-text: #e2e8f0;
-    --grid-text-secondary: #94a3b8;
-}
-
-#txnGrid.dark-theme {
-    background: var(--grid-bg);
-    color: var(--grid-text);
+#txnGrid.dark-theme,
+#txnGrid.dark-theme table {
+    background: #1e293b !important;
 }
 
 #txnGrid.dark-theme thead {
-    background: var(--grid-header-bg);
-    color: #e2e8f0;
-    border-bottom: 2px solid var(--grid-border);
+    background: #0f172a !important;
+    border-bottom: 2px solid #334155;
 }
 
 #txnGrid.dark-theme thead th {
@@ -250,28 +222,20 @@
 }
 
 #txnGrid.dark-theme tbody tr {
-    background: var(--grid-bg);
-    color: var(--grid-text);
-    border-bottom: 1px solid var(--grid-border);
+    background: #1e293b !important;
+    border-bottom: 1px solid #334155;
 }
 
 #txnGrid.dark-theme tbody tr:hover {
-    background: var(--grid-row-hover) !important;
+    background: #334155 !important;
 }
 
 #txnGrid.dark-theme tbody td {
-    color: var(--grid-text);
+    color: #e2e8f0 !important;
 }
 
-/* Apply theme colors to all grid text elements */
-#txnGrid[class*="-theme"] tbody td {
-    color: var(--grid-text, inherit);
-}
-
-#txnGrid[class*="-theme"] .tabulator-row.tabulator-row-odd {
-    background: var(--grid-bg, inherit);
-}
-
-#txnGrid[class*="-theme"] .tabulator-row:hover {
-    background: var(--grid-row-hover, inherit) !important;
+/* Ensure theme dropdown opens downwards */
+.v5-select.theme-selector {
+    appearance: menulist;
+    -webkit-appearance: menulist;
 }
