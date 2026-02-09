@@ -1788,15 +1788,17 @@
 
     console.log('[Header Data Update] Mode:', isAllMode ? 'ALL' : 'SINGLE', 'Account:', acc?.ref || 'None');
 
-    // Helper: Get bank icon
+    // Helper: Get bank icon (returns <img> tag with uniform 28x28 size)
     const getBankIcon = (bankName) => {
       const bank = (bankName || '').toLowerCase();
-      if (bank.includes('rbc') || bank.includes('royal')) return '🏦';
-      if (bank.includes('td')) return '💚';
-      if (bank.includes('bmo') || bank.includes('montreal')) return '🔵';
-      if (bank.includes('scotia')) return '🏴';
-      if (bank.includes('cibc')) return '🟥';
-      return '🏦';
+      const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
+      const basePath = '/src/ui/enterprise/assets/bank-icons/';
+      if (bank.includes('rbc') || bank.includes('royal')) return '<img src="' + basePath + 'rbc.png" alt="RBC" style="' + iconStyle + '" />';
+      if (bank.includes('td') || bank.includes('dominion')) return '<img src="' + basePath + 'td.png" alt="TD" style="' + iconStyle + '" />';
+      if (bank.includes('bmo') || bank.includes('montreal')) return '<img src="' + basePath + 'bmo.png" alt="BMO" style="' + iconStyle + '" />';
+      if (bank.includes('scotia')) return '<img src="' + basePath + 'scotia.png" alt="Scotia" style="' + iconStyle + '" />';
+      if (bank.includes('cibc')) return '<img src="' + basePath + 'cibc.png" alt="CIBC" style="' + iconStyle + '" />';
+      return '<img src="' + basePath + 'rbc.png" alt="Bank" style="' + iconStyle + '" />';
     };
 
     // Helper: Get account period range
@@ -2004,15 +2006,17 @@
       return Math.abs(accCalculated - accExpected) < 0.01;
     };
 
-    // Bank icon mapping
+    // Bank icon mapping (returns <img> tag with uniform 28x28 size)
     const getBankIcon = (bankName) => {
-      const name = (bankName || '').toUpperCase();
-      if (name.includes('RBC') || name.includes('ROYAL')) return '🏦'; // RBC
-      if (name.includes('BMO') || name.includes('MONTREAL')) return '🏛️'; // BMO
-      if (name.includes('TD') || name.includes('DOMINION')) return '🏢'; // TD
-      if (name.includes('CIBC')) return '🏬'; // CIBC
-      if (name.includes('SCOTIA')) return '🏪'; // Scotia
-      return '🏦'; // Default bank icon
+      const bank = (bankName || '').toLowerCase();
+      const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
+      const basePath = '/src/ui/enterprise/assets/bank-icons/';
+      if (bank.includes('rbc') || bank.includes('royal')) return '<img src="' + basePath + 'rbc.png" alt="RBC" style="' + iconStyle + '" />';
+      if (bank.includes('td') || bank.includes('dominion')) return '<img src="' + basePath + 'td.png" alt="TD" style="' + iconStyle + '" />';
+      if (bank.includes('bmo') || bank.includes('montreal')) return '<img src="' + basePath + 'bmo.png" alt="BMO" style="' + iconStyle + '" />';
+      if (bank.includes('scotia')) return '<img src="' + basePath + 'scotia.png" alt="Scotia" style="' + iconStyle + '" />';
+      if (bank.includes('cibc')) return '<img src="' + basePath + 'cibc.png" alt="CIBC" style="' + iconStyle + '" />';
+      return '<img src="' + basePath + 'rbc.png" alt="Bank" style="' + iconStyle + '" />';
     };
 
     const terminalFont = "'Courier New', Courier, monospace";
