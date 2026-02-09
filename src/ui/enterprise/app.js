@@ -184,15 +184,15 @@
     if (files.length > 0) window.handleFilesSelected(files);
   };
 
-  // Progress bar helpers (no full-page render - eliminates flickering)
+  // Progress bar helpers (inline, above grid)
   window.showProgressBar = () => {
-    const overlay = document.getElementById('parsing-progress-overlay');
-    if (overlay) overlay.style.display = 'flex';
+    const progressBar = document.getElementById('parsing-progress-inline');
+    if (progressBar) progressBar.style.display = 'block';
   };
 
   window.hideProgressBar = () => {
-    const overlay = document.getElementById('parsing-progress-overlay');
-    if (overlay) overlay.style.display = 'none';
+    const progressBar = document.getElementById('parsing-progress-inline');
+    if (progressBar) progressBar.style.display = 'none';
   };
 
   window.updateProgressBar = (current, total, fileName, stage, txnCount) => {
@@ -287,6 +287,27 @@
     }
   };
 
+  // Update utility bar with current account data
+  window.updateUtilityBar = function () {
+    if (!window.RoboLedger) return;
+
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const totalBalance = accounts.reduce((sum, a) => sum + (window.RoboLedger.Accounts.getBalance(a.id) || 0), 0);
+
+    const balanceEl = document.getElementById('util-total-balance');
+    if (balanceEl) {
+      balanceEl.textContent = `$${(totalBalance / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+      balanceEl.style.color = totalBalance >= 0 ? '#0f766e' : '#ef4444';
+    }
+
+    const badgesEl = document.getElementById('util-account-badges');
+    if (badgesEl) {
+      badgesEl.innerHTML = accounts.map(a => `
+        <div class="utility-badge" onclick="window.switchAccount('${a.id}')">${a.ref || 'N/A'}</div>
+      `).join('');
+    }
+  };
+
   // Desktop sidebar collapse toggle
   window.toggleSidebar = () => {
     const sidebar = document.getElementById('sidebar');
@@ -294,6 +315,14 @@
 
     if (sidebar) {
       sidebar.classList.toggle('collapsed');
+
+      // Toggle body class for global layout changes (grid expansion, utility bar)
+      document.body.classList.toggle('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+
+      // Update utility bar content when collapsed
+      if (sidebar.classList.contains('collapsed')) {
+        setTimeout(() => window.updateUtilityBar(), 100);
+      }
 
       // Update button icon
       if (sidebar.classList.contains('collapsed')) {
@@ -1815,12 +1844,32 @@
 
     const terminalFont = "'Courier New', Courier, monospace";
 
+    // Period range calculation helper
+    const getAccountPeriodRange = (accountId) => {
+      const txns = allTxns
+        .filter(t => t.account_id === accountId)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      if (txns.length === 0) return null;
+
+      const first = new Date(txns[0].date);
+      const last = new Date(txns[txns.length - 1].date);
+
+      const formatDate = (d) => d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+
+      return `${formatDate(first)} - ${formatDate(last)}`;
+    };
+
     // Aggregate calculations for ALL accounts mode
 
 
     return `
       <!-- Professional Account Dashboard Header -->
-      <div id="account-header-root" style="background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 12px 24px; gap: 12px;">
+      <div id="account-header-root" class="v5-account-workspace-header" style="background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 12px 24px; gap: 12px;">
         
         <!-- Header Top: Account Type & Selector -->
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1849,7 +1898,7 @@
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: stretch; min-height: 64px; overflow: hidden; margin: 8px 16px; border: 1px solid transparent; background-image: linear-gradient(white, white), linear-gradient(135deg, #e2e8f0, #cbd5e1); background-origin: padding-box, border-box; background-clip: padding-box, border-box;">
           
           <!-- LEFT: Reconciliation Status -->
-          <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 24px; display: flex; flex-direction: column; justify-content: center; gap: 2px;">
+          <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 6px 24px; display: flex; flex-direction: column; justify-content: center; gap: 2px;">
             <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Reconciliation</div>
             
             ${isAllMode ? `
@@ -1870,6 +1919,7 @@
             ` : !acc ? `
               <div style="font-family: ${terminalFont}; font-size: 13px; color: #db2777; opacity: 0.6;">&gt; Select an account to reconcile...</div>
             ` : `
+              <!-- SINGLE ACCOUNT: Reconciliation Formula -->
               <div style="display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; color: #1e293b;">
                 <div style="display: flex; align-items: center; gap: 4px;">
                   <span style="font-size: 11px; color: #64748b; font-weight: 500;">Opening</span>
@@ -1877,7 +1927,7 @@
                     type="text" 
                     id="header-opening-input"
                     value="$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}" 
-                    style="border: none; background: transparent; font-size: 14px; font-weight: 700; color: #1e293b; width: 90px; font-family: 'JetBrains Mono', monospace; outline: none; padding: 0;" 
+                    style="border: none; background: transparent; font-size: 14px; font-weight: 700; color: #1e293b; width: 90px; font-family: 'JetBrains Mono', monospace; outline: none; padding: 0; cursor: text;" 
                     oninput="window.updateOpeningBalance(this.value)"
                   />
                 </div>
@@ -1900,72 +1950,97 @@
 
                 <div style="display: flex; align-items: center; gap: 4px;">
                   <span style="font-size: 11px; color: #64748b; font-weight: 500;">Closing</span>
-                  <span id="header-closing-balance" style="color: #1e293b; font-weight: 800; font-family: 'JetBrains Mono', monospace;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style="color: #1e293b; font-weight: 800; font-family: 'JetBrains Mono', monospace;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
-              </div>
-
-              <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: #10b981; margin-top: 1px;">
-                <i class="ph ph-check-circle" style="font-size: 13px;"></i>
-                <span>Difference: $0.00 • Reconciled</span>
               </div>
             `}
           </div>
 
           <!-- RIGHT: Identity & Actions -->
-          <div style="flex: 1.5; padding: 8px 24px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="flex: 1.5; padding: 6px 24px; display: flex; align-items: center; justify-content: space-between;">
             ${isAllMode ? `
-              <!-- ALL MODE: Scrollable Account List -->
-              <div style="display: flex; flex-direction: column; width: 100%; gap: 2px;">
+              <!-- ALL MODE: Horizontal Badge-Only Layout (8-12 accounts) -->
+              <div style="display: flex; flex-direction: column; width: 100%; gap: 3px;">
                 <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
-                <div style="max-height: 48px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px;">
+                <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                   ${accounts.map(a => {
       const isReconciled = isAccountReconciled(a);
       return `
-                      <div onclick="window.switchAccount('${a.id}')" style="cursor: pointer; padding: 2px 0; font-size: 12px; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 6px; hover: background: #f1f5f9;">
-                        <span style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;">${a.ref || 'N/A'}</span><span>${a.name || a.ref}</span>
-                        ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 13px; color: #10b981;"></i>' : ''}
-                      </div>
+                      <span 
+                        onclick="window.switchAccount('${a.id}')" 
+                        title="${a.name || a.ref}"
+                        style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 3px;"
+                        onmouseover="this.style.background='#2563eb'"
+                        onmouseout="this.style.background='#3b82f6'">
+                        ${a.ref || 'N/A'}
+                        ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 10px; color: #10b981;"></i>' : ''}
+                      </span>
                     `;
     }).join('')}
                 </div>
               </div>
+              
+              <!-- Synced/Import Section (identical to SINGLE MODE) -->
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+                  <span>Synced 2m ago</span>
+                  <i class="ph ph-check" style="color: #10b981;"></i>
+                </div>
+                <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                  <i class="ph ph-plus-circle" style="font-size: 14px;"></i>
+                  Import
+                </button>
+              </div>
             ` : `
-              <!-- SELECTED ACCOUNT: Identity with Bank Icon -->
-              <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+              <!-- SELECTED ACCOUNT: Terminal-Style Metadata Container -->
+              <div style="display: flex; align-items: stretch; gap: 0; width: 100%;">
                 ${acc ? `
-                  <div style="font-size: 28px;">${getBankIcon(acc.bankName)}</div>
-                  <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; flex: 1;">
-                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
-                    <div style="font-size: 13px; font-weight: 700; color: #1e293b;">
-                      ${acc.bankName || 'RBC'} ${isLiability ? 'Credit Card' : 'Chequing'}${acc.brand ? ' • ' + acc.brand : ''}
+                  <!-- Bank Icon Column (covers 3-line height) -->
+                  <div style="display: flex; align-items: center; justify-content: center; padding: 6px 24px; border-right: 1px solid #e2e8f0; font-size: 36px;">
+                    ${getBankIcon(acc.bankName)}
+                  </div>
+                  
+                  <!-- Metadata Column (Terminal Style) -->
+                  <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; flex: 1; padding: 6px 24px; font-family: ${terminalFont};">
+                    <!-- Line 1: Bank Name (Statement Format) -->
+                    <div style="font-size: 12px; font-weight: 700; color: #1e293b; letter-spacing: 0.02em;">
+                      ${(acc.bankName || 'ROYAL BANK OF CANADA').toUpperCase()} - ${isLiability ? 'CREDIT CARD' : 'CHEQUING'}
                     </div>
+                    
+                    <!-- Line 2: Account Details (Statement Format) -->
                     <div style="font-size: 11px; font-weight: 500; color: #64748b;">
                       ${isLiability ? `
-                        •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}
+                        Card: •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}${acc.inst ? ' • IIN: ' + acc.inst : ''}
                       ` : `
-                        Transit ${acc.transit || '00000'} • Inst ${acc.inst || '000'} • Account •••• ${(acc.accountNumber || '').slice(-4) || '0000'}
+                        Transit: ${acc.transit || '00000'} • Institution: ${acc.inst || '003'} • Account: ••••${(acc.accountNumber || '').slice(-4) || '2443'}
                       `}
+                    </div>
+                    
+                    <!-- Line 3: Period Range -->
+                    <div style="font-size: 10px; font-weight: 500; color: #94a3b8;">
+                      ${getAccountPeriodRange(acc.id) ? `Period: ${getAccountPeriodRange(acc.id)}` : 'Period: No transactions'}
                     </div>
                   </div>
                 ` : `
-                  <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px;">
-                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
+                  <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px;">
+                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Metadata</div>
                     <div style="font-family: ${terminalFont}; font-size: 12px; color: #64748b; opacity: 0.6;">&gt; No account selected</div>
                   </div>
                 `}
               </div>
-            `}
-
-            <div style="display: flex; align-items: center; gap: 16px;">
-              <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-                <span>Synced 2m ago</span>
-                <i class="ph ph-check" style="color: #10b981;"></i>
+              
+              <!-- Synced/Import Section (matches ALL MODE structure) -->
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+                  <span>Synced 2m ago</span>
+                  <i class="ph ph-check" style="color: #10b981;"></i>
+                </div>
+                <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                  <i class="ph ph-plus-circle" style="font-size: 14px;"></i>
+                  Import
+                </button>
               </div>
-              <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                <i class="ph ph-plus-circle" style="font-size: 14px;"></i>
-                Import
-              </button>
-            </div>
+            `}
           </div>
 
         </div>
@@ -2168,6 +2243,23 @@
       // Edge-to-edge grid
       mainContent = `
       <div style="flex: 1; display: flex; flex-direction: column; background: white;">
+        <!-- Inline Progress Bar (above grid) -->
+        <div id="parsing-progress-inline" style="display: none; background: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px 24px; margin: 16px 24px; border-radius: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <div>
+              <div id="progress-title" style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">Processing Statements</div>
+              <div id="progress-subtitle" style="font-size: 12px; color: #64748b;"></div>
+            </div>
+            <div style="text-align: right;">
+              <div id="progress-file-count" style="font-size: 11px; font-weight: 600; color: #3b82f6;"></div>
+              <div id="progress-txn-count" style="font-size: 11px; color: #64748b;"></div>
+            </div>
+          </div>
+          <div style="height: 6px; background: #dbeafe; border-radius: 10px; overflow: hidden;">
+            <div id="progress-bar-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%); transition: width 0.3s ease; border-radius: 10px;"></div>
+          </div>
+        </div>
+        
         <div id="txnGrid" style="height: 100%; width: 100%; display: flex; flex-direction: column;"></div>
       </div>
       `;
@@ -2369,5 +2461,43 @@
     }
   });
 
+  // Global click handler for account ref badges
+  // Makes any blue badge (CHQ1, SAV1, etc.) clickable to switch accounts
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+
+    // Check if clicked element is a blue account ref badge using computed styles
+    if (target.tagName === 'SPAN') {
+      const computedStyle = window.getComputedStyle(target);
+      const bgColor = computedStyle.backgroundColor;
+      const fontFamily = computedStyle.fontFamily;
+
+      // Check for blue badge: rgb(59, 130, 246) = #3b82f6
+      if (bgColor && bgColor.includes('59, 130, 246') &&
+        fontFamily && fontFamily.includes('JetBrains Mono')) {
+
+        // Find the account ID from the closest parent with onclick or data attribute
+        let parent = target.parentElement;
+        let accountId = null;
+
+        // Try to extract account ID from parent's onclick attribute
+        if (parent && parent.onclick) {
+          const onclickStr = parent.onclick.toString();
+          const match = onclickStr.match(/switchAccount\('([^']+)'\)/);
+          if (match) accountId = match[1];
+        }
+
+        // If we found an account ID, switch to it
+        if (accountId) {
+          console.log(`[BADGE CLICK] Switching to: ${accountId}`);
+          window.switchAccount(accountId);
+        } else {
+          console.warn('[BADGE CLICK] Could not determine account ID from badge');
+        }
+      }
+    }
+  });
+
   if (typeof init === 'function') init();
 })();
+

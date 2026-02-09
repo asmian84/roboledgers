@@ -118,6 +118,33 @@
                 <!-- V4/V5 Restoration Logic Injected Here -->
             </main>
         </div>
+
+        <!-- Utility Bar (Shows when sidebar collapsed) -->
+        <aside id="utility-bar" class="utility-bar">
+            <div class="utility-bar-header">QUICK STATS</div>
+
+            <!-- Total Balance Card -->
+            <div class="utility-card">
+                <div class="utility-card-title">Total Balance</div>
+                <div class="utility-stat" id="util-total-balance">$0.00</div>
+            </div>
+
+            <!-- Account Badges -->
+            <div class="utility-card">
+                <div class="utility-card-title">Accounts</div>
+                <div id="util-account-badges" class="utility-badges">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="utility-card">
+                <button class="btn-primary" style="width: 100%; padding: 10px; border-radius: 6px;"
+                    onclick="window.openFilePicker()">
+                    <i class="ph ph-upload"></i> Quick Import
+                </button>
+            </div>
+        </aside>
     </div>
 
     <div id="settings-drawer" class="settings-drawer">
