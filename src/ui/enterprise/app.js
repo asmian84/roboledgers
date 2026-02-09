@@ -1832,56 +1832,112 @@
     // Update reconciliation content
     const reconContent = document.getElementById('reconciliation-content');
     if (reconContent) {
-      // UNIFIED RECONCILIATION LAYOUT - Same style for ALL and SINGLE modes
+      // PROFESSIONAL RECONCILIATION SYSTEM - Same layout, different data
       if (isAllMode) {
-        // ALL MODE: Calculate aggregates
+        // ALL MODE: Aggregate calculations
         const allTxns = window.RoboLedger.Ledger.getAll();
-        const aggTotalCredits = allTxns.filter(t => t.credit).reduce((sum, t) => sum + t.credit, 0);
-        const aggTotalDebits = allTxns.filter(t => t.debit).reduce((sum, t) => sum + t.debit, 0);
-        const aggNetActivity = aggTotalCredits - aggTotalDebits;
-        const aggTotalBalance = accounts.reduce((sum, a) => {
-          const txns = allTxns.filter(t => t.account_id === a.id);
-          const credits = txns.filter(t => t.credit).reduce((s, t) => s + t.credit, 0);
-          const debits = txns.filter(t => t.debit).reduce((s, t) => s + t.debit, 0);
-          return sum + (credits - debits);
-        }, 0);
+        const debitTxns = allTxns.filter(t => t.debit);
+        const creditTxns = allTxns.filter(t => t.credit);
+        const aggTotalDebits = debitTxns.reduce((sum, t) => sum + t.debit, 0);
+        const aggTotalCredits = creditTxns.reduce((sum, t) => sum + t.credit, 0);
+
+        // Calculate aggregate opening balance from all accounts
+        const aggOpeningBalance = accounts.reduce((sum, a) => sum + (a.openingBalance || 0), 0);
+        const aggEndingBalance = aggOpeningBalance + aggTotalDebits - aggTotalCredits;
+        const isReconciled = Math.abs(aggEndingBalance) < 0.01; // Within 1 cent
 
         reconContent.innerHTML = `
-          <div style="display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: #1e293b;">
-            <div style="font-weight: 700;">
-              Total Balance: <span style="font-family: 'JetBrains Mono', monospace; color: #0f766e;">$${aggTotalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-              <span style="font-weight: 400; color: #64748b; margin-left: 4px;">(${accounts.length} accounts)</span>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #1e293b;">
+            <!-- Opening Balance (Editable) -->
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-weight: 600; color: #64748b;">Opening Balance:</span>
+              <input 
+                type="text" 
+                id="header-opening-input-all"
+                value="$${aggOpeningBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}" 
+                onclick="this.select()"
+                style="border: 1px solid #e2e8f0; background: white; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #1e293b; width: 120px; font-family: 'JetBrains Mono', monospace; border-radius: 4px; text-align: right; cursor: pointer;" 
+                oninput="window.updateOpeningBalance(this.value)"
+              />
             </div>
-            <div style="font-weight: 500; font-size: 11px; color: #64748b;">
-              Total Debits: <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> •
-              Total Credits: <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            
+            <!-- Debits / Credits with transaction counts -->
+            <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 500;">
+              <span style="color: #64748b;">
+                Debit: <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace; font-weight: 700;">$${aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span><sup style="font-size: 8px; color: #94a3b8;">${debitTxns.length}</sup>
+                <span style="margin: 0 6px; color: #cbd5e1;">•</span>
+                Credit: <span style="color: #10b981; font-family: 'JetBrains Mono', monospace; font-weight: 700;">$${aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span><sup style="font-size: 8px; color: #94a3b8;">${creditTxns.length}</sup>
+              </span>
             </div>
-            <div style="font-weight: 600; font-size: 11px; color: #475569;">
-              Net Activity: <span style="font-family: 'JetBrains Mono', monospace; color: ${aggNetActivity >= 0 ? '#10b981' : '#ef4444'};">$${aggNetActivity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            
+            <!-- Ending Balance -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px; border-top: 1px solid #e2e8f0;">
+              <span style="font-weight: 700; color: #0f172a;">Ending Balance:</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-weight: 800; color: #0f766e; font-size: 12px;">$${aggEndingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+            
+            <!-- Reconciliation Status -->
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 4px;">
+              ${isReconciled ?
+            `<i class="ph ph-check-circle-fill" style="color: #10b981; font-size: 12px;"></i>
+                 <span style="font-size: 10px; font-weight: 600; color: #059669;">RECONCILED</span>` :
+            `<i class="ph ph-warning-circle-fill" style="color: #f59e0b; font-size: 12px;"></i>
+                 <span style="font-size: 10px; font-weight: 600; color: #d97706;">DISCREPANCY</span>`
+          }
             </div>
           </div>
         `;
       } else if (!acc) {
         reconContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 13px; color: #db2777; opacity: 0.6;">&gt; Select an account to reconcile...</div>`;
       } else {
-        // SINGLE MODE: Same text layout, different data
+        // SINGLE MODE: Same layout, account-specific data
         const txns = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === acc.id);
-        const inflow = txns.filter(t => t.credit).reduce((sum, t) => sum + t.credit, 0);
-        const outflow = txns.filter(t => t.debit).reduce((sum, t) => sum + t.debit, 0);
+        const debitTxns = txns.filter(t => t.debit);
+        const creditTxns = txns.filter(t => t.credit);
+        const totalDebits = debitTxns.reduce((sum, t) => sum + t.debit, 0);
+        const totalCredits = creditTxns.reduce((sum, t) => sum + t.credit, 0);
         const openingBalance = acc.openingBalance || 0;
-        const endingBalance = openingBalance + outflow - inflow;
+        const endingBalance = openingBalance + totalDebits - totalCredits;
+        const isReconciled = Math.abs(endingBalance) < 0.01; // Within 1 cent
 
         reconContent.innerHTML = `
-          <div style="display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: #1e293b;">
-            <div style="font-weight: 700;">
-              Total Balance: <span style="font-family: 'JetBrains Mono', monospace; color: #0f766e;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #1e293b;">
+            <!-- Opening Balance (Editable) -->
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-weight: 600; color: #64748b;">Opening Balance:</span>
+              <input 
+                type="text" 
+                id="header-opening-input"
+                value="$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}" 
+                onclick="this.select()"
+                style="border: 1px solid #e2e8f0; background: white; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #1e293b; width: 120px; font-family: 'JetBrains Mono', monospace; border-radius: 4px; text-align: right; cursor: pointer;" 
+                oninput="window.updateOpeningBalance(this.value)"
+              />
             </div>
-            <div style="font-weight: 500; font-size: 11px; color: #64748b;">
-              Total Debits: <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> •
-              Total Credits: <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${inflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            
+            <!-- Debits / Credits with transaction counts -->
+            <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 500;">
+              <span style="color: #64748b;">
+                Debit: <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace; font-weight: 700;">$${totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span><sup style="font-size: 8px; color: #94a3b8;">${debitTxns.length}</sup>
+                <span style="margin: 0 6px; color: #cbd5e1;">•</span>
+                Credit: <span style="color: #10b981; font-family: 'JetBrains Mono', monospace; font-weight: 700;">$${totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span><sup style="font-size: 8px; color: #94a3b8;">${creditTxns.length}</sup>
+              </span>
             </div>
-            <div style="font-weight: 600; font-size: 11px; color: #475569;">
-              Net Activity: <span style="font-family: 'JetBrains Mono', monospace; color: ${(outflow - inflow) >= 0 ? '#10b981' : '#ef4444'};">$${(outflow - inflow).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            
+            <!-- Ending Balance -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px; border-top: 1px solid #e2e8f0;">
+              <span style="font-weight: 700; color: #0f172a;">Ending Balance:</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-weight: 800; color: #0f766e; font-size: 12px;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+            
+            <!-- Reconciliation Status -->
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 4px;">
+              ${isReconciled ?
+            `<i class="ph ph-check-circle-fill" style="color: #10b981; font-size: 12px;"></i>
+                 <span style="font-size: 10px; font-weight: 600; color: #059669;">RECONCILED</span>` :
+            `<i class="ph ph-warning-circle-fill" style="color: #f59e0b; font-size: 12px;"></i>
+                 <span style="font-size: 10px; font-weight: 600; color: #d97706;">DISCREPANCY</span>`
+          }
             </div>
           </div>
         `;
@@ -1927,11 +1983,17 @@
           </div>
         `;
       } else if (acc) {
-        // SINGLE MODE: Show single account details (same div structure)
+        // SINGLE MODE: Show breadcrumb + single account badge (same div structure)
         metaContent.innerHTML = `
           <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
             <div style="display: flex; flex-direction: column; gap: 3px; flex: 1;">
-              <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
+              <!-- Breadcrumb -->
+              <div style="font-size: 10px; font-weight: 600; color: #94a3b8; display: flex; align-items: center; gap: 4px;">
+                <span onclick="window.switchAccount('ALL')" style="cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">ALL</span>
+                <i class="ph ph-caret-right" style="font-size: 10px;"></i>
+                <span style="color: #1e293b; font-weight: 700;">${acc.ref || 'CHQ1'}</span>
+              </div>
+              <!-- Account Badge -->
               <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                 <span style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; display: inline-flex; align-items: center; gap: 3px;">
                   ${acc.ref || 'CHQ1'}
