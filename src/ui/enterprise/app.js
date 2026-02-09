@@ -1568,6 +1568,12 @@
         console.log(`[UI] Passing ${ledgerData.length} transactions to grid`);
         if (window.renderTransactionsGrid) initGrid(ledgerData);
         else setTimeout(() => initGrid(ledgerData), 100);
+
+        // Populate static header containers with initial data
+        if (window.updateHeaderData) {
+          console.log('[UI] Populating header containers with initial data');
+          window.updateHeaderData();
+        }
       }
     }
   }
@@ -2088,153 +2094,18 @@
         </div>
 
         ${filteredTxns.length > 0 ? `
-        <!-- Professional Account Context Strip (Unified 2-Card) -->
+        <!-- Professional Account Context Strip (STATIC CONTAINERS - Never re-renders) -->
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: stretch; min-height: 64px; overflow: hidden; margin: 8px 16px; border: 1px solid transparent; background-image: linear-gradient(white, white), linear-gradient(135deg, #e2e8f0, #cbd5e1); background-origin: padding-box, border-box; background-clip: padding-box, border-box;">
           
-          <!-- LEFT: Reconciliation Status -->
+          <!-- LEFT: Reconciliation Status (STATIC CONTAINER) -->
           <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 6px 24px; display: flex; flex-direction: column; justify-content: center; gap: 2px;">
             <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Reconciliation</div>
-            
-            ${isAllMode ? `
-              <!-- ALL MODE: Aggregate Totals -->
-              <div style="display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: #1e293b;">
-                <div style="font-weight: 700;">
-                  Total Balance: <span style="font-family: 'JetBrains Mono', monospace; color: #0f766e;">$${aggTotalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                  <span style="font-weight: 400; color: #64748b; margin-left: 4px;">(${accounts.length} accounts)</span>
-                </div>
-                <div style="font-weight: 500; font-size: 11px; color: #64748b;">
-                  Total Debits: <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> •
-                  Total Credits: <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div style="font-weight: 600; font-size: 11px; color: #475569;">
-                  Net Activity: <span style="font-family: 'JetBrains Mono', monospace; color: ${aggNetActivity >= 0 ? '#10b981' : '#ef4444'};">$${aggNetActivity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-            ` : !acc ? `
-              <div style="font-family: ${terminalFont}; font-size: 13px; color: #db2777; opacity: 0.6;">&gt; Select an account to reconcile...</div>
-            ` : `
-              <!-- SINGLE ACCOUNT: Reconciliation Formula -->
-              <div style="display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; color: #1e293b;">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="font-size: 11px; color: #64748b; font-weight: 500;">Opening</span>
-                  <input 
-                    type="text" 
-                    id="header-opening-input"
-                    value="$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}" 
-                    style="border: none; background: transparent; font-size: 14px; font-weight: 700; color: #1e293b; width: 90px; font-family: 'JetBrains Mono', monospace; outline: none; padding: 0; cursor: text;" 
-                    oninput="window.updateOpeningBalance(this.value)"
-                  />
-                </div>
-                
-                <div style="color: #cbd5e1; font-weight: 300;">+</div>
-                
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="font-size: 11px; color: #64748b; font-weight: 500;">Debits</span>
-                  <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                <div style="color: #cbd5e1; font-weight: 300;">-</div>
-
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="font-size: 11px; color: #64748b; font-weight: 500;">Credits</span>
-                  <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${inflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                <div style="color: #cbd5e1; font-weight: 300;">=</div>
-
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span style="font-size: 11px; color: #64748b; font-weight: 500;">Closing</span>
-                  <span style="color: #1e293b; font-weight: 800; font-family: 'JetBrains Mono', monospace;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-            `}
+            <div id="reconciliation-content"></div>
           </div>
 
-          <!-- RIGHT: Identity & Actions -->
+          <!-- RIGHT: Identity & Actions (STATIC CONTAINER) -->
           <div style="flex: 1.5; padding: 6px 24px; display: flex; align-items: center; justify-content: space-between;">
-            ${isAllMode ? `
-              <!-- ALL MODE: Horizontal Badge-Only Layout (8-12 accounts) -->
-              <div style="display: flex; flex-direction: column; width: 100%; gap: 3px;">
-                <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
-                <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                  ${accounts.map(a => {
-      const isReconciled = isAccountReconciled(a);
-      return `
-                      <span 
-                        onclick="window.switchAccount('${a.id}')" 
-                        title="${a.name || a.ref}"
-                        style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 3px;"
-                        onmouseover="this.style.background='#2563eb'"
-                        onmouseout="this.style.background='#3b82f6'">
-                        ${a.ref || 'N/A'}
-                        ${isReconciled ? '<i class="ph ph-check-circle" style="font-size: 10px; color: #10b981;"></i>' : ''}
-                      </span>
-                    `;
-    }).join('')}
-                </div>
-              </div>
-              
-              <!-- Synced/Import Section (identical to SINGLE MODE) -->
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-                  <span>Synced 2m ago</span>
-                  <i class="ph ph-check" style="color: #10b981;"></i>
-                </div>
-                <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                  <i class="ph ph-plus-circle" style="font-size: 14px;"></i>
-                  Import
-                </button>
-              </div>
-            ` : `
-              <!-- SELECTED ACCOUNT: Terminal-Style Metadata Container -->
-              <div style="display: flex; align-items: stretch; gap: 0; width: 100%;">
-                ${acc ? `
-                  <!-- Bank Icon Column (covers 3-line height) -->
-                  <div style="display: flex; align-items: center; justify-content: center; padding: 6px 24px; border-right: 1px solid #e2e8f0; font-size: 36px;">
-                    ${getBankIcon(acc.bankName)}
-                  </div>
-                  
-                  <!-- Metadata Column (Terminal Style) -->
-                  <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; flex: 1; padding: 6px 24px; font-family: ${terminalFont};">
-                    <!-- Line 1: Bank Name (Statement Format) -->
-                    <div style="font-size: 12px; font-weight: 700; color: #1e293b; letter-spacing: 0.02em;">
-                      ${(acc.bankName || 'ROYAL BANK OF CANADA').toUpperCase()} - ${isLiability ? 'CREDIT CARD' : 'CHEQUING'}
-                    </div>
-                    
-                    <!-- Line 2: Account Details (Statement Format) -->
-                    <div style="font-size: 11px; font-weight: 500; color: #64748b;">
-                      ${isLiability ? `
-                        Card: •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}${acc.inst ? ' • IIN: ' + acc.inst : ''}
-                      ` : `
-                        Transit: ${acc.transit || '00000'} • Institution: ${acc.inst || '003'} • Account: ••••${(acc.accountNumber || '').slice(-4) || '2443'}
-                      `}
-                    </div>
-                    
-                    <!-- Line 3: Period Range -->
-                    <div style="font-size: 10px; font-weight: 500; color: #94a3b8;">
-                      ${getAccountPeriodRange(acc.id) ? `Period: ${getAccountPeriodRange(acc.id)}` : 'Period: No transactions'}
-                    </div>
-                  </div>
-                ` : `
-                  <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px;">
-                    <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Metadata</div>
-                    <div style="font-family: ${terminalFont}; font-size: 12px; color: #64748b; opacity: 0.6;">&gt; No account selected</div>
-                  </div>
-                `}
-              </div>
-              
-              <!-- Synced/Import Section (matches ALL MODE structure) -->
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-                  <span>Synced 2m ago</span>
-                  <i class="ph ph-check" style="color: #10b981;"></i>
-                </div>
-                <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                  <i class="ph ph-plus-circle" style="font-size: 14px;"></i>
-                  Import
-                </button>
-              </div>
-            `}
+            <div id="metadata-content" style="flex: 1; display: flex; align-items: center; justify-content: space-between;"></div>
           </div>
 
         </div>
