@@ -1874,14 +1874,14 @@
         reconContent.innerHTML = `
           <div style="display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: #1e293b;">
             <div style="font-weight: 700;">
-              Total Balance: <span style="font-family: 'JetBrains Mono', monospace; color: #0f766e;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              Total Balance: <span style="font-family: 'JetBrains Mono', monospace; color: #0f766e;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
             <div style="font-weight: 500; font-size: 11px; color: #64748b;">
               Total Debits: <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> •
               Total Credits: <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${inflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
             <div style="font-weight: 600; font-size: 11px; color: #475569;">
-              Net Activity: <span style="font-family: 'JetBrains Mono', monospace; color: ${(endingBalance - openingBalance) >= 0 ? '#10b981' : '#ef4444'};">$${(endingBalance - openingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              Net Activity: <span style="font-family: 'JetBrains Mono', monospace; color: ${(outflow - inflow) >= 0 ? '#10b981' : '#ef4444'};">$${(outflow - inflow).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
         `;
