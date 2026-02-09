@@ -1836,32 +1836,38 @@
     if (reconContent) {
       if (isAllMode) {
         // ALL MODE: Summary view - Total Balance, Debits•Credits, Net Activity
-        const allTxns = window.RoboLedger.Ledger.getAll();
-        const aggTotalDebits = allTxns.reduce((sum, t) => sum + (t.debit || 0), 0);
-        const aggTotalCredits = allTxns.reduce((sum, t) => sum + (t.credit || 0), 0);
-        const aggOpeningBalance = accounts.reduce((sum, a) => sum + (a.openingBalance || 0), 0);
-        const totalBalance = aggOpeningBalance - aggTotalDebits + aggTotalCredits;
-        const netActivity = aggTotalCredits - aggTotalDebits;
-        const allReconciled = accounts.length > 0 && accounts.every(a => {
-          const aTxns = allTxns.filter(t => t.account_id === a.id);
-          return aTxns.length > 0 && aTxns.every(t => t.reconciled);
+        // Use amount_cents/polarity (the actual data format), NOT t.debit/t.credit
+        var allTxns = window.RoboLedger.Ledger.getAll();
+        var aggTotalDebits = allTxns.filter(function (t) { return t.polarity === 'DEBIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
+        var aggTotalCredits = allTxns.filter(function (t) { return t.polarity === 'CREDIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
+        var aggOpeningBalance = accounts.reduce(function (sum, a) { return sum + (a.openingBalance || 0); }, 0);
+        var totalBalance = aggOpeningBalance - aggTotalDebits + aggTotalCredits;
+        var netActivity = aggTotalCredits - aggTotalDebits;
+        var allReconciled = accounts.length > 0 && accounts.every(function (a) {
+          var aTxns = allTxns.filter(function (t) { return t.account_id === a.id; });
+          return aTxns.length > 0 && aTxns.every(function (t) { return t.reconciled; });
         });
-        const statusHTML = allReconciled ? '<span style="color: #10b981;">\u2713 RECONCILED</span>' : '<span style="color: #ef4444;">\u2717 DISCREPANCY</span>';
+        var statusHTML = allReconciled ? '<span style="color: #10b981;">\u2713 RECONCILED</span>' : '<span style="color: #ef4444;">\u2717 DISCREPANCY</span>';
+
+        // Build account badges HTML for the header line
+        var badgesHTML = accounts.map(function (a) {
+          return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer; margin-left: 4px;">' + (a.ref || 'N/A') + '</span>';
+        }).join('');
 
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b; line-height: 1.7;">' +
-          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">RECONCILIATION</div>' +
+          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">RECONCILIATION' + badgesHTML + '</div>' +
           '<div>Total Balance: <span style="font-weight: 600;">$' + totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '<div>Total Debits: <span style="font-weight: 600; color: #ef4444;">$' + aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span> \u2022 Total Credits: <span style="font-weight: 600; color: #10b981;">$' + aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '<div>Net Activity: <span style="font-weight: 600;">$' + netActivity.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
-          '<div style="font-size: 10px; font-weight: 600; margin-top: 2px;">' + statusHTML + '</div>' +
+          '<div style="font-size: 10px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">' + statusHTML + '</div>' +
           '</div>';
       } else if (!acc) {
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b;">&gt; Select account...</div>';
       } else {
         // SINGLE MODE: 2-column layout with editable fields
-        const txns = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === acc.id);
-        const totalDebits = txns.reduce((sum, t) => sum + (t.debit || 0), 0);
-        const totalCredits = txns.reduce((sum, t) => sum + (t.credit || 0), 0);
+        var txns = window.RoboLedger.Ledger.getAll().filter(function (t) { return t.account_id === acc.id; });
+        var totalDebits = txns.filter(function (t) { return t.polarity === 'DEBIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
+        var totalCredits = txns.filter(function (t) { return t.polarity === 'CREDIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
         const openingBalance = acc.openingBalance || 0;
         const calculatedEnding = openingBalance - totalDebits + totalCredits;
         const actualEnding = acc.actualEndingBalance || 0;
@@ -1890,18 +1896,11 @@
     const metaContent = document.getElementById('metadata-content');
     if (metaContent) {
       if (isAllMode) {
-        // ALL MODE: Compact account badges
-        metaContent.innerHTML = `
-          <div style="font-family: ${terminalFont}; font-size: 10px; color: #1e293b; line-height: 1.4;">
-            <div style="color: #1e293b; margin-bottom: 4px; font-weight: 600;">ALL ACCOUNTS</div>
-            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-              ${accounts.map(a => {
-          const isReconciled = isAccountReconciled(a);
-          return `<span onclick="window.switchAccount('${a.id}')" title="${a.name || a.ref}" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; cursor: pointer;">${a.ref || 'N/A'}${isReconciled ? ' ✓' : ''}</span>`;
-        }).join('')}
-            </div>
-          </div>
-        `;
+        // ALL MODE: Show "Consolidated View" in metadata
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.4;">' +
+          '<div style="color: #64748b; font-weight: 600; font-size: 11px;">Consolidated View</div>' +
+          '<div style="color: #94a3b8; margin-top: 2px;">' + accounts.length + ' accounts \u2022 CAD</div>' +
+          '</div>';
       } else if (acc) {
         // SINGLE MODE: Compact 3-line metadata with bank icon
         var isLiability = acc.type === 'liability' || acc.type === 'creditcard';
@@ -2071,13 +2070,8 @@
         </div>
 
         ${filteredTxns.length > 0 ? `
-        <!-- Breadcrumb Navigation -->
-        <div id="account-breadcrumb" style="font-family: 'JetBrains Mono', 'SF Mono', 'Courier New', monospace; font-size: 10px; color: #64748b; margin: 0 16px 4px 16px; display: flex; align-items: center; gap: 4px;">
-          <span onclick="window.switchAccount('ALL')" style="cursor: pointer; color: ${UI_STATE.selectedAccount === 'ALL' ? '#1e293b; font-weight: 600' : '#3b82f6'}; text-decoration: ${UI_STATE.selectedAccount === 'ALL' ? 'none' : 'none'};">ALL</span>
-          ${acc ? '<span style="color: #94a3b8; margin: 0 2px;">→</span><span style="color: #1e293b; font-weight: 600;">' + (acc.ref || acc.name || 'Account') + '</span>' : ''}
-        </div>
-        <!-- Compact Terminal Strip (STATIC CONTAINERS - Never re-renders) -->
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 90px; overflow: hidden; margin: 0 16px 8px 16px;">
+        <!-- Compact Terminal Strip (STATIC CONTAINERS) -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 90px; overflow: hidden; margin: 8px 16px;">
           
           <!-- LEFT: Reconciliation (40%) -->
           <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 16px; display: flex; flex-direction: column; justify-content: center;">
