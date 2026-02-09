@@ -1832,6 +1832,7 @@
     // Update reconciliation content
     const reconContent = document.getElementById('reconciliation-content');
     if (reconContent) {
+      // UNIFIED RECONCILIATION LAYOUT - Same style for ALL and SINGLE modes
       if (isAllMode) {
         // ALL MODE: Calculate aggregates
         const allTxns = window.RoboLedger.Ledger.getAll();
@@ -1863,7 +1864,7 @@
       } else if (!acc) {
         reconContent.innerHTML = `<div style="font-family: ${terminalFont}; font-size: 13px; color: #db2777; opacity: 0.6;">&gt; Select an account to reconcile...</div>`;
       } else {
-        // SINGLE MODE: Reconciliation formula
+        // SINGLE MODE: Same text layout, different data
         const txns = window.RoboLedger.Ledger.getAll().filter(t => t.account_id === acc.id);
         const inflow = txns.filter(t => t.credit).reduce((sum, t) => sum + t.credit, 0);
         const outflow = txns.filter(t => t.debit).reduce((sum, t) => sum + t.debit, 0);
@@ -1871,51 +1872,33 @@
         const endingBalance = openingBalance + outflow - inflow;
 
         reconContent.innerHTML = `
-          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
-            <!-- Row 1: Opening Balance -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: #f8fafc; border-radius: 6px;">
-              <span style="font-weight: 600; color: #64748b; font-size: 11px;">OPENING</span>
-              <input 
-                type="text" 
-                id="header-opening-input"
-                value="$${openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}" 
-                style="border: none; background: transparent; font-size: 13px; font-weight: 700; color: #1e293b; width: 100px; font-family: 'JetBrains Mono', monospace; outline: none; padding: 0; cursor: text; text-align: right;" 
-                oninput="window.updateOpeningBalance(this.value)"
-              />
+          <div style="display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: #1e293b;">
+            <div style="font-weight: 700;">
+              Total Balance: <span style="font-family: 'JetBrains Mono', monospace; color: #0f766e;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
-            
-            <!-- Row 2: Debits -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-left: 3px solid #ef4444; background: #fef2f2; border-radius: 6px;">
-              <span style="font-weight: 600; color: #991b1b; font-size: 11px;">DEBITS</span>
-              <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;">$${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <div style="font-weight: 500; font-size: 11px; color: #64748b;">
+              Total Debits: <span style="color: #ef4444; font-family: 'JetBrains Mono', monospace;">$${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> •
+              Total Credits: <span style="color: #10b981; font-family: 'JetBrains Mono', monospace;">$${inflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
-            
-            <!-- Row 3: Credits -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-left: 3px solid #10b981; background: #f0fdf4; border-radius: 6px;">
-              <span style="font-weight: 600; color: #065f46; font-size: 11px;">CREDITS</span>
-              <span style="color: #10b981; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;">$${inflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-            </div>
-            
-            <!-- Row 4: Closing Balance (Highlighted) -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); border-radius: 6px; box-shadow: 0 2px 4px rgba(14, 165, 233, 0.2);">
-              <span style="font-weight: 700; color: white; font-size: 11px; letter-spacing: 0.05em;">CLOSING</span>
-              <span style="color: white; font-weight: 800; font-family: 'JetBrains Mono', monospace; font-size: 14px;">$${endingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <div style="font-weight: 600; font-size: 11px; color: #475569;">
+              Net Activity: <span style="font-family: 'JetBrains Mono', monospace; color: ${(endingBalance - openingBalance) >= 0 ? '#10b981' : '#ef4444'};">$${(endingBalance - openingBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
         `;
       }
     }
 
-    // Update metadata content
+    // UNIFIED METADATA LAYOUT - Same structure for ALL and SINGLE modes
     const metaContent = document.getElementById('metadata-content');
     if (metaContent) {
       if (isAllMode) {
-        // ALL MODE: Account badges + Synced/Import
+        // ALL MODE: Show account badges (same div structure)
         metaContent.innerHTML = `
-          <div style="display: flex; flex-direction: column; width: 100%; gap: 3px;">
-            <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
-            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-              ${accounts.map(a => {
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <div style="display: flex; flex-direction: column; gap: 3px; flex: 1;">
+              <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
+              <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                ${accounts.map(a => {
           const isReconciled = isAccountReconciled(a);
           return `
                   <span 
@@ -1929,61 +1912,32 @@
                   </span>
                 `;
         }).join('')}
+              </div>
             </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 16px;">
-            <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-              <span>Synced 2m ago</span>
-              <i class="ph ph-check" style="color: #10b981;"></i>
+            <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
+              <div style="text-align: right; color: #94a3b8; font-size: 10px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+                <i class="ph ph-check-circle-fill" style="color: #10b981; font-size: 12px;"></i>
+                <span>Synced</span>
+              </div>
+              <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <i class="ph ph-plus-circle" style="font-size: 13px;"></i>
+                Import
+              </button>
             </div>
-            <button onclick="window.openFilePicker()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-              <i class="ph ph-plus-circle" style="font-size: 14px;"></i>
-              Import
-            </button>
           </div>
         `;
       } else if (acc) {
-        // SINGLE MODE: Metadata + Synced/Import with PROMINENT BANK ICON
-        const isLiability = acc.type === 'liability' || acc.type === 'creditcard';
-
+        // SINGLE MODE: Show single account details (same div structure)
         metaContent.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 16px; width: 100%;">
-            <!-- PROMINENT BANK ICON -->
-            <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius: 12px; border: 2px solid #e2e8f0; flex-shrink: 0;">
-              <div style="font-size: 48px; line-height: 1;">
-                ${getBankIcon(acc.bankName)}
-              </div>
-            </div>
-            
-            <!-- ACCOUNT DETAILS -->
-            <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px; flex: 1; min-width: 0;">
-              <!-- Line 1: Bank Name + Account Type (Large & Bold) -->
-              <div style="font-size: 13px; font-weight: 800; color: #0f172a; letter-spacing: 0.01em; line-height: 1.2;">
-                ${(acc.bankName || 'ROYAL BANK OF CANADA').toUpperCase()}
-              </div>
-              
-              <!-- Line 2: Account Type Badge -->
-              <div style="display: flex; align-items: center; gap: 6px; margin: 2px 0;">
-                <span style="background: ${isLiability ? '#fee2e2' : '#dbeafe'}; color: ${isLiability ? '#991b1b' : '#1e40af'}; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em;">
-                  ${isLiability ? 'CREDIT CARD' : 'CHEQUING'}
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <div style="display: flex; flex-direction: column; gap: 3px; flex: 1;">
+              <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Account Identity</div>
+              <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                <span style="background: #3b82f6; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; display: inline-flex; align-items: center; gap: 3px;">
+                  ${acc.ref || 'CHQ1'}
                 </span>
               </div>
-              
-              <!-- Line 3: Account Numbers (Subtle) -->
-              <div style="font-size: 10px; font-weight: 500; color: #94a3b8; font-family: ${terminalFont};">
-                ${isLiability ?
-            `Card: •••• ${acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX'}` :
-            `Transit ${acc.transit || '00000'} • Inst ${acc.inst || '003'} • Acct ••••${(acc.accountNumber || '').slice(-4) || '2443'}`
-          }
-              </div>
-              
-              <!-- Line 4: Period Range -->
-              <div style="font-size: 9px; font-weight: 600; color: #cbd5e1; text-transform: uppercase;">
-                ${getAccountPeriodRange(acc.id) ? `${getAccountPeriodRange(acc.id)}` : 'No transactions'}
-              </div>
             </div>
-            
-            <!-- SYNC & IMPORT BUTTONS  -->
             <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
               <div style="text-align: right; color: #94a3b8; font-size: 10px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
                 <i class="ph ph-check-circle-fill" style="color: #10b981; font-size: 12px;"></i>
