@@ -2082,6 +2082,7 @@
         const debitTotal = debitTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
         const creditTotal = creditTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
 
+
         var bankIcon = getBankIcon(acc);  // Pass full account object for dual-icon support
         var transitInfo = isLiability ? (acc.cardNetwork || 'Card') + ' Card \u2022\u2022\u2022\u2022' + (acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX') : 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
 
