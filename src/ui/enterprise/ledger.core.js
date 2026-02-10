@@ -1243,6 +1243,34 @@ window.RoboLedger = (function () {
                     }
                 }
 
+                // === PHASE 6: PERSISTENT REF# ASSIGNMENT ===
+                // Assign permanent REF# based on account, BEFORE storing
+                if (!canonical.ref) {
+                    // Get account to find prefix
+                    const account = Accounts.get(canonical.account_id);
+                    const accountRef = (account && account.ref) || 'TXN';
+
+                    // Calculate next counter by finding highest existing REF# for this account
+                    const existingForAccount = state.transactions.filter(t => t.account_id === canonical.account_id);
+                    let maxCounter = 0;
+                    existingForAccount.forEach(tx => {
+                        if (tx.ref) {
+                            // Extract number from "AMEX1-034" -> 34
+                            const parts = tx.ref.split('-');
+                            if (parts.length === 2) {
+                                const num = parseInt(parts[1], 10);
+                                if (!isNaN(num) && num > maxCounter) {
+                                    maxCounter = num;
+                                }
+                            }
+                        }
+                    });
+
+                    const nextCounter = maxCounter + 1;
+                    canonical.ref = `${accountRef}-${String(nextCounter).padStart(3, '0')}`;
+                    console.log(`[LEDGER] Assigned persistent REF#: ${canonical.ref} to ${canonical.description}`);
+                }
+
                 if (Ledger.post(canonical)) {
                     importedCount++;
                 }
