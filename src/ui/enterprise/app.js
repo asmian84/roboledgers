@@ -302,9 +302,9 @@
     window.showProgressBar();
     window.updateProgressBar(0, files.length, 'Initializing...', 'Preparing to parse', 0);
 
-    // Get primary account for ingestion
-    const primaryAccount = window.RoboLedger.Accounts.getAll()[0];
-    const account_id = primaryAccount ? primaryAccount.id : 'ALL';
+    // ALWAYS GENERATE FRESH ACCOUNT IDs FOR EACH UPLOAD
+    // Fix: Don't reuse first account's ID - each statement should generate its own ID based on metadata
+    const account_id = 'ALL';
 
     let totalImported = 0;
 
