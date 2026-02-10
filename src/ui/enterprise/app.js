@@ -2102,15 +2102,21 @@
         return getSingleIcon('amex', 48);
       }
 
-      // For other accounts, use standard 28px icons
-      const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
-      const basePath = '/src/ui/enterprise/assets/logos/';
-      if (bank.includes('rbc') || bank.includes('royal')) return '<img src="' + basePath + 'rbc.png" alt="RBC" style="' + iconStyle + '" />';
-      if (bank.includes('td') || bank.includes('dominion')) return '<img src="' + basePath + 'td.png" alt="TD" style="' + iconStyle + '" />';
-      if (bank.includes('bmo') || bank.includes('montreal')) return '<img src="' + basePath + 'bmo.png" alt="BMO" style="' + iconStyle + '" />';
-      if (bank.includes('scotia')) return '<img src="' + basePath + 'scotia.png" alt="Scotia" style="' + iconStyle + '" />';
-      if (bank.includes('cibc')) return '<img src="' + basePath + 'cibc.png" alt="CIBC" style="' + iconStyle + '" />';
-      return '<img src="' + basePath + 'rbc.png" alt="Bank" style="' + iconStyle + '" />';
+      // For other accounts, use standard 48px icons (INCREASED from 28px)
+      const bank = (bankName || '').toLowerCase();
+      const iconFromParser = account ? account.bankIcon : null;
+
+      // Use bankIcon from parser if available (set by parsers), otherwise fall back to bankName matching
+      const iconName = iconFromParser ? iconFromParser.toLowerCase() : (
+        bank.includes('rbc') || bank.includes('royal') ? 'rbc' :
+          bank.includes('td') || bank.includes('dominion') ? 'td' :
+            bank.includes('bmo') || bank.includes('montreal') ? 'bmo' :
+              bank.includes('scotia') ? 'scotia' :
+                bank.includes('cibc') ? 'cibc' :
+                  'rbc' // default fallback
+      );
+
+      return getSingleIcon(iconName, 48); // INCREASED from 28px to 48px
     };
 
     // Helper: Get account period range
