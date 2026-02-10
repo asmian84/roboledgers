@@ -362,17 +362,17 @@
     setTimeout(() => {
       window.hideProgressBar();
 
-      // AUTO-SWITCH to the newly imported account so REF# prefix is correct
-      // Get all accounts and switch to the last one (most recently imported)
+      // AUTO-SET REF# prefix for the newly imported account
       const accounts = window.RoboLedger.Accounts.getAll();
       if (accounts.length > 0) {
         const lastAccount = accounts[accounts.length - 1];
-        console.log('[UPLOAD] Auto-switching to newly imported account:', lastAccount.id, lastAccount.ref);
-        window.switchAccount(lastAccount.id); // This will update UI_STATE.refPrefix
-      } else {
-        // No accounts, just render normally
-        render();
+        // Set prefix AND selectedAccount so grid renders with correct data
+        UI_STATE.refPrefix = lastAccount.ref || 'TXN';
+        UI_STATE.selectedAccount = lastAccount.id;
+        console.log('[UPLOAD] Auto-set account:', lastAccount.id, 'prefix:', UI_STATE.refPrefix);
       }
+
+      render(); // Render with updated state
     }, 1500);
 
     console.log(`[UPLOAD] Complete. Total imported: ${totalImported}`);
