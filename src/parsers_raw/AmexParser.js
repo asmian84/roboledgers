@@ -94,11 +94,9 @@ AMEX FORMAT:
                 inTransactionBlock = true;
                 continue;
             }
-            // Don't stop early - Amex has "Total of Payment Activity" BEFORE main transactions
-            // Only stop at true end markers or card summary sections
-            if (inTransactionBlock && (line.match(/Page \d+ \/ \d+/i) ||
-                line.match(/Total of New Transactions for .* Total of Transactions/i) ||
-                line.match(/CHARLIE HAWRANIK Total of New Transactions\s*[\d,]+\.\d{2}/i))) {
+            // Don't stop at "Total of Payment Activity" - it appears BEFORE transactions
+            // Only stop at "Total of New Transactions" which marks the actual end
+            if (inTransactionBlock && line.match(/^Total of New Transactions\s/i)) {
                 inTransactionBlock = false;
                 continue;
             }
