@@ -799,6 +799,50 @@
     }
   };
 
+  // Save opening balance when user edits field (for reconciliation)
+  window.saveOpeningBalance = function (value) {
+    if (!UI_STATE.selectedAccount || UI_STATE.selectedAccount === 'ALL') return;
+
+    // Parse value (remove $, commas)
+    const numericValue = parseFloat(value.replace(/[$,]/g, ''));
+    if (isNaN(numericValue)) {
+      console.warn('[RECON] Invalid opening balance:', value);
+      return;
+    }
+
+    // Update account
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const acc = accounts.find(a => a.id === UI_STATE.selectedAccount);
+    if (acc) {
+      acc.openingBalance = numericValue;
+      window.RoboLedger.Accounts.save(); // Persist to localStorage
+      console.log('[RECON] Opening balance updated:', numericValue);
+      render(); // Refresh UI
+    }
+  };
+
+  // Save statement ending balance when user edits field (for reconciliation)
+  window.saveStatementEnding = function (value) {
+    if (!UI_STATE.selectedAccount || UI_STATE.selectedAccount === 'ALL') return;
+
+    // Parse value
+    const numericValue = parseFloat(value.replace(/[$,]/g, ''));
+    if (isNaN(numericValue)) {
+      console.warn('[RECON] Invalid statement ending:', value);
+      return;
+    }
+
+    // Update account
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const acc = accounts.find(a => a.id === UI_STATE.selectedAccount);
+    if (acc) {
+      acc.statementEndingBalance = numericValue;
+      window.RoboLedger.Accounts.save();
+      console.log('[RECON] Statement ending updated:', numericValue);
+      render();
+    }
+  };
+
   // Update Ref# prefix for transaction numbering
   window.updateRefPrefix = function (newPrefix) {
     const sanitized = newPrefix.toUpperCase().trim().substr(0, 8); // Limit to 8 chars
@@ -1789,14 +1833,20 @@
       return; // Don't initialize grid until user chooses
     }
 
-    // 5. Grid Init
+    //5. Grid Init
     if (UI_STATE.currentRoute === 'import' && !UI_STATE.isIngesting && !UI_STATE.isPoppedOut) {
       const gridDiv = document.querySelector('#txnGrid');
       if (gridDiv) {
         console.log('[UI] Grid shell found, initializing TanStack...');
-        // Always pass current ledger data to ensure grid has the latest
-        const ledgerData = window.RoboLedger.Ledger.getAll();
-        console.log(`[UI] Passing ${ledgerData.length} transactions to grid`);
+
+        // CRITICAL FIX: Respect selected account filter when re-initializing grid
+        // Don't blindly pass ALL transactions - filter by selected account!
+        const allTxns = window.RoboLedger.Ledger.getAll();
+        const ledgerData = UI_STATE.selectedAccount === 'ALL'
+          ? allTxns
+          : allTxns.filter(t => t.account_id === UI_STATE.selectedAccount);
+
+        console.log(`[UI] Passing ${ledgerData.length} transactions to grid (filtered by: ${UI_STATE.selectedAccount || 'ALL'})`);
         if (window.renderTransactionsGrid) initGrid(ledgerData);
         else setTimeout(() => initGrid(ledgerData), 100);
 
@@ -2137,16 +2187,33 @@
         const endingVal = isAutoReconciled ? calculatedEnding : actualEnding;
         const statusHTML = (isAutoReconciled || isReconciled) ? '<span style="color: #10b981;">\u2713 RECONCILED</span>' : '<span style="color: #ef4444;">\u2717 DISCREPANCY: $' + Math.abs(discrepancy).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span>';
 
+
+        // Dual ending balances: for new HTML layout (backwards compatible)
+        const statementEnding = acc.statementEndingBalance !== undefined ? acc.statementEndingBalance : actualEnding;
+        const hasStatementEnding = statementEnding !== 0;
+        // 3-row layout: Opening+Debit, Ending(Calc)+Credit, Ending(Stmt)
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b; line-height: 1.7;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
+
+          // Row 1: Opening + Debit
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveOpeningBalance(this.value)" onclick="this.select()" /></div>' +
           '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 600; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
+
+          // Row 2: Ending (Calc) + Credit
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Ending: <input type="text" value="$' + endingVal.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Ending (Calc): <span style="font-weight: 600; color: #3b82f6;">$' + calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '<div style="flex: 1; white-space: nowrap;">Credit: <span style="font-weight: 600; color: #10b981;">$' + totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
+
+          // Row 3: Ending (Stmt) - editable
+          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
+          '<div style="flex: 1; white-space: nowrap;">Ending (Stmt): <input type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /></div>' +
+          '<div style="flex: 1;"></div>' + // Empty cell for alignment
+          '</div>' +
+
+          // Status row
           '<div style="font-size: 10px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">' + statusHTML + '</div>' +
           '</div>';
       }
@@ -2268,7 +2335,10 @@
     const accounts = window.RoboLedger.Accounts.getAll();
 
     // CRITICAL: Don't render header at all if no accounts exist (empty grid)
+    // ALSO clear selectedAccount from state to prevent cache persistence bugs
     if (accounts.length === 0) {
+      UI_STATE.selectedAccount = null;
+      UI_STATE.refPrefix = 'CHQ1'; // Reset to default
       return ''; // Return empty - no header when no data
     }
 
