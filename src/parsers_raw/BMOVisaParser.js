@@ -42,7 +42,11 @@ BMO VISA FORMAT:
             _tag: 'Visa',
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
-            bankName: 'BMO'
+            bankName: 'BMO',
+            // Branding for UI/icon
+            brand: 'VISA',
+            bankCode: 'VISA',
+            institution: 'VISA'
         };
         console.warn('🏁 [BMO-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

@@ -43,7 +43,11 @@ SCOTIABANK VISA FORMAT:
             _tag: 'Visa',
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
-            bankName: 'Scotiabank'
+            bankName: 'Scotiabank',
+            // Branding for UI/icon
+            brand: 'VISA',
+            bankCode: 'VISA',
+            institution: 'VISA'
         };
         console.warn('🏁 [SCOTIA-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

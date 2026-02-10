@@ -61,6 +61,10 @@ TD VISA FORMAT:
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
             bankName: 'TD',
+            // Branding for UI/icon
+            brand: 'VISA',
+            bankCode: 'VISA',
+            institution: 'VISA',
             openingBalance: openingBalance
         };
         console.warn('🏁 [TD-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);

@@ -31,7 +31,11 @@ CIBC VISA FORMAT:
             _tag: 'Visa',
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
-            bankName: 'CIBC'
+            bankName: 'CIBC',
+            // Branding for UI/icon
+            brand: 'VISA',
+            bankCode: 'VISA',
+            institution: 'VISA'
         };
         console.warn('🏁 [CIBC-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

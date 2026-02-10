@@ -57,6 +57,10 @@ RBC VISA FORMAT:
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
             bankName: 'RBC',
+            // Branding for UI/icon
+            brand: 'VISA',
+            bankCode: 'VISA',
+            institution: 'VISA',
             openingBalance: openingBalance
             // NO transit, NO institutionCode - these are for bank accounts only
         };

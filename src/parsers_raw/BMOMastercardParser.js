@@ -39,7 +39,11 @@ BMO MASTERCARD FORMAT:
       _tag: 'Mastercard',
       cardNetwork: 'Mastercard',
       accountType: 'CreditCard',
-      bankName: 'BMO'
+      bankName: 'BMO',
+      // Branding for UI/icon
+      brand: 'MC',
+      bankCode: 'MC',
+      institution: 'MC'
     };
     console.warn('🏁 [BMO-MC] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

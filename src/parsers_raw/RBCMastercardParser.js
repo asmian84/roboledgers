@@ -39,7 +39,11 @@ RBC MASTERCARD FORMAT:
             _tag: 'Mastercard',
             cardNetwork: 'Mastercard',
             accountType: 'CreditCard',
-            bankName: 'RBC'
+            bankName: 'RBC',
+            // Branding for UI/icon
+            brand: 'MC',
+            bankCode: 'MC',
+            institution: 'MC'
             // NO transit, NO institutionCode - these are for bank accounts only
         };
 
