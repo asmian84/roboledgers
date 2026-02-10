@@ -49,9 +49,7 @@ AMEX FORMAT:
             accountType: 'CreditCard',
             bankName: 'American Express',
             _cardType: cardType,
-            // Dual-icon system: bank + network
-            bankIcon: 'AMEX',
-            networkIcon: 'AMEX',
+            // Amex displays single full-height logo (NOT dual-icon split)
             // Legacy branding fields
             bankCode: 'AMEX',
             institution: 'AMEX',
