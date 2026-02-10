@@ -81,36 +81,50 @@ AMEX FORMAT:
 
         const descriptionLines = [];
         const amountLines = [];
-        let collectingDescriptions = false;
+        let collectDescriptions = false;
+        let collectAmounts = false;
 
-        // Store for debugging
-        window._lastAmexText = statementText;
-
-        const dateRegex = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(.+)/i;
-        const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
-
-        console.log('%c[AMEX-DEBUG] Starting line-by-line scan...', 'color: orange; font-weight: bold');
-
+        console.log('%c[AMEX-DEBUG] Starting dual-phase scan...', 'color: orange; font-weight: bold');
+        
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
 
-            // Start collecting after "New Transactions for" or "New Payments"
+            // PHASE 1: Start collecting amounts after "New Transactions for" or "New Payments"
             if (line.match(/New Transactions for|New Payments/i)) {
-                console.log(`%c✅ Line ${i}: START COLLECTING`, 'color: green; font-weight: bold', line.substring(0, 60));
-                collectingDescriptions = true;
+                console.log(`%c✅ AMOUNTS: Line ${i}`, 'color: green; font-weight: bold', line.substring(0, 60));
+                collectAmounts = true;
+                collectDescriptions = false;
                 continue;
             }
 
-            // Stop at page end or total line
-            if (line.match(/Total of New Transactions|Page \d+/i)) {
-                console.log(`%c🛑 Line ${i}: STOP`, 'color: red; font-weight: bold', line.substring(0, 60));
-                collectingDescriptions = false;
+            // PHASE 2: Start collecting descriptions after "@" marker
+            if (line.trim() === '@') {
+                console.log(`%c📍 DESCRIPTIONS: Line ${i} (@)`, 'color: blue; font-weight: bold');
+                collectDescriptions = true;
+                collectAmounts = false;
                 continue;
             }
 
-            if (collectingDescriptions) {
-                // Check if line has date pattern: "Mar 21 Mar 21 DESCRIPTION"
+            // Stop at page boundaries or totals
+            if (line.match(/^Page \d+|Total of (?:New Transactions|Payment Activity)/i)) {
+                if (collectAmounts || collect Descriptions) {
+                    console.log(`%c🛑 STOP: Line ${i}`, 'color: red', line.substring(0, 60));
+                }
+                collectAmounts = false;
+                collectDescriptions = false;
+                continue;
+            }
+
+            // Collect amounts (phase 1: after "New Transactions for", before "@")
+            if (collectAmounts && line.match(/^-?[\d,]+\.\d{2}$/)) {
+                const amount = parseFloat(line.replace(/,/g, ''));
+                amountLines.push(amount);
+                console.log(`%c💰 AMT ${amountLines.length}: Line ${i}`, 'color: purple', amount);
+            }
+
+            // Collect descriptions (phase 2: after "@", with date pattern)
+            if (collectDescriptions) {
                 const dateMatch = line.match(dateRegex);
                 if (dateMatch) {
                     const month = monthMap[dateMatch[1].toLowerCase()];
@@ -118,22 +132,10 @@ AMEX FORMAT:
                     const description = dateMatch[5].trim();
                     descriptionLines.push({
                         date: `${currentYear}-${month}-${day}`,
-                        description
+                        description,
+                        rawLine: line
                     });
                     console.log(`%c📅 DESC ${descriptionLines.length}: Line ${i}`, 'color: blue', line.substring(0, 80));
-                }
-                // Check if line is amount-only (number with optional comma/decimal)
-                else if (line.match(/^-?[\d,]+\.\d{2}$/)) {
-                    const amount = parseFloat(line.replace(/,/g, ''));
-                    amountLines.push(amount);
-                    console.log(`%c💰 AMT ${amountLines.length}: Line ${i}`, 'color: purple', line);
-                }
-                // Skip header lines and junk
-                else if (!line.match(/Transaction|Posting|Details|Amount|Prepared For|Account Number|Reference/i)) {
-                    // Show first 20 unmatched lines for debugging
-                    if (i < lines.indexOf(lines.find(l => l.match(/New Transactions for|New Payments/i))) + 25) {
-                        console.log(`   ❌ SKIP ${i}:`, line.substring(0, 80));
-                    }
                 }
             }
         }
