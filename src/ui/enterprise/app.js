@@ -992,8 +992,9 @@
     }
     console.warn('[DEV RESET] Clearing all state and cache...');
 
-    // Clear localStorage
+    // Clear ALL storage
     localStorage.clear();
+    sessionStorage.clear();
     window.RoboLedger.Ledger.reset();
 
     // Collect all async cleanup tasks
@@ -1015,6 +1016,18 @@
       cleanupTasks.push(swCleanup);
     }
 
+    // Clear IndexedDB (additional storage layer)
+    if ('indexedDB' in window) {
+      try {
+        const dbs = await indexedDB.databases();
+        for (const db of dbs) {
+          if (db.name) indexedDB.deleteDatabase(db.name);
+        }
+      } catch (e) {
+        console.warn('[DEV RESET] IndexedDB clear failed:', e);
+      }
+    }
+
     // Wait for ALL async tasks to complete
     try {
       await Promise.all(cleanupTasks);
@@ -1023,10 +1036,11 @@
       console.error('[DEV RESET] Error during cleanup:', err);
     }
 
-    console.log('[DEV RESET] Complete. Reloading page with cache bypass...');
-    // Force hard reload with cache bypass (timestamp prevents cached redirect)
+    console.log('[DEV RESET] Complete. Forcing hard reload with cache bypass...');
+    // AGGRESSIVE cache bypass: timestamp + random hash
     setTimeout(function () {
-      window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+      const cacheBust = `?reset=${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      window.location.href = window.location.href.split('?')[0] + cacheBust;
     }, 200);
   };
 
