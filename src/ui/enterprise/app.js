@@ -2053,7 +2053,6 @@
 
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.6;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">ACCOUNT METADATA</div>' +
-          '<div style="color: #64748b; font-weight: 600; font-size: 10px; margin-bottom: 4px;">Consolidated View \u2022 CAD</div>' +
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 11px; color: #1e293b; margin-bottom: 6px;">Total Transactions: <span style="font-weight: 700;">' + totalTxnCount.toLocaleString() + '</span></div>' +
           '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + allBadge + ' ' + badgesList + '</div>' +
           '</div>';
