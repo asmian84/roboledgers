@@ -2083,8 +2083,20 @@
         const creditTotal = creditTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
 
 
+
         var bankIcon = getBankIcon(acc);  // Pass full account object for dual-icon support
-        var transitInfo = isLiability ? (acc.cardNetwork || 'Card') + ' Card \u2022\u2022\u2022\u2022' + (acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX') : 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
+
+        // Format card number display based on card network
+        var transitInfo;
+        if (isLiability) {
+          const last4 = acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX';
+          const isAmex = (acc.cardNetwork || '').toLowerCase().includes('amex');
+          const maskCount = isAmex ? 11 : 12;  // Amex: 15 digits (11 masked), Visa/MC: 16 digits (12 masked)
+          const maskedDigits = '\u2022'.repeat(maskCount);
+          transitInfo = (acc.cardNetwork || 'Card') + ' Card ' + maskedDigits + last4;
+        } else {
+          transitInfo = 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
+        }
 
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
