@@ -118,7 +118,7 @@
 
   // IMMEDIATE GLOBAL EXPOSURE (Fix ReferenceError)
   window.render = function () {
-    if (typeof render === 'function') window.updateWorkspace();
+    if (typeof render === 'function') render();
     else console.error("[UI] render function NOT YET DEFINED");
   };
 
