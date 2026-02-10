@@ -83,8 +83,13 @@ AMEX FORMAT:
         const amountLines = [];
         let collectingDescriptions = false;
 
+        // Store for debugging
+        window._lastAmexText = statementText;
+
         const dateRegex = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(.+)/i;
         const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+
+        console.log('%c[AMEX-DEBUG] Starting line-by-line scan...', 'color: orange; font-weight: bold');
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
@@ -92,12 +97,14 @@ AMEX FORMAT:
 
             // Start collecting after "New Transactions for" or "New Payments"
             if (line.match(/New Transactions for|New Payments/i)) {
+                console.log(`%c✅ Line ${i}: START COLLECTING`, 'color: green; font-weight: bold', line.substring(0, 60));
                 collectingDescriptions = true;
                 continue;
             }
 
             // Stop at page end or total line
             if (line.match(/Total of New Transactions|Page \d+/i)) {
+                console.log(`%c🛑 Line ${i}: STOP`, 'color: red; font-weight: bold', line.substring(0, 60));
                 collectingDescriptions = false;
                 continue;
             }
@@ -113,15 +120,20 @@ AMEX FORMAT:
                         date: `${currentYear}-${month}-${day}`,
                         description
                     });
+                    console.log(`%c📅 DESC ${descriptionLines.length}: Line ${i}`, 'color: blue', line.substring(0, 80));
                 }
                 // Check if line is amount-only (number with optional comma/decimal)
                 else if (line.match(/^-?[\d,]+\.\d{2}$/)) {
                     const amount = parseFloat(line.replace(/,/g, ''));
                     amountLines.push(amount);
+                    console.log(`%c💰 AMT ${amountLines.length}: Line ${i}`, 'color: purple', line);
                 }
                 // Skip header lines and junk
                 else if (!line.match(/Transaction|Posting|Details|Amount|Prepared For|Account Number|Reference/i)) {
-                    // Could be continuation of previous description - ignore for now
+                    // Show first 20 unmatched lines for debugging
+                    if (i < lines.indexOf(lines.find(l => l.match(/New Transactions for|New Payments/i))) + 25) {
+                        console.log(`   ❌ SKIP ${i}:`, line.substring(0, 80));
+                    }
                 }
             }
         }
