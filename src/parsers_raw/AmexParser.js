@@ -108,7 +108,7 @@ AMEX FORMAT:
 
             // Stop at page boundaries or totals
             if (line.match(/^Page \d+|Total of (?:New Transactions|Payment Activity)/i)) {
-                if (collectAmounts || collect Descriptions) {
+                if (collectAmounts || collectDescriptions) {
                     console.log(`%c🛑 STOP: Line ${i}`, 'color: red', line.substring(0, 60));
                 }
                 collectAmounts = false;
