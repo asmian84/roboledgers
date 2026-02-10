@@ -975,7 +975,7 @@
   }
 
   // DEV RESET: Clean slate for testing (only in dev mode)
-  window.devReset = function () {
+  window.devReset = async function () {
     if (!confirm('⚠️ DEV RESET: This will clear ALL localStorage, reset the ledger, AND clear browser cache. Continue?')) {
       return;
     }
@@ -985,31 +985,38 @@
     localStorage.clear();
     window.RoboLedger.Ledger.reset();
 
-    // Clear all browser caches
+    // Collect all async cleanup tasks
+    const cleanupTasks = [];
+
+    // Clear all browser caches (MUST await)
     if ('caches' in window) {
-      caches.keys().then(function (names) {
-        names.forEach(function (name) {
-          caches.delete(name);
-        });
-        console.log('[DEV RESET] Cache cleared');
+      const cacheCleanup = caches.keys().then(function (names) {
+        return Promise.all(names.map(name => caches.delete(name)));
       });
+      cleanupTasks.push(cacheCleanup);
     }
 
-    // Unregister service workers
+    // Unregister service workers (MUST await)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (registrations) {
-        registrations.forEach(function (registration) {
-          registration.unregister();
-        });
-        console.log('[DEV RESET] Service workers unregistered');
+      const swCleanup = navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        return Promise.all(registrations.map(reg => reg.unregister()));
       });
+      cleanupTasks.push(swCleanup);
     }
 
-    console.log('[DEV RESET] Complete. Reloading page...');
-    // Force hard reload with cache bypass
+    // Wait for ALL async tasks to complete
+    try {
+      await Promise.all(cleanupTasks);
+      console.log('[DEV RESET] All caches and service workers cleared');
+    } catch (err) {
+      console.error('[DEV RESET] Error during cleanup:', err);
+    }
+
+    console.log('[DEV RESET] Complete. Reloading page with cache bypass...');
+    // Force hard reload with cache bypass (timestamp prevents cached redirect)
     setTimeout(function () {
-      window.location.reload(true);
-    }, 500);
+      window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+    }, 200);
   };
 
   function setupActions() {
