@@ -38,15 +38,12 @@ SCOTIABANK VISA FORMAT:
         const rawAccount = acctMatch ? acctMatch[1].trim() : '-----';
 
         const parsedMetadata = {
-            _inst: '002', // Scotiabank Institution Code
-            _transit: '-----',
             _acct: rawAccount,
-            institutionCode: '002',
-            transit: '-----',
-            accountNumber: rawAccount, // Keep exactly as found (potentially with spaces if 1:1 means preserving that too, but usually spaces are formatting)
-            _brand: 'Scotiabank',
-            _bank: 'Scotiabank Visa',
-            _tag: 'Visa'
+            accountNumber: rawAccount,
+            _tag: 'Visa',
+            cardNetwork: 'Visa',
+            accountType: 'CreditCard',
+            bankName: 'Scotiabank'
         };
         console.warn('🏁 [SCOTIA-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

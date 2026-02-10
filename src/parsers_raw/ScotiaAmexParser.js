@@ -33,15 +33,12 @@ SCOTIABANK AMEX FORMAT:
         // EXTRACT METADATA - Amex format: 3704-000228-17271
         const acctMatch = statementText.match(/(?:Account\s*#?)\s*(\d{4}-\d{6}-\d{5})/i);
         const parsedMetadata = {
-            _inst: '002', // Scotiabank Institution Code
-            _transit: '-----',
             _acct: acctMatch ? acctMatch[1].replace(/-/g, '') : '-----',
-            institutionCode: '002',
-            transit: '-----',
             accountNumber: acctMatch ? acctMatch[1].replace(/-/g, '') : '-----',
-            _brand: 'Scotiabank',
-            _bank: 'Scotiabank Amex',
-            _tag: 'Amex'
+            _tag: 'Amex',
+            cardNetwork: 'Amex',
+            accountType: 'CreditCard',
+            bankName: 'Scotiabank'
         };
         console.warn('🏁 [SCOTIA-AMEX] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

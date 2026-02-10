@@ -91,15 +91,12 @@ SCOTIA MASTERCARD FORMAT:
         return {
             transactions,
             metadata: {
-                _inst: '002', // Scotiabank Institution Code
-                _transit: '-----',
-                _acct: '-----', // Would need account number from statement
-                institutionCode: '002',
-                transit: '-----',
+                _acct: '-----',
                 accountNumber: '-----',
-                _brand: 'Scotiabank',
-                _bank: 'Scotiabank Mastercard',
-                _tag: 'Mastercard'
+                _tag: 'Mastercard',
+                cardNetwork: 'Mastercard',
+                accountType: 'CreditCard',
+                bankName: 'Scotiabank'
             }
         };
     }

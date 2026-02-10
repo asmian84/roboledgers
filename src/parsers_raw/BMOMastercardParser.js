@@ -34,15 +34,12 @@ BMO MASTERCARD FORMAT:
     // EXTRACT METADATA (Institution, Transit, Account)
     const acctMatch = statementText.match(/(?:Account)[:#]?\s*([\d-]{7,})/i);
     const parsedMetadata = {
-      _inst: '001', // BMO Institution Code
-      _transit: '-----',
       _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-      institutionCode: '001',
-      transit: '-----',
       accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-      _brand: 'BMO',
-      _bank: 'BMO Mastercard',
-      _tag: 'Mastercard'
+      _tag: 'Mastercard',
+      cardNetwork: 'Mastercard',
+      accountType: 'CreditCard',
+      bankName: 'BMO'
     };
     console.warn('🏁 [BMO-MC] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

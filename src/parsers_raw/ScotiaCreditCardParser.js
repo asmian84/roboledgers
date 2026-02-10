@@ -28,15 +28,12 @@ class ScotiaCreditCardParser extends BaseBankParser {
         // EXTRACT METADATA (Institution, Transit, Account)
         const acctMatch = statementText.match(/(?:Account)[:#]?\s*([\d-]{7,})/i);
         const parsedMetadata = {
-            _inst: '002', // Scotiabank Institution Code
-            _transit: '-----',
             _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            institutionCode: '002',
-            transit: '-----',
             accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            _brand: 'Scotiabank',
-            _bank: 'Scotiabank',
-            _tag: 'CreditCard'
+            _tag: 'CreditCard',
+            cardNetwork: 'CreditCard',
+            accountType: 'CreditCard',
+            bankName: 'Scotiabank'
         };
         console.warn('🏁 [SCOTIA-CC] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

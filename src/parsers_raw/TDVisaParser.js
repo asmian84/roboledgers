@@ -38,15 +38,12 @@ TD VISA FORMAT:
         }
 
         const parsedMetadata = {
-            _inst: '004', // TD Institution Code
-            _transit: '-----',
             _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            institutionCode: '004',
-            transit: '-----',
             accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            _brand: 'TD',
-            _bank: 'TD Visa',
             _tag: 'Visa',
+            cardNetwork: 'Visa',
+            accountType: 'CreditCard',
+            bankName: 'TD',
             openingBalance: openingBalance
         };
         console.warn('🏁 [TD-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);

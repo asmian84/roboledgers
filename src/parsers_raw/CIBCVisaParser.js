@@ -26,15 +26,12 @@ CIBC VISA FORMAT:
         // EXTRACT METADATA (Institution, Transit, Account)
         const acctMatch = statementText.match(/(?:Account)[:#]?\s*([\d-]{7,})/i);
         const parsedMetadata = {
-            _inst: '010', // CIBC Institution Code
-            _transit: '-----',
             _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            institutionCode: '010',
-            transit: '-----',
             accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            _brand: 'CIBC',
-            _bank: 'CIBC Visa',
-            _tag: 'Visa'
+            _tag: 'Visa',
+            cardNetwork: 'Visa',
+            accountType: 'CreditCard',
+            bankName: 'CIBC'
         };
         console.warn('🏁 [CIBC-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

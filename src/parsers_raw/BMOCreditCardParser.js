@@ -63,7 +63,15 @@ class BMOCreditCardParser extends BaseBankParser {
         }
 
         console.log(`[BMO-CC] Parsed ${transactions.length} transactions`);
-        return { transactions };
+        return {
+            transactions,
+            metadata: {
+                _tag: 'CreditCard',
+                cardNetwork: 'CreditCard',
+                accountType: 'CreditCard',
+                bankName: 'BMO'
+            }
+        };
     }
 }
 

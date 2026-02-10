@@ -37,15 +37,12 @@ BMO VISA FORMAT:
         // EXTRACT METADATA - Account may be masked: "XXX XXXX XXXX 3277"
         const acctMatch = statementText.match(/(?:Card\s+number|Account).*?([X\d]{3,4}\s+[X\d]{4}\s+[X\d]{4}\s+\d{4})/i);
         const parsedMetadata = {
-            _inst: '001', // BMO Institution Code
-            _transit: '-----',
             _acct: acctMatch ? acctMatch[1].replace(/\s/g, '') : '-----',
-            institutionCode: '001',
-            transit: '-----',
             accountNumber: acctMatch ? acctMatch[1].replace(/\s/g, '') : '-----',
-            _brand: 'BMO',
-            _bank: 'BMO Visa',
-            _tag: 'Visa'
+            _tag: 'Visa',
+            cardNetwork: 'Visa',
+            accountType: 'CreditCard',
+            bankName: 'BMO'
         };
         console.warn('🏁 [BMO-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 

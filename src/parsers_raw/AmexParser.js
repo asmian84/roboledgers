@@ -35,15 +35,12 @@ AMEX FORMAT:
         const cardType = cardTypeMatch ? cardTypeMatch[1] : 'Amex';
 
         const metadata = {
-            _inst: '303', // Amex Institution Code
-            _transit: '-----',
             _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            institutionCode: '303',
-            transit: '-----',
             accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            _brand: 'Amex',
-            _bank: 'American Express',
-            _tag: cardType, // Use specific card type for tag
+            _tag: cardType,
+            cardNetwork: 'Amex',
+            accountType: 'CreditCard',
+            bankName: 'American Express',
             _cardType: cardType
         };
         console.warn('🏁 [AMEX] Extraction Phase Complete. Transit:', metadata.transit, 'Acct:', metadata.accountNumber);
