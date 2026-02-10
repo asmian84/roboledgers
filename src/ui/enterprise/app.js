@@ -1934,8 +1934,15 @@
         </div>`;
       }
 
-      // SINGLE ICON MODE: Regular bank account
+      // SINGLE ICON MODE: Regular bank account or Amex (single logo)
       const bank = (bankName || '').toLowerCase();
+
+      // For Amex, use full 48px height single logo
+      if (bank.includes('amex') || bank.includes('american express')) {
+        return getSingleIcon('amex', 48);
+      }
+
+      // For other accounts, use standard 28px icons
       const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
       const basePath = '/src/ui/enterprise/assets/bank-icons/';
       if (bank.includes('rbc') || bank.includes('royal')) return '<img src="' + basePath + 'rbc.png" alt="RBC" style="' + iconStyle + '" />';
