@@ -531,7 +531,17 @@
 
   window.getDetachedColumns = function () {
     return [
-      { title: "Ref#", field: "ref", width: 100, editor: "input", formatter: (cell) => `<span style="color: #64748b;">${cell.getValue() || ''}</span>` },
+      {
+        title: "Ref#",
+        field: "ref",
+        width: 100,
+        editor: "input",
+        formatter: (cell) => {
+          // Dynamic REF# based on current row position (0-indexed, resets with sort)
+          const rowIndex = cell.getRow().getPosition() - 1; // -1 to make 0-indexed
+          return `<span style="color: #64748b;">${rowIndex}</span>`;
+        }
+      },
       { title: "Date", field: "date", width: 110, editor: "input", formatter: (cell) => `<span style="color: #0f172a;">${cell.getValue() || ''}</span>` },
       {
         title: "Description", field: "description", widthGrow: 3, editor: "input", formatter: (cell) => {
