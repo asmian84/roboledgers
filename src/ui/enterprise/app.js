@@ -751,6 +751,21 @@
     // Set global variable for metadata rendering
     window.currentAccountId = accId;
 
+    // CRITICAL: Update REF# prefix based on selected account
+    // The React grid uses UI_STATE.refPrefix to generate REF# like "CHQ1-001", "VISA1-001"
+    if (accId !== 'ALL') {
+      const accounts = window.RoboLedger.Ledger.getAccounts();
+      const selectedAcc = accounts.find(a => a.id === accId);
+      if (selectedAcc && selectedAcc.ref) {
+        UI_STATE.refPrefix = selectedAcc.ref;
+        console.log(`[REF#] Updated prefix to: ${selectedAcc.ref}`);
+      } else {
+        UI_STATE.refPrefix = 'TXN'; // Fallback
+      }
+    } else {
+      UI_STATE.refPrefix = 'ALL'; // ALL mode shows mixed refs
+    }
+
     // Get filtered transactions for the new account
     const allTx = window.RoboLedger.Ledger.getAll();
     const filtered = accId === 'ALL' ? allTx : allTx.filter(t => t.account_id === accId);
@@ -768,6 +783,8 @@
     if (window.updateHeaderData && previousAccount !== accId) {
       console.log('[HEADER] Updating header data (no re-render)');
       window.updateHeaderData();
+    } else {
+      console.warn('[HEADER] Header update skipped (no change or function unavailable)');
     }
   };
 
@@ -959,13 +976,40 @@
 
   // DEV RESET: Clean slate for testing (only in dev mode)
   window.devReset = function () {
-    if (!confirm('⚠️ DEV RESET: This will clear ALL localStorage and reset the ledger. Continue?')) {
+    if (!confirm('⚠️ DEV RESET: This will clear ALL localStorage, reset the ledger, AND clear browser cache. Continue?')) {
       return;
     }
-    console.warn('[DEV RESET] Clearing all state...');
+    console.warn('[DEV RESET] Clearing all state and cache...');
+
+    // Clear localStorage
     localStorage.clear();
     window.RoboLedger.Ledger.reset();
-    location.reload();
+
+    // Clear all browser caches
+    if ('caches' in window) {
+      caches.keys().then(function (names) {
+        names.forEach(function (name) {
+          caches.delete(name);
+        });
+        console.log('[DEV RESET] Cache cleared');
+      });
+    }
+
+    // Unregister service workers
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        registrations.forEach(function (registration) {
+          registration.unregister();
+        });
+        console.log('[DEV RESET] Service workers unregistered');
+      });
+    }
+
+    console.log('[DEV RESET] Complete. Reloading page...');
+    // Force hard reload with cache bypass
+    setTimeout(function () {
+      window.location.reload(true);
+    }, 500);
   };
 
   function setupActions() {
