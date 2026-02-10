@@ -2234,6 +2234,12 @@
   function getAccountWorkspaceHeaderHTML() {
     const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
     const accounts = window.RoboLedger.Accounts.getAll();
+
+    // CRITICAL: Don't render header at all if no accounts exist (empty grid)
+    if (accounts.length === 0) {
+      return ''; // Return empty - no header when no data
+    }
+
     const isLiability = acc && (acc.type === 'CREDIT_CARD' || acc.brand === 'VISA' || acc.brand === 'MASTERCARD' || acc.brand === 'AMEX');
 
     // Metrics Calculation
@@ -2352,10 +2358,10 @@
             </div>
           </div>
           <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 12px;">
-            <button onclick="window.devReset()" style="padding: 4px 8px; background: #fee2e2; color: #991b1b; border: 1px solid #fec aca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;" title="Clear all localStorage and reset (Dev only)">
+            <span>Header V5.2 • Active Session</span>
+            <button onclick="window.devReset()" style="padding: 4px 8px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;" title="Clear all localStorage and reset (Dev only)">
               ⚠️ DEV RESET
             </button>
-            <span>Header V5.2 • Active Session</span>
           </div>
         </div>
 
