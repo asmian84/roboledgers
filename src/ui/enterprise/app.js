@@ -2344,9 +2344,9 @@
     const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
     const accounts = window.RoboLedger.Accounts.getAll();
 
-    // CRITICAL: Don't render header at all if no accounts exist (empty grid)
+    // CRITICAL: Don't render header at all if no transactions exist (empty grid)
     // ALSO clear selectedAccount from state to prevent cache persistence bugs
-    if (accounts.length === 0) {
+    if (allTxns.length === 0) {
       UI_STATE.selectedAccount = null;
       UI_STATE.refPrefix = 'CHQ1'; // Reset to default
       return ''; // Return empty - no header when no data
