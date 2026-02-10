@@ -998,7 +998,7 @@
       console.log(`[INIT] Theme restored: ${savedTheme}`);
     }
 
-    window.window.updateWorkspace();
+    render();
   }
 
   function setupNav() {
