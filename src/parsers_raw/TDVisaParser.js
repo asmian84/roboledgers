@@ -26,21 +26,23 @@ TD VISA FORMAT:
         const lines = statementText.split('\n');
         const transactions = [];
 
-        // EXTRACT METADATA - Account number from masked card format
+        // EXTRACT METADATA - Full masked card number (IIN standard: 16 digits for Visa)
         // TD format: "4520 70XX XXXX 7298" or "Account Number: 4520 70XX XXXX 7298"
-        let accountNumber = '-----';
+        let accountNumber = 'XXXX XXXX XXXX XXXX'; // Default fallback
 
-        // Try to extract from masked card number format
-        const maskedMatch = statementText.match(/(?:Account\s+Number[:\s]+)?[\dX]{4}\s+[\dX]{2,4}\s+[\dX]{4}\s+(\d{4})/i);
+        // Extract full 16-digit masked card number (Visa standard)
+        const maskedMatch = statementText.match(/(?:Account\s+Number[:\s]+)?([4-6]\d{3}\s+[X\d]{2,4}\s+[X\d]{4}\s+\d{4})/i);
         if (maskedMatch) {
-            accountNumber = maskedMatch[1]; // Last 4 digits
-            console.log(`[TD-VISA] Extracted last 4 from masked: ${accountNumber}`);
+            accountNumber = maskedMatch[1]; // Full masked format: "4520 70XX XXXX 7298"
+            console.log(`[TD-VISA] Extracted full masked card: ${accountNumber}`);
         } else {
-            // Fallback: Try full account number
-            const fullMatch = statementText.match(/(?:Account\s+Number)[:\s]+(\d{7,})/i);
-            if (fullMatch) {
-                accountNumber = fullMatch[1];
-                console.log(`[TD-VISA] Extracted full account: ${accountNumber}`);
+            // Fallback: Try unformatted (no spaces)
+            const unformattedMatch = statementText.match(/(?:Account\s+Number[:\s]+)?([4-6]\d{3}[X\d]{8}\d{4})/i);
+            if (unformattedMatch) {
+                const raw = unformattedMatch[1];
+                // Format as XXXX XXXX XXXX XXXX
+                accountNumber = raw.match(/.{1,4}/g).join(' ');
+                console.log(`[TD-VISA] Extracted and formatted: ${accountNumber}`);
             }
         }
 
