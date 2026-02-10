@@ -2103,7 +2103,6 @@
       }
 
       // For other accounts, use standard 48px icons (INCREASED from 28px)
-      const bank = (bankName || '').toLowerCase();
       const iconFromParser = account ? account.bankIcon : null;
 
       // Use bankIcon from parser if available (set by parsers), otherwise fall back to bankName matching
