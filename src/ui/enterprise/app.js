@@ -1149,8 +1149,22 @@
 
   window.handleSearch = function (query) {
     UI_STATE.searchQuery = query;
-    // Re-render the current view with the search query
-    window.render();
+
+    // LIVE SEARCH: Update grid data only, don't re-render entire page
+    // Get currently filtered transactions (account-based filter)
+    const allTx = window.RoboLedger.Ledger.getAll();
+    const accountFiltered = UI_STATE.selectedAccount === 'ALL'
+      ? allTx
+      : allTx.filter(t => t.account_id === UI_STATE.selectedAccount);
+
+    // Pass filtered data + search query to React grid
+    // The grid's globalFilter will handle the search filtering
+    if (window.renderTransactionsGrid) {
+      window.renderTransactionsGrid(accountFiltered, query);
+      console.log(`[SEARCH] Live filtering with query: "${query}"`);
+    } else {
+      console.warn('[SEARCH] Grid render function not available');
+    }
   };
 
   // Account switcher dropdown
