@@ -2343,6 +2343,7 @@
   function getAccountWorkspaceHeaderHTML() {
     const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
     const accounts = window.RoboLedger.Accounts.getAll();
+    const allTxns = window.RoboLedger.Ledger.getAll(); // MOVED UP: declare before use
 
     // CRITICAL: Don't render header at all if no transactions exist (empty grid)
     // ALSO clear selectedAccount from state to prevent cache persistence bugs
@@ -2355,7 +2356,6 @@
     const isLiability = acc && (acc.type === 'CREDIT_CARD' || acc.brand === 'VISA' || acc.brand === 'MASTERCARD' || acc.brand === 'AMEX');
 
     // Metrics Calculation
-    const allTxns = window.RoboLedger.Ledger.getAll();
     const filteredTxns = UI_STATE.selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === UI_STATE.selectedAccount);
 
     // Activity metrics - Show ALL time if 30d is empty (Better for statements)
