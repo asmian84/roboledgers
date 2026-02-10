@@ -288,14 +288,14 @@
 
   window.updateProgressBar = (current, total, fileName, stage, txnCount) => {
     const percent = Math.round((current / total) * 100);
-    
+
     // Null-safe updates - prevent silent failures on first upload
     const fill = document.getElementById('progress-bar-fill');
     const title = document.getElementById('progress-title');
     const subtitle = document.getElementById('progress-subtitle');
     const fileCount = document.getElementById('progress-file-count');
     const txnCountEl = document.getElementById('progress-txn-count');
-    
+
     if (fill) fill.style.width = `${percent}%`;
     if (title) title.textContent = stage;
     if (subtitle) subtitle.textContent = fileName;
@@ -1890,7 +1890,51 @@
     console.log('[Header Data Update] Mode:', isAllMode ? 'ALL' : 'SINGLE', 'Account:', acc?.ref || 'None');
 
     // Helper: Get bank icon (returns <img> tag with uniform 28x28 size)
-    const getBankIcon = (bankName) => {
+    // Helper: Get icon HTML for a single icon code
+    const getSingleIcon = (iconCode, size = 28) => {
+      const bank = (iconCode || '').toLowerCase();
+      const iconStyle = `width: ${size}px; height: ${size}px; border-radius: 4px; object-fit: contain;`;
+      const basePath = '/src/ui/enterprise/assets/bank-icons/';
+
+      // Bank icons
+      if (bank === 'rbc' || bank.includes('royal')) return `<img src="${basePath}rbc.png" alt="RBC" style="${iconStyle}" />`;
+      if (bank === 'td' || bank.includes('dominion')) return `<img src="${basePath}td.png" alt="TD" style="${iconStyle}" />`;
+      if (bank === 'bmo' || bank.includes('montreal')) return `<img src="${basePath}bmo.png" alt="BMO" style="${iconStyle}" />`;
+      if (bank === 'scotia' || bank.includes('scotiabank')) return `<img src="${basePath}scotia.png" alt="Scotia" style="${iconStyle}" />`;
+      if (bank === 'cibc') return `<img src="${basePath}cibc.png" alt="CIBC" style="${iconStyle}" />`;
+
+      // Card network icons
+      if (bank === 'visa') return `<div style="width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; background: #1434CB; border-radius: 4px;"><span style="color: white; font-weight: 700; font-size: ${size * 0.35}px;">VISA</span></div>`;
+      if (bank === 'mc' || bank === 'mastercard') return `<div style="width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, #EB001B 50%, #F79E1B 50%); border-radius: 4px;"></div>`;
+      if (bank === 'amex') return `<div style="width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; background: #006FCF; border-radius: 4px;"><span style="color: white; font-weight: 700; font-size: ${size * 0.28}px;">AMEX</span></div>`;
+
+      // Fallback
+      return `<img src="${basePath}rbc.png" alt="Bank" style="${iconStyle}" />`;
+    };
+
+    // Helper: Get bank icon (supports dual-icon for credit cards)
+    const getBankIcon = (bankNameOrAccount) => {
+      // Support both old API (bankName string) and new API (account object with bankIcon/networkIcon)
+      const account = typeof bankNameOrAccount === 'object' ? bankNameOrAccount : null;
+      const bankName = account ? account.bankName : bankNameOrAccount;
+
+      // Check if dual icons are available (credit card)
+      if (account && account.bankIcon && account.networkIcon) {
+        // DUAL ICON MODE: Vertical split
+        const height = 48; // Total height (3 text lines)
+        const halfHeight = height / 2;
+
+        return `<div style="width: 48px; height: ${height}px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column;">
+          <div style="height: ${halfHeight}px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #e2e8f0;">
+            ${getSingleIcon(account.bankIcon, 20)}
+          </div>
+          <div style="height: ${halfHeight}px; display: flex; align-items: center; justify-content: center;">
+            ${getSingleIcon(account.networkIcon, 20)}
+          </div>
+        </div>`;
+      }
+
+      // SINGLE ICON MODE: Regular bank account
       const bank = (bankName || '').toLowerCase();
       const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
       const basePath = '/src/ui/enterprise/assets/bank-icons/';
