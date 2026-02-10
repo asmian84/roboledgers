@@ -971,6 +971,13 @@
           return;
         }
 
+        if (route === 'audit') {
+          // Open AI Audit panel with all transactions
+          const allTx = window.RoboLedger.Ledger.getAll();
+          window.showAIAuditPanel(allTx, 'all');
+          return;
+        }
+
         UI_STATE.currentRoute = route;
         if (route === 'import') {
           UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
