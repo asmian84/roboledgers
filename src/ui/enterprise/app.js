@@ -748,6 +748,9 @@
     const previousAccount = UI_STATE.selectedAccount;
     UI_STATE.selectedAccount = accId;
 
+    // Set global variable for metadata rendering
+    window.currentAccountId = accId;
+
     // Get filtered transactions for the new account
     const allTx = window.RoboLedger.Ledger.getAll();
     const filtered = accId === 'ALL' ? allTx : allTx.filter(t => t.account_id === accId);
