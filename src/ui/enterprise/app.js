@@ -2013,7 +2013,7 @@
         var bankIcon = getBankIcon(acc.bankName);
         // Replace icon size to 48px for large display
         bankIcon = bankIcon.replace(/width: 28px; height: 28px;/, 'width: 48px; height: 48px;').replace(/border-radius: 4px;/, 'border-radius: 6px;');
-        var transitInfo = isLiability ? 'Card \u2022\u2022\u2022\u2022 ' + (acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX') : 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
+        var transitInfo = isLiability ? (acc.cardNetwork || 'Card') + ' Card \u2022\u2022\u2022\u2022' + (acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX') : 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
 
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
