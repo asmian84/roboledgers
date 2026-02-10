@@ -114,24 +114,38 @@ window.RoboLedger = (function () {
     ];
 
     // --- STORAGE ENGINE ---
+    const LEDGER_VERSION = '2.0.0'; // Increment when schema/logic changes
+
     function load() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
+
+                // Version check - auto-clear incompatible cache
+                const savedVersion = parsed.version || '1.0.0';
+                if (savedVersion !== LEDGER_VERSION) {
+                    console.warn(`[LEDGER] Version mismatch: saved=${savedVersion}, current=${LEDGER_VERSION}`);
+                    console.warn('[LEDGER] Clearing incompatible cache and starting fresh');
+                    localStorage.removeItem(STORAGE_KEY);
+                    return; // Start with empty state
+                }
+
                 state.transactions = parsed.transactions || {};
                 state.sigIndex = parsed.sigIndex || {};
                 state.accounts = parsed.accounts || [];
                 state.coa = parsed.coa || DEFAULT_COA_TEMPLATE;
-                console.log('[LEDGER] State loaded.');
+                console.log(`[LEDGER] State loaded (v${LEDGER_VERSION})`);
             } catch (e) {
                 console.error('[LEDGER] Failed to load state', e);
+                localStorage.removeItem(STORAGE_KEY); // Clear corrupted data
             }
         }
     }
 
     function save() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            version: LEDGER_VERSION, // Include version for validation
             transactions: state.transactions,
             sigIndex: state.sigIndex,
             accounts: state.accounts,
