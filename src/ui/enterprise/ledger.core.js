@@ -1251,7 +1251,9 @@ window.RoboLedger = (function () {
                     const accountRef = (account && account.ref) || 'TXN';
 
                     // Calculate next counter by finding highest existing REF# for this account
-                    const existingForAccount = state.transactions.filter(t => t.account_id === canonical.account_id);
+                    // NOTE: state.transactions is an OBJECT (keyed by tx ID), not array!
+                    const allTransactions = Object.values(state.transactions);
+                    const existingForAccount = allTransactions.filter(t => t.account_id === canonical.account_id);
                     let maxCounter = 0;
                     existingForAccount.forEach(tx => {
                         if (tx.ref) {
