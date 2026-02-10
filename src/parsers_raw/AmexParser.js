@@ -84,8 +84,15 @@ AMEX FORMAT:
         let collectDescriptions = false;
         let collectAmounts = false;
 
+        // Store for debugging
+        window._lastAmexText = statementText;
+
+        // Date regex: "Nov 28   Nov 29   DESCRIPTION" or "Nov 28 Nov 29 DESCRIPTION"
+        const dateRegex = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(.+)/i;
+        const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+
         console.log('%c[AMEX-DEBUG] Starting dual-phase scan...', 'color: orange; font-weight: bold');
-        
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
