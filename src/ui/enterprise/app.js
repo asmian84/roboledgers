@@ -393,7 +393,7 @@
     if (!window.RoboLedger) return;
 
     const accounts = window.RoboLedger.Accounts.getAll();
-    const totalBalance = accounts.reduce((sum, a) => sum + (window.RoboLedger.Accounts.getBalance(a.id) || 0), 0);
+    const totalBalance = accounts.reduce((sum, a) => sum + (a.actualEndingBalance || a.calculatedBalance || 0), 0);
 
     const balanceEl = document.getElementById('util-total-balance');
     if (balanceEl) {
