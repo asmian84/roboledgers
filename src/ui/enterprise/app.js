@@ -2089,11 +2089,8 @@
         // Format card number display based on card network
         var transitInfo;
         if (isLiability) {
-          const last4 = acc.accountNumber ? acc.accountNumber.slice(-4) : 'XXXX';
-          const isAmex = (acc.cardNetwork || '').toLowerCase().includes('amex');
-          const maskCount = isAmex ? 11 : 12;  // Amex: 15 digits (11 masked), Visa/MC: 16 digits (12 masked)
-          const maskedDigits = '\u2022'.repeat(maskCount);
-          transitInfo = (acc.cardNetwork || 'Card') + ' Card ' + maskedDigits + last4;
+          // Show account number exactly as extracted from statement
+          transitInfo = (acc.cardNetwork || 'Card') + ' Card ' + (acc.accountNumber || 'N/A');
         } else {
           transitInfo = 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
         }
