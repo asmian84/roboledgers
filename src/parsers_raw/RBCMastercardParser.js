@@ -27,18 +27,15 @@ RBC MASTERCARD FORMAT:
         const periodMatch = statementText.match(/STATEMENT FROM.*?(\d{4})/i);
         if (periodMatch) currentYear = parseInt(periodMatch[1]);
 
-        // 2. Metadata Detection
-        let acctMatch = statementText.match(/(?:Account)[:#]?\s*([\d-]{7,})/i) ||
-            statementText.match(/(5526\s+12\*\*\s+\*\*\*\*\s+\d{4})/i) ||
-            statementText.match(/(\d{4}\s\d{2}\*\*\s\*\*\*\*\s\d{4})/i);
+        // 2. Metadata Detection - Full masked card (IIN: 16 digits for Mastercard)
+        let acctMatch = statementText.match(/([5]\d{3}[\s-]+\d{2}\*\*[\s-]+\*{4}[\s-]+\d{4})/i) ||
+            statementText.match(/(\d{4}[\s-]+\d{2}\*\*[\s-]+\*{4}[\s-]+\d{4})/i);
 
-        const rawAcct = acctMatch ? acctMatch[1] : '-----';
-        const cleanAcct = rawAcct.replace(/[-\s*]/g, '');
+        const rawAcct = acctMatch ? acctMatch[1].replace(/-/g, ' ') : 'XXXX XXXX XXXX XXXX'; // Normalize to spaces
 
         const parsedMetadata = {
-            _acct: cleanAcct,
-            accountNumber: cleanAcct,
-            displayAccountNumber: rawAcct, // Masked version for UI
+            _acct: rawAcct,
+            accountNumber: rawAcct, // Full masked format for display
             _tag: 'Mastercard',
             cardNetwork: 'Mastercard',
             accountType: 'CreditCard',

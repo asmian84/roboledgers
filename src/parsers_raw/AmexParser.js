@@ -24,26 +24,33 @@ AMEX FORMAT:
         console.error('📄 [DEBUG-AMEX] First 1000 characters (RED for visibility):');
         console.log(statementText.substring(0, 1000));
 
-        // EXTRACT METADATA (Institution, Transit, Account)
-        // Amex format often: XXXX XXXXX6 91001 or Account Number: 1234-567890-12345
-        // Flexible regex for X's and account number parts
-        const acctMatch = statementText.match(/(?:Account Number|Credit Card)[:#]?\s*(?:X{4,}\s*X{5,}\d?\s*|[\d-]{7,})(\d{5,6})/i)
-            || statementText.match(/(?:Account)[:#]?\s*([\d-]{7,})/i);
+        // EXTRACT METADATA - Full masked card (IIN: 15 digits for Amex)
+        // Amex format often: "XXXX XXXXX6 91001" or "3XXX XXXXXX X1001"
+        let accountNumber = 'XXXX XXXXXX XXXX'; // Default fallback (15 digits)
+
+        // Try to match full 15-digit Amex format (3XXX-XXXXXX-X1001)
+        const maskedMatch = statementText.match(/([3]\d{3}[\s-]*X{6}[\s-]*X?\d{4,5})/i) ||
+            statementText.match(/(X{4}[\s-]*X{5}\d?[\s-]*\d{4,5})/i);
+
+        if (maskedMatch) {
+            accountNumber = maskedMatch[1].replace(/-/g, ' ').replace(/\s+/g, ' '); // Normalize
+            console.log(`[AMEX] Extracted full masked card: ${accountNumber}`);
+        }
 
         // EXTRACTION FOR CARD TYPE (Platinum, Gold, etc)
         const cardTypeMatch = statementText.match(/(?:The\s+)?(?:Business\s+)?(Platinum|Gold|Silver|Standard|Green)(?:\s+Card)?(?:\s+Statement)?/i);
         const cardType = cardTypeMatch ? cardTypeMatch[1] : 'Amex';
 
         const metadata = {
-            _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
+            _acct: accountNumber,
+            accountNumber: accountNumber,
             _tag: cardType,
             cardNetwork: 'Amex',
             accountType: 'CreditCard',
             bankName: 'American Express',
             _cardType: cardType
         };
-        console.warn('🏁 [AMEX] Extraction Phase Complete. Transit:', metadata.transit, 'Acct:', metadata.accountNumber);
+        console.warn('🏁 [AMEX] Extraction Phase Complete. Card:', metadata.accountNumber);
 
         // YEAR DETECTION: Look for Statement Period or Closing Date year
         const yearRegex = /(?:Statement\s+Period|Closing\s+Date|Ending\s+in|20[23]\d)/gi;
