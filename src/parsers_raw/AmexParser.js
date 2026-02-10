@@ -74,78 +74,81 @@ AMEX FORMAT:
             console.log(`[AMEX] Extracted opening balance: ${openingBalance}`);
         }
 
-        let inTransactionBlock = false;
-        let txnCounter = 1;
+        // NEW APPROACH: Amex PDFs have fragmented structure
+        // - Description lines: "Mar 21 Mar 21 AMZN MKTP CA*H72MJ7G40  WWW.AMAZON.CA"
+        // - Amount-only lines: "142.12"
+        // - Need to collect both separately and match by position
 
-        const dateRegex1 = /^(\d{1,2})\/(\d{1,2})/;
-        const dateRegex2 = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})/i;
+        const descriptionLines = [];
+        const amountLines = [];
+        let collectingDescriptions = false;
+
+        const dateRegex = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(.+)/i;
         const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
-
-        let pendingDescription = '';
-        let pendingRawLines = [];
-        let pendingAuditLines = [];
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
 
-            // TRACK BLOCK STATE
-            if (line.match(/Your Transactions|New Transactions for/i)) {
-                inTransactionBlock = true;
+            // Start collecting after "New Transactions for" or "New Payments"
+            if (line.match(/New Transactions for|New Payments/i)) {
+                collectingDescriptions = true;
                 continue;
             }
-            // MINIMAL FIX: Exclude 'Payment Activity' from stop - it appears BEFORE main transactions
-            if (inTransactionBlock && line.match(/Total of (?:New Transactions|Activity)(?!\s+Activity)/i)) {
-                inTransactionBlock = false;
+
+            // Stop at page end or total line
+            if (line.match(/Total of New Transactions|Page \d+/i)) {
+                collectingDescriptions = false;
                 continue;
             }
-            if (!inTransactionBlock || line.match(/Transaction\s+Posting\s+Details\s+Amount/i)) continue;
 
-            let isoDate = null;
-            let dateMatch = line.match(dateRegex1) || line.match(dateRegex2);
-            if (dateMatch) {
-                if (dateMatch[1].length === 3) {
-                    isoDate = `${currentYear}-${monthMap[dateMatch[1].toLowerCase()]}-${dateMatch[2].padStart(2, '0')}`;
-                } else {
-                    isoDate = `${currentYear}-${dateMatch[1].padStart(2, '0')}-${dateMatch[2].padStart(2, '0')}`;
+            if (collectingDescriptions) {
+                // Check if line has date pattern: "Mar 21 Mar 21 DESCRIPTION"
+                const dateMatch = line.match(dateRegex);
+                if (dateMatch) {
+                    const month = monthMap[dateMatch[1].toLowerCase()];
+                    const day = dateMatch[2].padStart(2, '0');
+                    const description = dateMatch[5].trim();
+                    descriptionLines.push({
+                        date: `${currentYear}-${month}-${day}`,
+                        description
+                    });
                 }
-                const remainder = line.substring(dateMatch[0].length).trim();
-
-                const extracted = this.extractTransaction(remainder, isoDate, line);
-                if (extracted && extracted.amount) {
-                    if (pendingDescription) {
-                        extracted.description = pendingDescription + ' ' + extracted.description;
-                        extracted.rawText = [...pendingRawLines, extracted.rawText].join('\n');
-                        if (extracted.audit) {
-                            extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, extracted.audit]);
-                        }
-                    }
-                    transactions.push(extracted);
-                    pendingDescription = '';
-                    pendingRawLines = [];
-                    pendingAuditLines = [];
-                } else {
-                    pendingDescription = remainder;
-                    pendingRawLines = [line];
-                    pendingAuditLines = [this.getSpatialMetadata(line)];
+                // Check if line is amount-only (number with optional comma/decimal)
+                else if (line.match(/^-?[\d,]+\.\d{2}$/)) {
+                    const amount = parseFloat(line.replace(/,/g, ''));
+                    amountLines.push(amount);
                 }
-            } else if (pendingDescription && line.length > 3) {
-                const extracted = this.extractTransaction(line, '', line);
-                if (extracted && extracted.amount) {
-                    extracted.date = transactions[transactions.length - 1]?.date || '1900-01-01';
-                    extracted.description = pendingDescription + ' ' + extracted.description;
-                    extracted.rawText = [...pendingRawLines, line].join('\n');
-                    extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, this.getSpatialMetadata(line)]);
-                    transactions.push(extracted);
-                    pendingDescription = '';
-                    pendingRawLines = [];
-                    pendingAuditLines = [];
-                } else {
-                    pendingDescription += ' ' + line;
-                    pendingRawLines.push(line);
-                    pendingAuditLines.push(this.getSpatialMetadata(line));
+                // Skip header lines and junk
+                else if (!line.match(/Transaction|Posting|Details|Amount|Prepared For|Account Number|Reference/i)) {
+                    // Could be continuation of previous description - ignore for now
                 }
             }
+        }
+
+        // Match descriptions with amounts by position
+        console.log(`[AMEX] Found ${descriptionLines.length} descriptions, ${amountLines.length} amounts`);
+
+        const minLen = Math.min(descriptionLines.length, amountLines.length);
+        for (let i = 0; i < minLen; i++) {
+            const desc = descriptionLines[i];
+            const amount = Math.abs(amountLines[i]);
+            const isPayment = amountLines[i] < 0 || desc.description.match(/PAYMENT|THANK YOU/i);
+
+            transactions.push({
+                date: desc.date,
+                description: this.cleanCreditDescription(desc.description, [
+                    "PAYMENT THANK YOU", "PURCHASE", "CASH ADVANCE",
+                    "INTEREST CHARGE", "MEMBERSHIP FEE", "LATE FEE"
+                ]),
+                amount,
+                debit: isPayment ? 0 : amount,
+                credit: isPayment ? amount : 0,
+                balance: 0,
+                audit: this.getSpatialMetadata(desc.description),
+                rawText: this.cleanRawText(`${desc.date} ${desc.description} ${amount}`),
+                refCode: desc.description.match(/\b([A-Z0-9]{15,})\b/)?.[1] || 'N/A'
+            });
         }
 
         console.log(`[AMEX] Parsed ${transactions.length} transactions`);
