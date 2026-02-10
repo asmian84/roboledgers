@@ -111,7 +111,9 @@ TD VISA FORMAT:
         console.log(`[TD-VISA-EXTRACT] Input text: "${text}"`);
         console.log(`[TD-VISA-EXTRACT] Date: ${isoDate}`);
 
-        const amounts = text.match(/([\d,]+\.\d{2})/g);
+        // TD format: Amount comes FIRST, then description
+        // Example: "$99.56 FiverrEU Nicosia" or "-$1.00 ROYAL BANK OF CANADA"
+        const amounts = text.match(/(-?\$?[\d,]+\.\d{2})/g);
         if (!amounts || amounts.length < 1) {
             console.log(`[TD-VISA-EXTRACT] No amounts found, skipping`);
             return null;
@@ -119,11 +121,16 @@ TD VISA FORMAT:
 
         console.log(`[TD-VISA-EXTRACT] Found amounts:`, amounts);
 
-        const firstAmtIdx = text.search(/[\d,]+\.\d{2}/);
-        let description = text.substring(0, firstAmtIdx).trim();
+        // Find where the first amount ENDS (not starts!)
+        const firstAmountMatch = text.match(/(-?\$?[\d,]+\.\d{2})/);
+        const amountEndIdx = firstAmountMatch.index + firstAmountMatch[0].length;
+
+        // Description is everything AFTER the first amount
+        let description = text.substring(amountEndIdx).trim();
 
         console.log(`[TD-VISA-EXTRACT] Raw description: "${description}"`);
 
+        // Clean up the description
         description = this.cleanCreditDescription(description, [
             "PAYMENT THANK YOU", "PURCHASE", "CASH ADVANCE",
             "INTEREST CHARGE", "ANNUAL FEE", "FOREIGN TRANSACTION FEE"
@@ -131,17 +138,19 @@ TD VISA FORMAT:
 
         console.log(`[TD-VISA-EXTRACT] Cleaned description: "${description}"`);
 
-        const amount = parseFloat(amounts[0].replace(/,/g, ''));
-        const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-        const isPayment = /payment|credit|refund/i.test(description);
+        // Parse amount (remove $ and - signs, keep just the number)
+        const amountStr = amounts[0].replace(/[\$-]/g, '');
+        const amount = parseFloat(amountStr.replace(/,/g, ''));
+        const isNegative = amounts[0].includes('-');
+        const isPayment = /payment|credit|refund/i.test(description) || isNegative;
 
         return {
             date: isoDate,
-            description,
+            description: description || 'Transaction',
             amount,
             debit: isPayment ? 0 : amount,
             credit: isPayment ? amount : 0,
-            balance,
+            balance: 0,
             _brand: 'TD',
             _tag: 'Visa',
             _accountType: 'CreditCard',
