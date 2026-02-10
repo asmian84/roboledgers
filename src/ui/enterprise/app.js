@@ -2041,7 +2041,10 @@
     const metaContent = document.getElementById('metadata-content');
     if (metaContent) {
       if (isAllMode) {
-        // ALL MODE: ACCOUNT METADATA heading + Consolidated View + badge row (ALL as badge)
+        // ALL MODE: ACCOUNT METADATA heading + Consolidated View + badge row (ALL as badge) + Transaction count
+        const allTxns = window.RoboLedger.Ledger.getAll();
+        const totalTxnCount = allTxns.length;
+
         var allBadge = '<span style="background: #1e293b; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace;">ALL</span>';
         var badgesList = accounts.map(function (a) {
           var isRecon = isAccountReconciled(a);
@@ -2051,10 +2054,11 @@
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.6;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">ACCOUNT METADATA</div>' +
           '<div style="color: #64748b; font-weight: 600; font-size: 10px; margin-bottom: 4px;">Consolidated View \u2022 CAD</div>' +
+          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 11px; color: #1e293b; margin-bottom: 6px;">Total Transactions: <span style="font-weight: 700;">' + totalTxnCount.toLocaleString() + '</span></div>' +
           '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + allBadge + ' ' + badgesList + '</div>' +
           '</div>';
       } else if (acc) {
-        // SINGLE MODE: ACCOUNT METADATA heading + breadcrumb + icon (48px) + text
+        // SINGLE MODE: ACCOUNT METADATA heading + breadcrumb + transaction counts + icon (48px) + text
         var isLiability = acc.type === 'liability' || acc.type === 'creditcard';
         var accTxns = window.RoboLedger.Ledger.getAll().filter(function (t) { return t.account_id === acc.id; });
         var periodText = 'No transactions';
@@ -2062,6 +2066,16 @@
           var dates = accTxns.map(function (t) { return new Date(t.date_iso || t.date); }).sort(function (a, b) { return a - b; });
           periodText = dates[0].toISOString().split('T')[0] + ' TO ' + dates[dates.length - 1].toISOString().split('T')[0];
         }
+
+        // Calculate transaction counts
+        const totalTxns = accTxns.length;
+        const debitTxns = accTxns.filter(t => t.polarity === 'DEBIT');
+        const creditTxns = accTxns.filter(t => t.polarity === 'CREDIT');
+        const debitCount = debitTxns.length;
+        const creditCount = creditTxns.length;
+        const debitTotal = debitTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+        const creditTotal = creditTxns.reduce((sum, t) => sum + (t.amount_cents || 0), 0) / 100;
+
         var bankIcon = getBankIcon(acc.bankName);
         // Replace icon size to 48px for large display
         bankIcon = bankIcon.replace(/width: 28px; height: 28px;/, 'width: 48px; height: 48px;').replace(/border-radius: 4px;/, 'border-radius: 6px;');
@@ -2073,6 +2087,11 @@
           '<span onclick="window.switchAccount(\'ALL\')" style="cursor: pointer; color: #3b82f6;">ALL</span>' +
           '<span style="color: #94a3b8; margin: 0 4px;">\u2192</span>' +
           '<span style="color: #1e293b; font-weight: 600;">' + (acc.ref || acc.name || 'Account') + '</span>' +
+          '</div>' +
+          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #1e293b; margin-bottom: 8px;">' +
+          'Transactions: <span style="font-weight: 600;">' + totalTxns + '</span>  |  ' +
+          '<span style="color: #ef4444;">Debits: ' + debitTotal.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '<sup style="font-size: 8px;">' + debitCount + '</sup></span>  |  ' +
+          '<span style="color: #10b981;">Credits: ' + creditTotal.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '<sup style="font-size: 8px;">' + creditCount + '</sup></span>' +
           '</div>' +
           '<div style="display: flex; align-items: flex-start; gap: 10px;">' +
           bankIcon +
