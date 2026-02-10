@@ -1894,22 +1894,22 @@
     const getSingleIcon = (iconCode, size = 28) => {
       const bank = (iconCode || '').toLowerCase();
       const iconStyle = `width: ${size}px; height: ${size}px; border-radius: 4px; object-fit: contain;`;
-      const basePath = '/src/ui/enterprise/assets/bank-icons/';
+      const basePath = '/src/ui/enterprise/assets/';
 
       // Bank icons
-      if (bank === 'rbc' || bank.includes('royal')) return `<img src="${basePath}rbc.png" alt="RBC" style="${iconStyle}" />`;
-      if (bank === 'td' || bank.includes('dominion')) return `<img src="${basePath}td.png" alt="TD" style="${iconStyle}" />`;
-      if (bank === 'bmo' || bank.includes('montreal')) return `<img src="${basePath}bmo.png" alt="BMO" style="${iconStyle}" />`;
-      if (bank === 'scotia' || bank.includes('scotiabank')) return `<img src="${basePath}scotia.png" alt="Scotia" style="${iconStyle}" />`;
-      if (bank === 'cibc') return `<img src="${basePath}cibc.png" alt="CIBC" style="${iconStyle}" />`;
+      if (bank === 'rbc' || bank.includes('royal')) return `<img src="${basePath}bank-icons/rbc.png" alt="RBC" style="${iconStyle}" />`;
+      if (bank === 'td' || bank.includes('dominion')) return `<img src="${basePath}bank-icons/td.png" alt="TD" style="${iconStyle}" />`;
+      if (bank === 'bmo' || bank.includes('montreal')) return `<img src="${basePath}bank-icons/bmo.png" alt="BMO" style="${iconStyle}" />`;
+      if (bank === 'scotia' || bank.includes('scotiabank')) return `<img src="${basePath}bank-icons/scotia.png" alt="Scotia" style="${iconStyle}" />`;
+      if (bank === 'cibc') return `<img src="${basePath}bank-icons/cibc.png" alt="CIBC" style="${iconStyle}" />`;
 
-      // Card network icons
-      if (bank === 'visa') return `<div style="width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; background: #1434CB; border-radius: 4px;"><span style="color: white; font-weight: 700; font-size: ${size * 0.35}px;">VISA</span></div>`;
-      if (bank === 'mc' || bank === 'mastercard') return `<div style="width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, #EB001B 50%, #F79E1B 50%); border-radius: 4px;"></div>`;
-      if (bank === 'amex') return `<div style="width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; background: #006FCF; border-radius: 4px;"><span style="color: white; font-weight: 700; font-size: ${size * 0.28}px;">AMEX</span></div>`;
+      // Card network logos - centralized PNG files
+      if (bank === 'visa') return `<img src="${basePath}card-logos/visa.png" alt="Visa" style="${iconStyle}" />`;
+      if (bank === 'mc' || bank === 'mastercard') return `<img src="${basePath}card-logos/mastercard.png" alt="Mastercard" style="${iconStyle}" />`;
+      if (bank === 'amex' || bank.includes('american express')) return `<img src="${basePath}card-logos/amex.png" alt="American Express" style="${iconStyle}" />`;
 
       // Fallback
-      return `<img src="${basePath}rbc.png" alt="Bank" style="${iconStyle}" />`;
+      return `<img src="${basePath}bank-icons/rbc.png" alt="Bank" style="${iconStyle}" />`;
     };
 
     // Helper: Get bank icon (supports dual-icon for credit cards)
