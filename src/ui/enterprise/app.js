@@ -118,7 +118,7 @@
 
   // IMMEDIATE GLOBAL EXPOSURE (Fix ReferenceError)
   window.render = function () {
-    if (typeof render === 'function') render();
+    if (typeof render === 'function') window.updateWorkspace();
     else console.error("[UI] render function NOT YET DEFINED");
   };
 
@@ -139,7 +139,7 @@
         transactions: window.RoboLedger.Ledger.getRawState().transactions,
         sigIndex: window.RoboLedger.Ledger.getRawState().sigIndex
       }));
-      render();
+      window.updateWorkspace();
     } else if (type === 'popIn') {
       window.popInGrid();
     }
@@ -152,19 +152,19 @@
     } else {
       UI_STATE.refError = null;
     }
-    render();
+    window.updateWorkspace();
   };
 
   window.toggleInspector = () => {
     UI_STATE.panelState = UI_STATE.panelState === 'closed' ? 'collapsed' : (UI_STATE.panelState === 'collapsed' ? 'expanded' : 'closed');
     console.log('[UI] Inspector state:', UI_STATE.panelState);
-    render();
+    window.updateWorkspace();
   };
 
   window.handleOpeningBalanceUpdate = (accId, val) => {
     const amount = parseFloat(val) || 0;
     window.RoboLedger.Accounts.setOpeningBalance(accId, amount * 100);
-    render();
+    window.updateWorkspace();
   };
 
   // Mobile sidebar toggle
@@ -469,7 +469,7 @@
       UI_STATE.popoutWindow.close();
       UI_STATE.popoutWindow = null;
     }
-    render();
+    window.updateWorkspace();
   };
 
   window.popOutGrid = function () {
@@ -527,7 +527,7 @@
     const url = URL.createObjectURL(blob);
     UI_STATE.popoutWindow = window.open(url, 'GridPopout', 'width=1400,height=900');
     UI_STATE.isPoppedOut = true;
-    render();
+    window.updateWorkspace();
 
     // Heartbeat Monitor
     const monitor = setInterval(() => {
@@ -535,7 +535,7 @@
         clearInterval(monitor);
         UI_STATE.isPoppedOut = false;
         UI_STATE.popoutWindow = null;
-        window.render();
+        window.window.updateWorkspace();
       }
     }, 500);
   };
@@ -708,11 +708,11 @@
 
     if (action === 'continue') {
       UI_STATE.recoveryPending = false;
-      render();
+      window.updateWorkspace();
     } else {
       window.RoboLedger.Ledger.reset();
       UI_STATE.recoveryPending = false;
-      render();
+      window.updateWorkspace();
     }
   };
 
@@ -754,49 +754,53 @@
   }
 
 
-  window.switchAccount = function (accId) {
-    console.log(`[V5 CONTROL] Switching to account: ${accId}`);
-    const previousAccount = UI_STATE.selectedAccount;
-    UI_STATE.selectedAccount = accId;
+  // ═══════════════════════════════════════════════════════════════
+  // UNIFIED WORKSPACE UPDATE - MAGNETIC CONTAINER COUPLING
+  // ═══════════════════════════════════════════════════════════════
+  /**
+   * Ensures metadata, reconciliation, and grid are MAGNETICALLY coupled
+   * This is the SINGLE SOURCE OF TRUTH for updating the workspace
+   * 
+   * @param {string|null} accountId - Account ID to display, or null to use current UI_STATE
+   */
+  window.updateWorkspace = function (accountId = null) {
+    const selectedAccount = accountId || UI_STATE.selectedAccount || 'ALL';
+    console.log(`[WORKSPACE] ═══ UNIFIED UPDATE for: ${selectedAccount} ═══`);
 
-    // Set global variable for metadata rendering
-    window.currentAccountId = accId;
+    const allTxns = window.RoboLedger.Ledger.getAll();
+    const filteredTxns = selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === selectedAccount);
+    console.log(`[WORKSPACE] Filtered: ${filteredTxns.length} of ${allTxns.length} transactions`);
 
-    // CRITICAL: Update REF# prefix based on selected account
-    // The React grid uses UI_STATE.refPrefix to generate REF# like "CHQ1-001", "VISA1-001"
-    if (accId !== 'ALL') {
+    UI_STATE.selectedAccount = selectedAccount;
+    window.currentAccountId = selectedAccount;
+
+    if (selectedAccount !== 'ALL') {
       const accounts = window.RoboLedger.Accounts.getAll();
-      const selectedAcc = accounts.find(a => a.id === accId);
-      if (selectedAcc && selectedAcc.ref) {
-        UI_STATE.refPrefix = selectedAcc.ref;
-        console.log(`[REF#] Updated prefix to: ${selectedAcc.ref}`);
-      } else {
-        UI_STATE.refPrefix = 'TXN'; // Fallback
-      }
+      const selectedAcc = accounts.find(a => a.id === selectedAccount);
+      UI_STATE.refPrefix = (selectedAcc && selectedAcc.ref) ? selectedAcc.ref : 'TXN';
     } else {
-      UI_STATE.refPrefix = 'ALL'; // ALL mode shows mixed refs
+      UI_STATE.refPrefix = 'ALL';
     }
 
-    // Get filtered transactions for the new account
-    const allTx = window.RoboLedger.Ledger.getAll();
-    const filtered = accId === 'ALL' ? allTx : allTx.filter(t => t.account_id === accId);
-
-    console.log(`[GRID RENDER] Filtered ${filtered.length} transactions for account: ${accId}`);
-
-    // Update grid data ONLY (don't re-render entire page)
     if (window.renderTransactionsGrid) {
-      window.renderTransactionsGrid(filtered, UI_STATE.searchQuery);
-    } else {
-      console.warn('[GRID] renderTransactionsGrid not available, grid will not update');
+      console.log('[WORKSPACE] → Updating GRID with filtered dataset');
+      window.renderTransactionsGrid(filteredTxns, UI_STATE.searchQuery);
     }
 
-    // Update header DATA ONLY (no re-rendering of structure)
-    if (window.updateHeaderData && previousAccount !== accId) {
-      console.log('[HEADER] Updating header data (no re-render)');
+    if (window.updateHeaderData) {
+      console.log('[WORKSPACE] → Updating METADATA + RECONCILIATION');
       window.updateHeaderData();
-    } else {
-      console.warn('[HEADER] Header update skipped (no change or function unavailable)');
     }
+
+    console.log('[WORKSPACE] ✓ All containers coupled to same filter');
+  };
+
+  window.switchAccount = function (accId) {
+    console.log(`[CONTROL] Switching to account: ${accId}`);
+
+    // UNIFIED UPDATE: Ensures metadata, reconciliation, and grid are magnetically coupled
+    // All three containers will use the SAME filtered dataset
+    window.updateWorkspace(accId);
   };
 
   // Save opening balance when user edits field (for reconciliation)
@@ -817,7 +821,7 @@
       acc.openingBalance = numericValue;
       window.RoboLedger.Accounts.save(); // Persist to localStorage
       console.log('[RECON] Opening balance updated:', numericValue);
-      render(); // Refresh UI
+      window.updateWorkspace(); // Refresh UI
     }
   };
 
@@ -839,7 +843,7 @@
       acc.statementEndingBalance = numericValue;
       window.RoboLedger.Accounts.save();
       console.log('[RECON] Statement ending updated:', numericValue);
-      render();
+      window.updateWorkspace();
     }
   };
 
@@ -994,7 +998,7 @@
       console.log(`[INIT] Theme restored: ${savedTheme}`);
     }
 
-    window.render();
+    window.window.updateWorkspace();
   }
 
   function setupNav() {
@@ -1031,7 +1035,7 @@
           const label = route.charAt(0).toUpperCase() + route.slice(1);
           UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
         }
-        render();
+        window.updateWorkspace();
       };
     });
   }
@@ -1140,7 +1144,7 @@
       if (btn) {
         UI_STATE.selectedAccount = btn.dataset.acc;
         UI_STATE.bulkMenuOpen = false; // Close bulk menu on account switch
-        render();
+        window.updateWorkspace();
       }
     });
 
@@ -1171,7 +1175,7 @@
       if (e.target.closest('.btn-add-row')) {
         const accId = UI_STATE.selectedAccount === 'ALL' ? 'ACC-001' : UI_STATE.selectedAccount;
         window.RoboLedger.Ledger.createManual(accId);
-        window.render();
+        window.window.updateWorkspace();
       }
     });
 
@@ -1183,7 +1187,7 @@
     document.addEventListener('click', (e) => {
       if (UI_STATE.bulkMenuOpen && !e.target.closest('.bulk-actions-container')) {
         UI_STATE.bulkMenuOpen = false;
-        window.render();
+        window.window.updateWorkspace();
       }
     });
   }
@@ -1191,19 +1195,19 @@
   window.handleReset = () => {
     if (!UI_STATE.resetConfirm) {
       UI_STATE.resetConfirm = true;
-      render();
+      window.updateWorkspace();
       // Auto-reset confirmation after 3 seconds of inactivity
       setTimeout(() => {
         if (UI_STATE.resetConfirm) {
           UI_STATE.resetConfirm = false;
-          render();
+          window.updateWorkspace();
         }
       }, 3000);
     } else {
       window.RoboLedger.Ledger.reset();
       UI_STATE.resetConfirm = false;
       UI_STATE.selectedAccount = 'ACC-001';
-      render();
+      window.updateWorkspace();
     }
   };
 
@@ -1214,7 +1218,7 @@
       const data = dataAdjustedForAccount();
       if (window.renderTransactionsGrid) window.renderTransactionsGrid(data, UI_STATE.searchQuery);
     }
-    render();
+    window.updateWorkspace();
     if (UI_STATE.isSearchOpen) {
       setTimeout(() => {
         const el = document.getElementById('v5-search-input');
@@ -1268,7 +1272,7 @@
     if (UI_STATE.panelState === 'collapsed' || UI_STATE.panelState === 'closed') {
       UI_STATE.panelState = 'expanded';
     }
-    render();
+    window.updateWorkspace();
   };
 
   // Toggle inspector panel states
@@ -1285,7 +1289,7 @@
         UI_STATE.panelState = 'collapsed';
       }
     }
-    render();
+    window.updateWorkspace();
     // Redraw grid to handle column visibility
     if (window.txnTable) {
       setTimeout(() => window.txnTable.redraw(true), 350);
@@ -1301,7 +1305,7 @@
         category_name: category ? category.name : 'UNCATEGORIZED',
         status: categoryCode ? 'CONFIRMED' : 'RAW'
       });
-      render();
+      window.updateWorkspace();
     } catch (err) {
       console.error('[CODING] Failed to update category:', err);
     }
@@ -1317,7 +1321,7 @@
 
   window.toggleBulkMenu = () => {
     UI_STATE.bulkMenuOpen = !UI_STATE.bulkMenuOpen;
-    render();
+    window.updateWorkspace();
   };
 
   function toggleSettings(open) {
@@ -1670,7 +1674,7 @@
 
     UI_STATE.isIngesting = true;
     let totalFiles = files.length;
-    render();
+    window.updateWorkspace();
 
     // Technical Metadata Engine: Extraction & Classification
     for (let i = 0; i < totalFiles; i++) {
@@ -1724,7 +1728,7 @@
     UI_STATE.isIngesting = false;
     UI_STATE.ingestionLabel = null;
     UI_STATE.ingestionProgress = 100;
-    render();
+    window.updateWorkspace();
   }
 
   // --- V5 Technical Metadata Engine ---
@@ -1793,7 +1797,7 @@
     if (window.txnTable) {
       window.txnTable.setData(data);
     }
-    render();
+    window.updateWorkspace();
     return "DEEP REPAIR COMPLETE - UI REFRESHED";
   };
 
@@ -2776,7 +2780,7 @@
     const targets = []; // Get from React selection
     if (confirm(`Delete ${ targets.length } transactions ? `)) {
       targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
-      window.render();
+      window.window.updateWorkspace();
     }
     */
   };
@@ -2886,7 +2890,7 @@
       UI_STATE.isIngesting = true;
       UI_STATE.ingestionProgress = 0;
       UI_STATE.ingestionLabel = "AI Analysis in progress...";
-      render();
+      window.updateWorkspace();
 
       // Mock processing
       let intv = setInterval(() => {
@@ -2894,9 +2898,9 @@
         if (UI_STATE.ingestionProgress >= 100) {
           clearInterval(intv);
           UI_STATE.isIngesting = false;
-          render();
+          window.updateWorkspace();
         }
-        render();
+        window.updateWorkspace();
       }, 300);
     };
   };
