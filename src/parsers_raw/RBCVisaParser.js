@@ -23,20 +23,36 @@ RBC VISA FORMAT:
         const lines = statementText.split('\n');
         const transactions = [];
 
-        // EXTRACT METADATA (Institution, Transit, Account)
-        const acctMatch = statementText.match(/(?:Account)[:#]?\s*([\d-]{7,})/i);
+        // EXTRACT METADATA - Full masked card number (IIN standard: 16 digits for Visa)
+        // RBC format: Can vary, try to extract full 16-digit masked format
+        let accountNumber = 'XXXX XXXX XXXX XXXX'; // Default fallback
+
+        // Try formatted (with spaces/dashes): "4XXX-XXXX-XXXX-1234" or "4XXX XXXX XXXX 1234"
+        const maskedMatch = statementText.match(/([4-6]\d{3}[\s-]+[X\d]{4}[\s-]+[X\d]{4}[\s-]+\d{4})/i);
+        if (maskedMatch) {
+            accountNumber = maskedMatch[1].replace(/-/g, ' '); // Normalize to spaces
+            console.log(`[RBC-VISA] Extracted full masked card: ${accountNumber}`);
+        } else {
+            // Fallback: Try unformatted
+            const unformattedMatch = statementText.match(/([4-6]\d{3}[X\d]{8}\d{4})/i);
+            if (unformattedMatch) {
+                const raw = unformattedMatch[1];
+                accountNumber = raw.match(/.{1,4}/g).join(' ');
+                console.log(`[RBC-VISA] Extracted and formatted: ${accountNumber}`);
+            }
+        }
 
         // Extract opening balance (Previous Balance for credit cards)
         let openingBalance = null;
-        const openingMatch = statementText.match(/Previous Balance.*?\$?([\d,]+\.\d{2})/i);
+        const openingMatch = statementText.match(/Previous Balance.*?\$?([\ d,]+\.\d{2})/i);
         if (openingMatch) {
             openingBalance = parseFloat(openingMatch[1].replace(/,/g, ''));
             console.log(`[RBC-VISA] Extracted opening balance: ${openingBalance}`);
         }
 
         const parsedMetadata = {
-            _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
+            _acct: accountNumber,
+            accountNumber: accountNumber,
             _tag: 'Visa',
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
@@ -44,7 +60,7 @@ RBC VISA FORMAT:
             openingBalance: openingBalance
             // NO transit, NO institutionCode - these are for bank accounts only
         };
-        console.warn('🏁 [RBC-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
+        console.warn('🏁 [RBC-VISA] Extraction Phase Complete. Card:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
