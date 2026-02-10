@@ -97,7 +97,10 @@ SCOTIA MASTERCARD FORMAT:
                 cardNetwork: 'Mastercard',
                 accountType: 'CreditCard',
                 bankName: 'Scotiabank',
-                // Branding for UI/icon
+                // Dual-icon system
+                bankIcon: 'SCOTIA',
+                networkIcon: 'MC',
+                // Legacy branding
                 brand: 'MC',
                 bankCode: 'MC',
                 institution: 'MC'

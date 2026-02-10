@@ -40,7 +40,10 @@ BMO MASTERCARD FORMAT:
       cardNetwork: 'Mastercard',
       accountType: 'CreditCard',
       bankName: 'BMO',
-      // Branding for UI/icon
+      // Dual-icon system
+      bankIcon: 'BMO',
+      networkIcon: 'MC',
+      // Legacy branding
       brand: 'MC',
       bankCode: 'MC',
       institution: 'MC'

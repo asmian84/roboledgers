@@ -40,7 +40,10 @@ RBC MASTERCARD FORMAT:
             cardNetwork: 'Mastercard',
             accountType: 'CreditCard',
             bankName: 'RBC',
-            // Branding for UI/icon
+            // Dual-icon system
+            bankIcon: 'RBC',
+            networkIcon: 'MC',
+            // Legacy branding
             brand: 'MC',
             bankCode: 'MC',
             institution: 'MC'

@@ -43,7 +43,10 @@ BMO VISA FORMAT:
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
             bankName: 'BMO',
-            // Branding for UI/icon
+            // Dual-icon system
+            bankIcon: 'BMO',
+            networkIcon: 'VISA',
+            // Legacy branding
             brand: 'VISA',
             bankCode: 'VISA',
             institution: 'VISA'

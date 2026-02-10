@@ -49,7 +49,10 @@ AMEX FORMAT:
             accountType: 'CreditCard',
             bankName: 'American Express',
             _cardType: cardType,
-            // Add proper branding for UI/icon detection
+            // Dual-icon system: bank + network
+            bankIcon: 'AMEX',
+            networkIcon: 'AMEX',
+            // Legacy branding fields
             bankCode: 'AMEX',
             institution: 'AMEX',
             brand: 'AMEX',

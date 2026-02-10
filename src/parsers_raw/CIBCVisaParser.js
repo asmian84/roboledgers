@@ -32,7 +32,10 @@ CIBC VISA FORMAT:
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
             bankName: 'CIBC',
-            // Branding for UI/icon
+            // Dual-icon system
+            bankIcon: 'CIBC',
+            networkIcon: 'VISA',
+            // Legacy branding
             brand: 'VISA',
             bankCode: 'VISA',
             institution: 'VISA'

@@ -44,7 +44,10 @@ SCOTIABANK VISA FORMAT:
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
             bankName: 'Scotiabank',
-            // Branding for UI/icon
+            // Dual-icon system
+            bankIcon: 'SCOTIA',
+            networkIcon: 'VISA',
+            // Legacy branding
             brand: 'VISA',
             bankCode: 'VISA',
             institution: 'VISA'
