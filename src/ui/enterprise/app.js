@@ -1957,7 +1957,7 @@
 
       // For other accounts, use standard 28px icons
       const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
-      const basePath = '/src/ui/enterprise/assets/bank-icons/';
+      const basePath = '/src/ui/enterprise/assets/logos/';
       if (bank.includes('rbc') || bank.includes('royal')) return '<img src="' + basePath + 'rbc.png" alt="RBC" style="' + iconStyle + '" />';
       if (bank.includes('td') || bank.includes('dominion')) return '<img src="' + basePath + 'td.png" alt="TD" style="' + iconStyle + '" />';
       if (bank.includes('bmo') || bank.includes('montreal')) return '<img src="' + basePath + 'bmo.png" alt="BMO" style="' + iconStyle + '" />';
@@ -2234,7 +2234,7 @@
     const getBankIcon = (bankName) => {
       const bank = (bankName || '').toLowerCase();
       const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
-      const basePath = '/src/ui/enterprise/assets/bank-icons/';
+      const basePath = '/src/ui/enterprise/assets/logos/';
       if (bank.includes('rbc') || bank.includes('royal')) return '<img src="' + basePath + 'rbc.png" alt="RBC" style="' + iconStyle + '" />';
       if (bank.includes('td') || bank.includes('dominion')) return '<img src="' + basePath + 'td.png" alt="TD" style="' + iconStyle + '" />';
       if (bank.includes('bmo') || bank.includes('montreal')) return '<img src="' + basePath + 'bmo.png" alt="BMO" style="' + iconStyle + '" />';
