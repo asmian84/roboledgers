@@ -94,9 +94,8 @@ AMEX FORMAT:
                 inTransactionBlock = true;
                 continue;
             }
-            // Don't stop at "Total of Payment Activity" - it appears BEFORE transactions
-            // Only stop at "Total of New Transactions" which marks the actual end
-            if (inTransactionBlock && line.match(/^Total of New Transactions\s/i)) {
+            // MINIMAL FIX: Exclude 'Payment Activity' from stop - it appears BEFORE main transactions
+            if (inTransactionBlock && line.match(/Total of (?:New Transactions|Activity)(?!\s+Activity)/i)) {
                 inTransactionBlock = false;
                 continue;
             }
