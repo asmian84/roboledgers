@@ -2088,7 +2088,10 @@
           '</div>';
       } else if (acc) {
         // SINGLE MODE: ACCOUNT METADATA heading + breadcrumb + transaction counts + icon (48px) + text
-        var isLiability = acc.type === 'liability' || acc.type === 'creditcard';
+        // Check accountType field (set by parsers) OR fallback to type field
+        var isLiability = (acc.accountType || '').toLowerCase() === 'creditcard' ||
+          acc.type === 'liability' ||
+          acc.type === 'creditcard';
         var accTxns = window.RoboLedger.Ledger.getAll().filter(function (t) { return t.account_id === acc.id; });
         var periodText = 'No transactions';
         if (accTxns.length > 0) {
