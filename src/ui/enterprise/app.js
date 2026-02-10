@@ -2106,6 +2106,11 @@
 
         var bankIcon = getBankIcon(acc);  // Pass full account object for dual-icon support
 
+        // Determine if this is a credit card account (check accountType field from parser)
+        const isLiability = (acc.accountType || '').toLowerCase() === 'creditcard' ||
+          acc.type === 'liability' ||
+          acc.type === 'creditcard';
+
         // Format card number display based on card network
         var transitInfo;
         if (isLiability) {
