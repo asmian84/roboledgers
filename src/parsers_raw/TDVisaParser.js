@@ -26,8 +26,23 @@ TD VISA FORMAT:
         const lines = statementText.split('\n');
         const transactions = [];
 
-        // EXTRACT METADATA (Institution, Transit, Account)
-        const acctMatch = statementText.match(/(?:Account)[:#]?\s*([\d-]{7,})/i);
+        // EXTRACT METADATA - Account number from masked card format
+        // TD format: "4520 70XX XXXX 7298" or "Account Number: 4520 70XX XXXX 7298"
+        let accountNumber = '-----';
+
+        // Try to extract from masked card number format
+        const maskedMatch = statementText.match(/(?:Account\s+Number[:\s]+)?[\dX]{4}\s+[\dX]{2,4}\s+[\dX]{4}\s+(\d{4})/i);
+        if (maskedMatch) {
+            accountNumber = maskedMatch[1]; // Last 4 digits
+            console.log(`[TD-VISA] Extracted last 4 from masked: ${accountNumber}`);
+        } else {
+            // Fallback: Try full account number
+            const fullMatch = statementText.match(/(?:Account\s+Number)[:\s]+(\d{7,})/i);
+            if (fullMatch) {
+                accountNumber = fullMatch[1];
+                console.log(`[TD-VISA] Extracted full account: ${accountNumber}`);
+            }
+        }
 
         // Extract opening balance (Previous Balance for credit cards)
         let openingBalance = null;
@@ -38,8 +53,8 @@ TD VISA FORMAT:
         }
 
         const parsedMetadata = {
-            _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
-            accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
+            _acct: accountNumber,
+            accountNumber: accountNumber,
             _tag: 'Visa',
             cardNetwork: 'Visa',
             accountType: 'CreditCard',
