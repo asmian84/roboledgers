@@ -361,7 +361,18 @@
     // Hide progress bar after brief delay, then refresh grid
     setTimeout(() => {
       window.hideProgressBar();
-      render(); // Single render at the end
+
+      // AUTO-SWITCH to the newly imported account so REF# prefix is correct
+      // Get all accounts and switch to the last one (most recently imported)
+      const accounts = window.RoboLedger.Accounts.getAll();
+      if (accounts.length > 0) {
+        const lastAccount = accounts[accounts.length - 1];
+        console.log('[UPLOAD] Auto-switching to newly imported account:', lastAccount.id, lastAccount.ref);
+        window.switchAccount(lastAccount.id); // This will update UI_STATE.refPrefix
+      } else {
+        // No accounts, just render normally
+        render();
+      }
     }, 1500);
 
     console.log(`[UPLOAD] Complete. Total imported: ${totalImported}`);
