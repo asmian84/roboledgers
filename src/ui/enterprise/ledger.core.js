@@ -710,8 +710,9 @@ window.RoboLedger = (function () {
             // ==================== TD PARSERS (CHECK FIRST!) ====================
             // CRITICAL: Must check TD before RBC because "TD" alone is too generic
             // TD Aeroplan cards say "TD® Aeroplan® Visa" not "TD CANADA TRUST"
-            if (upper.includes('TD CANADA') || upper.includes('TD TRUST') || upper.includes('AEROPLAN') ||
-                (upper.includes('TD') && upper.includes('VISA') && !upper.includes('RBC') && !upper.includes('ROYAL BANK'))) {
+            if ((upper.includes('TD CANADA') || upper.includes('TD TRUST') || upper.includes('AEROPLAN') ||
+                (upper.includes('TD') && upper.includes('VISA') && !upper.includes('RBC') && !upper.includes('ROYAL BANK'))) &&
+                !upper.includes('AMERICAN EXPRESS') && !upper.includes('AMEX BANK')) {
                 console.log('[PARSER] Detected TD statement');
 
                 if (upper.includes('VISA') || upper.includes('AEROPLAN')) {
