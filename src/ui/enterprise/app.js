@@ -2021,7 +2021,14 @@
         var totalDebits = txns.filter(function (t) { return t.polarity === 'DEBIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
         var totalCredits = txns.filter(function (t) { return t.polarity === 'CREDIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
         const openingBalance = acc.openingBalance || 0;
-        const calculatedEnding = openingBalance - totalDebits + totalCredits;
+
+        // Critical: Use correct formula based on account type
+        // Credit cards: balance INCREASES with debits, DECREASES with payments (credits)
+        // Bank accounts: balance DECREASES with debits, INCREASES with credits
+        const isLiability = acc.type === 'liability' || acc.type === 'creditcard';
+        const calculatedEnding = isLiability
+          ? openingBalance + totalDebits - totalCredits  // Credit card formula
+          : openingBalance - totalDebits + totalCredits; // Bank account formula
         const actualEnding = acc.actualEndingBalance || 0;
         const isAutoReconciled = actualEnding === 0;
         const discrepancy = isAutoReconciled ? 0 : (actualEnding - calculatedEnding);
