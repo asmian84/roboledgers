@@ -1820,7 +1820,12 @@
           </div>
           ${isLast ? '' : '<span class="breadcrumb-separator" style="margin: 0 10px; color: #cbd5e1;"><i class="ph ph-caret-right" style="font-size: 10px;"></i></span>'}
         `;
-      }).join('');
+      }).join('') + `
+        <div style="flex: 1;"></div>
+        <button onclick="window.devReset()" style="padding: 4px 10px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 12px;" title="Clear all localStorage and reset (Dev only)">
+          ⚠️ DEV RESET
+        </button>
+      `;
     }
 
     // 3. Stage Content
