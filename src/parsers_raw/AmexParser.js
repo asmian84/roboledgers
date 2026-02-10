@@ -48,7 +48,12 @@ AMEX FORMAT:
             cardNetwork: 'Amex',
             accountType: 'CreditCard',
             bankName: 'American Express',
-            _cardType: cardType
+            _cardType: cardType,
+            // Add proper branding for UI/icon detection
+            bankCode: 'AMEX',
+            institution: 'AMEX',
+            brand: 'AMEX',
+            id: 'CC-AMEX'
         };
         console.warn('🏁 [AMEX] Extraction Phase Complete. Card:', metadata.accountNumber);
 
