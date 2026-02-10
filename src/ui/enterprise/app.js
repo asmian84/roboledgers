@@ -1907,22 +1907,22 @@
     const getSingleIcon = (iconCode, size = 28) => {
       const bank = (iconCode || '').toLowerCase();
       const iconStyle = `width: ${size}px; height: ${size}px; border-radius: 4px; object-fit: contain;`;
-      const basePath = '/src/ui/enterprise/assets/';
+      const basePath = '/src/ui/enterprise/assets/logos/';
 
       // Bank icons
-      if (bank === 'rbc' || bank.includes('royal')) return `<img src="${basePath}bank-icons/rbc.png" alt="RBC" style="${iconStyle}" />`;
-      if (bank === 'td' || bank.includes('dominion')) return `<img src="${basePath}bank-icons/td.png" alt="TD" style="${iconStyle}" />`;
-      if (bank === 'bmo' || bank.includes('montreal')) return `<img src="${basePath}bank-icons/bmo.png" alt="BMO" style="${iconStyle}" />`;
-      if (bank === 'scotia' || bank.includes('scotiabank')) return `<img src="${basePath}bank-icons/scotia.png" alt="Scotia" style="${iconStyle}" />`;
-      if (bank === 'cibc') return `<img src="${basePath}bank-icons/cibc.png" alt="CIBC" style="${iconStyle}" />`;
+      if (bank === 'rbc' || bank.includes('royal')) return `<img src="${basePath}rbc.png" alt="RBC" style="${iconStyle}" />`;
+      if (bank === 'td' || bank.includes('dominion')) return `<img src="${basePath}td.png" alt="TD" style="${iconStyle}" />`;
+      if (bank === 'bmo' || bank.includes('montreal')) return `<img src="${basePath}bmo.png" alt="BMO" style="${iconStyle}" />`;
+      if (bank === 'scotia' || bank.includes('scotiabank')) return `<img src="${basePath}scotia.png" alt="Scotia" style="${iconStyle}" />`;
+      if (bank === 'cibc') return `<img src="${basePath}cibc.png" alt="CIBC" style="${iconStyle}" />`;
 
-      // Card network logos - centralized PNG files
-      if (bank === 'visa') return `<img src="${basePath}card-logos/visa.png" alt="Visa" style="${iconStyle}" />`;
-      if (bank === 'mc' || bank === 'mastercard') return `<img src="${basePath}card-logos/mastercard.png" alt="Mastercard" style="${iconStyle}" />`;
-      if (bank === 'amex' || bank.includes('american express')) return `<img src="${basePath}card-logos/amex.png" alt="American Express" style="${iconStyle}" />`;
+      // Card network logos
+      if (bank === 'visa') return `<img src="${basePath}visa.png" alt="Visa" style="${iconStyle}" />`;
+      if (bank === 'mc' || bank === 'mastercard') return `<img src="${basePath}mastercard.png" alt="Mastercard" style="${iconStyle}" />`;
+      if (bank === 'amex' || bank.includes('american express')) return `<img src="${basePath}amex.png" alt="American Express" style="${iconStyle}" />`;
 
       // Fallback
-      return `<img src="${basePath}bank-icons/rbc.png" alt="Bank" style="${iconStyle}" />`;
+      return `<img src="${basePath}rbc.png" alt="Bank" style="${iconStyle}" />`;
     };
 
     // Helper: Get bank icon (supports dual-icon for credit cards)
@@ -2000,31 +2000,19 @@
     const reconContent = document.getElementById('reconciliation-content');
     if (reconContent) {
       if (isAllMode) {
-        // ALL MODE: Summary view - Total Balance, Debits•Credits, Net Activity
-        // Use amount_cents/polarity (the actual data format), NOT t.debit/t.credit
+        // ALL MODE: "All Accounts at a glance" - Simple summary without reconciliation status
         var allTxns = window.RoboLedger.Ledger.getAll();
         var aggTotalDebits = allTxns.filter(function (t) { return t.polarity === 'DEBIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
         var aggTotalCredits = allTxns.filter(function (t) { return t.polarity === 'CREDIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
         var aggOpeningBalance = accounts.reduce(function (sum, a) { return sum + (a.openingBalance || 0); }, 0);
         var totalBalance = aggOpeningBalance - aggTotalDebits + aggTotalCredits;
         var netActivity = aggTotalCredits - aggTotalDebits;
-        var allReconciled = accounts.length > 0 && accounts.every(function (a) {
-          var aTxns = allTxns.filter(function (t) { return t.account_id === a.id; });
-          return aTxns.length > 0 && aTxns.every(function (t) { return t.reconciled; });
-        });
-        var statusHTML = allReconciled ? '<span style="color: #10b981;">\u2713 RECONCILED</span>' : '<span style="color: #ef4444;">\u2717 DISCREPANCY</span>';
-
-        // Build account badges HTML for the header line
-        var badgesHTML = accounts.map(function (a) {
-          return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer; margin-left: 4px;">' + (a.ref || 'N/A') + '</span>';
-        }).join('');
 
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b; line-height: 1.7;">' +
-          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
+          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">All Accounts at a glance</div>' +
           '<div>Total Balance: <span style="font-weight: 600;">$' + totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '<div>Total Debits: <span style="font-weight: 600; color: #ef4444;">$' + aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span> \u2022 Total Credits: <span style="font-weight: 600; color: #10b981;">$' + aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '<div>Net Activity: <span style="font-weight: 600;">$' + netActivity.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
-          '<div style="font-size: 10px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">' + statusHTML + '</div>' +
           '</div>';
       } else if (!acc) {
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b;">&gt; Select account...</div>';
