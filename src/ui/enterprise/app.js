@@ -2034,8 +2034,11 @@
 
         // Critical: Use correct formula based on account type
         // Credit cards: balance INCREASES with debits, DECREASES with payments (credits)
-        // Bank accounts: balance DECREASES with debits, INCREASES with credits
-        const isLiability = acc.type === 'liability' || acc.type === 'creditcard';
+        // Bank accounts: balance DECREASES with debits, INCREASES with credits  
+        // Check accountType field (set by parsers) OR fallback to type field
+        const isLiability = (acc.accountType || '').toLowerCase() === 'creditcard' ||
+          acc.type === 'liability' ||
+          acc.type === 'creditcard';
         const calculatedEnding = isLiability
           ? openingBalance + totalDebits - totalCredits  // Credit card formula
           : openingBalance - totalDebits + totalCredits; // Bank account formula
