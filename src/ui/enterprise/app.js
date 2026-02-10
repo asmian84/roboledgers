@@ -754,7 +754,7 @@
     // CRITICAL: Update REF# prefix based on selected account
     // The React grid uses UI_STATE.refPrefix to generate REF# like "CHQ1-001", "VISA1-001"
     if (accId !== 'ALL') {
-      const accounts = window.RoboLedger.Ledger.getAccounts();
+      const accounts = window.RoboLedger.Accounts.getAll();
       const selectedAcc = accounts.find(a => a.id === accId);
       if (selectedAcc && selectedAcc.ref) {
         UI_STATE.refPrefix = selectedAcc.ref;
