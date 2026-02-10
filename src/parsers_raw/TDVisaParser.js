@@ -123,7 +123,13 @@ TD VISA FORMAT:
 
         // Find where the first amount ENDS (not starts!)
         const firstAmountMatch = text.match(/(-?\$?[\d,]+\.\d{2})/);
+        console.log(`[TD-VISA-EXTRACT] First amount match:`, firstAmountMatch[0]);
+        console.log(`[TD-VISA-EXTRACT] Match starts at index:`, firstAmountMatch.index);
+        console.log(`[TD-VISA-EXTRACT] Match length:`, firstAmountMatch[0].length);
+
         const amountEndIdx = firstAmountMatch.index + firstAmountMatch[0].length;
+        console.log(`[TD-VISA-EXTRACT] Amount ends at index:`, amountEndIdx);
+        console.log(`[TD-VISA-EXTRACT] Text from end index:`, text.substring(amountEndIdx));
 
         // Description is everything AFTER the first amount
         let description = text.substring(amountEndIdx).trim();
