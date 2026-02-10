@@ -65,58 +65,41 @@ TD VISA FORMAT:
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
-        const dateRegex = /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{1,2})/i;
-        const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
-        let pendingDescription = '';
-        let pendingRawLines = [];
-        let pendingAuditLines = [];
+        // TD Visa has TWO dates per line: TRANSACTION DATE + POSTING DATE
+        // Format: "AUG 10       AUG 12   KILKENNY PUB CALGARY             $146.59"
+        const dateRegex = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{1,2})/i;
+        const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const trimmed = line.trim();
-            if (!trimmed || trimmed.match(/Opening Balance|Previous Balance|Page \d/i)) continue;
 
-            const dateMatch = trimmed.match(dateRegex);
-            if (dateMatch) {
-                const isoDate = `${currentYear}-${monthMap[dateMatch[1].toLowerCase()]}-${dateMatch[2].padStart(2, '0')}`;
-                const remainder = trimmed.substring(dateMatch[0].length).trim();
+            // Skip headers, balances, page numbers
+            if (!trimmed || trimmed.length < 10) continue;
+            if (trimmed.match(/Opening Balance|Previous|PREVIOUS|Page \d|TRANSACTION.*DATE|AMOUNT\(\$\)|Continued|STATEMENT/i)) continue;
 
-                const extracted = this.extractTransaction(remainder, isoDate, line);
-                if (extracted && extracted.amount) {
-                    if (pendingDescription) {
-                        extracted.description = pendingDescription + ' ' + extracted.description;
-                        extracted.rawText = [...pendingRawLines, extracted.rawText].join('\n');
-                        if (extracted.audit) {
-                            extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, extracted.audit]);
-                        }
-                    }
-                    transactions.push(extracted);
-                    pendingDescription = '';
-                    pendingRawLines = [];
-                    pendingAuditLines = [];
-                } else {
-                    // Start of multi-line
-                    pendingDescription = remainder;
-                    pendingRawLines = [line];
-                    pendingAuditLines = [this.getSpatialMetadata(line)];
-                }
-            } else if (pendingDescription && trimmed.length > 3) {
-                const extracted = this.extractTransaction(trimmed, '', line);
-                if (extracted && extracted.amount) {
-                    extracted.date = transactions[transactions.length - 1]?.date || '1900-01-01';
-                    extracted.description = pendingDescription + ' ' + extracted.description;
-                    extracted.rawText = [...pendingRawLines, line].join('\n');
-                    extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, this.getSpatialMetadata(line)]);
-                    transactions.push(extracted);
-                    pendingDescription = '';
-                    pendingRawLines = [];
-                    pendingAuditLines = [];
-                } else {
-                    pendingDescription += ' ' + trimmed;
-                    pendingRawLines.push(line);
-                    pendingAuditLines.push(this.getSpatialMetadata(line));
-                }
+            // Try to match TWO dates at the start of line
+            // Pattern: "AUG 10       AUG 12   DESCRIPTION   $146.59"
+            const firstDateMatch = trimmed.match(dateRegex);
+            if (!firstDateMatch) continue;
+
+            // Remove first date, look for second date
+            const afterFirstDate = trimmed.substring(firstDateMatch[0].length).trim();
+            const secondDateMatch = afterFirstDate.match(dateRegex);
+
+            if (!secondDateMatch) continue; // TD Visa MUST have two dates
+
+            // Use posting date (second date) as the transaction date
+            const postingDate = `${currentYear}-${monthMap[secondDateMatch[1].toLowerCase()]}-${secondDateMatch[2].padStart(2, '0')}`;
+
+            // Everything after the second date is: DESCRIPTION + AMOUNT
+            const remainder = afterFirstDate.substring(secondDateMatch[0].length).trim();
+
+            // Extract transaction from remainder
+            const extracted = this.extractTransaction(remainder, postingDate, line);
+            if (extracted && extracted.amount) {
+                transactions.push(extracted);
             }
         }
 
@@ -125,16 +108,28 @@ TD VISA FORMAT:
     }
 
     extractTransaction(text, isoDate, originalLine) {
+        console.log(`[TD-VISA-EXTRACT] Input text: "${text}"`);
+        console.log(`[TD-VISA-EXTRACT] Date: ${isoDate}`);
+
         const amounts = text.match(/([\d,]+\.\d{2})/g);
-        if (!amounts || amounts.length < 1) return null;
+        if (!amounts || amounts.length < 1) {
+            console.log(`[TD-VISA-EXTRACT] No amounts found, skipping`);
+            return null;
+        }
+
+        console.log(`[TD-VISA-EXTRACT] Found amounts:`, amounts);
 
         const firstAmtIdx = text.search(/[\d,]+\.\d{2}/);
         let description = text.substring(0, firstAmtIdx).trim();
+
+        console.log(`[TD-VISA-EXTRACT] Raw description: "${description}"`);
 
         description = this.cleanCreditDescription(description, [
             "PAYMENT THANK YOU", "PURCHASE", "CASH ADVANCE",
             "INTEREST CHARGE", "ANNUAL FEE", "FOREIGN TRANSACTION FEE"
         ]);
+
+        console.log(`[TD-VISA-EXTRACT] Cleaned description: "${description}"`);
 
         const amount = parseFloat(amounts[0].replace(/,/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;

@@ -693,8 +693,30 @@ window.RoboLedger = (function () {
             const upper = text.toUpperCase();
             let result = null;
 
+            // ==================== TD PARSERS (CHECK FIRST!) ====================
+            // CRITICAL: Must check TD before RBC because "TD" alone is too generic
+            // TD Aeroplan cards say "TD® Aeroplan® Visa" not "TD CANADA TRUST"
+            if (upper.includes('TD CANADA') || upper.includes('TD TRUST') || upper.includes('AEROPLAN') ||
+                (upper.includes('TD') && upper.includes('VISA') && !upper.includes('RBC') && !upper.includes('ROYAL BANK'))) {
+                console.log('[PARSER] Detected TD statement');
+
+                if (upper.includes('VISA') || upper.includes('AEROPLAN')) {
+                    console.log('[PARSER] Routing to TD Visa Parser');
+                    if (window.tdVisaParser) {
+                        result = await window.tdVisaParser.parse(text);
+                        if (result) console.log('[PARSER] TD Visa returned:', result);
+                    }
+                } else {
+                    console.log('[PARSER] Routing to TD Chequing Parser');
+                    if (window.tdChequingParser) {
+                        result = await window.tdChequingParser.parse(text);
+                        if (result) console.log('[PARSER] TD Chequing returned:', result);
+                    }
+                }
+            }
+
             // ==================== RBC PARSERS ====================
-            if (upper.includes('RBC') || upper.includes('ROYAL BANK')) {
+            else if (upper.includes('RBC') || upper.includes('ROYAL BANK')) {
                 console.log('[PARSER] Detected RBC statement');
 
                 if (upper.includes('SAVINGS ACCOUNT') || upper.includes('BUSINESS ESSENTIALS') && upper.includes('SAVINGS')) {
