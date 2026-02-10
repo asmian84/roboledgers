@@ -1010,7 +1010,9 @@ window.RoboLedger = (function () {
                     return `CC-${brand}-${last4}`;
                 }
             }
-            if (tag.includes("AMEX") || tag.includes("AMERICAN EXPRESS")) {
+            // Amex: Check both tag AND cardNetwork (tag may be "Platinum" not "Amex")
+            if (tag.includes("AMEX") || tag.includes("AMERICAN EXPRESS") ||
+                (metadata.cardNetwork && metadata.cardNetwork.toUpperCase().includes("AMEX"))) {
                 const cardNum = (metadata._acct || metadata.accountNumber || "").replace(/\D/g, "");
                 if (cardNum.length >= 4) {
                     const last4 = cardNum.slice(-4);
