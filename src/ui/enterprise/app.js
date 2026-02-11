@@ -399,11 +399,6 @@
       try {
         console.log('[UPLOAD] Hiding progress bar and rendering grid...');
 
-        // Hide progress bar
-        if (window.hideProgressBar) {
-          window.hideProgressBar();
-        }
-
         // AUTO-SET REF# prefix for the newly imported account
         const accounts = window.RoboLedger.Accounts.getAll();
         if (accounts.length > 0) {
@@ -413,10 +408,10 @@
           console.log('[UPLOAD] Auto-set account:', lastAccount.id, 'prefix:', UI_STATE.refPrefix);
         }
 
-        // Reset ingesting state BEFORE render so progress bar is removed from DOM
+        // Reset ingesting state so render() excludes progress bar HTML
         UI_STATE.isIngesting = false;
 
-        // Render with updated state
+        // Render - this will naturally exclude progress bar since isIngesting is false
         render();
 
         console.log('[UPLOAD] Upload workflow complete - grid should be visible');
