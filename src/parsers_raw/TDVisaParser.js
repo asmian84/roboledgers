@@ -147,8 +147,8 @@ TD VISA FORMAT:
             date: isoDate,
             description: description || 'Transaction',
             amount,
-            debit: isPayment ? 0 : amount,
-            credit: isPayment ? amount : 0,
+            debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
+            credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
             balance: 0,
             _brand: 'TD',
             _tag: 'Visa',

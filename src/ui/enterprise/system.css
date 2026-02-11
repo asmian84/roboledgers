@@ -517,7 +517,7 @@ body {
 
 /* Grid Container reset (Card Style) */
 .grid-container-wall {
-    height: calc(100vh - 280px);
+    max-height: calc(100vh - 280px);
     width: calc(100% - 80px);
     margin: 0 40px 1px 40px;
     padding: 24px;

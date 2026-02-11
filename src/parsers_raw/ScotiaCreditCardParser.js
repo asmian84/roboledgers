@@ -150,8 +150,8 @@ class ScotiaCreditCardParser extends BaseBankParser {
             date: isoDate,
             description,
             amount,
-            debit: isPayment ? 0 : amount,
-            credit: isPayment ? amount : 0,
+            debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
+            credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
             balance,
             rawText: this.cleanRawText(originalLine),
             refCode: originalLine.match(/\b([A-Z0-9]{15,})\b/)?.[1] || 'N/A',

@@ -135,8 +135,8 @@ BMO MASTERCARD FORMAT:
       date: isoDate,
       description,
       amount,
-      debit: isPayment ? 0 : amount,
-      credit: isPayment ? amount : 0,
+      debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
+      credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
       balance,
       rawText: this.cleanRawText(originalLine),
       audit: this.getSpatialMetadata(originalLine)

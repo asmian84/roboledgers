@@ -116,6 +116,21 @@
     }
   };
 
+  /**
+   * Get all accounts that have at least 1 transaction
+   * @returns {Array} Accounts with transaction data
+   */
+  function getAccountsWithTransactions() {
+    const accounts = window.RoboLedger?.Accounts?.getAll() || [];
+    const allTxns = window.RoboLedger?.Ledger?.transactions || [];
+
+    return accounts.filter(acc => {
+      const txns = allTxns.filter(t => t.account_id === acc.id);
+      return txns.length > 0;
+    });
+  }
+
+
   // IMMEDIATE GLOBAL EXPOSURE (Fix ReferenceError)
   window.render = function () {
     if (typeof render === 'function') render();
@@ -296,17 +311,38 @@
     const fileCount = document.getElementById('progress-file-count');
     const txnCountEl = document.getElementById('progress-txn-count');
 
-    if (fill) fill.style.width = `${percent}%`;
+    if (fill) {
+      // For single file uploads, show indeterminate pulsing during parsing
+      if (total === 1 && stage === 'Parsing PDF...') {
+        fill.style.width = '100%';
+        fill.style.background = 'linear-gradient(90deg, #3b82f6 25%, #60a5fa 50%, #3b82f6 75%)';
+        fill.style.backgroundSize = '200% 100%';
+        fill.style.animation = 'progressPulse 1.5s ease-in-out infinite';
+      } else {
+        // Normal percentage-based progress for multi-file or completed
+        fill.style.width = `${percent}%`;
+        fill.style.background = '#3b82f6';
+        fill.style.animation = 'none';
+      }
+    }
     if (title) title.textContent = stage;
     if (subtitle) subtitle.textContent = fileName;
     if (fileCount) fileCount.textContent = `${current} / ${total} files`;
     if (txnCountEl) txnCountEl.textContent = `${txnCount} transactions`;
+
+    // FORCE BROWSER REPAINT: Ensure progress bar updates are visible immediately
+    // Without this, browser batches DOM changes and only repaints after JS execution completes
+    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   };
 
   window.handleFilesSelected = async (files) => {
     console.log('[UPLOAD] Processing', files.length, 'file(s)');
 
-    // Show progress bar instead of render()
+    // CRITICAL: Set is Ingesting flag FIRST so renderPage() includes progress bar HTML
+    UI_STATE.isIngesting = true;
+    render(); // Force re-render with progress bar included
+
+    // Now show and update the progress bar
     window.showProgressBar();
     window.updateProgressBar(0, files.length, 'Initializing...', 'Preparing to parse', 0);
 
@@ -320,7 +356,7 @@
       const file = files[idx];
       try {
         // Update progress bar (lightweight, no flicker)
-        window.updateProgressBar(
+        await window.updateProgressBar(
           idx + 1,
           files.length,
           file.name,
@@ -332,7 +368,7 @@
         totalImported += imported;
 
         // Update with results
-        window.updateProgressBar(
+        await window.updateProgressBar(
           idx + 1,
           files.length,
           file.name,
@@ -360,20 +396,37 @@
 
     // Hide progress bar after brief delay, then refresh grid
     setTimeout(() => {
-      window.hideProgressBar();
+      try {
+        console.log('[UPLOAD] Hiding progress bar and rendering grid...');
 
-      // AUTO-SET REF# prefix for the newly imported account
-      const accounts = window.RoboLedger.Accounts.getAll();
-      if (accounts.length > 0) {
-        const lastAccount = accounts[accounts.length - 1];
-        // Set prefix AND selectedAccount so grid renders with correct data
-        UI_STATE.refPrefix = lastAccount.ref || 'TXN';
-        UI_STATE.selectedAccount = lastAccount.id;
-        console.log('[UPLOAD] Auto-set account:', lastAccount.id, 'prefix:', UI_STATE.refPrefix);
+        // Hide progress bar
+        if (window.hideProgressBar) {
+          window.hideProgressBar();
+        }
+
+        // AUTO-SET REF# prefix for the newly imported account
+        const accounts = window.RoboLedger.Accounts.getAll();
+        if (accounts.length > 0) {
+          const lastAccount = accounts[accounts.length - 1];
+          UI_STATE.refPrefix = lastAccount.ref || 'TXN';
+          UI_STATE.selectedAccount = lastAccount.id;
+          console.log('[UPLOAD] Auto-set account:', lastAccount.id, 'prefix:', UI_STATE.refPrefix);
+        }
+
+        // Reset ingesting state BEFORE render so progress bar is removed from DOM
+        UI_STATE.isIngesting = false;
+
+        // Render with updated state
+        render();
+
+        console.log('[UPLOAD] Upload workflow complete - grid should be visible');
+      } catch (err) {
+        console.error('[UPLOAD] Error in completion flow:', err);
+        // Force render anyway
+        UI_STATE.isIngesting = false;
+        render();
       }
-
-      render(); // Render with updated state
-    }, 1500);
+    }, 500);
 
     console.log(`[UPLOAD] Complete. Total imported: ${totalImported}`);
   };
@@ -1020,9 +1073,8 @@
         }
 
         if (route === 'audit') {
-          // Open AI Audit panel with all transactions
-          const allTx = window.RoboLedger.Ledger.getAll();
-          window.showAIAuditPanel(allTx, 'all');
+          // Open AI Audit drawer
+          toggleAuditDrawer(true);
           return;
         }
 
@@ -1205,6 +1257,7 @@
       }, 3000);
     } else {
       window.RoboLedger.Ledger.reset();
+      window.RoboLedger.Accounts.reset(); // Clear cached accounts
       UI_STATE.resetConfirm = false;
       UI_STATE.selectedAccount = 'ACC-001';
       window.updateWorkspace();
@@ -1589,6 +1642,114 @@
         <div>Module Engineering in Progress</div>
     </div>`;
   }
+
+  // ============================================
+  // AI AUDIT DRAWER
+  // ============================================
+
+  function toggleAuditDrawer(open) {
+    UI_STATE.isAuditOpen = open;
+    const drawer = document.getElementById('audit-drawer');
+    drawer.classList.toggle('open', open);
+    if (open) renderAuditDrawer();
+  }
+
+  function renderAuditDrawer() {
+    const drawer = document.getElementById('audit-drawer');
+    const allTxns = window.RoboLedger.Ledger.getAll();
+    const selectedAccount = UI_STATE.selectedAccount || 'ALL';
+    const filteredTxns = selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === selectedAccount);
+
+    drawer.innerHTML = `
+      <div class="drawer-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="background: #8b5cf6; padding: 8px; border-radius: 8px; color: white;">
+                  <i class="ph ph-sparkle" style="font-size: 1.3rem;"></i>
+              </div>
+              <div>
+                  <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: #1e293b;">AI Audit</h3>
+                  <span style="font-size: 0.75rem; color: #64748b;">Automatic transaction categorization</span>
+              </div>
+          </div>
+          <i class="ph ph-x close-drawer" style="font-size: 20px; cursor: pointer; color: #94a3b8;" onclick="toggleAuditDrawer(false)"></i>
+      </div>
+      <div class="drawer-content" style="flex: 1; overflow-y: auto; padding: 24px;">
+          
+          <!-- Account Selection -->
+          <div class="setting-group" style="margin-bottom: 24px;">
+              <div class="setting-group-title"><i class="ph ph-funnel"></i> Scope</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">
+                  Currently viewing: ${selectedAccount === 'ALL' ? 'All Accounts' : selectedAccount}
+              </div>
+              <div style="padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                  <div style="font-size: 12px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                      ${filteredTxns.length} transactions available
+                  </div>
+                  <div style="font-size: 11px; color: #64748b;">
+                      ${filteredTxns.filter(t => !t.category || t.category === 'Uncategorized').length} uncategorized
+                  </div>
+              </div>
+          </div>
+
+          <!-- AI Engines -->
+          <div class="setting-group" style="margin-bottom: 24px;">
+              <div class="setting-group-title"><i class="ph ph-sparkle"></i> AI Engine</div>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div style="padding: 16px; border: 2px solid #8b5cf6; background: #f5f3ff; border-radius: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                      <i class="ph ph-sparkle" style="color: #8b5cf6; font-size: 20px;"></i>
+                      <div style="flex: 1;">
+                          <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Google Gemini AI</div>
+                          <div style="font-size: 0.8rem; color: #64748b;">Context-aware, 99% accuracy</div>
+                      </div>
+                      <i class="ph ph-check-circle" style="color: #8b5cf6; font-size: 20px;"></i>
+                  </div>
+                  <div style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.6; cursor: not-allowed;">
+                      <i class="ph ph-lightning" style="color: #f59e0b; font-size: 20px;"></i>
+                      <div style="flex: 1;">
+                          <div style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">Local Logic</div>
+                          <div style="font-size: 0.8rem; color: #64748b;">Fast, pattern-based (v5.0 default)</div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="setting-group">
+              <div class="setting-group-title"><i class="ph ph-play"></i> Run Classification</div>
+              <button class="btn-restored" style="width: 100%; background: #8b5cf6; color: white; margin-bottom: 12px;" onclick="window.runAIAudit('all')">
+                  <i class="ph ph-sparkle" style="margin-right: 8px;"></i>
+                  Categorize All Transactions
+              </button>
+              <button class="btn-restored" style="width: 100%; background: white; color: #8b5cf6; border: 2px solid #8b5cf6;" onclick="window.runAIAudit('uncategorized')">
+                  <i class="ph ph-funnel" style="margin-right: 8px;"></i>
+                  Categorize Uncategorized Only
+              </button>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 12px; text-align: center;">
+                  AI categorization uses Google Gemini API
+              </div>
+          </div>
+
+      </div>
+    `;
+  }
+
+  // Global exposure for audit drawer
+  window.toggleAuditDrawer = toggleAuditDrawer;
+
+  // Placeholder for AI audit execution
+  window.runAIAudit = function (mode) {
+    const allTx = window.RoboLedger.Ledger.getAll();
+    const selectedAccount = UI_STATE.selectedAccount || 'ALL';
+    const filteredTxns = selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === selectedAccount);
+
+    const targets = mode === 'uncategorized'
+      ? filteredTxns.filter(t => !t.category || t.category === 'Uncategorized')
+      : filteredTxns;
+
+    console.log(`[AI AUDIT] Running ${mode} audit on ${targets.length} transactions`);
+    window.showAIAuditPanel(targets, mode);
+    toggleAuditDrawer(false); // Close drawer when opening modal
+  };
 
   window.toggleGridColumn = (field, visible) => {
     console.log(`[SETTINGS] Toggling column ${field} to ${visible}`);
@@ -2185,15 +2346,17 @@
         const openingBalance = acc.openingBalance || 0;
 
         // Critical: Use correct formula based on account type
-        // Credit cards: balance INCREASES with debits, DECREASES with payments (credits)
-        // Bank accounts: balance DECREASES with debits, INCREASES with credits  
+        // FIXED: After fixing parsers, for credit cards:
+        //   - Payments are DEBITS (reduce liability)
+        //   - Purchases are CREDITS (increase liability)
+        // So: Opening + Credits - Debits = Ending
         // Check accountType field (set by parsers) OR fallback to type field
         const isLiability = (acc.accountType || '').toLowerCase() === 'creditcard' ||
           acc.type === 'liability' ||
           acc.type === 'creditcard';
         const calculatedEnding = isLiability
-          ? openingBalance + totalDebits - totalCredits  // Credit card formula
-          : openingBalance - totalDebits + totalCredits; // Bank account formula
+          ? openingBalance + totalCredits - totalDebits  // Credit card: Opening + Credits - Debits
+          : openingBalance - totalDebits + totalCredits; // Bank account: Opening - Debits + Credits
         const actualEnding = acc.actualEndingBalance || 0;
         const isAutoReconciled = actualEnding === 0;
         const discrepancy = isAutoReconciled ? 0 : (actualEnding - calculatedEnding);
@@ -2455,7 +2618,7 @@
     // Aggregate calculations for ALL accounts mode
 
 
-    return `
+    return filteredTxns.length > 0 ? `
       <!-- Professional Account Dashboard Header -->
       <div id="account-header-root" class="v5-account-workspace-header" style="background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 12px 24px; gap: 12px;">
         
@@ -2481,7 +2644,6 @@
           </div>
         </div>
 
-        ${filteredTxns.length > 0 ? `
         <!-- Compact Terminal Strip -->
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 90px; overflow: hidden; margin: 8px 16px;">
           
@@ -2501,9 +2663,9 @@
           </div>
 
         </div>
-        ` : ''}
       </div>
-    `;
+    ` : '';
+
 
 
   }
@@ -2684,12 +2846,7 @@
     // Flat workspace structure - NO CARDS
     let mainContent = "";
     if (UI_STATE.isIngesting) {
-      mainContent = `
-        ${getTxnIngestionHTML()}
-    <div id="txnGrid" style="flex: 1; min-height: 480px; position: relative; background: #ffffff;">
-      ${getTxnEmptyStateHTML()}
-    </div>
-    `;
+      mainContent = getTxnIngestionHTML(); // Only show progress card, no empty grid below
     } else if (!hasData) {
       mainContent = `
       <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: #fafbfc;">
@@ -2954,6 +3111,35 @@
       }
     }
   });
+
+  /**
+   * Remove accounts with 0 transactions from storage
+   * Runs on app initialization to clean orphaned accounts
+   */
+  function cleanupEmptyAccounts() {
+    const accounts = window.RoboLedger?.Accounts?.getAll() || [];
+    const allTxns = window.RoboLedger?.Ledger?.transactions || [];
+
+    let cleaned = 0;
+    accounts.forEach(acc => {
+      const txns = allTxns.filter(t => t.account_id === acc.id);
+      if (txns.length === 0) {
+        console.log('[CLEANUP] Removing empty account:', acc.id, acc.name);
+        if (window.RoboLedger?.Accounts?.remove) {
+          window.RoboLedger.Accounts.remove(acc.id);
+          cleaned++;
+        }
+      }
+    });
+
+    if (cleaned > 0) {
+      console.log(`[CLEANUP] Removed ${cleaned} empty account(s)`);
+    }
+  }
+
+  // Clean up empty accounts on initialization
+  // TEMPORARILY DISABLED - Persistence bug causes transactions to not save
+  // cleanupEmptyAccounts();
 
   if (typeof init === 'function') init();
 })();

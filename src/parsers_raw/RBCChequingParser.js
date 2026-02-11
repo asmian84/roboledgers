@@ -632,6 +632,16 @@ SMART PARSING RULES:
     // 0. EARLY NORMALIZATION: Collapse all whitespace/newlines into single spaces
     desc = desc.replace(/\s+/g, ' ').trim();
 
+    // 0.5. REMOVE PDF PAGINATION ARTIFACTS (USER REPORTED - Feb 10, 2026)
+    // Remove "4 of 5", "2 of 2", etc. (page numbers)
+    desc = desc.replace(/\b\d+\s+of\s+\d+\b/gi, '');
+    // Remove "1 Cr @ 2.50" (credit notation artifacts)
+    desc = desc.replace(/\b\d+\s+Cr\s+@\s+[\d.]+\b/gi, '');
+    // Remove standalone "Page X" artifacts
+    desc = desc.replace(/\bPage\s+\d+\b/gi, '');
+    // Remove "Continued from Page X" / "Continued to Page X"
+    desc = desc.replace(/\bContinued\s+(from|to)\s+Page\s+\d+\b/gi, '');
+
     // 1. HARD RULE: AGGRESSIVE DATE REMOVAL (User Request)
     // Matches "09 Jun", "15 Jan", "4 Jul", etc. anywhere in the string
     desc = desc.replace(/\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/gi, '');
@@ -642,8 +652,8 @@ SMART PARSING RULES:
     // Remove "continued" artifacts
     desc = desc.replace(/continued\s+/gi, '');
     desc = desc.replace(/to\s+-\s+/gi, ''); // Fix "to - continued" artifact
-
-    // 2. REMOVE GIBBERISH CODES (Aggressive & Case-Insensitive)
+    // Remove "to [Month] [Day]" prefix pattern (e.g., "to August 5,")
+    desc = desc.replace(/\bto\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s*/gi, '');
     desc = desc.replace(/C1A[a-zA-Z0-9]{4,}/gi, '');
     desc = desc.replace(/CA[a-zA-Z0-9]{5,}/gi, '');
     desc = desc.replace(/[a-f0-9]{16,}/gi, '');
@@ -707,6 +717,16 @@ SMART PARSING RULES:
     // Rule for Overdraft Interest
     if (descUpper.includes('OVERDRAFT INTEREST')) {
       return `Overdraft Interest, RBC Lending`;
+    }
+
+    // Rule for Account Payable - AIRBNB Payments
+    if (descUpper.includes('ACCOUNT PAYABLE') && descUpper.includes('AIRBNB')) {
+      // Extract the payment details after "PMT" or "AIRBNB PAY"
+      let details = desc.replace(/Account Payable/gi, '')
+        .replace(/Pmt/gi, '')
+        .replace(/AIRBNB PAY/gi, 'Airbnb')
+        .trim();
+      return `${details}, Account Payable Payment`;
     }
 
     // 4. FALLBACK: Split on dash if no prefix matched but dash exists

@@ -8,6 +8,7 @@ import {
     createColumnHelper
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { COADropdown } from './components/COADropdown';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GRID DESIGN TOKENS — SINGLE SOURCE OF TRUTH
@@ -42,7 +43,7 @@ const GRID_TOKENS = {
     numberFontWeight: 500,
 
     // Row Dimensions
-    rowHeight: 56, // Comfortable density (px)
+    rowHeight: 56, // Increased from 48 to accommodate 2-line descriptions // Comfortable density (px)
     rowPaddingX: '16px',
 
     // Colors
@@ -85,24 +86,28 @@ function DescriptionCell({ row }) {
     return (
         <div className="flex flex-col overflow-hidden" style={{ gap: '2px' }}>
             <span
-                className="truncate"
                 style={{
                     fontSize: GRID_TOKENS.descLine1FontSize,
                     fontWeight: GRID_TOKENS.descLine1FontWeight,
                     color: GRID_TOKENS.descLine1Color,
-                    lineHeight: GRID_TOKENS.cellLineHeight
+                    lineHeight: GRID_TOKENS.cellLineHeight,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
                 }}
             >
                 {payeeName}
             </span>
             {transactionType && (
                 <span
-                    className="truncate"
                     style={{
                         fontSize: GRID_TOKENS.descLine2FontSize,
                         fontWeight: GRID_TOKENS.descLine2FontWeight,
                         color: GRID_TOKENS.descLine2Color,
-                        lineHeight: GRID_TOKENS.cellLineHeight
+                        lineHeight: GRID_TOKENS.cellLineHeight,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
                     }}
                 >
                     {transactionType}
@@ -146,25 +151,35 @@ const columns = [
         ),
     }),
 
-    // 2. Ref # (e.g., CHQ1-001)
-    columnHelper.accessor('ref', {
+    // 2. Ref # (e.g., CHQ1-001) - VISUAL COUNTER (resets based on view)
+    columnHelper.display({
+        id: 'ref',
         header: 'REF #',
         size: 130,
         minSize: 120,
         maxSize: 150,
-        cell: info => (
-            <span
-                style={{
-                    fontSize: GRID_TOKENS.cellFontSize,
-                    fontWeight: GRID_TOKENS.cellFontWeight,
-                    color: GRID_TOKENS.cellColor,
-                    fontVariantNumeric: 'tabular-nums',
-                    whiteSpace: 'nowrap'
-                }}
-            >
-                {info.getValue() || '-'}
-            </span>
-        )
+        cell: info => {
+            const row = info.row.original;
+            const account = window.RoboLedger?.Accounts?.get(row.account_id);
+            const prefix = account?.ref || 'TXN';
+            // Get position in SORTED/FILTERED array (not original data index)
+            const sortedRows = info.table.getRowModel().rows;
+            const sortedIndex = sortedRows.findIndex(r => r.id === info.row.id);
+            const counter = String(sortedIndex + 1).padStart(3, '0');
+            return (
+                <span
+                    style={{
+                        fontSize: GRID_TOKENS.cellFontSize,
+                        fontWeight: GRID_TOKENS.cellFontWeight,
+                        color: GRID_TOKENS.cellColor,
+                        fontVariantNumeric: 'tabular-nums',
+                        whiteSpace: 'nowrap'
+                    }}
+                >
+                    {`${prefix}-${counter}`}
+                </span>
+            );
+        }
     }),
 
     // 3. Date
@@ -188,8 +203,8 @@ const columns = [
         )
     }),
 
-    // 4. Description (Two-line cell - Flex)
-    columnHelper.display({
+    // 4. Description (Two-line cell - Flex) - Sortable by payee
+    columnHelper.accessor('payee', {
         id: 'description',
         header: 'DESCRIPTION',
         minSize: 250,
@@ -205,13 +220,20 @@ const columns = [
         maxSize: 150,
         cell: info => {
             const val = info.getValue();
+            const row = info.row.original;
+            // Get account to determine type
+            const account = window.RoboLedger?.Accounts?.get(row.account_id);
+            const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
+                account?.type === 'liability' || account?.type === 'creditcard';
+            // Liabilities: debit=green (payment reduces debt), Assets: debit=red (withdrawal reduces balance)
+            const debitColor = isLiability ? '#10b981' : '#ef4444';
             return (
                 <span
                     className="text-right block"
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: GRID_TOKENS.debitColor,
+                        color: debitColor,
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
@@ -229,13 +251,20 @@ const columns = [
         maxSize: 150,
         cell: info => {
             const val = info.getValue();
+            const row = info.row.original;
+            // Get account to determine type
+            const account = window.RoboLedger?.Accounts?.get(row.account_id);
+            const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
+                account?.type === 'liability' || account?.type === 'creditcard';
+            // Liabilities: credit=red (purchase increases debt), Assets: credit=green (deposit increases balance)
+            const creditColor = isLiability ? '#ef4444' : '#10b981';
             return (
                 <span
                     className="text-right block"
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: GRID_TOKENS.creditColor,
+                        color: creditColor,
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
@@ -248,42 +277,80 @@ const columns = [
     // 7. Account (COA Dropdown)
     columnHelper.accessor('category', {
         header: 'ACCOUNT',
-        size: 150,
-        minSize: 120,
-        maxSize: 200,
-        cell: info => (
-            <span
-                className="truncate"
-                style={{
-                    fontSize: GRID_TOKENS.cellFontSize,
-                    fontWeight: GRID_TOKENS.cellFontWeight,
-                    color: GRID_TOKENS.cellColor
-                }}
-            >
-                {info.getValue() || 'Uncategorized'}
-            </span>
-        )
+        size: 200,
+        minSize: 180,
+        maxSize: 250,
+        cell: ({ row }) => {
+            const handleUpdateCategory = (code) => {
+                const txId = row.original.tx_id;
+
+                // Update in ledger
+                if (window.RoboLedger?.Ledger?.updateCategory) {
+                    window.RoboLedger.Ledger.updateCategory(txId, code);
+                }
+
+                // Trigger workspace refresh
+                if (window.updateWorkspace) {
+                    window.updateWorkspace();
+                }
+            };
+
+            return (
+                <COADropdown
+                    value={row.original.category || ''}
+                    onChange={handleUpdateCategory}
+                    txId={row.original.tx_id}
+                />
+            );
+        }
     }),
 
-    // 8. Balance
-    columnHelper.accessor('balance', {
+    // 8. Balance (DYNAMIC CALCULATION - updates based on sort order)
+    columnHelper.display({
+        id: 'balance',
         header: 'BALANCE',
         size: 140,
         minSize: 120,
         maxSize: 170,
         cell: info => {
-            const val = info.getValue() || 0;
+            // Get the sorted rows to calculate running balance
+            const sortedRows = info.table.getRowModel().rows;
+            const currentRowIndex = sortedRows.findIndex(r => r.id === info.row.id);
+
+            // Get opening balance and account type
+            const firstRow = sortedRows[0]?.original;
+            const account = window.RoboLedger?.Accounts?.get(firstRow?.account_id);
+            const openingBalance = account?.openingBalance || 0;
+            const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
+                account?.type === 'liability' || account?.type === 'creditcard';
+
+            // Calculate running balance from opening balance through current row
+            let runningBalance = openingBalance;
+            for (let i = 0; i <= currentRowIndex; i++) {
+                const row = sortedRows[i].original;
+                const debit = row.debit || 0;
+                const credit = row.credit || 0;
+
+                if (isLiability) {
+                    // Liability: debits decrease debt (payments), credits increase debt (purchases)
+                    runningBalance = runningBalance - debit + credit;
+                } else {
+                    // Asset: debits decrease balance (withdrawals), credits increase balance (deposits)
+                    runningBalance = runningBalance - debit + credit;
+                }
+            }
+
             return (
                 <span
                     className="text-right block"
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: val < 0 ? GRID_TOKENS.negativeColor : GRID_TOKENS.cellColor,
+                        color: runningBalance < 0 ? GRID_TOKENS.negativeColor : GRID_TOKENS.cellColor,
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
-                    {formatCurrency(val)}
+                    {formatCurrency(runningBalance)}
                 </span>
             );
         }
@@ -325,6 +392,16 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
     const [globalFilter, setGlobalFilter] = useState(initialGlobalFilter || '');
     const [rowSelection, setRowSelection] = useState({});
     const [density] = useState('comfortable'); // Fixed at comfortable for now
+
+    // SYNC: Update data when prop changes (for account switching)
+    useEffect(() => {
+        setData(initialData || []);
+    }, [initialData]);
+
+    // SYNC: Update globalFilter when search query changes (for live search)
+    useEffect(() => {
+        setGlobalFilter(initialGlobalFilter || '');
+    }, [initialGlobalFilter]);
 
     // Expose column visibility control to window (for settings drawer)
     useEffect(() => {
@@ -375,7 +452,7 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
     };
 
     return (
-        <div className="flex flex-col h-full w-full bg-white overflow-hidden relative">
+        <div className="flex flex-col h-full w-full bg-white relative" style={{ transform: 'scale(0.96)', transformOrigin: 'top left' }}>
             {/* Batch Action Bar */}
             {Object.keys(rowSelection).length > 0 && (
                 <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
@@ -457,14 +534,15 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
                                     {row.getVisibleCells().map(cell => (
                                         <div
                                             key={cell.id}
-                                            className={`flex items-center overflow-hidden ${getStickyClass(cell.column.id)}`}
+                                            className={`flex items-center ${cell.column.id === 'category' ? 'overflow-visible' : 'overflow-hidden'} ${getStickyClass(cell.column.id)}`}
                                             style={{
                                                 width: cell.column.id === 'description' ? undefined : cell.column.getSize(),
                                                 flex: cell.column.id === 'description' ? '1 1 0' : undefined,
                                                 minWidth: cell.column.id === 'description' ? '250px' : undefined,
                                                 flexShrink: 0,
                                                 padding: `0 ${GRID_TOKENS.rowPaddingX}`,
-                                                borderRight: `1px solid ${GRID_TOKENS.borderColor}`
+                                                borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
+                                                position: cell.column.id === 'category' ? 'relative' : undefined
                                             }}
                                         >
                                             <div className="w-full">

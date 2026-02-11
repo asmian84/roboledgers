@@ -387,6 +387,11 @@ window.RoboLedger = (function () {
             return true;
         },
 
+        // Expose transactions as an array (for backward compatibility)
+        get transactions() {
+            return this.getAll();
+        },
+
         getAll: function () {
             // Sort ASCENDING for benchmark parity (oldest first)
             const raw = Object.values(state.transactions).sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));
@@ -473,6 +478,22 @@ window.RoboLedger = (function () {
             return false;
         },
 
+        updateCategory: function (tx_id, category_code) {
+            const tx = state.transactions[tx_id];
+            if (tx) {
+                tx.category = category_code;
+                tx.category_code = category_code; // Fallback field
+                const account = COA.get(category_code);
+                if (account) {
+                    tx.category_name = account.name;
+                }
+                save();
+                console.log(`[LEDGER] Updated category for ${tx_id}: ${category_code}`);
+                return true;
+            }
+            return false;
+        },
+
         createManual: function (account_id) {
             const tx_id = crypto.randomUUID();
             const tx = {
@@ -516,6 +537,11 @@ window.RoboLedger = (function () {
         },
         get: function (id) {
             return state.accounts.find(a => a.id === id);
+        },
+        reset: function () {
+            state.accounts = [];
+            save();
+            console.log('[ACCOUNTS] All accounts cleared.');
         },
         updateMetadata: function (id, metadata) {
             let acc = this.get(id);

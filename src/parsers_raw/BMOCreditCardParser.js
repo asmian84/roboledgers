@@ -51,8 +51,8 @@ class BMOCreditCardParser extends BaseBankParser {
                 date: isoDate,
                 description,
                 amount,
-                debit: isPayment ? 0 : amount,   // Charge = debit (balance up)
-                credit: isPayment ? amount : 0,  // Payment = credit (balance down)
+                debit: isPayment ? amount : 0,   // Payments REDUCE liability (debit)
+                credit: isPayment ? 0 : amount,  // Purchases INCREASE liability (credit)
                 balance,
                 _brand: 'BMO',
                 _tag: 'CreditCard',

@@ -33,8 +33,10 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
 
     const canonicalData = transactionsOnly.map((tx, idx) => ({
         ...tx,
-        ref: tx.ref || `TXN-${String(idx + 1).padStart(3, '0')}`, // Use persistent ref (fallback should never happen)
-        status: tx.status || statuses[idx % 4],
+        // REF# is visual display counter (001, 002, 003...) that resets based on current filter
+        // Prefix comes from UI_STATE.refPrefix (set by updateWorkspace based on selected account)
+        ref: `${window.UI_STATE?.refPrefix || 'TXN'}-${String(idx + 1).padStart(3, '0')}`,
+        status: tx.status || 'Imported',
         payee: tx.description || tx.raw_description || 'Unknown',
         debit: tx.polarity === 'DEBIT' ? tx.amount_cents / 100 : null,
         credit: tx.polarity === 'CREDIT' ? tx.amount_cents / 100 : null,

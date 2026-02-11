@@ -85,8 +85,8 @@ AMEX FORMAT:
         // - Amount-only lines: "142.12"
         // - Need to collect both separately and match by position
 
-        const descriptionLines = [];
-        const amountLines = [];
+        let descriptionLines = [];
+        let amountLines = [];
         let collectDescriptions = false;
         let collectAmounts = false;
 
@@ -99,58 +99,88 @@ AMEX FORMAT:
 
         console.log('%c[AMEX-DEBUG] Starting dual-phase scan...', 'color: orange; font-weight: bold');
 
+        // PHASE 2: Collect all transaction sections first, then pick the right one
+        const sections = [];
+        let currentSection = null;
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
 
-            // PHASE 1: Start collecting amounts after "New Transactions for" or "New Payments"
-            if (line.match(/New Transactions for|New Payments/i)) {
-                console.log(`%c✅ AMOUNTS: Line ${i}`, 'color: green; font-weight: bold', line.substring(0, 60));
-                collectAmounts = true;
-                collectDescriptions = false;
-                continue;
-            }
+            // Start new section - but NOT if line starts with "Total of"
+            const isNewTransactions = line.includes('New Transactions for') || line.includes('New Payments');
+            const isTotal = line.startsWith('Total of');
 
-            // PHASE 2: Start collecting descriptions after "@" marker
-            if (line.trim() === '@') {
-                console.log(`%c📍 DESCRIPTIONS: Line ${i} (@)`, 'color: blue; font-weight: bold');
-                collectDescriptions = true;
-                collectAmounts = false;
-                continue;
-            }
-
-            // Stop at page boundaries or totals
-            if (line.match(/^Page \d+|Total of (?:New Transactions|Payment Activity)/i)) {
-                if (collectAmounts || collectDescriptions) {
-                    console.log(`%c🛑 STOP: Line ${i}`, 'color: red', line.substring(0, 60));
+            if (isNewTransactions && !isTotal) {
+                if (currentSection) {
+                    sections.push(currentSection);
                 }
-                collectAmounts = false;
-                collectDescriptions = false;
+                currentSection = {
+                    startLine: i,
+                    startText: line,
+                    amounts: [],
+                    descriptions: []
+                };
+                console.log(`%c✅ START SECTION ${sections.length + 1}: Line ${i}`, 'color: green; font-weight: bold', line.substring(0, 60));
                 continue;
             }
 
-            // Collect amounts (phase 1: after "New Transactions for", before "@")
-            if (collectAmounts && line.match(/^-?[\d,]+\.\d{2}$/)) {
-                const amount = parseFloat(line.replace(/,/g, ''));
-                amountLines.push(amount);
-                console.log(`%c💰 AMT ${amountLines.length}: Line ${i}`, 'color: purple', amount);
+            // Stop current section at totals
+            if (currentSection && line.match(/Total of (?:New Transactions|Payment Activity)/i)) {
+                currentSection.endLine = i;
+                currentSection.endText = line;
+                sections.push(currentSection);
+                console.log(`%c🛑 STOP SECTION ${sections.length}: Line ${i}`, 'color: red', line.substring(0, 60));
+                currentSection = null;
+                continue;
             }
 
-            // Collect descriptions (phase 2: after "@", with date pattern)
-            if (collectDescriptions) {
+            // Collect data for current section
+            if (currentSection) {
+                // Collect amounts
+                if (line.match(/^-?[\d,]+\.\d{2}$/)) {
+                    const amount = parseFloat(line.replace(/,/g, ''));
+                    currentSection.amounts.push(amount);
+                    continue;
+                }
+
+                // Collect descriptions
                 const dateMatch = line.match(dateRegex);
                 if (dateMatch) {
                     const month = monthMap[dateMatch[1].toLowerCase()];
                     const day = dateMatch[2].padStart(2, '0');
                     const description = dateMatch[5].trim();
-                    descriptionLines.push({
+                    currentSection.descriptions.push({
                         date: `${currentYear}-${month}-${day}`,
                         description,
                         rawLine: line
                     });
-                    console.log(`%c📅 DESC ${descriptionLines.length}: Line ${i}`, 'color: blue', line.substring(0, 80));
                 }
             }
+        }
+
+        // Log all detected sections
+        console.log(`%c📋 Found ${sections.length} transaction sections`, 'background: orange; color: white; padding: 4px; font-weight: bold;');
+        sections.forEach((s, idx) => {
+            console.log(`%cSection ${idx + 1}: ${s.descriptions.length} descriptions, ${s.amounts.length} amounts`, 'color: blue');
+            console.log(`  Start: "${s.startText?.substring(0, 60)}"`);
+            console.log(`  End: "${s.endText?.substring(0, 60)}"`);
+            if (s.descriptions.length > 0) {
+                console.log(`  First desc: "${s.descriptions[0].rawLine.substring(0, 60)}"`);
+            }
+        });
+
+        // Use the LAST section (typically the actual statement period transactions)
+        // Earlier sections are often summary/bulk categorizations
+        const targetSection = sections[sections.length - 1];
+        if (!targetSection) {
+            console.warn('[AMEX] No transaction sections found!');
+            descriptionLines = [];
+            amountLines = [];
+        } else {
+            console.log(`%c🎯 Using Section ${sections.length} (last section)`, 'background: green; color: white; padding: 4px;');
+            descriptionLines = targetSection.descriptions;
+            amountLines = targetSection.amounts;
         }
 
         // Match descriptions with amounts by position
@@ -169,8 +199,8 @@ AMEX FORMAT:
                     "INTEREST CHARGE", "MEMBERSHIP FEE", "LATE FEE"
                 ]),
                 amount,
-                debit: isPayment ? 0 : amount,
-                credit: isPayment ? amount : 0,
+                debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
+                credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
                 balance: 0,
                 audit: this.getSpatialMetadata(desc.description),
                 rawText: this.cleanRawText(`${desc.date} ${desc.description} ${amount}`),
