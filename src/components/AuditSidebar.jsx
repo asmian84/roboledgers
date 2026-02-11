@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DocumentViewer } from './DocumentViewer';
+import { PDFSnippet } from './PDFSnippet';
 
 /**
  * AuditSidebar - Right-hand sidebar for transaction auditing
@@ -55,15 +56,18 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
     if (!isOpen || !transaction) return null;
 
     const handleViewSourceDocument = () => {
-        // Use demo PDF if no source PDF URL is available
-        const demoUrl = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
+        // NO FALLBACK - show error if no PDF
+        if (!transaction.source_pdf?.url) {
+            alert('No source PDF available for this transaction. This may be from an older import or CSV data.');
+            return;
+        }
 
         setViewerDocument({
             type: 'pdf',
-            url: transaction.source_pdf?.url || demoUrl,
-            name: transaction.source_pdf?.filename || 'statement.pdf',
-            page: transaction.source_pdf?.page || 1,
-            highlightLine: transaction.source_pdf?.line_position || null // {top, left, width, height} in PDF coordinates
+            url: transaction.source_pdf.url,
+            name: transaction.source_pdf.filename || 'statement.pdf',
+            page: transaction.source_pdf.page || 1,
+            highlightLine: transaction.source_pdf.line_position || null
         });
         setShowDocViewer(true);
     };
@@ -196,6 +200,27 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         }}>
                             {transaction.source_pdf?.raw_line || `${transaction.date}    ${transaction.description}    ${transaction.amount < 0 ? transaction.amount : '+' + transaction.amount}`}
                         </div>
+
+                        {/* PDF Visual Snippet - Shows actual transaction line from PDF */}
+                        {transaction.source_pdf?.url && (
+                            <div style={{ marginTop: '12px' }}>
+                                <div style={{
+                                    fontSize: '10px',
+                                    fontWeight: 600,
+                                    color: '#94a3b8',
+                                    marginBottom: '6px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.5px'
+                                }}>
+                                    PDF SNIPPET
+                                </div>
+                                <PDFSnippet
+                                    pdfUrl={transaction.source_pdf.url}
+                                    page={transaction.source_pdf.page || 1}
+                                    linePosition={transaction.source_pdf.line_position}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {/* Source Document */}
