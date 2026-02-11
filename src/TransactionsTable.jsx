@@ -99,9 +99,12 @@ function DescriptionCell({ row }) {
 
     const handleSave = () => {
         if (editValue.trim() && editValue !== fullDesc) {
+            // Remove leading comma if present
+            const cleanedValue = editValue.trim().replace(/^,\s*/, '');
+
             // Update in ledger with the full edited description
             if (window.RoboLedger?.Ledger?.updateDescription) {
-                window.RoboLedger.Ledger.updateDescription(row.tx_id, editValue.trim());
+                window.RoboLedger.Ledger.updateDescription(row.tx_id, cleanedValue);
             }
             // Trigger workspace refresh
             if (window.updateWorkspace) {
