@@ -17,7 +17,6 @@ import React, { useState, useEffect } from 'react';
 export function AuditSidebar({ isOpen, onClose, transaction }) {
     const [showPdfViewer, setShowPdfViewer] = useState(false);
     const [receipts, setReceipts] = useState([]);
-    const [snippetZoom, setSnippetZoom] = useState(1); // 1x or 2x zoom for PDF snippet
     const sidebarRef = React.useRef(null);
 
     // Auto-scroll to sidebar when opened
@@ -150,7 +149,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                 {/* Body */}
                 <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
 
-                    {/* Audit Metadata (Raw PDF Text) - FULL WIDTH WITH HORIZONTAL SCROLL */}
+                    {/* Audit Metadata (Raw PDF Text) - SCROLLABLE WITH MAGNIFYING GLASS */}
                     <div style={{ marginBottom: '20px' }}>
                         <div style={{
                             fontSize: '11px',
@@ -161,88 +160,44 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         }}>
                             AUDIT METADATA
                         </div>
-                        <div style={{
-                            background: '#1e293b',
-                            color: 'white',
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            fontFamily: 'Monaco, Consolas, monospace',
-                            fontSize: '12px',
-                            lineHeight: '1.6',
-                            overflowX: 'auto', // Allow horizontal scroll
-                            whiteSpace: 'nowrap' // Prevent text wrapping
-                        }}>
-                            {transaction.source_pdf?.raw_line || `${transaction.date}    ${transaction.description}    ${transaction.amount < 0 ? transaction.amount : '+' + transaction.amount}`}
-                        </div>
-                    </div>
-
-                    {/* PDF Transaction Line Snippet - ACTUAL PDF IMAGE WITH ZOOM */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            PDF TRANSACTION LINE
-                        </div>
-                        <div
-                            onClick={() => setSnippetZoom(snippetZoom === 1 ? 2 : 1)}
-                            style={{
-                                border: '2px solid #e2e8f0',
-                                borderRadius: '8px',
-                                background: '#ffffff',
-                                position: 'relative',
-                                cursor: 'zoom-in',
-                                overflow: snippetZoom === 2 ? 'auto' : 'hidden',
-                                maxHeight: snippetZoom === 2 ? '300px' : 'none'
-                            }}
-                        >
-                            {/* Actual PDF snippet image will be rendered here */}
+                        <div style={{ position: 'relative' }}>
                             <div style={{
-                                padding: snippetZoom === 2 ? '0' : '20px',
-                                background: '#f8fafc',
-                                textAlign: 'center',
+                                background: '#1e293b',
+                                color: 'white',
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                fontFamily: 'Monaco, Consolas, monospace',
                                 fontSize: '12px',
-                                color: '#64748b',
-                                transform: snippetZoom === 2 ? 'scale(2)' : 'scale(1)',
-                                transformOrigin: 'top left',
-                                transition: 'transform 0.3s ease'
+                                lineHeight: '1.6',
+                                overflowX: 'auto', // Horizontal scroll
+                                whiteSpace: 'nowrap' // Prevent text wrapping
                             }}>
-                                <div style={{
-                                    marginBottom: '8px',
-                                    fontFamily: 'Monaco, monospace',
-                                    fontSize: '11px',
-                                    color: '#1e293b',
-                                    background: 'white',
-                                    padding: '8px',
-                                    borderRadius: '4px'
-                                }}>
-                                    {transaction.source_pdf?.raw_line || `${transaction.date}    ${transaction.description}    ${transaction.amount}`}
-                                </div>
-                                <div style={{ fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>
-                                    (Actual PDF image snippet will be extracted and displayed here)
-                                </div>
+                                {transaction.source_pdf?.raw_line || `${transaction.date}    ${transaction.description}    ${transaction.amount < 0 ? transaction.amount : '+' + transaction.amount}`}
                             </div>
 
-                            {/* Magnifying glass icon - shows zoom level */}
-                            <div style={{
-                                position: 'absolute',
-                                bottom: '8px',
-                                right: '8px',
-                                background: 'rgba(59, 130, 246, 0.9)',
-                                color: 'white',
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: 600,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                pointerEvents: 'none'
-                            }}>
-                                <i className="ph ph-magnifying-glass"></i> {snippetZoom}x
+                            {/* Magnifying glass icon - click to view in PDF */}
+                            <div
+                                onClick={handleViewSourcePdf}
+                                style={{
+                                    position: 'absolute',
+                                    bottom: '8px',
+                                    right: '8px',
+                                    background: 'rgba(59, 130, 246, 0.9)',
+                                    color: 'white',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '14px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    transition: 'background 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(37, 99, 235, 0.9)'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.9)'}
+                                title="View in source PDF"
+                            >
+                                <i className="ph ph-magnifying-glass"></i>
                             </div>
                         </div>
                     </div>
