@@ -223,15 +223,20 @@ function DescriptionCell({ row }) {
                         }}
                         title="Edit description"
                     />
-                    {/* Link icon for audit drawer (future) */}
+                    {/* Link icon for audit sidebar */}
                     <i
                         className="ph ph-link cursor-pointer hover:text-blue-500"
-                        onClick={() => console.log('[AUDIT] Open drawer for:', row.tx_id)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.openAuditSidebar) {
+                                window.openAuditSidebar(row);
+                            }
+                        }}
                         style={{
                             fontSize: '16px',
                             color: '#64748b'
                         }}
-                        title="View source document"
+                        title="View audit trail"
                     />
                 </div>
             </div>
@@ -530,6 +535,10 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
     const [rowSelection, setRowSelection] = useState({});
     const [density] = useState('comfortable'); // Fixed at comfortable for now
 
+    // EXPERIMENTAL: Audit sidebar state
+    const [auditSidebarOpen, setAuditSidebarOpen] = useState(false);
+    const [selectedAuditTransaction, setSelectedAuditTransaction] = useState(null);
+
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
         setData(initialData || []);
@@ -699,6 +708,16 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
                     </div>
                 )}
             </div>
+
+            {/* EXPERIMENTAL: Audit Sidebar */}
+            <AuditSidebar
+                isOpen={auditSidebarOpen}
+                onClose={() => {
+                    setAuditSidebarOpen(false);
+                    setSelectedAuditTransaction(null);
+                }}
+                transaction={selectedAuditTransaction}
+            />
         </div>
     );
 }
