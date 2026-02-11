@@ -872,9 +872,44 @@
     const acc = accounts.find(a => a.id === UI_STATE.selectedAccount);
     if (acc) {
       acc.openingBalance = numericValue;
-      window.RoboLedger.Accounts.save(); // Persist to localStorage
+      // Accounts are part of ledger state - will auto-save
       console.log('[RECON] Opening balance updated:', numericValue);
       window.updateWorkspace(); // Refresh UI
+      render(); // Force grid re-render with new balance calculations
+    }
+  };
+
+  // Live opening balance update handler
+  window.handleOpeningBalanceInput = function (inputElement) {
+    let value = inputElement.value.replace(/[$,]/g, '');
+    const numericValue = parseFloat(value);
+
+    if (!isNaN(numericValue)) {
+      // Update the account value immediately
+      const accounts = window.RoboLedger.Accounts.getAll();
+      const acc = accounts.find(a => a.id === UI_STATE.selectedAccount);
+      if (acc) {
+        acc.openingBalance = numericValue;
+
+        // Get fresh transactions with new balances
+        const txs = window.RoboLedger.Ledger.getAll(UI_STATE.selectedAccount);
+
+        // Update balance cells directly (no re-render)
+        txs.forEach((tx, idx) => {
+          const balanceCell = document.querySelector(`[data-tx-id="${tx.tx_id}"] [data-column="balance"]`);
+          if (balanceCell) {
+            balanceCell.textContent = '$' + tx.running_balance.toLocaleString(undefined, { minimumFractionDigits: 2 });
+          }
+        });
+
+        // Update workspace summary (debit/credit totals, etc.)
+        window.updateWorkspace();
+
+        console.log('[RECON] Opening balance updated (live):', numericValue);
+      }
+
+      // Format the input with currency
+      inputElement.value = '$' + numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
   };
 
@@ -894,7 +929,7 @@
     const acc = accounts.find(a => a.id === UI_STATE.selectedAccount);
     if (acc) {
       acc.statementEndingBalance = numericValue;
-      window.RoboLedger.Accounts.save();
+      // Accounts are part of ledger state - will auto-save
       console.log('[RECON] Statement ending updated:', numericValue);
       window.updateWorkspace();
     }
@@ -2374,7 +2409,7 @@
 
           // Row 1: Opening + Debit
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveOpeningBalance(this.value)" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onclick="this.select()" /></div>' +
           '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 600; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
 
