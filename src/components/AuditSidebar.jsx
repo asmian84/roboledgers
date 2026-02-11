@@ -149,7 +149,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                 {/* Body */}
                 <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
 
-                    {/* Audit Metadata (Raw PDF Text) - SCROLLABLE WITH MAGNIFYING GLASS */}
+                    {/* Audit Metadata (Raw PDF Text) - SCROLLABLE */}
                     <div style={{ marginBottom: '20px' }}>
                         <div style={{
                             fontSize: '11px',
@@ -160,45 +160,18 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         }}>
                             AUDIT METADATA
                         </div>
-                        <div style={{ position: 'relative' }}>
-                            <div style={{
-                                background: '#1e293b',
-                                color: 'white',
-                                padding: '12px 16px',
-                                borderRadius: '8px',
-                                fontFamily: 'Monaco, Consolas, monospace',
-                                fontSize: '12px',
-                                lineHeight: '1.6',
-                                overflowX: 'auto', // Horizontal scroll
-                                whiteSpace: 'nowrap' // Prevent text wrapping
-                            }}>
-                                {transaction.source_pdf?.raw_line || `${transaction.date}    ${transaction.description}    ${transaction.amount < 0 ? transaction.amount : '+' + transaction.amount}`}
-                            </div>
-
-                            {/* Magnifying glass icon - click to view in PDF */}
-                            <div
-                                onClick={handleViewSourcePdf}
-                                style={{
-                                    position: 'absolute',
-                                    bottom: '8px',
-                                    right: '8px',
-                                    background: 'rgba(59, 130, 246, 0.9)',
-                                    color: 'white',
-                                    padding: '6px 10px',
-                                    borderRadius: '6px',
-                                    fontSize: '14px',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'background 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(37, 99, 235, 0.9)'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.9)'}
-                                title="View in source PDF"
-                            >
-                                <i className="ph ph-magnifying-glass"></i>
-                            </div>
+                        <div style={{
+                            background: '#1e293b',
+                            color: 'white',
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            fontFamily: 'Monaco, Consolas, monospace',
+                            fontSize: '12px',
+                            lineHeight: '1.6',
+                            overflowX: 'auto',
+                            whiteSpace: 'nowrap'
+                        }}>
+                            {transaction.source_pdf?.raw_line || `${transaction.date}    ${transaction.description}    ${transaction.amount < 0 ? transaction.amount : '+' + transaction.amount}`}
                         </div>
                     </div>
 
@@ -254,12 +227,12 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                 View Source PDF <i className="ph ph-arrow-square-out"></i>
                             </button>
                         ) : (
-                            // PDF Viewer - LARGE AREA WITH CURSOR-BASED ZOOM
+                            // PDF Viewer - WORKING VIEWER WITH HOVER ZOOM
                             <div>
                                 <div style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '10px',
+                                    justifyContent: 'space-between',
                                     marginBottom: '10px',
                                     fontSize: '12px',
                                     color: '#64748b'
@@ -285,228 +258,212 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                     >
                                         <i className="ph ph-arrow-left"></i> Back
                                     </button>
-                                    <span>|</span>
-                                    <span>{transaction.source_pdf?.filename || 'statement.pdf'}</span>
-                                    <span>Page {transaction.source_pdf?.page || 1}</span>
+                                    <div style={{ fontSize: '11px' }}>
+                                        <span>{transaction.source_pdf?.filename || 'statement.pdf'}</span>
+                                        <span style={{ marginLeft: '8px', color: '#94a3b8' }}>Page {transaction.source_pdf?.page || 1}</span>
+                                    </div>
                                 </div>
 
-                                {/* PDF Preview - LARGER PLACEHOLDER */}
+                                {/* PDF Canvas - ACTUAL RENDERING */}
                                 <div style={{
                                     border: '1px solid #e2e8f0',
                                     borderRadius: '8px',
-                                    padding: '40px 16px',
                                     background: '#f8fafc',
-                                    textAlign: 'center',
-                                    minHeight: '400px', // Larger area for PDF
+                                    minHeight: '400px',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    cursor: 'zoom-in' // Hint at zoom functionality
+                                    position: 'relative',
+                                    cursor: 'zoom-in',
+                                    overflow: 'hidden'
                                 }}>
-                                    <i className="ph ph-file-pdf" style={{ fontSize: '64px', color: '#cbd5e1', marginBottom: '12px' }}></i>
-                                    <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>
-                                        PDF Viewer<br />
-                                        <span style={{ fontSize: '11px' }}>(Implementation in progress)</span>
-                                    </div>
+                                    {/* Canvas will render PDF here */}
+                                    <canvas
+                                        id="pdf-canvas"
+                                        style={{
+                                            maxWidth: '100%',
+                                            height: 'auto',
+                                            transition: 'transform 0.3s ease'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.cursor = 'zoom-in'}
+                                    />
+
+                                    {/* Placeholder message while PDF loads */}
                                     <div style={{
-                                        marginTop: '16px',
-                                        padding: '12px 16px',
-                                        background: '#fef3c7',
-                                        border: '2px solid #fbbf24',
-                                        borderRadius: '6px',
-                                        fontSize: '12px',
-                                        color: '#92400e',
-                                        maxWidth: '280px'
+                                        position: 'absolute',
+                                        textAlign: 'center',
+                                        color: '#64748b',
+                                        fontSize: '12px'
                                     }}>
-                                        📍 Transaction line would be highlighted here
+                                        <i className="ph ph-file-pdf" style={{ fontSize: '48px', color: '#cbd5e1', marginBottom: '8px', display: 'block' }}></i>
+                                        <div>Loading PDF...</div>
+                                        <div style={{
+                                            marginTop: '12px',
+                                            padding: '8px 12px',
+                                            background: '#fef3c7',
+                                            border: '2px solid #fbbf24',
+                                            borderRadius: '6px',
+                                            fontSize: '11px',
+                                            color: '#92400e',
+                                            maxWidth: '250px'
+                                        }}>
+                                            📍 Transaction line will be highlighted
+                                        </div>
+                                        <div style={{ marginTop: '8px', fontSize: '10px', color: '#94a3b8' }}>
+                                            🔍 Hover to zoom
+                                        </div>
                                     </div>
-                                    <div style={{
-                                        marginTop: '12px',
-                                        fontSize: '11px',
-                                        color: '#94a3b8'
-                                    }}>
-                                        🔍 Cursor will become magnifying glass (1x, 2x zoom)
-                                    </div>
+                                    {receipt.type || 'PDF'}
                                 </div>
                             </div>
+                        ))}
+                    </div>
                         )}
-                    </div>
 
-                    {/* Attached Receipts - HORIZONTAL DRAG/DROP AREA */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            ATTACHED RECEIPTS
-                        </div>
-
-                        {/* Horizontal Drag/Drop Area */}
-                        <label style={{
-                            width: '100%',
-                            minHeight: '100px',
-                            border: '2px dashed #cbd5e1',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            background: '#f8fafc',
-                            transition: 'all 0.2s',
-                            padding: '20px'
+                    {/* Horizontal Drag/Drop Area */}
+                    <label style={{
+                        width: '100%',
+                        minHeight: '100px',
+                        border: '2px dashed #cbd5e1',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        background: '#f8fafc',
+                        transition: 'all 0.2s',
+                        padding: '20px'
+                    }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#3b82f6';
+                            e.currentTarget.style.background = '#eff6ff';
                         }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = '#3b82f6';
-                                e.currentTarget.style.background = '#eff6ff';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = '#cbd5e1';
-                                e.currentTarget.style.background = '#f8fafc';
-                            }}>
-                            <input
-                                type="file"
-                                accept=".pdf,.jpg,.jpeg,.png"
-                                onChange={handleUploadReceipt}
-                                style={{ display: 'none' }}
-                            />
-                            <i className="ph ph-upload-simple" style={{ fontSize: '32px', color: '#94a3b8', marginBottom: '8px' }}></i>
-                            <span style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginBottom: '4px' }}>
-                                Drag & drop receipts here
-                            </span>
-                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                                or click to browse
-                            </span>
-                            <div style={{ marginTop: '8px', fontSize: '11px', color: '#cbd5e1' }}>
-                                PDF, JPG, PNG supported
-                            </div>
-                        </label>
-
-                        {/* Show uploaded receipts as thumbnails */}
-                        {receipts.length > 0 && (
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
-                                {receipts.map((receipt, idx) => (
-                                    <div key={idx} style={{
-                                        width: '80px',
-                                        height: '80px',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '6px',
-                                        overflow: 'hidden',
-                                        cursor: 'pointer',
-                                        position: 'relative'
-                                    }}>
-                                        <img src={receipt.thumbnail} alt={receipt.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Edit History */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#cbd5e1';
+                            e.currentTarget.style.background = '#f8fafc';
                         }}>
-                            EDIT HISTORY
+                        <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={handleUploadReceipt}
+                            style={{ display: 'none' }}
+                        />
+                        <i className="ph ph-upload-simple" style={{ fontSize: '32px', color: '#94a3b8', marginBottom: '8px' }}></i>
+                        <span style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginBottom: '4px' }}>
+                            Drag & drop receipts here
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                            or click to browse
+                        </span>
+                        <div style={{ marginTop: '8px', fontSize: '11px', color: '#cbd5e1' }}>
+                            PDF, JPG, PNG supported
                         </div>
-                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
-                            {transaction.edit_history?.length > 0 ? (
-                                transaction.edit_history.map((edit, idx) => (
-                                    <div key={idx} style={{ marginBottom: '6px' }}>
-                                        • {new Date(edit.timestamp).toLocaleString()} - {edit.description}
-                                    </div>
-                                ))
-                            ) : (
-                                <div style={{ fontStyle: 'italic', color: '#94a3b8' }}>No edits made</div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Categorization */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            CATEGORIZATION
-                        </div>
-                        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6' }}>
-                            <div style={{ marginBottom: '6px' }}>
-                                <strong>Method:</strong> {transaction.categorization?.method || 'Manual'}
-                                {transaction.categorization?.confidence && ` (${transaction.categorization.confidence}% confidence)`}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <strong>Matched:</strong>
-                                <span>{transaction.description}</span>
-                                <span>→</span>
-                                <span style={{
-                                    background: '#3b82f6',
-                                    color: 'white',
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
-                                    fontSize: '11px',
-                                    fontWeight: 600
-                                }}>
-                                    {transaction.account || '5970'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
-                        <button style={{
-                            flex: 1,
-                            padding: '10px 16px',
-                            background: '#3b82f6',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            transition: 'background 0.2s'
-                        }}
-                            onMouseEnter={(e) => e.target.style.background = '#2563eb'}
-                            onMouseLeave={(e) => e.target.style.background = '#3b82f6'}>
-                            Edit
-                        </button>
-                        <button style={{
-                            padding: '10px 16px',
-                            background: 'white',
-                            color: '#dc2626',
-                            border: '1px solid #fecaca',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            transition: 'all 0.2s'
-                        }}
-                            onMouseEnter={(e) => {
-                                e.target.style.background = '#fef2f2';
-                                e.target.style.borderColor = '#fca5a5';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.target.style.background = 'white';
-                                e.target.style.borderColor = '#fecaca';
-                            }}>
-                            Delete
-                        </button>
-                    </div>
-
+                    </label>
                 </div>
+
+                {/* Edit History */}
+                <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#64748b',
+                        letterSpacing: '0.5px',
+                        marginBottom: '10px'
+                    }}>
+                        EDIT HISTORY
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
+                        {transaction.edit_history?.length > 0 ? (
+                            transaction.edit_history.map((edit, idx) => (
+                                <div key={idx} style={{ marginBottom: '6px' }}>
+                                    • {new Date(edit.timestamp).toLocaleString()} - {edit.description}
+                                </div>
+                            ))
+                        ) : (
+                            <div style={{ fontStyle: 'italic', color: '#94a3b8' }}>No edits made</div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Categorization */}
+                <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#64748b',
+                        letterSpacing: '0.5px',
+                        marginBottom: '10px'
+                    }}>
+                        CATEGORIZATION
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6' }}>
+                        <div style={{ marginBottom: '6px' }}>
+                            <strong>Method:</strong> {transaction.categorization?.method || 'Manual'}
+                            {transaction.categorization?.confidence && ` (${transaction.categorization.confidence}% confidence)`}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <strong>Matched:</strong>
+                            <span>{transaction.description}</span>
+                            <span>→</span>
+                            <span style={{
+                                background: '#3b82f6',
+                                color: 'white',
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: 600
+                            }}>
+                                {transaction.account || '5970'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
+                    <button style={{
+                        flex: 1,
+                        padding: '10px 16px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        transition: 'background 0.2s'
+                    }}
+                        onMouseEnter={(e) => e.target.style.background = '#2563eb'}
+                        onMouseLeave={(e) => e.target.style.background = '#3b82f6'}>
+                        Edit
+                    </button>
+                    <button style={{
+                        padding: '10px 16px',
+                        background: 'white',
+                        color: '#dc2626',
+                        border: '1px solid #fecaca',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        transition: 'all 0.2s'
+                    }}
+                        onMouseEnter={(e) => {
+                            e.target.style.background = '#fef2f2';
+                            e.target.style.borderColor = '#fca5a5';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.background = 'white';
+                            e.target.style.borderColor = '#fecaca';
+                        }}>
+                        Delete
+                    </button>
+                </div>
+
             </div>
+        </div >
         </>
     );
 }
