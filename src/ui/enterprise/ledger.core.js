@@ -1111,8 +1111,16 @@ window.RoboLedger = (function () {
             // Store the file blob for the workbench
             const sourceFileId = Accounts.storeFile(file);
 
+            // Create blob URL for PDF viewing
+            let pdfBlobUrl = null;
+
             if (file.name.toLowerCase().endsWith('.pdf')) {
                 console.log('[INGEST] 📄 PDF detected:', file.name);
+
+                // Create blob URL that can be used by PDF viewer
+                pdfBlobUrl = URL.createObjectURL(file);
+                console.log('[INGEST] 🔗 Created blob URL:', pdfBlobUrl);
+
                 const buffer = await file.arrayBuffer();
                 console.log('[INGEST] 📦 Buffer size:', buffer.byteLength, 'bytes');
 
@@ -1137,8 +1145,23 @@ window.RoboLedger = (function () {
                     rows = parseResult || [];
                 }
 
-                // Attach source file id to each parsed row so it flows through the pipeline
-                rows = rows.map(r => ({ ...r, source_file_id: sourceFileId }));
+                // Attach source file id AND PDF blob URL to each parsed row
+                rows = rows.map(r => ({
+                    ...r,
+                    source_file_id: sourceFileId,
+                    source_pdf: {
+                        url: pdfBlobUrl,
+                        filename: file.name,
+                        page: r.audit_metadata?.page || 1,
+                        raw_line: r.raw_line || `${r.date} ${r.description} ${r.debit || r.credit}`,
+                        line_position: r.audit_metadata ? {
+                            top: r.audit_metadata.y || 0,
+                            left: 50,
+                            width: 500,
+                            height: r.audit_metadata.height || 12
+                        } : null
+                    }
+                }));
 
                 // ===== INTELLIGENT ACCOUNT ID GENERATION =====
                 if (originalAccountId === 'ALL' || !originalAccountId) {
