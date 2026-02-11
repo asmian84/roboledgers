@@ -197,6 +197,8 @@ body {
     border-left: 3px solid transparent;
     transition: all var(--transition-normal);
     cursor: pointer;
+    /* Prevent text overflow */
+    min-width: 0;
 }
 
 .nav-item:hover {
@@ -213,6 +215,13 @@ body {
 .nav-icon {
     font-size: 1.25rem;
     opacity: 0.8;
+    /* Fixed width for icon symmetry */
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .nav-item.active .nav-icon {
@@ -1042,6 +1051,15 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+}
+
+.nav-label {
+    /* Prevent text overflow with ellipsis */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
 }
 
 .ati-label {
