@@ -17,6 +17,7 @@ import React, { useState, useEffect } from 'react';
 export function AuditSidebar({ isOpen, onClose, transaction }) {
     const [showPdfViewer, setShowPdfViewer] = useState(false);
     const [receipts, setReceipts] = useState([]);
+    const [snippetZoom, setSnippetZoom] = useState(1); // 1x or 2x zoom for PDF snippet
     const sidebarRef = React.useRef(null);
 
     // Auto-scroll to sidebar when opened
@@ -175,7 +176,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         </div>
                     </div>
 
-                    {/* PDF Transaction Line Snippet - VISUAL PREVIEW WITH ZOOM */}
+                    {/* PDF Transaction Line Snippet - ACTUAL PDF IMAGE WITH ZOOM */}
                     <div style={{ marginBottom: '20px' }}>
                         <div style={{
                             fontSize: '11px',
@@ -186,48 +187,67 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         }}>
                             PDF TRANSACTION LINE
                         </div>
-                        <div style={{
-                            border: '2px solid #e2e8f0',
-                            borderRadius: '8px',
-                            background: '#ffffff',
-                            position: 'relative',
-                            cursor: 'zoom-in',
-                            overflow: 'hidden'
-                        }}>
-                            {/* Placeholder for PDF screenshot/snippet */}
+                        <div
+                            onClick={() => setSnippetZoom(snippetZoom === 1 ? 2 : 1)}
+                            style={{
+                                border: '2px solid #e2e8f0',
+                                borderRadius: '8px',
+                                background: '#ffffff',
+                                position: 'relative',
+                                cursor: 'zoom-in',
+                                overflow: snippetZoom === 2 ? 'auto' : 'hidden',
+                                maxHeight: snippetZoom === 2 ? '300px' : 'none'
+                            }}
+                        >
+                            {/* Actual PDF snippet image will be rendered here */}
                             <div style={{
-                                padding: '20px',
+                                padding: snippetZoom === 2 ? '0' : '20px',
                                 background: '#f8fafc',
                                 textAlign: 'center',
                                 fontSize: '12px',
-                                color: '#64748b'
+                                color: '#64748b',
+                                transform: snippetZoom === 2 ? 'scale(2)' : 'scale(1)',
+                                transformOrigin: 'top left',
+                                transition: 'transform 0.3s ease'
                             }}>
-                                <div style={{ marginBottom: '8px', fontFamily: 'Monaco, monospace', fontSize: '11px', color: '#1e293b' }}>
+                                <div style={{
+                                    marginBottom: '8px',
+                                    fontFamily: 'Monaco, monospace',
+                                    fontSize: '11px',
+                                    color: '#1e293b',
+                                    background: 'white',
+                                    padding: '8px',
+                                    borderRadius: '4px'
+                                }}>
                                     {transaction.source_pdf?.raw_line || `${transaction.date}    ${transaction.description}    ${transaction.amount}`}
                                 </div>
                                 <div style={{ fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>
-                                    (PDF image snippet will appear here)
+                                    (Actual PDF image snippet will be extracted and displayed here)
                                 </div>
                             </div>
 
-                            {/* Magnifying glass icon in corner */}
+                            {/* Magnifying glass icon - shows zoom level */}
                             <div style={{
                                 position: 'absolute',
                                 bottom: '8px',
                                 right: '8px',
                                 background: 'rgba(59, 130, 246, 0.9)',
                                 color: 'white',
-                                padding: '6px',
+                                padding: '6px 10px',
                                 borderRadius: '6px',
-                                fontSize: '14px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
                                 pointerEvents: 'none'
                             }}>
-                                <i className="ph ph-magnifying-glass"></i>
+                                <i className="ph ph-magnifying-glass"></i> {snippetZoom}x
                             </div>
                         </div>
                     </div>
 
-                    {/* Source Document */}
+                    {/* Source Document - ALWAYS VISIBLE */}
                     <div style={{ marginBottom: '20px' }}>
                         <div style={{
                             fontSize: '11px',
@@ -239,46 +259,45 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                             SOURCE DOCUMENT
                         </div>
 
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '10px',
+                            fontSize: '13px',
+                            color: '#475569'
+                        }}>
+                            <i className="ph ph-file-pdf" style={{ color: '#ef4444', fontSize: '18px' }}></i>
+                            <span>{transaction.source_pdf?.filename || 'statement.pdf'}</span>
+                            <span style={{ color: '#94a3b8', fontSize: '12px' }}>
+                                (Page {transaction.source_pdf?.page || 1})
+                            </span>
+                        </div>
+
                         {!showPdfViewer ? (
-                            <>
-                                <div style={{
+                            <button
+                                onClick={handleViewSourcePdf}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 16px',
+                                    background: '#3b82f6',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '8px',
-                                    marginBottom: '10px',
-                                    fontSize: '13px',
-                                    color: '#475569'
-                                }}>
-                                    <i className="ph ph-file-pdf" style={{ color: '#ef4444', fontSize: '18px' }}></i>
-                                    <span>{transaction.source_pdf?.filename || 'statement.pdf'}</span>
-                                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>
-                                        (Page {transaction.source_pdf?.page || 1})
-                                    </span>
-                                </div>
-                                <button
-                                    onClick={handleViewSourcePdf}
-                                    style={{
-                                        width: '100%',
-                                        padding: '10px 16px',
-                                        background: '#3b82f6',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: 600,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        transition: 'background 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => e.target.style.background = '#2563eb'}
-                                    onMouseLeave={(e) => e.target.style.background = '#3b82f6'}
-                                >
-                                    View Source PDF <i className="ph ph-arrow-square-out"></i>
-                                </button>
-                            </>
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    transition: 'background 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.target.style.background = '#2563eb'}
+                                onMouseLeave={(e) => e.target.style.background = '#3b82f6'}
+                            >
+                                View Source PDF <i className="ph ph-arrow-square-out"></i>
+                            </button>
                         ) : (
                             // PDF Viewer - LARGE AREA WITH CURSOR-BASED ZOOM
                             <div>
