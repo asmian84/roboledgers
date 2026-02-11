@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DocumentViewer } from './DocumentViewer';
 
 /**
  * AuditSidebar - Right-hand sidebar for transaction auditing
@@ -246,93 +247,10 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                             </>
                         ) : (
                             // Document Viewer - SUPPORTS PDF, JPG, PNG, DOCX
-                            <div>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '10px',
-                                    marginBottom: '10px',
-                                    fontSize: '12px',
-                                    color: '#64748b'
-                                }}>
-                                    <button
-                                        onClick={handleBackToAudit}
-                                        style={{
-                                            border: 'none',
-                                            background: 'none',
-                                            color: '#3b82f6',
-                                            cursor: 'pointer',
-                                            fontSize: '13px',
-                                            fontWeight: 600,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            padding: '4px 8px',
-                                            borderRadius: '4px',
-                                            transition: 'background 0.2s'
-                                        }}
-                                        onMouseEnter={(e) => e.target.style.background = '#eff6ff'}
-                                        onMouseLeave={(e) => e.target.style.background = 'none'}
-                                    >
-                                        <i className="ph ph-arrow-left"></i> Back
-                                    </button>
-                                    <div style={{ fontSize: '11px' }}>
-                                        <span>{viewerDocument?.name || 'document'}</span>
-                                        {viewerDocument?.page && <span style={{ marginLeft: '8px', color: '#94a3b8' }}>Page {viewerDocument.page}</span>}
-                                    </div>
-                                </div>
-
-                                {/* Document Canvas - RENDERS PDF/JPG/PNG */}
-                                <div style={{
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '8px',
-                                    background: '#f8fafc',
-                                    minHeight: '400px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    position: 'relative',
-                                    cursor: 'zoom-in',
-                                    overflow: 'auto'
-                                }}>
-                                    <canvas
-                                        id="doc-canvas"
-                                        style={{
-                                            maxWidth: '100%',
-                                            height: 'auto',
-                                            transition: 'transform 0.3s ease'
-                                        }}
-                                    />
-
-                                    <div style={{
-                                        position: 'absolute',
-                                        textAlign: 'center',
-                                        color: '#64748b',
-                                        fontSize: '12px'
-                                    }}>
-                                        <i className="ph ph-file-pdf" style={{ fontSize: '48px', color: '#cbd5e1', marginBottom: '8px', display: 'block' }}></i>
-                                        <div>Loading {viewerDocument?.type || 'document'}...</div>
-                                        {viewerDocument?.type === 'pdf' && (
-                                            <div style={{
-                                                marginTop: '12px',
-                                                padding: '8px 12px',
-                                                background: '#fef3c7',
-                                                border: '2px solid #fbbf24',
-                                                borderRadius: '6px',
-                                                fontSize: '11px',
-                                                color: '#92400e',
-                                                maxWidth: '250px'
-                                            }}>
-                                                📍 Transaction line will be highlighted
-                                            </div>
-                                        )}
-                                        <div style={{ marginTop: '8px', fontSize: '10px', color: '#94a3b8' }}>
-                                            🔍 Hover to zoom
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <DocumentViewer
+                                document={viewerDocument}
+                                onBack={handleBackToAudit}
+                            />
                         )}
                     </div>
 
