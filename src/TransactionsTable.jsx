@@ -100,7 +100,36 @@ function DescriptionCell({ row }) {
     const handleSave = () => {
         if (editValue.trim() && editValue !== fullDesc) {
             // Remove leading comma if present
-            const cleanedValue = editValue.trim().replace(/^,\s*/, '');
+            let cleanedValue = editValue.trim().replace(/^,\s*/, '');
+
+            // Smart comma injection: if description is long and has no comma, add one
+            if (!cleanedValue.includes(',') && cleanedValue.length > 35) {
+                // Find a natural break point (after first 1-3 words, before 60% of length)
+                const words = cleanedValue.split(' ');
+                if (words.length >= 2) {
+                    // Try to split after first 1-3 words, or at ~40% of length
+                    const maxSplitIndex = Math.min(3, Math.floor(words.length / 2));
+                    let splitIndex = 1;
+
+                    // Find split point that keeps first part under 40 chars ideally
+                    for (let i = 1; i <= maxSplitIndex; i++) {
+                        const firstPart = words.slice(0, i).join(' ');
+                        if (firstPart.length <= 40) {
+                            splitIndex = i;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    const firstPart = words.slice(0, splitIndex).join(' ');
+                    const secondPart = words.slice(splitIndex).join(' ');
+
+                    if (secondPart) {
+                        cleanedValue = `${firstPart}, ${secondPart}`;
+                        console.log('[SMART COMMA] Injected:', cleanedValue);
+                    }
+                }
+            }
 
             // Update in ledger with the full edited description
             if (window.RoboLedger?.Ledger?.updateDescription) {
