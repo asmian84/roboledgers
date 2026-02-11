@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { COADropdown } from './components/COADropdown';
+import { AuditSidebar } from './components/AuditSidebar';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GRID DESIGN TOKENS — SINGLE SOURCE OF TRUTH
