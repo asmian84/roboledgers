@@ -67,6 +67,26 @@ export function DocumentViewer({ document, onBack }) {
         };
 
         await page.render(renderContext).promise;
+
+        // Draw highlight box if transaction line position is provided
+        if (document.highlightLine) {
+            const { top, left, width, height } = document.highlightLine;
+
+            // Convert PDF coordinates to canvas coordinates
+            const canvasX = left * viewport.scale;
+            const canvasY = top * viewport.scale;
+            const canvasWidth = width * viewport.scale;
+            const canvasHeight = height * viewport.scale;
+
+            // Draw yellow highlight
+            context.fillStyle = 'rgba(255, 235, 59, 0.3)';
+            context.fillRect(canvasX, canvasY, canvasWidth, canvasHeight);
+
+            // Draw border
+            context.strokeStyle = '#FBB924';
+            context.lineWidth = 2;
+            context.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight);
+        }
     };
 
     const renderImage = (url) => {

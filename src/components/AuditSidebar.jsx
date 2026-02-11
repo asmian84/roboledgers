@@ -55,20 +55,25 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
     if (!isOpen || !transaction) return null;
 
     const handleViewSourceDocument = () => {
+        // Use demo PDF if no source PDF URL is available
+        const demoUrl = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
+
         setViewerDocument({
             type: 'pdf',
-            url: transaction.source_pdf?.url || null,
+            url: transaction.source_pdf?.url || demoUrl,
             name: transaction.source_pdf?.filename || 'statement.pdf',
-            page: transaction.source_pdf?.page || 1
+            page: transaction.source_pdf?.page || 1,
+            highlightLine: transaction.source_pdf?.line_position || null // {top, left, width, height} in PDF coordinates
         });
         setShowDocViewer(true);
     };
 
     const handleViewReceipt = (receipt) => {
         setViewerDocument({
-            type: receipt.type,
+            type: receipt.type || 'pdf',
             url: receipt.url,
-            name: receipt.filename
+            name: receipt.filename,
+            highlightLine: null
         });
         setShowDocViewer(true);
     };
