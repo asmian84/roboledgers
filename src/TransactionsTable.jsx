@@ -155,7 +155,7 @@ function DescriptionCell({ row }) {
 
     return (
         <div className="flex flex-col overflow-hidden group" style={{ gap: '2px' }}>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2">
                 <span
                     style={{
                         fontSize: GRID_TOKENS.descLine1FontSize,
@@ -174,17 +174,29 @@ function DescriptionCell({ row }) {
                 >
                     {payeeName}
                 </span>
-                {/* Pencil icon for edit mode */}
-                <i
-                    className="ph ph-pencil-simple opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-blue-500"
-                    onClick={handleEdit}
-                    style={{
-                        fontSize: '16px',
-                        color: '#64748b',
-                        flexShrink: 0
-                    }}
-                    title="Edit description"
-                />
+                {/* Icons container - far right */}
+                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ flexShrink: 0 }}>
+                    {/* Pencil icon for edit mode */}
+                    <i
+                        className="ph ph-pencil-simple cursor-pointer hover:text-blue-500"
+                        onClick={handleEdit}
+                        style={{
+                            fontSize: '16px',
+                            color: '#64748b'
+                        }}
+                        title="Edit description"
+                    />
+                    {/* Link icon for audit drawer (future) */}
+                    <i
+                        className="ph ph-link cursor-pointer hover:text-blue-500"
+                        onClick={() => console.log('[AUDIT] Open drawer for:', row.tx_id)}
+                        style={{
+                            fontSize: '16px',
+                            color: '#64748b'
+                        }}
+                        title="View source document"
+                    />
+                </div>
             </div>
             {transactionType && (
                 <span
