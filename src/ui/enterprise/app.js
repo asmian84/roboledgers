@@ -902,14 +902,18 @@
           }
         });
 
-        // Update workspace summary (debit/credit totals, etc.)
-        window.updateWorkspace();
-
         console.log('[RECON] Opening balance updated (live):', numericValue);
       }
+    }
+  };
 
-      // Format the input with currency
+  // Format opening balance on blur
+  window.formatOpeningBalance = function (inputElement) {
+    let value = inputElement.value.replace(/[$,]/g, '');
+    const numericValue = parseFloat(value);
+    if (!isNaN(numericValue)) {
       inputElement.value = '$' + numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      window.updateWorkspace(); // Update summary after formatting
     }
   };
 
@@ -2409,7 +2413,7 @@
 
           // Row 1: Opening + Debit
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /></div>' +
           '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 600; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
 
