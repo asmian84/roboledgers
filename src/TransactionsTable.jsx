@@ -154,25 +154,38 @@ function DescriptionCell({ row }) {
     }
 
     return (
-        <div className="flex flex-col overflow-hidden" style={{ gap: '2px' }}>
-            <span
-                onClick={handleEdit}
-                className="cursor-pointer hover:bg-blue-50 px-1 rounded transition-colors"
-                style={{
-                    fontSize: GRID_TOKENS.descLine1FontSize,
-                    fontWeight: GRID_TOKENS.descLine1FontWeight,
-                    color: GRID_TOKENS.descLine1Color,
-                    lineHeight: GRID_TOKENS.cellLineHeight,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    wordBreak: 'break-word'
-                }}
-            >
-                {payeeName}
-            </span>
+        <div className="flex flex-col overflow-hidden group" style={{ gap: '2px' }}>
+            <div className="flex items-center gap-2">
+                <span
+                    style={{
+                        fontSize: GRID_TOKENS.descLine1FontSize,
+                        fontWeight: GRID_TOKENS.descLine1FontWeight,
+                        color: GRID_TOKENS.descLine1Color,
+                        lineHeight: GRID_TOKENS.cellLineHeight,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        wordBreak: 'break-word',
+                        flex: 1,
+                        minWidth: 0
+                    }}
+                >
+                    {payeeName}
+                </span>
+                {/* Pencil icon for edit mode */}
+                <i
+                    className="ph ph-pencil-simple opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-blue-500"
+                    onClick={handleEdit}
+                    style={{
+                        fontSize: '16px',
+                        color: '#64748b',
+                        flexShrink: 0
+                    }}
+                    title="Edit description"
+                />
+            </div>
             {transactionType && (
                 <span
                     style={{
