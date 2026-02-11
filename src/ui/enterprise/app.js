@@ -355,7 +355,7 @@
     for (let idx = 0; idx < files.length; idx++) {
       const file = files[idx];
       try {
-        // Update progress bar (lightweight, no flicker)
+        // Update progress bar to show "Parsing PDF..." with pulsing animation
         await window.updateProgressBar(
           idx + 1,
           files.length,
@@ -363,6 +363,9 @@
           'Parsing PDF...',
           totalImported
         );
+
+        // Give browser time to paint the pulsing animation before parsing starts
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
         totalImported += imported;
