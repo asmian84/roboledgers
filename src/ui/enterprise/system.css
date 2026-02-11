@@ -235,6 +235,9 @@ body {
     padding: 20px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
     background: rgba(15, 23, 42, 0.5);
+    /* Prevent overflow beyond sidebar */
+    overflow: hidden;
+    min-width: 0;
 }
 
 .user-card {
@@ -243,6 +246,9 @@ body {
     gap: 12px;
     padding: 8px;
     border-radius: 12px;
+    /* Prevent content overflow */
+    min-width: 0;
+    overflow: hidden;
 }
 
 .user-avatar {
@@ -262,11 +268,19 @@ body {
     font-size: 0.9rem;
     font-weight: 600;
     color: white;
+    /* Prevent text overflow */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .user-role {
     font-size: 0.75rem;
     color: #94a3b8;
+    /* Prevent text overflow */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* --- MAIN CONTENT --- */
