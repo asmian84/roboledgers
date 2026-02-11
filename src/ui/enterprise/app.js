@@ -312,14 +312,14 @@
     const txnCountEl = document.getElementById('progress-txn-count');
 
     if (fill) {
-      // For single file uploads, show indeterminate pulsing during parsing
-      if (total === 1 && stage === 'Parsing PDF...') {
+      // Show indeterminate pulsing animation during parsing stage
+      if (stage === 'Parsing PDF...') {
         fill.style.width = '100%';
         fill.style.background = 'linear-gradient(90deg, #3b82f6 25%, #60a5fa 50%, #3b82f6 75%)';
         fill.style.backgroundSize = '200% 100%';
         fill.style.animation = 'progressPulse 1.5s ease-in-out infinite';
       } else {
-        // Normal percentage-based progress for multi-file or completed
+        // Normal percentage-based progress for other stages
         fill.style.width = `${percent}%`;
         fill.style.background = '#3b82f6';
         fill.style.animation = 'none';
