@@ -88,14 +88,18 @@ function DescriptionCell({ row }) {
     }
 
     const handleEdit = () => {
-        setEditValue(payeeName);
+        // Edit the FULL description (both parts combined)
+        const fullEditValue = transactionType
+            ? `${payeeName}, ${transactionType}`
+            : payeeName;
+        setEditValue(fullEditValue);
         setIsEditing(true);
         setTimeout(() => inputRef.current?.focus(), 10);
     };
 
     const handleSave = () => {
-        if (editValue.trim() && editValue !== payeeName) {
-            // Update in ledger
+        if (editValue.trim() && editValue !== fullDesc) {
+            // Update in ledger with the full edited description
             if (window.RoboLedger?.Ledger?.updateDescription) {
                 window.RoboLedger.Ledger.updateDescription(row.tx_id, editValue.trim());
             }
