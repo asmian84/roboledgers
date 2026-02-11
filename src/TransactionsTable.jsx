@@ -557,8 +557,16 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
                 [columnId]: !visible // TanStack uses inverted logic
             }));
         };
+
+        // EXPERIMENTAL: Expose audit sidebar function
+        window.openAuditSidebar = (row) => {
+            setSelectedAuditTransaction(row);
+            setAuditSidebarOpen(true);
+        };
+
         return () => {
             delete window.setGridColumnVisibility;
+            delete window.openAuditSidebar;
         };
     }, []);
 
