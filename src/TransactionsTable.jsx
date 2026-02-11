@@ -72,6 +72,10 @@ function Checkbox({ checked, indeterminate, onChange }) {
 
 // Two-line Description Cell (Payee + Transaction Type)
 function DescriptionCell({ row }) {
+    const [isEditing, setIsEditing] = React.useState(false);
+    const [editValue, setEditValue] = React.useState('');
+    const inputRef = React.useRef(null);
+
     const fullDesc = row.payee || row.description || 'No Description';
 
     let payeeName = fullDesc;
@@ -83,17 +87,88 @@ function DescriptionCell({ row }) {
         transactionType = parts.slice(1).join(',').trim();
     }
 
+    const handleEdit = () => {
+        setEditValue(payeeName);
+        setIsEditing(true);
+        setTimeout(() => inputRef.current?.focus(), 10);
+    };
+
+    const handleSave = () => {
+        if (editValue.trim() && editValue !== payeeName) {
+            // Update in ledger
+            if (window.RoboLedger?.Ledger?.updateDescription) {
+                window.RoboLedger.Ledger.updateDescription(row.tx_id, editValue.trim());
+            }
+            // Trigger workspace refresh
+            if (window.updateWorkspace) {
+                window.updateWorkspace();
+            }
+        }
+        setIsEditing(false);
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSave();
+        } else if (e.key === 'Escape') {
+            setIsEditing(false);
+        }
+    };
+
+    if (isEditing) {
+        return (
+            <div className="flex flex-col overflow-hidden" style={{ gap: '2px' }}>
+                <input
+                    ref={inputRef}
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={handleSave}
+                    onKeyDown={handleKeyDown}
+                    className="w-full px-1 py-0.5 border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    style={{
+                        fontSize: GRID_TOKENS.descLine1FontSize,
+                        fontWeight: GRID_TOKENS.descLine1FontWeight,
+                        color: GRID_TOKENS.descLine1Color,
+                        lineHeight: GRID_TOKENS.cellLineHeight
+                    }}
+                />
+                {transactionType && (
+                    <span
+                        style={{
+                            fontSize: GRID_TOKENS.descLine2FontSize,
+                            fontWeight: GRID_TOKENS.descLine2FontWeight,
+                            color: GRID_TOKENS.descLine2Color,
+                            lineHeight: GRID_TOKENS.cellLineHeight,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        }}
+                    >
+                        {transactionType}
+                    </span>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col overflow-hidden" style={{ gap: '2px' }}>
             <span
+                onClick={handleEdit}
+                className="cursor-pointer hover:bg-blue-50 px-1 rounded transition-colors"
                 style={{
                     fontSize: GRID_TOKENS.descLine1FontSize,
                     fontWeight: GRID_TOKENS.descLine1FontWeight,
                     color: GRID_TOKENS.descLine1Color,
                     lineHeight: GRID_TOKENS.cellLineHeight,
-                    whiteSpace: 'nowrap',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    textOverflow: 'ellipsis',
+                    wordBreak: 'break-word'
                 }}
             >
                 {payeeName}

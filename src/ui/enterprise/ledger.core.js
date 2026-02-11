@@ -494,6 +494,41 @@ window.RoboLedger = (function () {
             return false;
         },
 
+        updateDescription: function (tx_id, new_description) {
+            const tx = state.transactions[tx_id];
+            if (tx) {
+                const old_value = tx.payee || tx.description || '';
+
+                // Skip if no change
+                if (old_value === new_description) {
+                    return false;
+                }
+
+                // Initialize edit history if not exists
+                if (!tx.edit_history) {
+                    tx.edit_history = [];
+                }
+
+                // Track the edit for audit transparency
+                tx.edit_history.push({
+                    field: 'description',
+                    old_value: old_value,
+                    new_value: new_description,
+                    timestamp: new Date().toISOString(),
+                    edited_by: 'user' // Can be enhanced with actual user ID later
+                });
+
+                // Update the fields
+                tx.payee = new_description;
+                tx.description = new_description;
+
+                save();
+                console.log(`[LEDGER] Updated description for ${tx_id}: "${old_value}" → "${new_description}"`);
+                return true;
+            }
+            return false;
+        },
+
         createManual: function (account_id) {
             const tx_id = crypto.randomUUID();
             const tx = {
