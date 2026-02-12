@@ -682,9 +682,9 @@ const columns = [
     columnHelper.display({
         id: 'balance',
         header: 'BALANCE',
-        size: 80,  // Reduced to minimize right-side space
-        minSize: 75,
-        maxSize: 110,
+        size: 65,  // Further reduced to minimize right-side space
+        minSize: 60,
+        maxSize: 90,
         cell: info => {
             // Get the sorted rows to calculate running balance
             const sortedRows = info.table.getRowModel().rows;
