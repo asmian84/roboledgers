@@ -1232,6 +1232,33 @@ window.RoboLedger = (function () {
                 }
 
                 Accounts.updateMetadata(account_id, metadata);
+
+                // RECONCILIATION SOURCE LINKS: Store PDF URL and balances
+                const existingAccount = state.accounts.find(a => a.id === account_id);
+                if (existingAccount && pdfBlobUrl) {
+                    existingAccount.pdfUrl = pdfBlobUrl;
+                    existingAccount.pdfFilename = file.name;
+                    console.log(`[RECON] Stored PDF URL for ${account_id}:`, pdfBlobUrl);
+                }
+
+                //Store opening balance if parser provided it
+                if (existingAccount && parseResult && parseResult.openingBalance !== undefined) {
+                    existingAccount.openingBalance = parseResult.openingBalance;
+                    console.log(`[RECON] Stored opening balance for ${account_id}:`, parseResult.openingBalance);
+                }
+
+                // Store closing balance if parser provided it
+                if (existingAccount && parseResult && parseResult.closingBalance !== undefined) {
+                    existingAccount.statementEndingBalance = parseResult.closingBalance;
+                    console.log(`[RECON] Stored closing balance for ${account_id}:`, parseResult.closingBalance);
+                }
+
+                // Store statement period if available
+                if (existingAccount && parseResult && parseResult.statementPeriod) {
+                    existingAccount.statementPeriod = parseResult.statementPeriod;
+                    console.log(`[RECON] Stored statement period for ${account_id}:`, parseResult.statementPeriod);
+                }
+
                 console.log(`[INGEST] DETECTED & UPDATED: ${metadata.name} (Transit: ${metadata.transit})`);
             } else {
                 const text = await file.text();
