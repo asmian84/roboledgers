@@ -51,12 +51,26 @@ export function DocumentViewer({ document, onBack }) {
     }, [document]);
 
     const renderPdfPage = async (pdf, pageNum) => {
+        // Cancel any ongoing render first
+        if (renderTaskRef.current) {
+            console.log('[DOC VIEWER] Canceling previous render');
+            renderTaskRef.current.cancel();
+            renderTaskRef.current = null;
+        }
+
         const page = await pdf.getPage(pageNum);
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         const context = canvas.getContext('2d');
-        const viewport = page.getViewport({ scale: 1.5 });
+
+        // Get page rotation from PDF metadata (0, 90, 180, 270)
+        const rotation = page.rotate || 0;
+        console.log(`[DOC VIEWER] Page rotation from metadata: ${rotation}°`);
+
+        // Apply rotation correction - if PDF is upside down (180°), rotate it back
+        const correctedRotation = rotation;
+        const viewport = page.getViewport({ scale: 1.5, rotation: correctedRotation });
 
         canvas.height = viewport.height;
         canvas.width = viewport.width;
