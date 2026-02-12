@@ -178,19 +178,16 @@ export function DocumentViewer({ document, onBack }) {
                     alignItems: 'center',
                     justifyContent: isLoading ? 'center' : 'flex-start',
                     position: 'relative',
-                    cursor: isZoomed ? 'zoom-out' : 'zoom-in',
                     overflow: 'auto',
                     padding: '20px'
                 }}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
             >
                 <canvas
                     ref={canvasRef}
                     style={{
-                        maxWidth: '100%',
+                        width: '100%',
                         height: 'auto',
-                        transition: 'transform 0.3s ease',
+                        cursor: 'default',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                     }}
                 />

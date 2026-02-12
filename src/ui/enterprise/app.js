@@ -1257,7 +1257,10 @@
     const page = type === 'opening' ? 1 : (recon.total_pages || 1);
     const balanceType = type === 'opening' ? 'Opening' : 'Ending';
 
+    console.log(`[BALANCE VIEW] ========================================`);
     console.log(`[BALANCE VIEW] Opening ${balanceType} balance - Page ${page}`);
+    console.log(`[BALANCE VIEW] PDF URL:`, recon.pdf_url);
+    console.log(`[BALANCE VIEW] Creating RIGHT-SIDE panel (z-index 999)`);
 
     // Overlay
     const overlay = document.createElement('div');
@@ -1269,6 +1272,8 @@
     const panel = document.createElement('div');
     panel.id = 'balance-viewer-panel';
     panel.style.cssText = 'position:fixed;top:0;right:0;width:50%;max-width:700px;height:100vh;background:white;box-shadow:-4px 0 12px rgba(0,0,0,0.1);z-index:999;display:flex;flex-direction:column;';
+    console.log(`[BALANCE VIEW] Panel created:`, panel.id);
+    console.log(`[BALANCE VIEW] Panel style:`, panel.style.cssText);
 
     // Header
     const header = document.createElement('div');
@@ -1290,6 +1295,9 @@
     panel.appendChild(pdfContainer);
     document.body.appendChild(overlay);
     document.body.appendChild(panel);
+    console.log(`[BALANCE VIEW] Panel appended to body`);
+    console.log(`[BALANCE VIEW] Computed style - right:`, window.getComputedStyle(panel).right);
+    console.log(`[BALANCE VIEW] Computed style - position:`, window.getComputedStyle(panel).position);
 
     // Mount DocumentViewer
     if (window.mountDocumentViewer) {
