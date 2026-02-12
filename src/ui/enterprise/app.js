@@ -45,7 +45,17 @@
     refOverride: 'TXN',
     dateFormat: 'MM/DD/YYYY',
     province: 'ON',
-    gstEnabled: true
+    gstEnabled: true,
+    // Grid Appearance Settings (NEW in V5.1)
+    gridTheme: 'default',
+    gridFontSize: 13.5,
+
+    // Transaction Import State
+    uploadInProgress: false,
+    importSession: null,
+
+    // Version
+    version: '5.1.1',
   };
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
@@ -1275,6 +1285,10 @@
     const provinceSelect = document.getElementById('settings-province');
     const gstEnabled = document.getElementById('settings-gst-enabled');
 
+    // Grid Appearance Settings
+    const gridThemeSelect = document.getElementById('settings-grid-theme');
+    const gridFontsizeSlider = document.getElementById('settings-grid-fontsize');
+
     if (themeSelect) UI_STATE.activeTheme = themeSelect.value;
     if (dexteritySlider) UI_STATE.dexterity = parseInt(dexteritySlider.value);
     if (fontsizeSlider) UI_STATE.fontSize = parseInt(fontsizeSlider.value);
@@ -1284,6 +1298,10 @@
     if (dateFormat) UI_STATE.dateFormat = dateFormat.value;
     if (provinceSelect) UI_STATE.province = provinceSelect.value;
     if (gstEnabled) UI_STATE.gstEnabled = gstEnabled.checked;
+
+    // Save grid appearance settings
+    if (gridThemeSelect) UI_STATE.gridTheme = gridThemeSelect.value;
+    if (gridFontsizeSlider) UI_STATE.gridFontSize = parseFloat(gridFontsizeSlider.value);
 
     // Apply saved theme to grid container only (grid-specific setting)
     const applyThemeToGrid = () => {
@@ -1309,14 +1327,54 @@
       refOverride: UI_STATE.refOverride,
       dateFormat: UI_STATE.dateFormat,
       province: UI_STATE.province,
-      gstEnabled: UI_STATE.gstEnabled
+      gstEnabled: UI_STATE.gstEnabled,
+      // Grid appearance settings
+      gridTheme: UI_STATE.gridTheme,
+      gridFontSize: UI_STATE.gridFontSize
     };
 
     localStorage.setItem('roboledger_v5_settings', JSON.stringify(settings));
 
     // Close drawer
     toggleSettings(false);
+
+    // Force grid re-render with new theme
+    window.applyGridSettings();
+
     console.log("[SETTINGS] Configuration saved and applied.");
+  };
+
+  // Live preview functions for grid appearance
+  window.previewGridTheme = function (themeName) {
+    UI_STATE.gridTheme = themeName;
+    window.applyGridSettings();
+  };
+
+  window.previewGridFontSize = function (size) {
+    const fontSize = parseFloat(size);
+    UI_STATE.gridFontSize = fontSize;
+
+    // Update display
+    const display = document.getElementById('grid-fontsize-display');
+    if (display) display.textContent = `${fontSize}px`;
+
+    // Apply immediately
+    window.applyGridSettings();
+  };
+
+  // Apply grid settings to trigger re-render
+  window.applyGridSettings = function () {
+    console.log('[GRID] Applying theme:', UI_STATE.gridTheme, 'Font size:', UI_STATE.gridFontSize);
+
+    // Force grid to re-render with new GRID_TOKENS
+    if (window.renderTransactionsGrid) {
+      const txns = window.RoboLedger ? window.RoboLedger.Ledger.getAll() : [];
+      const filtered = UI_STATE.selectedAccount === 'ALL'
+        ? txns
+        : txns.filter(t => t.account_id === UI_STATE.selectedAccount);
+
+      window.renderTransactionsGrid(filtered, UI_STATE.searchQuery);
+    }
   };
 
   window.setDensity = function (density) {
@@ -1870,6 +1928,42 @@
                     <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'compact' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('compact')">Compact</button>
                     <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'comfortable' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('comfortable')">Comfortable</button>
                     <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'spacious' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('spacious')">Spacious</button>
+                </div>
+            </div>
+            <div class="setting-group">
+                <div class="setting-group-title"><i class="ph ph-table"></i> Grid Appearance</div>
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Professional accounting grid themes and typography</div>
+                
+                <!-- Grid Theme Selector -->
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">PROFESSIONAL THEME</label>
+                    <select class="v5-select" id="settings-grid-theme" onchange="window.previewGridTheme(this.value)">
+                        <option value="vanilla" ${UI_STATE.gridTheme === 'vanilla' ? 'selected' : ''}>Vanilla</option>
+                        <option value="classic" ${UI_STATE.gridTheme === 'classic' ? 'selected' : ''}>Classic</option>
+                        <option value="default" ${UI_STATE.gridTheme === 'default' ? 'selected' : ''}>Default</option>
+                        <option value="ledger-pad" ${UI_STATE.gridTheme === 'ledger-pad' ? 'selected' : ''}>Ledger Pad</option>
+                        <option value="post-it-note" ${UI_STATE.gridTheme === 'post-it-note' ? 'selected' : ''}>Post-it Note</option>
+                        <option value="rainbow" ${UI_STATE.gridTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
+                        <option value="social" ${UI_STATE.gridTheme === 'social' ? 'selected' : ''}>Social</option>
+                        <option value="spectrum" ${UI_STATE.gridTheme === 'spectrum' ? 'selected' : ''}>Spectrum</option>
+                        <option value="subliminal" ${UI_STATE.gridTheme === 'subliminal' ? 'selected' : ''}>Subliminal</option>
+                        <option value="subtle" ${UI_STATE.gridTheme === 'subtle' ? 'selected' : ''}>Subtle</option>
+                        <option value="tracker" ${UI_STATE.gridTheme === 'tracker' ? 'selected' : ''}>Tracker</option>
+                        <option value="vintage" ${UI_STATE.gridTheme === 'vintage' ? 'selected' : ''}>Vintage</option>
+                        <option value="wave" ${UI_STATE.gridTheme === 'wave' ? 'selected' : ''}>Wave</option>
+                        <option value="webapp" ${UI_STATE.gridTheme === 'webapp' ? 'selected' : ''}>WebApp</option>
+                    </select>
+                </div>
+                
+                <!-- Grid Font Size -->
+                <div style="margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label style="font-size: 11px; font-weight: 700; color: #94a3b8;">GRID FONT SIZE</label>
+                        <span id="grid-fontsize-display" style="font-size: 11px; font-weight: 700; color: #3b82f6;">${UI_STATE.gridFontSize}px</span>
+                    </div>
+                    <input type="range" id="settings-grid-fontsize" min="9" max="16" step="0.5" value="${UI_STATE.gridFontSize}" 
+                           style="width: 100%;" 
+                           oninput="window.previewGridFontSize(this.value)">
                 </div>
             </div>
         `;

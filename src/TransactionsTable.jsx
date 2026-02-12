@@ -15,7 +15,158 @@ import { AuditSidebar } from './components/AuditSidebar';
 // GRID DESIGN TOKENS — SINGLE SOURCE OF TRUTH
 // ═══════════════════════════════════════════════════════════════════════════
 
-const GRID_TOKENS = {
+// Caseware Professional Themes (matching Caseware naming exactly)
+const CASEWARE_THEMES = {
+    'vanilla': {
+        fontFamily: 'Inter, -apple-system, system-ui, sans-serif',
+        cellFontSize: '13.5px',
+        headerFontSize: '12px',
+        rowHeight: 56,
+        borderColor: '#f1f5f9',
+        hoverBg: '#fefcf3',
+        headerBg: '#fffef9',
+        headerColor: '#78716c'
+    },
+    'classic': {
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        cellFontSize: '11px',
+        headerFontSize: '11px',
+        rowHeight: 48,
+        borderColor: '#d0d0d0',
+        hoverBg: '#e8f4f8',
+        headerBg: '#f0f0f0',
+        headerColor: '#333333'
+    },
+    'default': {
+        fontFamily: 'Inter, -apple-system, system-ui, sans-serif',
+        cellFontSize: '13px',
+        headerFontSize: '12px',
+        rowHeight: 54,
+        borderColor: '#e5e7eb',
+        hoverBg: '#f9fafb',
+        headerBg: '#ffffff',
+        headerColor: '#6b7280'
+    },
+    'ledger-pad': {
+        fontFamily: '"Courier New", Courier, monospace',
+        cellFontSize: '12px',
+        headerFontSize: '11px',
+        rowHeight: 50,
+        borderColor: '#c7d2fe',
+        hoverBg: '#eef2ff',
+        headerBg: '#e0e7ff',
+        headerColor: '#4338ca'
+    },
+    'post-it-note': {
+        fontFamily: '"Comic Sans MS", "Chalkboard SE", cursive',
+        cellFontSize: '12px',
+        headerFontSize: '11px',
+        rowHeight: 52,
+        borderColor: '#fde047',
+        hoverBg: '#fef9c3',
+        headerBg: '#fef08a',
+        headerColor: '#713f12'
+    },
+    'rainbow': {
+        fontFamily: 'Inter, sans-serif',
+        cellFontSize: '12px',
+        headerFontSize: '11px',
+        rowHeight: 52,
+        borderColor: '#e0e0e0',
+        hoverBg: 'linear-gradient(90deg, #fef3c7, #fce7f3, #dbeafe)',
+        headerBg: '#f3f4f6',
+        headerColor: '#374151'
+    },
+    'social': {
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        cellFontSize: '13px',
+        headerFontSize: '12px',
+        rowHeight: 56,
+        borderColor: '#e4e7eb',
+        hoverBg: '#f0f9ff',
+        headerBg: '#eff6ff',
+        headerColor: '#3b82f6'
+    },
+    'spectrum': {
+        fontFamily: '"Segoe UI", Tahoma, sans-serif',
+        cellFontSize: '12px',
+        headerFontSize: '11px',
+        rowHeight: 50,
+        borderColor: '#e9d5ff',
+        hoverBg: '#faf5ff',
+        headerBg: '#f3e8ff',
+        headerColor: '#7c3aed'
+    },
+    'subliminal': {
+        fontFamily: 'Georgia, serif',
+        cellFontSize: '11.5px',
+        headerFontSize: '10.5px',
+        rowHeight: 48,
+        borderColor: '#f5f5f4',
+        hoverBg: '#fafaf9',
+        headerBg: '#f5f5f4',
+        headerColor: '#78716c'
+    },
+    'subtle': {
+        fontFamily: 'Inter, sans-serif',
+        cellFontSize: '12px',
+        headerFontSize: '11px',
+        rowHeight: 50,
+        borderColor: '#f1f5f9',
+        hoverBg: '#f8fafc',
+        headerBg: '#f1f5f9',
+        headerColor: '#64748b'
+    },
+    'tracker': {
+        fontFamily: '"SF Mono", Monaco, "Cascadia Code", monospace',
+        cellFontSize: '11px',
+        headerFontSize: '10px',
+        rowHeight: 46,
+        borderColor: '#22c55e',
+        hoverBg: '#f0fdf4',
+        headerBg: '#dcfce7',
+        headerColor: '#15803d'
+    },
+    'vintage': {
+        fontFamily: '"Times New Roman", Times, serif',
+        cellFontSize: '12px',
+        headerFontSize: '11px',
+        rowHeight: 50,
+        borderColor: '#d4a373',
+        hoverBg: '#fef3e2',
+        headerBg: '#fde8cc',
+        headerColor: '#92400e'
+    },
+    'wave': {
+        fontFamily: '"Trebuchet MS", sans-serif',
+        cellFontSize: '12px',
+        headerFontSize: '11px',
+        rowHeight: 52,
+        borderColor: '#a5f3fc',
+        hoverBg: '#cffafe',
+        headerBg: '#ecfeff',
+        headerColor: '#0e7490'
+    },
+    'webapp': {
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        cellFontSize: '13px',
+        headerFontSize: '12px',
+        rowHeight: 54,
+        borderColor: '#e5e5e5',
+        hoverBg: '#fafafa',
+        headerBg: '#f5f5f5',
+        headerColor: '#525252'
+    }
+};
+
+// Get active theme settings from UI_STATE
+function getActiveTheme() {
+    const themeName = window.UI_STATE?.gridTheme || 'default';
+    return CASEWARE_THEMES[themeName] || CASEWARE_THEMES['default'];
+}
+
+// Dynamic GRID_TOKENS - merges defaults with active theme
+const GRID_TOKENS_BASE = {
     // Typography - Headers
     headerFontSize: '12px',
     headerFontWeight: 600,
@@ -44,7 +195,7 @@ const GRID_TOKENS = {
     numberFontWeight: 500,
 
     // Row Dimensions
-    rowHeight: 56, // Increased from 48 to accommodate 2-line descriptions // Comfortable density (px)
+    rowHeight: 56, // Comfortable density (px)
     rowPaddingX: '16px',
 
     // Colors
@@ -54,6 +205,33 @@ const GRID_TOKENS = {
     borderColor: '#f1f5f9',
     hoverBg: '#f8fafc',
 };
+
+// Apply theme overrides
+function getActiveGridTokens() {
+    const theme = getActiveTheme();
+    const userFontSize = window.UI_STATE?.gridFontSize;
+
+    return {
+        ...GRID_TOKENS_BASE,
+        // Theme overrides
+        fontFamily: theme.fontFamily,
+        cellFontSize: userFontSize ? `${userFontSize}px` : theme.cellFontSize,
+        headerFontSize: theme.headerFontSize,
+        rowHeight: theme.rowHeight,
+        borderColor: theme.borderColor,
+        hoverBg: theme.hoverBg,
+        headerBg: theme.headerBg,
+        headerColor: theme.headerColor,
+        // Update description line sizes based on cell font size
+        descLine1FontSize: userFontSize ? `${userFontSize}px` : theme.cellFontSize,
+        descLine2FontSize: userFontSize ? `${Math.max(9, userFontSize - 1.5)}px` : (parseInt(theme.cellFontSize) - 1.5) + 'px',
+        numberFontSize: userFontSize ? `${userFontSize}px` : theme.cellFontSize,
+    };
+}
+
+// Export dynamic tokens
+const GRID_TOKENS = getActiveGridTokens();
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SUB-COMPONENTS
