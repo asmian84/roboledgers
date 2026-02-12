@@ -542,7 +542,8 @@ const columns = [
                         fontWeight: GRID_TOKENS.cellFontWeight,
                         color: GRID_TOKENS.cellColor,
                         fontVariantNumeric: 'tabular-nums',
-                        whiteSpace: 'nowrap'
+                        whiteSpace: 'nowrap',
+                        paddingRight: '6px'
                     }}
                 >
                     {`${prefix}-${counter}`}
@@ -564,7 +565,8 @@ const columns = [
                     fontWeight: GRID_TOKENS.cellFontWeight,
                     color: GRID_TOKENS.cellColor,
                     fontVariantNumeric: 'tabular-nums',
-                    whiteSpace: 'nowrap'
+                    whiteSpace: 'nowrap',
+                    paddingRight: '6px'
                 }}
             >
                 {info.getValue()}
@@ -665,11 +667,13 @@ const columns = [
             };
 
             return (
-                <COADropdown
-                    value={row.original.category || ''}
-                    onChange={handleUpdateCategory}
-                    txId={row.original.tx_id}
-                />
+                <div style={{ paddingRight: '6px' }}>
+                    <COADropdown
+                        value={row.original.category || ''}
+                        onChange={handleUpdateCategory}
+                        txId={row.original.tx_id}
+                    />
+                </div>
             );
         }
     }),
