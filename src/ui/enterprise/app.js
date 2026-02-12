@@ -3449,7 +3449,7 @@
    */
   function cleanupEmptyAccounts() {
     const accounts = window.RoboLedger?.Accounts?.getAll() || [];
-    const allTxns = window.RoboLedger?.Ledger?.transactions || [];
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
 
     let cleaned = 0;
     accounts.forEach(acc => {
