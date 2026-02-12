@@ -21,18 +21,11 @@ SCOTIABANK VISA FORMAT:
         console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
-                // Extract balances using base helper
+        // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+        console.log(`[SCOTIA-VISA] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
-
-        // Extract opening balance (Previous Balance)
-        let openingBalance = 0;
-        const previousBalanceMatch = statementText.match(/(?:Previous\s+balance|Balance\s+forward).*?(\d+[\d,]*\.\d{2})/i);
-        if (previousBalanceMatch) {
-            openingBalance = parseFloat(previousBalanceMatch[1].replace(/,/g, ''));
-            console.log(`[SCOTIA-VISA] Extracted opening balance: ${openingBalance}`);
-        }
 
         // EXTRACT METADATA (Institution, Transit, Account)
         // EXTRACT METADATA (Institution, Transit, Account)
@@ -123,7 +116,7 @@ SCOTIABANK VISA FORMAT:
         }
 
         console.log(`[SCOTIA-VISA] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata, openingBalance , openingBalance, closingBalance, statementPeriod };
+        return { transactions, metadata: parsedMetadata, openingBalance, openingBalance, closingBalance, statementPeriod };
     };
 
     extractTransaction(text, isoDate, originalLine) {

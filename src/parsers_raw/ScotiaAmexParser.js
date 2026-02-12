@@ -20,18 +20,11 @@ SCOTIABANK AMEX FORMAT:
         console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
-                // Extract balances using base helper
+        // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+        console.log(`[SCOTIA-AMEX] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
-
-        // Extract opening balance
-        let openingBalance = 0;
-        const previousBalanceMatch = statementText.match(/(?:Previous\s+balance|Balance\s+forward).*?(\d+[\d,]*\.\d{2})/i);
-        if (previousBalanceMatch) {
-            openingBalance = parseFloat(previousBalanceMatch[1].replace(/,/g, ''));
-            console.log(`[SCOTIA-AMEX] Extracted opening balance: ${openingBalance}`);
-        }
 
         // EXTRACT METADATA - Amex format: 3704-000228-17271
         const acctMatch = statementText.match(/(?:Account\s*#?)\s*(\d{4}-\d{6}-\d{5})/i);
@@ -111,7 +104,7 @@ SCOTIABANK AMEX FORMAT:
         }
 
         console.log(`[SCOTIA-AMEX] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata, openingBalance , openingBalance, closingBalance, statementPeriod };
+        return { transactions, metadata: parsedMetadata, openingBalance, openingBalance, closingBalance, statementPeriod };
     };
 
     extractTransaction(text, isoDate, originalLine) {

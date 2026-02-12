@@ -24,18 +24,11 @@ BMO VISA FORMAT:
         console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
-                // Extract balances using base helper
+        // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+        console.log(`[BMO-VISA] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
-
-        // Extract opening balance
-        let openingBalance = 0;
-        const previousBalanceMatch = statementText.match(/(?:Previous\s+balance|Opening\s+Balance).*?(\d+[\d,]*\.\d{2})/i);
-        if (previousBalanceMatch) {
-            openingBalance = parseFloat(previousBalanceMatch[1].replace(/,/g, ''));
-            console.log(`[BMO-VISA] Extracted opening balance: ${openingBalance}`);
-        }
 
         // EXTRACT METADATA - Account may be masked: "XXX XXXX XXXX 3277"
         const acctMatch = statementText.match(/(?:Card\s+number|Account).*?([X\d]{3,4}\s+[X\d]{4}\s+[X\d]{4}\s+\d{4})/i);
@@ -118,7 +111,7 @@ BMO VISA FORMAT:
         }
 
         console.log(`[BMO-VISA] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata, openingBalance , openingBalance, closingBalance, statementPeriod };
+        return { transactions, metadata: parsedMetadata, openingBalance, openingBalance, closingBalance, statementPeriod };
     };
 
     extractTransaction(text, isoDate, originalLine) {

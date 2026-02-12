@@ -24,8 +24,9 @@ TD VISA FORMAT:
         console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
-                // Extract balances using base helper
+        // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+        console.log(`[TD-VISA] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
 
@@ -47,14 +48,6 @@ TD VISA FORMAT:
                 accountNumber = raw.match(/.{1,4}/g).join(' ');
                 console.log(`[TD-VISA] Extracted and formatted: ${accountNumber}`);
             }
-        }
-
-        // Extract opening balance (Previous Balance for credit cards)
-        let openingBalance = null;
-        const openingMatch = statementText.match(/(Opening|Previous) Balance.*?\$?([\d,]+\.\d{2})/i);
-        if (openingMatch) {
-            openingBalance = parseFloat(openingMatch[2].replace(/,/g, ''));
-            console.log(`[TD-VISA] Extracted opening balance: ${openingBalance}`);
         }
 
         const parsedMetadata = {
@@ -116,7 +109,7 @@ TD VISA FORMAT:
         }
 
         console.log(`[TD-VISA] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata , openingBalance, closingBalance, statementPeriod };
+        return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 
     extractTransaction(text, isoDate, originalLine) {
