@@ -917,9 +917,16 @@ export function TransactionsTable({
 
                             // Determine row background color from theme
                             const rowIndex = virtualRow.index;
-                            const rowBg = isSelected
-                                ? (GRID_TOKENS.selectedRowBg || '#eff6ff')
-                                : (rowIndex % 2 === 0 ? GRID_TOKENS.rowBg : GRID_TOKENS.rowBgAlt);
+                            let rowBg;
+                            if (isSelected) {
+                                rowBg = GRID_TOKENS.selectedRowBg || '#eff6ff';
+                            } else if (GRID_TOKENS.rowColors && Array.isArray(GRID_TOKENS.rowColors)) {
+                                // Rainbow mode: cycle through color palette
+                                rowBg = GRID_TOKENS.rowColors[rowIndex % GRID_TOKENS.rowColors.length];
+                            } else {
+                                // Standard alternating (2 colors)
+                                rowBg = rowIndex % 2 === 0 ? GRID_TOKENS.rowBg : GRID_TOKENS.rowBgAlt;
+                            }
                             const hoverBg = GRID_TOKENS.hoverBg || '#f8fafc';
 
                             return (
