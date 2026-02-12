@@ -2740,7 +2740,7 @@
         const hasStatementEnding = statementEnding !== 0;
         // 3-row layout: Opening+Debit, Ending(Calc)+Credit, Ending(Stmt)
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.7;">' +
-          '<div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
+          '<div style="font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
 
           // Row 1: Opening + Debit
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
@@ -2781,7 +2781,7 @@
         }).join(' ');
 
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; line-height: 1.6;">' +
-          '<div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">ACCOUNT METADATA</div>' +
+          '<div style="font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">ACCOUNT METADATA</div>' +
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">Total Transactions: <span style="font-weight: 700;">' + totalTxnCount.toLocaleString() + '</span></div>' +
           '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + allBadge + ' ' + badgesList + '</div>' +
           '</div>';
