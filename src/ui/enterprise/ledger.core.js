@@ -110,7 +110,8 @@ window.RoboLedger = (function () {
         { code: '8700', name: 'Bank Charges', class: 'EXP_OP_FIN', root: 'EXPENSE', balance: 0 },
         { code: '8800', name: 'Bank & Interest Charges', class: 'EXP_OP_FIN', root: 'EXPENSE', balance: 0 },
         { code: '8900', name: 'Professional Fees (Accounting/Legal)', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '9000', name: 'Depreciation Expense', class: 'EXP_NON_CASH', root: 'EXPENSE', balance: 0 }
+        { code: '9000', name: 'Depreciation Expense', class: 'EXP_NON_CASH', root: 'EXPENSE', balance: 0 },
+        { code: '9970', name: 'Uncategorized', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 }
     ];
 
     // --- STORAGE ENGINE ---
