@@ -929,7 +929,7 @@ export function TransactionsTable({
                             height: GRID_TOKENS.headerHeight,
                             // Custom padding per column (match cell padding)
                             padding: header.id === 'select' ? '0 4px 0 2px' :  // Checkbox: minimal left
-                                header.id === 'balance' ? '0 2px 0 4px' : // Balance: minimal right
+                                header.id === 'balance' ? '0 0 0 4px' :   // Balance: zero right padding
                                     `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
                             fontSize: GRID_TOKENS.headerFontSize,
                             fontWeight: GRID_TOKENS.headerFontWeight,
@@ -1010,7 +1010,7 @@ export function TransactionsTable({
                                                 flexShrink: 0,
                                                 // Custom padding per column
                                                 padding: cell.column.id === 'select' ? '0 4px 0 2px' :  // Checkbox: minimal left
-                                                    cell.column.id === 'balance' ? '0 2px 0 4px' : // Balance: minimal right
+                                                    cell.column.id === 'balance' ? '0 0 0 4px' :   // Balance: zero right padding
                                                         `0 ${GRID_TOKENS.rowPaddingX}`,                  // Others: default
                                                 borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
                                                 position: cell.column.id === 'category' ? 'relative' : undefined
