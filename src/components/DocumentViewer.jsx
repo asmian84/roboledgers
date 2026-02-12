@@ -91,6 +91,16 @@ export function DocumentViewer({ document, onBack }) {
             context.strokeStyle = '#FBB924';
             context.lineWidth = 2;
             context.strokeRect(canvasX, canvasY, canvasWidth, canvasHeight);
+
+            // Auto-scroll to highlighted line
+            setTimeout(() => {
+                const container = canvas.parentElement;
+                if (container) {
+                    const scrollTop = canvasY - (container.clientHeight / 2) + (canvasHeight / 2);
+                    container.scrollTop = Math.max(0, scrollTop);
+                    console.log('[DOC VIEWER] Auto-scrolled to highlight at Y:', canvasY);
+                }
+            }, 100);
         }
     };
 

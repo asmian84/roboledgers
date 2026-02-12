@@ -1273,7 +1273,7 @@
     // Panel - RIGHT SIDE (magnet to audit drawer)
     const panel = document.createElement('div');
     panel.id = 'balance-viewer-panel';
-    panel.style.cssText = 'position:fixed;top:0;right:400px;width:50%;max-width:700px;height:100vh;background:white;box-shadow:-4px 0 12px rgba(0,0,0,0.1);z-index:999;display:flex;flex-direction:column;';
+    panel.style.cssText = 'position:fixed;top:0;right:320px;width:50%;max-width:700px;height:100vh;background:white;box-shadow:-4px 0 12px rgba(0,0,0,0.1);z-index:999;display:flex;flex-direction:column;';
     console.log(`[BALANCE VIEW] Panel created:`, panel.id);
     console.log(`[BALANCE VIEW] Panel style:`, panel.style.cssText);
 
