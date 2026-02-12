@@ -719,29 +719,51 @@ window.RoboLedger = (function () {
         /**
          * PDF.js Text Extraction (Forensic Reconstruction)
          * Preserves line breaks by detecting Y-coordinate changes
+         * NOW ALSO RETURNS LINE COORDINATES for highlighting
          */
         extractTextFromPDF: async function (arrayBuffer) {
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             let fullText = '';
+            const lineCoordinates = []; // Store coordinates for each line
 
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
                 const content = await page.getTextContent();
 
                 // Group items by Y-coordinate (line detection)
                 const lines = [];
                 let currentLine = [];
                 let lastY = null;
+                let lineStartY = null;
+                let lineHeight = null;
 
-                content.items.forEach(item => {
+                content.items.forEach((item, idx) => {
                     const y = Math.round(item.transform[5]); // Y-coordinate
+                    const height = item.height || 12; // Approximate height from font size
 
                     // New line if Y changes by more than 2 pixels
                     if (lastY !== null && Math.abs(y - lastY) > 2) {
                         if (currentLine.length > 0) {
-                            lines.push(currentLine.join(' '));
+                            const lineText = currentLine.join(' ');
+                            lines.push(lineText);
+
+                            // Store coordinate for this line
+                            lineCoordinates.push({
+                                page: pageNum,
+                                text: lineText,
+                                y: lineStartY,
+                                height: lineHeight
+                            });
+
                             currentLine = [];
+                            lineStartY = null;
                         }
+                    }
+
+                    // Track first Y-coordinate of the line
+                    if (lineStartY === null) {
+                        lineStartY = y;
+                        lineHeight = height;
                     }
 
                     currentLine.push(item.str);
@@ -750,13 +772,22 @@ window.RoboLedger = (function () {
 
                 // Don't forget last line
                 if (currentLine.length > 0) {
-                    lines.push(currentLine.join(' '));
+                    const lineText = currentLine.join(' ');
+                    lines.push(lineText);
+
+                    lineCoordinates.push({
+                        page: pageNum,
+                        text: lineText,
+                        y: lineStartY,
+                        height: lineHeight
+                    });
                 }
 
                 fullText += lines.join('\n') + '\n';
             }
 
-            return fullText;
+            // Return both text and coordinates
+            return { text: fullText, lineCoordinates };
         },
 
         /**
@@ -1124,8 +1155,12 @@ window.RoboLedger = (function () {
                 const buffer = await file.arrayBuffer();
                 console.log('[INGEST] 📦 Buffer size:', buffer.byteLength, 'bytes');
 
-                const text = await this.extractTextFromPDF(buffer);
+                const pdfData = await this.extractTextFromPDF(buffer);
+                const text = pdfData.text; // Destructure text
+                const lineCoordinates = pdfData.lineCoordinates; // Get coordinates
+
                 console.log('[INGEST] 📝 Extracted text length:', text.length, 'characters');
+                console.log('[INGEST] 📍 Line coordinates captured:', lineCoordinates.length, 'lines');
                 console.log('[INGEST] 📝 First 500 chars:', text.substring(0, 500));
 
                 // Try specialized parser first, fallback to detection
@@ -1146,22 +1181,39 @@ window.RoboLedger = (function () {
                 }
 
                 // Attach source file id AND PDF blob URL to each parsed row
-                rows = rows.map(r => ({
-                    ...r,
-                    source_file_id: sourceFileId,
-                    source_pdf: {
-                        url: pdfBlobUrl,
-                        filename: file.name,
-                        page: r.audit_metadata?.page || 1,
-                        raw_line: r.raw_line || `${r.date} ${r.description} ${r.debit || r.credit}`,
-                        line_position: r.audit_metadata ? {
-                            top: r.audit_metadata.y || 0,
-                            left: 50,
-                            width: 500,
-                            height: r.audit_metadata.height || 12
-                        } : null
+                // NOW with coordinate matching for highlights!
+                rows = rows.map(r => {
+                    // Try to find matching coordinate for this transaction
+                    const searchText = (r.description || '').substring(0, 30);
+                    const searchAmount = r.debit || r.credit || '';
+
+                    let matchedCoord = null;
+                    for (const coord of lineCoordinates) {
+                        // Match if line contains description or amount
+                        if ((searchText && coord.text.includes(searchText)) ||
+                            (searchAmount && coord.text.includes(searchAmount))) {
+                            matchedCoord = coord;
+                            break;
+                        }
                     }
-                }));
+
+                    return {
+                        ...r,
+                        source_file_id: sourceFileId,
+                        source_pdf: {
+                            url: pdfBlobUrl,
+                            filename: file.name,
+                            page: matchedCoord?.page || 1,
+                            raw_line: r.raw_line || `${r.date} ${r.description} ${r.debit || r.credit}`,
+                            line_position: matchedCoord ? {
+                                top: matchedCoord.y,
+                                left: 50,
+                                width: 500,
+                                height: matchedCoord.height
+                            } : null
+                        }
+                    };
+                });
 
                 // ===== INTELLIGENT ACCOUNT ID GENERATION =====
                 if (originalAccountId === 'ALL' || !originalAccountId) {
