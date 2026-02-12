@@ -8,7 +8,7 @@ import {
     createColumnHelper
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import COADropdown from './components/COADropdown';
+import { COADropdown } from './components/COADropdown';
 import { AuditSidebar } from './components/AuditSidebar';
 
 // Canadian Tax Rates (GST, PST, HST, QST) by Province/Territory
