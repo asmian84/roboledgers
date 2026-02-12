@@ -9,6 +9,12 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     const container = document.getElementById('txnGrid');
     if (!container) return;
 
+    // Use theme+fontSize as React key to force component remount when they change
+    // This ensures GRID_TOKENS (calculated at module level) gets fresh values
+    const theme = window.UI_STATE?.gridTheme || 'default';
+    const fontSize = window.UI_STATE?.gridFontSize || 13.5;
+    const uniqueKey = `table-${theme}-${fontSize}`;
+
     // If the old root's container was detached from the DOM (e.g. by render() replacing innerHTML),
     // we must create a fresh root on the new container node.
     if (window._txGridRoot && window._txGridRootContainer && !document.body.contains(window._txGridRootContainer)) {
@@ -46,7 +52,7 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
 
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable data={canonicalData} globalFilter={filterQuery} />
+            <TransactionsTable key={uniqueKey} data={canonicalData} globalFilter={filterQuery} />
         </React.StrictMode>
     );
 };
