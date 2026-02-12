@@ -506,7 +506,7 @@ const columns = [
     // 1. Checkbox
     columnHelper.display({
         id: 'select',
-        size: 40,  // Tighter column
+        size: 44,  // Optimized proportion (~10% of min grid width)
         enableResizing: false,
         header: ({ table }) => (
             <Checkbox
@@ -792,13 +792,13 @@ export function TransactionsTable({
     }
 
     // Apply density-based rowHeight override
-    const DENSITY_ROW_HEIGHTS = {
-        'compact': 42,
-        'comfortable': 56,
-        'spacious': 68
+    const rowHeights = {
+        compact: 36,      // Ultra-tight
+        comfortable: 42,  // Caseware-standard (reduced from 56)
+        spacious: 56      // Reduced from 68
     };
-    if (DENSITY_ROW_HEIGHTS[gridDensity]) {
-        GRID_TOKENS.rowHeight = DENSITY_ROW_HEIGHTS[gridDensity];
+    if (rowHeights[gridDensity]) {
+        GRID_TOKENS.rowHeight = rowHeights[gridDensity];
     }
 
     console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize, 'density:', gridDensity, 'rowHeight:', GRID_TOKENS.rowHeight);
@@ -932,8 +932,8 @@ export function TransactionsTable({
                             flexShrink: 0,
                             height: GRID_TOKENS.headerHeight,
                             // Custom padding per column (match cell padding)
-                            padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (away from wall)
-                                header.id === 'balance' ? '0 4px 0 2px' :   // Balance: breathing room on right
+                            padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
+                                header.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
                                     `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
                             fontSize: GRID_TOKENS.headerFontSize,
                             fontWeight: GRID_TOKENS.headerFontWeight,
@@ -1013,8 +1013,8 @@ export function TransactionsTable({
                                                 minWidth: cell.column.id === 'description' ? '250px' : undefined,
                                                 flexShrink: 0,
                                                 // Custom padding per column
-                                                padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (away from wall)
-                                                    cell.column.id === 'balance' ? '0 4px 0 2px' :   // Balance: breathing room on right
+                                                padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
+                                                    cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
                                                         `0 ${GRID_TOKENS.rowPaddingX}`,                  // Others: default
                                                 borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
                                                 position: cell.column.id === 'category' ? 'relative' : undefined
