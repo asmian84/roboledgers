@@ -356,7 +356,7 @@
           Math.max(1, Math.round(baseProgress + (fileProgressStep * 0.1))),
           100,
           file.name,
-          '📄 Extracting transactions...',
+          'Extracting transactions...',
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -366,7 +366,7 @@
           Math.round(baseProgress + (fileProgressStep * 0.4)),
           100,
           file.name,
-          '🔍 Parsing transactions...',
+          'Parsing transactions...',
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -380,7 +380,7 @@
           Math.round(baseProgress + (fileProgressStep * 0.7)),
           100,
           file.name,
-          '🏷️ Categorizing transactions...',
+          'Categorizing transactions...',
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 80));
@@ -390,7 +390,7 @@
           Math.round(baseProgress + (fileProgressStep * 0.85)),
           100,
           file.name,
-          '✨ Cleaning data...',
+          'Cleaning data...',
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 80));
@@ -400,7 +400,7 @@
           Math.round(baseProgress + (fileProgressStep * 0.95)),
           100,
           file.name,
-          `✅ Imported ${imported} transactions`,
+          `Imported ${imported} transactions`,
           totalImported
         );
 
@@ -419,7 +419,7 @@
     }
 
     // Final update - 100% complete
-    await window.updateProgressBar(100, 100, '🎉 All files processed!', `✅ ${totalImported} transactions imported`, totalImported);
+    await window.updateProgressBar(100, 100, 'All files processed!', `${totalImported} transactions imported`, totalImported);
 
 
     // Hide progress bar after brief delay, then refresh grid
@@ -2728,12 +2728,12 @@
         const statementEnding = acc.statementEndingBalance !== undefined ? acc.statementEndingBalance : actualEnding;
         const hasStatementEnding = statementEnding !== 0;
         // 3-row layout: Opening+Debit, Ending(Calc)+Credit, Ending(Stmt)
-        reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b; line-height: 1.7;">' +
-          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
+        reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 12px; color: #1e293b; line-height: 1.7;">' +
+          '<div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
 
           // Row 1: Opening + Debit
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /></div>' +
           '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 600; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
 
@@ -2745,12 +2745,12 @@
 
           // Row 3: Ending (Stmt) - editable
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Ending (Stmt): <input type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Ending (Stmt): <input type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /></div>' +
           '<div style="flex: 1;"></div>' + // Empty cell for alignment
           '</div>' +
 
           // Status row
-          '<div style="font-size: 10px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">' + statusHTML + '</div>' +
+          '<div style="font-size: 11px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">' + statusHTML + '</div>' +
           '</div>';
       }
     }
@@ -2769,9 +2769,9 @@
           return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>';
         }).join(' ');
 
-        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; line-height: 1.6;">' +
-          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">ACCOUNT METADATA</div>' +
-          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 11px; color: #1e293b; margin-bottom: 6px;">Total Transactions: <span style="font-weight: 700;">' + totalTxnCount.toLocaleString() + '</span></div>' +
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b; line-height: 1.6;">' +
+          '<div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">ACCOUNT METADATA</div>' +
+          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 12px; color: #1e293b; margin-bottom: 6px;">Total Transactions: <span style="font-weight: 700;">' + totalTxnCount.toLocaleString() + '</span></div>' +
           '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + allBadge + ' ' + badgesList + '</div>' +
           '</div>';
       } else if (acc) {
@@ -3122,8 +3122,8 @@
           </div>
 
           <!-- Title -->
-          <div id="progress-title" style="font-size: 20px; font-weight: 800; color: #1e293b; margin-bottom: 8px;">Processing Statement</div>
-          <div id="progress-subtitle" style="font-size: 13px; color: #64748b; margin-bottom: 32px;">${label}</div>
+          <div id="progress-title" style="font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">Processing Statement</div>
+          <div id="progress-subtitle" style="font-size: 12px; color: #64748b; margin-bottom: 28px;">${label}</div>
 
           <!-- Progress Bar -->
           <div style="width: 100%; max-width: 400px;">

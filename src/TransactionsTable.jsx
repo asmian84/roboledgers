@@ -297,9 +297,9 @@ const columns = [
     columnHelper.display({
         id: 'ref',
         header: 'REF #',
-        size: 130,
-        minSize: 120,
-        maxSize: 150,
+        size: 110,
+        minSize: 100,
+        maxSize: 130,
         cell: info => {
             const row = info.row.original;
             const account = window.RoboLedger?.Accounts?.get(row.account_id);
@@ -327,9 +327,9 @@ const columns = [
     // 3. Date
     columnHelper.accessor('date', {
         header: 'DATE',
-        size: 140,
-        minSize: 130,
-        maxSize: 160,
+        size: 110,
+        minSize: 105,
+        maxSize: 130,
         cell: info => (
             <span
                 style={{
@@ -357,9 +357,9 @@ const columns = [
     // 5. Debit
     columnHelper.accessor('debit', {
         header: 'DEBIT',
-        size: 120,
-        minSize: 100,
-        maxSize: 150,
+        size: 100,
+        minSize: 90,
+        maxSize: 130,
         cell: info => {
             const val = info.getValue();
             const row = info.row.original;
@@ -388,9 +388,9 @@ const columns = [
     // 6. Credit
     columnHelper.accessor('credit', {
         header: 'CREDIT',
-        size: 120,
-        minSize: 100,
-        maxSize: 150,
+        size: 100,
+        minSize: 90,
+        maxSize: 130,
         cell: info => {
             const val = info.getValue();
             const row = info.row.original;
@@ -419,9 +419,9 @@ const columns = [
     // 7. Account (COA Dropdown)
     columnHelper.accessor('category', {
         header: 'ACCOUNT',
-        size: 200,
-        minSize: 180,
-        maxSize: 250,
+        size: 180,
+        minSize: 160,
+        maxSize: 220,
         cell: ({ row }) => {
             const handleUpdateCategory = (code) => {
                 const txId = row.original.tx_id;
@@ -451,9 +451,9 @@ const columns = [
     columnHelper.display({
         id: 'balance',
         header: 'BALANCE',
-        size: 140,
-        minSize: 120,
-        maxSize: 170,
+        size: 120,
+        minSize: 110,
+        maxSize: 150,
         cell: info => {
             // Get the sorted rows to calculate running balance
             const sortedRows = info.table.getRowModel().rows;
