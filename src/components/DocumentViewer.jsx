@@ -72,9 +72,14 @@ export function DocumentViewer({ document, onBack }) {
         if (document.highlightLine) {
             const { top, left, width, height } = document.highlightLine;
 
-            // Convert PDF coordinates to canvas coordinates
+            // PDF.js renders correctly - coordinates should work as-is
+            // PDF coordinates: origin at BOTTOM-LEFT, Y increases UPWARD
+            // Viewport transforms this to canvas coordinates automatically
+            // We just need to invert Y because our 'top' is from top of page
+            const pdfPageHeight = viewport.height / viewport.scale;
+
             const canvasX = left * viewport.scale;
-            const canvasY = top * viewport.scale;
+            const canvasY = (pdfPageHeight - top - height) * viewport.scale;
             const canvasWidth = width * viewport.scale;
             const canvasHeight = height * viewport.scale;
 

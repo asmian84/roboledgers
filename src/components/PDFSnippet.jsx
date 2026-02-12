@@ -30,18 +30,7 @@ export function PDFSnippet({ pdfUrl, page, linePosition }) {
                 const context = canvas.getContext('2d');
                 const viewport = pdfPage.getViewport({ scale: 1.5 });
 
-                // Calculate crop area (expand a bit around the line)
-                const { top, left, width, height } = linePosition;
-                const padding = 20;
-
-                const cropY = Math.max(0, top - padding);
-                const cropHeight = height + (padding * 2);
-
-                // Set canvas size to cropped area
-                canvas.width = viewport.width;
-                canvas.height = cropHeight * viewport.scale;
-
-                // Render full page first
+                // Render full page to temporary canvas first
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = viewport.width;
                 tempCanvas.height = viewport.height;
@@ -52,17 +41,32 @@ export function PDFSnippet({ pdfUrl, page, linePosition }) {
                     viewport: viewport
                 }).promise;
 
-                // Copy cropped section
+                // Calculate crop area with padding
+                const { top, left, width, height } = linePosition;
+                const padding = 30;
+
+                // Convert from PDF coordinates (measuredfrom top) to canvas coordinates
+                const pdfPageHeight = viewport.height / viewport.scale;
+                const canvasTop = (pdfPageHeight - top - height) * viewport.scale;
+
+                const cropY = Math.max(0, canvasTop - (padding * viewport.scale));
+                const cropHeight = (height + (padding * 2)) * viewport.scale;
+
+                // Set canvas size to cropped area
+                canvas.width = viewport.width;
+                canvas.height = Math.min(cropHeight, viewport.height - cropY);
+
+                // Copy cropped section from temp canvas
                 context.drawImage(
                     tempCanvas,
-                    0, cropY * viewport.scale,  // source x, y
-                    viewport.width, cropHeight * viewport.scale,  // source width, height
+                    0, cropY,  // source x, y
+                    viewport.width, canvas.height,  // source width, height
                     0, 0,  // dest x, y
                     canvas.width, canvas.height  // dest width, height
                 );
 
-                // Draw highlight box
-                const highlightY = (top - cropY) * viewport.scale;
+                // Draw highlight box on the snippet
+                const highlightY = Math.max(0, (canvasTop - cropY));
                 context.fillStyle = 'rgba(255, 235, 59, 0.3)';
                 context.fillRect(
                     left * viewport.scale,
@@ -140,7 +144,8 @@ export function PDFSnippet({ pdfUrl, page, linePosition }) {
                     justifyContent: 'center',
                     background: 'rgba(255,255,255,0.9)',
                     fontSize: '11px',
-                    color: '#64748b'
+                    color: '#64748b',
+                    zIndex: 10
                 }}>
                     <i className="ph ph-circle-notch ph-spin" style={{ marginRight: '6px' }}></i>
                     Loading snippet...
