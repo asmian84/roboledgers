@@ -229,9 +229,16 @@ function getActiveGridTokens() {
     };
 }
 
-// Export dynamic tokens
-const GRID_TOKENS = getActiveGridTokens();
+// Export dynamic tokens (initially default)
+let GRID_TOKENS = getActiveGridTokens();
 
+// CRITICAL: Function to force recalculation when theme changes
+// Called from TransactionsTable component when props change
+window.recalculateGridTokens = function () {
+    GRID_TOKENS = getActiveGridTokens();
+    console.log('[GRID_TOKENS] Recalculated for theme:', window.UI_STATE?.gridTheme);
+    return GRID_TOKENS;
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SUB-COMPONENTS
@@ -705,7 +712,25 @@ const columns = [
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function TransactionsTable({ data: initialData, globalFilter: initialGlobalFilter }) {
+export function TransactionsTable({
+    data: initialData,
+    globalFilter: initialGlobalFilter,
+    gridTheme = 'default',
+    gridFontSize = 13.5
+}) {
+    // CRITICAL: Update UI_STATE with new theme values
+    if (window.UI_STATE) {
+        window.UI_STATE.gridTheme = gridTheme;
+        window.UI_STATE.gridFontSize = gridFontSize;
+    }
+
+    // Force GRID_TOKENS recalculation (module-level variable gets updated)
+    if (window.recalculateGridTokens) {
+        window.recalculateGridTokens();
+    }
+
+    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize);
+
     const [data, setData] = useState(initialData || []);
     const [sorting, setSorting] = useState([{ id: 'date', desc: true }]);
     const [columnVisibility, setColumnVisibility] = useState({ tax_cents: false }); // Hide GST by default

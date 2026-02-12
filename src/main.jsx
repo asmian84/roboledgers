@@ -15,6 +15,10 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     const fontSize = window.UI_STATE?.gridFontSize || 13.5;
     const uniqueKey = `table-${theme}-${fontSize}`;
 
+    console.log('[MAIN.JSX] Mounting grid with key:', uniqueKey);
+    console.log('[MAIN.JSX] Theme from UI_STATE:', theme);
+    console.log('[MAIN.JSX] FontSize from UI_STATE:', fontSize);
+
     // If the old root's container was detached from the DOM (e.g. by render() replacing innerHTML),
     // we must create a fresh root on the new container node.
     if (window._txGridRoot && window._txGridRootContainer && !document.body.contains(window._txGridRootContainer)) {
@@ -52,7 +56,12 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
 
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable key={uniqueKey} data={canonicalData} globalFilter={filterQuery} />
+            <TransactionsTable
+                data={canonicalData}
+                globalFilter={filterQuery}
+                gridTheme={theme}
+                gridFontSize={fontSize}
+            />
         </React.StrictMode>
     );
 };
