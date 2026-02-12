@@ -1271,6 +1271,7 @@ window.RoboLedger = (function () {
                     raw_description: raw_description, // SECONDARY LINE (DIRTY)
 
                     sourceFileId: sourceFileId, // Link to workbench blob
+                    source_pdf: row.source_pdf || null, // PDF metadata for audit viewer
                     txsig,
                     metadata: {
                         source: metadata.name,
