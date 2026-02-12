@@ -849,9 +849,18 @@
     // Check if we're on the homepage route
     if (UI_STATE.currentRoute === 'home') {
       console.log('[WORKSPACE] → Rendering HOMEPAGE');
+
+      // Create the container for the homepage if it doesn't exist
+      const stage = document.getElementById('app-stage');
+      if (stage) {
+        stage.innerHTML = '<div id="txnGrid" style="height: 100%; width: 100%; display: flex; flex-direction: column;"></div>';
+      }
+
+      // Now mount the homepage
       if (window.mountHomePage) {
         window.mountHomePage();
       }
+
       // Update breadcrumbs
       const bcContainer = document.getElementById('breadcrumb');
       if (bcContainer && UI_STATE.breadcrumbs) {
