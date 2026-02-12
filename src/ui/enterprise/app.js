@@ -5,14 +5,13 @@
 (function () {
   // --- UI STATE & ROUTING ---
   window.UI_STATE = {
-    currentRoute: 'import',
+    currentRoute: 'home',
     navItems: [
       { label: 'Home' },
       { label: 'Transactions' }
     ],
     breadcrumbs: [
-      { label: 'Home' },
-      { label: 'Transactions', active: true }
+      { label: 'Home', active: true }
     ],
     selectedAccount: 'ALL',
     isIngesting: false,
