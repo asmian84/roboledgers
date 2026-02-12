@@ -815,6 +815,50 @@
    * @param {string|null} accountId - Account ID to display, or null to use current UI_STATE
    */
   window.updateWorkspace = function (accountId = null) {
+    // HOMEPAGE ROUTE: Render simple HTML homepage
+    if (UI_STATE.currentRoute === 'home') {
+      console.log('[WORKSPACE] → Rendering HOMEPAGE');
+      const stage = document.getElementById('app-stage');
+      if (stage) {
+        stage.innerHTML = `
+          <div style="max-width: 1200px; margin: 0 auto; padding: 60px 40px;">
+            <div style="text-align: center; margin-bottom: 60px;">
+              <i class="ph-fill ph-robot" style="font-size: 64px; color: #3b82f6; margin-bottom: 20px;"></i>
+              <h1 style="font-size: 36px; font-weight: 800; color: #0f172a; margin: 0 0 12px 0;">Welcome to RoboLedger</h1>
+              <p style="font-size: 16px; color: #64748b; margin: 0;">Automated accounting intelligence for your business</p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+              <div onclick="window.navigateTo('import')" style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #3b82f6, #2563eb); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                  <i class="ph ph-upload" style="font-size: 24px; color: white;"></i>
+                </div>
+                <h3 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Import Transactions</h3>
+                <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.5;">Upload bank statements and process transactions automatically</p>
+              </div>
+              
+              <div onclick="window.navigateTo('coa')" style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                  <i class="ph ph-list-bullets" style="font-size: 24px; color: white;"></i>
+                </div>
+                <h3 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Chart of Accounts</h3>
+                <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.5;">Configure and manage your account structure</p>
+              </div>
+              
+              <div onclick="window.navigateTo('reports')" style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                  <i class="ph ph-chart-line" style="font-size: 24px; color: white;"></i>
+                </div>
+                <h3 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Reports & Analytics</h3>
+                <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.5;">View financial reports and business insights</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      return; // Exit early for homepage
+    }
+
     const selectedAccount = accountId || UI_STATE.selectedAccount || 'ALL';
     console.log(`[WORKSPACE] ═══ UNIFIED UPDATE for: ${selectedAccount} ═══`);
 
