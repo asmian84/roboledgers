@@ -427,6 +427,10 @@
       try {
         console.log('[UPLOAD] Hiding progress bar and rendering grid...');
 
+        // CRITICAL: Clean up any empty accounts before rendering
+        // (prevents hangover accounts from failed uploads or zero-transaction files)
+        cleanupEmptyAccounts();
+
         // AUTO-SET REF# prefix for the newly imported account
         const accounts = window.RoboLedger.Accounts.getAll();
         if (accounts.length > 0) {
