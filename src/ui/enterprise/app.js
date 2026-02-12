@@ -2274,16 +2274,8 @@
   }
 
   function updateProgressUI() {
-    const label = document.querySelector('.v5-progress-label');
-    const fill = document.querySelector('.v5-progress-fill');
-    const track = document.querySelector('.v5-progress-track');
-
-    if (label) label.textContent = UI_STATE.ingestionLabel || 'Parsing Statement...';
-    if (fill) {
-      fill.style.width = `${Math.round(UI_STATE.ingestionProgress)}%`;
-      fill.classList.add('pulsing');
-    }
-    if (track) track.style.display = 'block';
+    // Simply trigger a re-render - the HTML will show updated progress from UI_STATE
+    window.updateWorkspace();
   }
 
   window.forceDeepRepair = () => {
