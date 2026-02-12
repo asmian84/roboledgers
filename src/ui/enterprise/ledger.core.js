@@ -1408,6 +1408,18 @@ window.RoboLedger = (function () {
                     }
                 }
 
+                // === FALLBACK: Ensure all transactions have a COA code ===
+                if (!canonical.gl_account_code && !canonical.category_code) {
+                    // No category assigned - use 9970 (Uncategorized) as fallback
+                    const fallbackCOA = COA.get('9970');
+                    canonical.gl_account_code = '9970';
+                    canonical.gl_account_name = fallbackCOA ? fallbackCOA.name : 'Uncategorized';
+                    canonical.category_confidence = 0;
+                    canonical.category_source = 'fallback';
+                    canonical.status = 'needs_review';
+                }
+
+
                 // === PHASE 5: SALES TAX (GST/HST) CALCULATION ===
                 if (settings.gstEnabled) {
                     const province = settings.province || 'ON';
