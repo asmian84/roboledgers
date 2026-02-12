@@ -161,7 +161,7 @@ window.RoboLedger = (function () {
             date,
             Math.abs(amount_cents).toString(),
             currency.toUpperCase(),
-            raw_description.trim()
+            (raw_description || '').trim() // NULL SAFETY: default to empty string
         ].join('|');
 
 
