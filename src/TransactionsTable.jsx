@@ -237,6 +237,10 @@ function getActiveGridTokens() {
         hoverBg: theme.hoverBg,
         headerBg: theme.headerBg,
         headerColor: theme.headerColor,
+        // Row background colors (rainbow uses rowColors array, others use rowBg/rowBgAlt)
+        rowColors: theme.rowColors,           // Array for rainbow cycling
+        rowBg: theme.rowBg,                   // Even rows
+        rowBgAlt: theme.rowBgAlt,             // Odd rows
         // Update description line sizes based on cell font size
         descLine1FontSize: userFontSize ? `${userFontSize}px` : theme.cellFontSize,
         descLine2FontSize: userFontSize ? `${Math.max(9, userFontSize - 1.5)}px` : (parseInt(theme.cellFontSize) - 1.5) + 'px',
@@ -731,12 +735,14 @@ export function TransactionsTable({
     data: initialData,
     globalFilter: initialGlobalFilter,
     gridTheme = 'default',
-    gridFontSize = 13.5
+    gridFontSize = 13.5,
+    gridDensity = 'comfortable'
 }) {
     // CRITICAL: Update UI_STATE with new theme values
     if (window.UI_STATE) {
         window.UI_STATE.gridTheme = gridTheme;
         window.UI_STATE.gridFontSize = gridFontSize;
+        window.UI_STATE.gridDensity = gridDensity;
     }
 
     // Force GRID_TOKENS recalculation (module-level variable gets updated)
@@ -744,7 +750,18 @@ export function TransactionsTable({
         window.recalculateGridTokens();
     }
 
-    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize);
+    // Apply density-based rowHeight override
+    const DENSITY_ROW_HEIGHTS = {
+        'compact': 42,
+        'comfortable': 56,
+        'spacious': 68
+    };
+    if (DENSITY_ROW_HEIGHTS[gridDensity]) {
+        GRID_TOKENS.rowHeight = DENSITY_ROW_HEIGHTS[gridDensity];
+    }
+
+    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize, 'density:', gridDensity, 'rowHeight:', GRID_TOKENS.rowHeight);
+
 
     const [data, setData] = useState(initialData || []);
     const [sorting, setSorting] = useState([{ id: 'date', desc: true }]);

@@ -54,20 +54,56 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
         category: tx.category_code || tx.category || ''
     }));
 
+    // Filter out opening balance rows (reference points, not transactions)
+    const pureTransactions = canonicalData.filter(tx => tx.ref && !tx.ref.includes('opening-balance'));
+
+    console.log(`[MAIN.JSX] Canonical data count:`, pureTransactions.length);
+
+    // Get density setting
+    const density = window.UI_STATE?.density || 'comfortable';
+    console.log(`[MAIN.JSX] Grid density:`, density);
+
+    // Create props object and save for updateGridDensity
+    const gridProps = {
+        data: pureTransactions,
+        globalFilter: filterQuery,
+        gridTheme: theme,
+        gridFontSize: fontSize,
+        gridDensity: density
+    };
+    window._txGridProps = gridProps;
+
+    // Render
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable
-                data={canonicalData}
-                globalFilter={filterQuery}
-                gridTheme={theme}
-                gridFontSize={fontSize}
-            />
+            <TransactionsTable {...gridProps} />
         </React.StrictMode>
     );
 };
 
 // Alias for backward compatibility
 window.renderTransactionsGrid = window.mountTransactionsTable;
+
+/**
+ * Global Bridge: Updates the grid density without remounting the entire component.
+ */
+window.updateGridDensity = (newDensity) => {
+    if (!window._txGridRoot || !window._txGridProps) {
+        console.warn('[MAIN.JSX] Grid not mounted, cannot update density.');
+        return;
+    }
+
+    console.log(`[MAIN.JSX] Updating grid density to: ${newDensity}`);
+    window._txGridProps.gridDensity = newDensity;
+
+    window._txGridRoot.render(
+        <React.StrictMode>
+            <TransactionsTable
+                {...window._txGridProps}
+            />
+        </React.StrictMode>
+    );
+};
 
 /**
  * Global Bridge: Mount PDFSnippet component for reconciliation source modals
