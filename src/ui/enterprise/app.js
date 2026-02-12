@@ -2977,9 +2977,6 @@
           </div>
           <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 12px;">
             <span>Header V5.2 • Active Session</span>
-            <button onclick="window.devReset()" style="padding: 4px 8px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;" title="Clear all localStorage and reset (Dev only)">
-              ⚠️ DEV RESET
-            </button>
           </div>
         </div>
 
