@@ -814,7 +814,65 @@
    * 
    * @param {string|null} accountId - Account ID to display, or null to use current UI_STATE
    */
+  /**
+   * Navigate to a specific route
+   * Handles breadcrumb navigation and route switching
+   */
+  window.navigateTo = function (route) {
+    console.log(`[NAVIGATE] Switching to route: ${route}`);
+
+    // Update UI state
+    UI_STATE.currentRoute = route;
+
+    // Update breadcrumbs
+    if (route === 'home') {
+      UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
+    } else if (route === 'import') {
+      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
+    } else if (route === 'coa') {
+      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
+    } else {
+      const label = route.charAt(0).toUpperCase() + route.slice(1);
+      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
+    }
+
+    // Render the UI for the new route
+    window.updateWorkspace();
+
+    // Update any UI state that depends on route
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+      item.classList.toggle('active', item.dataset.route === route);
+    });
+  };
+
   window.updateWorkspace = function (accountId = null) {
+    // Check if we're on the homepage route
+    if (UI_STATE.currentRoute === 'home') {
+      console.log('[WORKSPACE] → Rendering HOMEPAGE');
+      if (window.mountHomePage) {
+        window.mountHomePage();
+      }
+      // Update breadcrumbs
+      const bcContainer = document.getElementById('breadcrumb');
+      if (bcContainer && UI_STATE.breadcrumbs) {
+        const renderBreadcrumbs = () => {
+          bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
+            const isLast = i === UI_STATE.breadcrumbs.length - 1;
+            const isHome = bc.label.toLowerCase() === 'home';
+            return `
+              <div class="breadcrumb-item ${isLast ? 'active' : ''}">
+                ${isHome ? '<i class="ph ph-house breadcrumb-icon" style="margin-right: 6px; font-size: 14px; color: #3b82f6;"></i>' : ''}
+                <span class="breadcrumb-label" style="${!isLast ? 'color: #3b82f6; font-weight: 500;' : ''}">${bc.label}</span>
+              </div>
+            `;
+          }).join('');
+        };
+        renderBreadcrumbs();
+      }
+      return; // Exit early for homepage
+    }
+
     const selectedAccount = accountId || UI_STATE.selectedAccount || 'ALL';
     console.log(`[WORKSPACE] ═══ UNIFIED UPDATE for: ${selectedAccount} ═══`);
 
@@ -1116,7 +1174,9 @@
         }
 
         UI_STATE.currentRoute = route;
-        if (route === 'import') {
+        if (route === 'home') {
+          UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
+        } else if (route === 'import') {
           UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
         } else if (route === 'coa') {
           UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
@@ -2016,7 +2076,7 @@
         return `
           <div class="breadcrumb-item ${isLast ? 'active' : ''}" 
                style="cursor: ${isLast ? 'default' : 'pointer'};"
-               onclick="${isLast ? '' : `window.UI_STATE.currentRoute='${route}'; window.render();`}">
+               onclick="${isLast ? '' : `window.navigateTo('${route}');`}">
             ${isHome ? '<i class="ph ph-house breadcrumb-icon" style="margin-right: 6px; font-size: 14px; color: #3b82f6;"></i>' : ''}
             <span class="breadcrumb-label" style="${!isLast ? 'color: #3b82f6; font-weight: 500;' : ''}">${bc.label}</span>
           </div>

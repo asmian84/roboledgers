@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { TransactionsTable } from './TransactionsTable';
+import { HomePage } from './components/HomePage';
 
 /**
  * Global Bridge: Exposes the mounting function to the Vanilla JS shell (app.js)
@@ -51,7 +52,34 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     );
 };
 
+/**
+ * Mount HomePage component
+ */
+window.mountHomePage = () => {
+    const container = document.getElementById('txnGrid');
+    if (!container) return;
+
+    // Unmount existing root if needed
+    if (window._txGridRoot && window._txGridRootContainer && !document.body.contains(window._txGridRootContainer)) {
+        try { window._txGridRoot.unmount(); } catch (e) { /* ignore */ }
+        window._txGridRoot = null;
+        window._txGridRootContainer = null;
+    }
+
+    if (!window._txGridRoot) {
+        window._txGridRoot = ReactDOM.createRoot(container);
+        window._txGridRootContainer = container;
+    }
+
+    window._txGridRoot.render(
+        <React.StrictMode>
+            <HomePage onNavigate={(route) => window.navigateTo(route)} />
+        </React.StrictMode>
+    );
+};
+
 // Alias for backward compatibility
 window.renderTransactionsGrid = window.mountTransactionsTable;
 
 console.log('[VITE] React bridge established.');
+
