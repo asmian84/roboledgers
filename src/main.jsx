@@ -54,4 +54,47 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
 // Alias for backward compatibility
 window.renderTransactionsGrid = window.mountTransactionsTable;
 
+/**
+ * Global Bridge: Mount PDFSnippet component for reconciliation source modals
+ */
+import { PDFSnippet } from './components/PDFSnippet';
+
+window.mountPDFSnippet = (containerId, pdfUrl, page, linePosition) => {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        console.error(`[PDF SNIPPET] Container #${containerId} not found`);
+        return;
+    }
+
+    // Create a fresh root for this snippet
+    const root = ReactDOM.createRoot(container);
+
+    root.render(
+        <React.StrictMode>
+            <PDFSnippet
+                pdfUrl={pdfUrl}
+                page={page}
+                linePosition={linePosition}
+            />
+        </React.StrictMode>
+    );
+
+    console.log(`[PDF SNIPPET] Mounted in #${containerId}`);
+
+    // Store root for cleanup
+    container._pdfSnippetRoot = root;
+};
+
+/**
+ * Cleanup function to unmount PDF snippet
+ */
+window.unmountPDFSnippet = (containerId) => {
+    const container = document.getElementById(containerId);
+    if (container && container._pdfSnippetRoot) {
+        container._pdfSnippetRoot.unmount();
+        delete container._pdfSnippetRoot;
+        console.log(`[PDF SNIPPET] Unmounted from #${containerId}`);
+    }
+};
+
 console.log('[VITE] React bridge established.');

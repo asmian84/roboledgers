@@ -1259,6 +1259,18 @@ window.RoboLedger = (function () {
                     console.log(`[RECON] Stored statement period for ${account_id}:`, parseResult.statementPeriod);
                 }
 
+                // Store balance coordinates if available (for PDF snippet highlighting)
+                if (existingAccount && parseResult) {
+                    if (parseResult.openingBalanceCoords) {
+                        existingAccount.openingBalanceCoords = parseResult.openingBalanceCoords;
+                        console.log(`[RECON] Stored opening balance coordinates for ${account_id}:`, parseResult.openingBalanceCoords);
+                    }
+                    if (parseResult.closingBalanceCoords) {
+                        existingAccount.closingBalanceCoords = parseResult.closingBalanceCoords;
+                        console.log(`[RECON] Stored closing balance coordinates for ${account_id}:`, parseResult.closingBalanceCoords);
+                    }
+                }
+
                 console.log(`[INGEST] DETECTED & UPDATED: ${metadata.name} (Transit: ${metadata.transit})`);
             } else {
                 const text = await file.text();

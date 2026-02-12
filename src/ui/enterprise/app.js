@@ -1257,11 +1257,11 @@
       (acc.openingBalance || 0) :
       (acc.statementEndingBalance || 0);
 
-    // TODO: Get actual PDF URL and coordinates from account.pdfUrl or account.statements
-    // For now, show a modal with account info as placeholder
+    console.log(`[RECON SOURCE] Showing ${type} balance source for ${acc.ref}:`, balanceValue);
 
     // Create modal overlay
     const modal = document.createElement('div');
+    modal.id = 'statement-source-modal';
     modal.style.cssText = `
       position: fixed;
       top: 0;
@@ -1281,47 +1281,100 @@
       background: white;
       border-radius: 12px;
       padding: 24px;
-      max-width: 600px;
+      max-width: 800px;
       width: 90%;
       max-height: 80vh;
       overflow-y: auto;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      position: relative;
     `;
 
-    content.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1e293b;">Statement Source</h2>
-        <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" style="background: none; border: none; font-size: 24px; color: #94a3b8; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
-      </div>
-      
-      <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
-        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Account: <strong>${acc.ref || acc.name || 'Unknown'}</strong></div>
-        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Bank: <strong>${acc.bankName || 'N/A'}</strong></div>
-        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Balance Type: <strong>${type === 'opening' ? 'Opening Balance' : 'Closing Balance (Statement)'}</strong></div>
-        <div style="font-size: 16px; color: #1e293b; margin-top: 12px;">Amount: <strong>$${balanceValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
-      </div>
-      
-      <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fde047; margin-bottom: 16px;">
-        <div style="font-size: 13px; color: #92400e; font-weight: 600; margin-bottom: 4px;">🚧 Feature In Progress</div>
-        <div style="font-size: 12px; color: #92400e;">PDF snippet viewer will be integrated here to show the exact location of this balance on your bank statement.</div>
-      </div>
-      
-      <div style="font-size: 11px; color: #94a3b8; padding: 12px; background: #f1f5f9; border-radius: 6px;">
-        <strong>Next Phase:</strong> This will display a PDF preview with the balance amount highlighted, allowing you to verify the source directly from your uploaded statement.
-      </div>
+    // Header
+    const header = document.createElement('div');
+    header.style.marginBottom = '20px';
+    const title = document.createElement('h2');
+    title.textContent = `Statement Source - ${type === 'opening' ? 'Opening' : 'Closing'} Balance`;
+    title.style.cssText = 'margin: 0; font-size: 18px; font-weight: 700; color: #1e293b; padding-right: 40px;';
+    header.appendChild(title);
+
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.style.cssText = 'background: none; border: none; font-size: 32px; color: #94a3b8; cursor: pointer; padding: 0; line-height: 1; position: absolute; top: 20px; right: 24px;';
+    closeBtn.onclick = () => {
+      if (window.unmountPDFSnippet) {
+        window.unmountPDFSnippet('pdf-snippet-container');
+      }
+      modal.remove();
+    };
+
+    // Account info
+    const info = document.createElement('div');
+    info.style.cssText = 'background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;';
+    info.innerHTML = `
+      <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Account: <strong>${acc.ref || acc.name || 'Unknown'}</strong></div>
+      <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Bank: <strong>${acc.bankName || 'N/A'}</strong></div>
+      <div style="font-size: 16px; color: #1e293b; margin-top: 12px;">Amount: <strong>$${balanceValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
     `;
 
+    // PDF snippet container
+    const pdfContainer = document.createElement('div');
+    pdfContainer.id = 'pdf-snippet-container';
+    pdfContainer.style.cssText = 'margin-top: 16px;';
+
+    // Assemble modal
+    content.appendChild(closeBtn);
+    content.appendChild(header);
+    content.appendChild(info);
+    content.appendChild(pdfContainer);
     modal.appendChild(content);
     document.body.appendChild(modal);
 
     // Close on overlay click
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
+        if (window.unmountPDFSnippet) {
+          window.unmountPDFSnippet('pdf-snippet-container');
+        }
         modal.remove();
       }
     });
 
-    console.log(`[RECON SOURCE] Showing ${type} balance source for ${acc.ref}:`, balanceValue);
+    // Mount PDF snippet if URL available
+    if (acc.pdfUrl && window.mountPDFSnippet) {
+      // Use actual coordinates from parser if available, otherwise fallback to estimated positions
+      let linePosition;
+
+      if (type === 'opening' && acc.openingBalanceCoords) {
+        linePosition = acc.openingBalanceCoords;
+        console.log(`[RECON] Using actual opening balance coordinates:`, linePosition);
+      } else if (type === 'closing' && acc.closingBalanceCoords) {
+        linePosition = acc.closingBalanceCoords;
+        console.log(`[RECON] Using actual closing balance coordinates:`, linePosition);
+      } else {
+        // Fallback to estimated positions
+        linePosition = {
+          top: type === 'opening' ? 700 : 650,
+          left: 50,
+          width: 500,
+          height: 50
+        };
+        console.log(`[RECON] Using estimated coordinates (parser didn't provide exact coords):`, linePosition);
+      }
+
+      // Small delay to ensure container is in DOM
+      setTimeout(() => {
+        window.mountPDFSnippet('pdf-snippet-container', acc.pdfUrl, linePosition.page || 1, linePosition);
+      }, 100);
+    } else {
+      // Show placeholder if no PDF
+      pdfContainer.innerHTML = `
+        <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fde047;">
+          <div style="font-size: 13px; color: #92400e; font-weight: 600; margin-bottom: 4px;">📄 No PDF Available</div>
+          <div style="font-size: 12px; color: #92400e;">Upload a statement to see the PDF source preview.</div>
+        </div>
+      `;
+    }
   };
 
   // Update Ref# prefix for transaction numbering
@@ -1331,7 +1384,7 @@
     localStorage.setItem('roboledger_refPrefix', UI_STATE.refPrefix);
 
     // Trigger grid re-render to update ref numbers
-    window.mountTanStackGrid();
+    window.updateWorkspace();
     console.log(`[REF PREFIX] Updated to: ${UI_STATE.refPrefix}`);
   };
 

@@ -74,19 +74,56 @@ AMEX FORMAT:
 
         // Extract opening balance (Previous Balance)
         let openingBalance = 0;
+        let openingBalanceCoords = null;
         const previousBalanceMatch = statementText.match(/Previous\s+Balance\s+.*?([\d,]+\.\d{2})/i);
         if (previousBalanceMatch) {
             openingBalance = parseFloat(previousBalanceMatch[1].replace(/,/g, ''));
             console.log(`[AMEX] Extracted opening balance: ${openingBalance}`);
+
+            // Find exact coordinates from lineMetadata
+            if (lineMetadata && lineMetadata.length > 0) {
+                const balanceLine = lineMetadata.find(line =>
+                    line.text && line.text.toLowerCase().includes('previous balance')
+                );
+                if (balanceLine) {
+                    openingBalanceCoords = {
+                        page: balanceLine.page || 1,
+                        y: balanceLine.y,
+                        height: balanceLine.height || 12,
+                        width: 500  // Approx width to show full balance line
+                    };
+                    console.log(`[AMEX] Found opening balance coords:`, openingBalanceCoords);
+                }
+            }
         }
 
         // Extract closing balance (New Balance or Closing Balance)
         let closingBalance = 0;
+        let closingBalanceCoords = null;
         const closingBalanceMatch = statementText.match(/(?:New Balance|Closing Balance|Balance on [A-Za-z]+ \d{1,2}, \d{4})\s+.*?([\d,]+\.\d{2})/i) ||
             statementText.match(/Closing balance on [A-Za-z]+\s+\d{1,2},\s+\d{4}\s+.*?\$([\d,]+\.\d{2})/i);
         if (closingBalanceMatch) {
             closingBalance = parseFloat(closingBalanceMatch[1].replace(/,/g, ''));
             console.log(`[AMEX] Extracted closing balance: ${closingBalance}`);
+
+            // Find exact coordinates from lineMetadata
+            if (lineMetadata && lineMetadata.length > 0) {
+                const balanceLine = lineMetadata.find(line =>
+                    line.text && (
+                        line.text.toLowerCase().includes('new balance') ||
+                        line.text.toLowerCase().includes('closing balance')
+                    )
+                );
+                if (balanceLine) {
+                    closingBalanceCoords = {
+                        page: balanceLine.page || 1,
+                        y: balanceLine.y,
+                        height: balanceLine.height || 12,
+                        width: 500
+                    };
+                    console.log(`[AMEX] Found closing balance coords:`, closingBalanceCoords);
+                }
+            }
         }
 
         // Extract statement period
@@ -227,7 +264,15 @@ AMEX FORMAT:
         }
 
         console.log(`[AMEX] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata, openingBalance, closingBalance, statementPeriod };
+        return {
+            transactions,
+            metadata,
+            openingBalance,
+            closingBalance,
+            statementPeriod,
+            openingBalanceCoords,
+            closingBalanceCoords
+        };
     }
 
     extractTransaction(text, isoDate, originalLine) {
