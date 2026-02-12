@@ -21,6 +21,9 @@ CIBC VISA FORMAT:
         console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
+                // Extract balances using base helper
+        const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+
         const transactions = [];
 
         // EXTRACT METADATA (Institution, Transit, Account)
@@ -101,7 +104,7 @@ CIBC VISA FORMAT:
         }
 
         console.log(`[CIBC-VISA] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata };
+        return { transactions, metadata: parsedMetadata , openingBalance, closingBalance, statementPeriod };
     }
 
     extractTransaction(text, isoDate, originalLine) {

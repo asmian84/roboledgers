@@ -20,6 +20,9 @@ RBC MASTERCARD FORMAT:
         console.warn('⚡ [RBC-MC] Starting CALIBRATED extraction...');
 
         const lines = statementText.split('\n');
+                // Extract balances using base helper
+        const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+
         const transactions = [];
         let currentYear = new Date().getFullYear();
 
@@ -113,7 +116,7 @@ RBC MASTERCARD FORMAT:
         }
 
         console.log(`[RBC-MC] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata, openingBalance: 0 };
+        return { transactions, metadata: parsedMetadata, openingBalance: 0 , openingBalance, closingBalance, statementPeriod };
     }
 
     finalizeTransaction(pending) {

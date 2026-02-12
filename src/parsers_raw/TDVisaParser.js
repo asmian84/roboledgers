@@ -24,6 +24,9 @@ TD VISA FORMAT:
         console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
+                // Extract balances using base helper
+        const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+
         const transactions = [];
 
         // EXTRACT METADATA - Full masked card number (IIN standard: 16 digits for Visa)
@@ -113,7 +116,7 @@ TD VISA FORMAT:
         }
 
         console.log(`[TD-VISA] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata };
+        return { transactions, metadata: parsedMetadata , openingBalance, closingBalance, statementPeriod };
     }
 
     extractTransaction(text, isoDate, originalLine) {

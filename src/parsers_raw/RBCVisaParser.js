@@ -42,13 +42,8 @@ RBC VISA FORMAT:
             }
         }
 
-        // Extract opening balance (Previous Balance for credit cards)
-        let openingBalance = null;
-        const openingMatch = statementText.match(/Previous Balance.*?\$?([\ d,]+\.\d{2})/i);
-        if (openingMatch) {
-            openingBalance = parseFloat(openingMatch[1].replace(/,/g, ''));
-            console.log(`[RBC-VISA] Extracted opening balance: ${openingBalance}`);
-        }
+        // Extract balances using base helper
+        const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
 
         const parsedMetadata = {
             _acct: accountNumber,
@@ -63,8 +58,7 @@ RBC VISA FORMAT:
             // Legacy branding
             brand: 'VISA',
             bankCode: 'VISA',
-            institution: 'VISA',
-            openingBalance: openingBalance
+            institution: 'VISA'
             // NO transit, NO institutionCode - these are for bank accounts only
         };
         console.warn('🏁 [RBC-VISA] Extraction Phase Complete. Card:', parsedMetadata.accountNumber);
@@ -128,7 +122,7 @@ RBC VISA FORMAT:
             }
         }
         console.log(`[RBC-VISA] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata };
+        return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 
     extractTransaction(text, isoDate, originalLine) {

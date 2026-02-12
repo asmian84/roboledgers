@@ -21,7 +21,10 @@ BMO MASTERCARD FORMAT:
     console.log(statementText.substring(0, 1000));
 
     const lines = statementText.split('\n');
-    const transactions = [];
+            // Extract balances using base helper
+        const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+
+        const transactions = [];
 
     // Extract opening balance (Previous Balance)
     let openingBalance = 0;
@@ -111,7 +114,7 @@ BMO MASTERCARD FORMAT:
 
 
     console.log(`[BMO-MC] Parsed ${transactions.length} transactions`);
-    return { transactions, metadata: parsedMetadata, openingBalance };
+    return { transactions, metadata: parsedMetadata, openingBalance , openingBalance, closingBalance, statementPeriod };
   };
 
 

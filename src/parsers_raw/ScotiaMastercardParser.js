@@ -18,6 +18,9 @@ SCOTIA MASTERCARD FORMAT:
         console.log('⚡ Scotia Mastercard: Starting regex-based parsing...');
 
         const lines = statementText.split('\n');
+                // Extract balances using base helper
+        const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+
         const transactions = [];
 
         const yearMatch = statementText.match(/20\d{2}/);

@@ -74,7 +74,7 @@ AMEX FORMAT:
 
         // Extract opening balance (Previous Balance)
         let openingBalance = 0;
-        const previousBalanceMatch = statementText.match(/Previous\s+Balance\s+.*?([\d,]+\.\ d{2})/i);
+        const previousBalanceMatch = statementText.match(/Previous\s+Balance\s+.*?([\d,]+\.\d{2})/i);
         if (previousBalanceMatch) {
             openingBalance = parseFloat(previousBalanceMatch[1].replace(/,/g, ''));
             console.log(`[AMEX] Extracted opening balance: ${openingBalance}`);
@@ -82,7 +82,7 @@ AMEX FORMAT:
 
         // Extract closing balance (New Balance or Closing Balance)
         let closingBalance = 0;
-        const closingBalanceMatch = statementText.match(/(?:New Balance|Closing Balance|Balance on [A-Za-z]+ \d{1,2}, \d{4})\s+.*?([\d,]+\.\ d{2})/i) ||
+        const closingBalanceMatch = statementText.match(/(?:New Balance|Closing Balance|Balance on [A-Za-z]+ \d{1,2}, \d{4})\s+.*?([\d,]+\.\d{2})/i) ||
             statementText.match(/Closing balance on [A-Za-z]+\s+\d{1,2},\s+\d{4}\s+.*?\$([\d,]+\.\d{2})/i);
         if (closingBalanceMatch) {
             closingBalance = parseFloat(closingBalanceMatch[1].replace(/,/g, ''));

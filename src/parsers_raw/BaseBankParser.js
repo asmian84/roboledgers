@@ -100,6 +100,65 @@ class BaseBankParser {
     }
 
     /**
+     * Extract opening and closing balances from statement text
+     * Common patterns for Canadian banks
+     */
+    extractBalances(statementText) {
+        let openingBalance = 0;
+        let closingBalance = 0;
+        let statementPeriod = '';
+
+        // OPENING BALANCE PATTERNS
+        const openingPatterns = [
+            /(?:Opening|Beginning|Previous|Starting)\s+Balance[:\s]+\$?([\d,]+\.\d{2})/i,
+            /Balance\s+(?:Forward|Brought Forward)[:\s]+\$?([\d,]+\.\d{2})/i,
+            /Previous\s+Balance[:\s]+\$?([\d,]+\.\d{2})/i
+        ];
+
+        for (const pattern of openingPatterns) {
+            const match = statementText.match(pattern);
+            if (match) {
+                openingBalance = parseFloat(match[1].replace(/,/g, ''));
+                console.log(`[${this.bankName}] Extracted opening balance: ${openingBalance}`);
+                break;
+            }
+        }
+
+        // CLOSING BALANCE PATTERNS
+        const closingPatterns = [
+            /(?:Closing|Ending|New|Final)\s+Balance[:\s]+\$?([\d,]+\.\d{2})/i,
+            /Balance\s+on\s+[A-Za-z]+\s+\d{1,2},\s+\d{4}[:\s]+\$?([\d,]+\.\d{2})/i,
+            /(?:Current|Statement)\s+Balance[:\s]+\$?([\d,]+\.\d{2})/i
+        ];
+
+        for (const pattern of closingPatterns) {
+            const match = statementText.match(pattern);
+            if (match) {
+                closingBalance = parseFloat(match[1].replace(/,/g, ''));
+                console.log(`[${this.bankName}] Extracted closing balance: ${closingBalance}`);
+                break;
+            }
+        }
+
+        // STATEMENT PERIOD PATTERNS
+        const periodPatterns = [
+            /(?:Statement\s+Period|For\s+the\s+period)[:\s]+([A-Za-z]+\s+\d{1,2},\s+\d{4})\s+(?:to|-)\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i,
+            /([A-Za-z]+\s+\d{1,2},\s+\d{4})\s+(?:to|-)\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i
+        ];
+
+        for (const pattern of periodPatterns) {
+            const match = statementText.match(pattern);
+            if (match) {
+                statementPeriod = `${match[1]} - ${match[2]}`;
+                console.log(`[${this.bankName}] Extracted statement period: ${statementPeriod}`);
+                break;
+            }
+        }
+
+        return { openingBalance, closingBalance, statementPeriod };
+    }
+
+    /**
      * Parse statement text using Hybrid Strategy (Regex First -> AI Fallback)
      * @param {string} statementText 
      * @param {Object} metadata

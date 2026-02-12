@@ -10,6 +10,9 @@ class BMOCreditCardParser extends BaseBankParser {
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
         const lines = statementText.split('\n');
+                // Extract balances using base helper
+        const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
+
         const transactions = [];
         let currentYear = new Date().getFullYear();
 
