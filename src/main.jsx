@@ -175,4 +175,46 @@ window.unmountPDFSnippet = (containerId) => {
     }
 };
 
+/**
+ * Global Bridge: Mount DocumentViewer for balance source viewing
+ */
+import { DocumentViewer } from './components/DocumentViewer';
+
+window.mountDocumentViewer = (containerId, document) => {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        console.error(`[DOC VIEWER] Container #${containerId} not found`);
+        return;
+    }
+
+    // Create a fresh root for this viewer
+    const root = ReactDOM.createRoot(container);
+
+    root.render(
+        <React.StrictMode>
+            <DocumentViewer
+                document={document}
+                onBack={() => window.closeBalanceViewer?.()}
+            />
+        </React.StrictMode>
+    );
+
+    console.log(`[DOC VIEWER] Mounted in #${containerId}`);
+
+    // Store root for cleanup
+    container._documentViewerRoot = root;
+};
+
+/**
+ * Cleanup function to unmount DocumentViewer
+ */
+window.unmountDocumentViewer = (containerId) => {
+    const container = document.getElementById(containerId);
+    if (container && container._documentViewerRoot) {
+        container._documentViewerRoot.unmount();
+        delete container._documentViewerRoot;
+        console.log(`[DOC VIEWER] Unmounted from #${containerId}`);
+    }
+};
+
 console.log('[VITE] React bridge established.');
