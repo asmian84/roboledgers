@@ -839,8 +839,8 @@ export function TransactionsTable({
 
     // Sticky column helper
     const getStickyClass = (id) => {
-        if (id === 'select' || id === 'ref') return 'sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]';
-        if (id === 'balance') return 'sticky right-0 bg-white z-10 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)]';
+        if (id === 'select' || id === 'ref') return 'sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]';
+        if (id === 'balance') return 'sticky right-0 z-10 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)]';
         return '';
     };
 
