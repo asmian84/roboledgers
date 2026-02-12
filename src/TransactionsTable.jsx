@@ -772,7 +772,8 @@ export function TransactionsTable({
     globalFilter: initialGlobalFilter,
     gridTheme = 'default',
     gridFontSize = 13.5,
-    gridDensity = 'comfortable'
+    gridDensity = 'comfortable',
+    columnVisibility: initialColumnVisibility = { tax_cents: false }
 }) {
     // CRITICAL: Update UI_STATE with new theme values
     if (window.UI_STATE) {
@@ -801,7 +802,7 @@ export function TransactionsTable({
 
     const [data, setData] = useState(initialData || []);
     const [sorting, setSorting] = useState([{ id: 'date', desc: true }]);
-    const [columnVisibility, setColumnVisibility] = useState({ tax_cents: false }); // Hide GST by default
+    const [columnVisibility, setColumnVisibility] = useState(initialColumnVisibility); // Use prop or default
     const [globalFilter, setGlobalFilter] = useState(initialGlobalFilter || '');
     const [rowSelection, setRowSelection] = useState({});
     const [density] = useState('comfortable'); // Fixed at comfortable for now

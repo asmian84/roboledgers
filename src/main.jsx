@@ -106,6 +106,33 @@ window.updateGridDensity = (newDensity) => {
 };
 
 /**
+ * Global Bridge: Updates column visibility without remounting
+ */
+window.setGridColumnVisibility = (columnId, visible) => {
+    if (!window._txGridRoot || !window._txGridProps) {
+        console.warn('[MAIN.JSX] Grid not mounted, cannot update column visibility.');
+        return;
+    }
+
+    console.log(`[MAIN.JSX] Setting column ${columnId} visibility to: ${visible}`);
+
+    // Update column visibility in props
+    if (!window._txGridProps.columnVisibility) {
+        window._txGridProps.columnVisibility = {};
+    }
+    window._txGridProps.columnVisibility[columnId] = visible;
+
+    // Re-render with updated props
+    window._txGridRoot.render(
+        <React.StrictMode>
+            <TransactionsTable
+                {...window._txGridProps}
+            />
+        </React.StrictMode>
+    );
+};
+
+/**
  * Global Bridge: Mount PDFSnippet component for reconciliation source modals
  */
 import { PDFSnippet } from './components/PDFSnippet';
