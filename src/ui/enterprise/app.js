@@ -331,11 +331,18 @@
   window.handleFilesSelected = async (files) => {
     console.log('[UPLOAD] Processing', files.length, 'file(s)');
 
-    // CRITICAL: Set is Ingesting flag FIRST so renderPage() includes progress bar HTML
-    UI_STATE.isIngesting = true;
-    render(); // Force re-render with progress bar included
+    // SMART UX: Only show full overlay for FIRST upload (no existing transactions)
+    // Subsequent uploads show inline progress bar while grid stays visible
+    const existingTxns = window.RoboLedger.Ledger.getAll();
+    const isFirstUpload = existingTxns.length === 0;
 
-    // Now show and update the progress bar
+    if (isFirstUpload) {
+      // First upload: Show full-screen progress overlay
+      UI_STATE.isIngesting = true;
+      render(); // Force re-render with progress overlay
+    }
+
+    // Show/update progress bar (inline if has data, overlay if first upload)
     window.showProgressBar();
     window.updateProgressBar(0, files.length, 'Initializing...', 'Preparing to parse', 0);
 
@@ -2732,24 +2739,24 @@
         const statementEnding = acc.statementEndingBalance !== undefined ? acc.statementEndingBalance : actualEnding;
         const hasStatementEnding = statementEnding !== 0;
         // 3-row layout: Opening+Debit, Ending(Calc)+Credit, Ending(Stmt)
-        reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 12px; color: #1e293b; line-height: 1.7;">' +
+        reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.7;">' +
           '<div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
 
           // Row 1: Opening + Debit
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /></div>' +
-          '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 600; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 700; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
 
           // Row 2: Ending (Calc) + Credit
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Ending (Calc): <span style="font-weight: 600; color: #3b82f6;">$' + calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
-          '<div style="flex: 1; white-space: nowrap;">Credit: <span style="font-weight: 600; color: #10b981;">$' + totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Ending (Calc): <span style="font-weight: 700; color: #3b82f6;">$' + calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Credit: <span style="font-weight: 700; color: #10b981;">$' + totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
           '</div>' +
 
           // Row 3: Ending (Stmt) - editable
           '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Ending (Stmt): <input type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Ending (Stmt): <input type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /></div>' +
           '<div style="flex: 1;"></div>' + // Empty cell for alignment
           '</div>' +
 
@@ -2773,9 +2780,9 @@
           return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>';
         }).join(' ');
 
-        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b; line-height: 1.6;">' +
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; font-weight: 600; color: #1e293b; line-height: 1.6;">' +
           '<div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 2px;">ACCOUNT METADATA</div>' +
-          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 12px; color: #1e293b; margin-bottom: 6px;">Total Transactions: <span style="font-weight: 700;">' + totalTxnCount.toLocaleString() + '</span></div>' +
+          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">Total Transactions: <span style="font-weight: 700;">' + totalTxnCount.toLocaleString() + '</span></div>' +
           '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + allBadge + ' ' + badgesList + '</div>' +
           '</div>';
       } else if (acc) {

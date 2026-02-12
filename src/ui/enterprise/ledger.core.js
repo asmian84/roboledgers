@@ -578,6 +578,16 @@ window.RoboLedger = (function () {
             save();
             console.log('[ACCOUNTS] All accounts cleared.');
         },
+        remove: function (id) {
+            const index = state.accounts.findIndex(a => a.id === id);
+            if (index !== -1) {
+                const removed = state.accounts.splice(index, 1)[0];
+                save();
+                console.log(`[ACCOUNTS] Removed account: ${id} - ${removed.name}`);
+                return true;
+            }
+            return false;
+        },
         updateMetadata: function (id, metadata) {
             let acc = this.get(id);
             const isNewAccount = !acc;
