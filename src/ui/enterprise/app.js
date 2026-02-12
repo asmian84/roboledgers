@@ -815,45 +815,109 @@
    * @param {string|null} accountId - Account ID to display, or null to use current UI_STATE
    */
   window.updateWorkspace = function (accountId = null) {
-    // HOMEPAGE ROUTE: Render simple HTML homepage
+    // HOMEPAGE ROUTE: Render enhanced HTML homepage
     if (UI_STATE.currentRoute === 'home') {
       console.log('[WORKSPACE] → Rendering HOMEPAGE');
+
+      // Get live stats
+      const allTxns = window.RoboLedger.Ledger.getAll();
+      const accounts = window.RoboLedger.Accounts?.getAll() || [];
+      const reconciled = allTxns.filter(t => t.reconciled).length;
+      const reconciledPercent = allTxns.length > 0 ? Math.round((reconciled / allTxns.length) * 100) : 0;
+
       const stage = document.getElementById('app-stage');
       if (stage) {
         stage.innerHTML = `
-          <div style="max-width: 1200px; margin: 0 auto; padding: 60px 40px;">
-            <div style="text-align: center; margin-bottom: 60px;">
-              <i class="ph-fill ph-robot" style="font-size: 64px; color: #3b82f6; margin-bottom: 20px;"></i>
-              <h1 style="font-size: 36px; font-weight: 800; color: #0f172a; margin: 0 0 12px 0;">Welcome to RoboLedger</h1>
-              <p style="font-size: 16px; color: #64748b; margin: 0;">Automated accounting intelligence for your business</p>
+          <div style="height: calc(100vh - 140px); overflow: auto; display: flex; flex-direction: column;">
+            <!-- Hero Section with Gradient -->
+            <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%); padding: 48px 40px; text-align: center;">
+              <div style="animation: float 3s ease-in-out infinite;">
+                <i class="ph-fill ph-robot" style="font-size: 56px; color: #60a5fa;"></i>
+              </div>
+              <h1 style="font-size: 32px; font-weight: 800; color: white; margin: 16px 0 8px 0; letter-spacing: -0.5px;">RoboLedger</h1>
+              <p style="font-size: 15px; color: #cbd5e1; margin: 0;">Automated Accounting Intelligence</p>
             </div>
             
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
-              <div onclick="window.navigateTo('import')" style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #3b82f6, #2563eb); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
-                  <i class="ph ph-upload" style="font-size: 24px; color: white;"></i>
+            <div style="flex: 1; padding: 32px 40px; max-width: 1400px; margin: 0 auto; width: 100%;">
+              <!-- Stats Grid -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px;">
+                <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #93c5fd; border-radius: 12px; padding: 20px; text-align: center;">
+                  <i class="ph ph-folders" style="font-size: 28px; color: #2563eb; margin-bottom: 8px;"></i>
+                  <div style="font-size: 28px; font-weight: 800; color: #1e40af; margin-bottom: 4px;">${accounts.length}</div>
+                  <div style="font-size: 12px; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Accounts</div>
                 </div>
-                <h3 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Import Transactions</h3>
-                <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.5;">Upload bank statements and process transactions automatically</p>
+                
+                <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #86efac; border-radius: 12px; padding: 20px; text-align: center;">
+                  <i class="ph ph-swap" style="font-size: 28px; color: #16a34a; margin-bottom: 8px;"></i>
+                  <div style="font-size: 28px; font-weight: 800; color: #15803d; margin-bottom: 4px;">${allTxns.length.toLocaleString()}</div>
+                  <div style="font-size: 12px; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Transactions</div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #fcd34d; border-radius: 12px; padding: 20px; text-align: center;">
+                  <i class="ph ph-check-circle" style="font-size: 28px; color: #d97706; margin-bottom: 8px;"></i>
+                  <div style="font-size: 28px; font-weight: 800; color: #c2410c; margin-bottom: 4px;">${reconciledPercent}%</div>
+                  <div style="font-size: 12px; color: #c2410c; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Reconciled</div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border: 2px solid #c4b5fd; border-radius: 12px; padding: 20px; text-align: center;">
+                  <i class="ph ph-lightning" style="font-size: 28px; color: #7c3aed; margin-bottom: 8px;"></i>
+                  <div style="font-size: 28px; font-weight: 800; color: #6d28d9; margin-bottom: 4px;">AI</div>
+                  <div style="font-size: 12px; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Powered</div>
+                </div>
               </div>
               
-              <div onclick="window.navigateTo('coa')" style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
-                  <i class="ph ph-list-bullets" style="font-size: 24px; color: white;"></i>
-                </div>
-                <h3 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Chart of Accounts</h3>
-                <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.5;">Configure and manage your account structure</p>
-              </div>
+              <!-- Quick Actions -->
+              <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px;">
+                <i class="ph ph-lightning-fill" style="color: #f59e0b;"></i>
+                Quick Actions
+              </h2>
               
-              <div onclick="window.navigateTo('reports')" style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
-                  <i class="ph ph-chart-line" style="font-size: 24px; color: white;"></i>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+                <div onclick="window.navigateTo('import')" style="background: white; border: 2px solid #e2e8f0; border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden;" onmouseover="this.style.transform='translateY(-4px) scale(1.02)'; this.style.borderColor='#3b82f6'; this.style.boxShadow='0 12px 24px rgba(59, 130, 246, 0.2)'" onmouseout="this.style.transform=''; this.style.borderColor='#e2e8f0'; this.style.boxShadow=''">
+                  <div style="position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), transparent); border-radius: 0 0 0 100px;"></div>
+                  <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #3b82f6, #2563eb); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">
+                    <i class="ph-fill ph-upload" style="font-size: 28px; color: white;"></i>
+                  </div>
+                  <h3 style="font-size: 17px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0;">Import Transactions</h3>
+                  <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">Upload bank statements & auto-process</p>
+                  <div style="margin-top: 12px; font-size: 13px; color: #3b82f6; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                    Start now <i class="ph ph-arrow-right"></i>
+                  </div>
                 </div>
-                <h3 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Reports & Analytics</h3>
-                <p style="font-size: 14px; color: #64748b; margin: 0; line-height: 1.5;">View financial reports and business insights</p>
+                
+                <div onclick="window.navigateTo('coa')" style="background: white; border: 2px solid #e2e8f0; border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden;" onmouseover="this.style.transform='translateY(-4px) scale(1.02)'; this.style.borderColor='#8b5cf6'; this.style.boxShadow='0 12px 24px rgba(139, 92, 246, 0.2)'" onmouseout="this.style.transform=''; this.style.borderColor='#e2e8f0'; this.style.boxShadow=''">
+                  <div style="position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), transparent); border-radius: 0 0 0 100px;"></div>
+                  <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);">
+                    <i class="ph-fill ph-list-bullets" style="font-size: 28px; color: white;"></i>
+                  </div>
+                  <h3 style="font-size: 17px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0;">Chart of Accounts</h3>
+                  <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">Configure & manage account structure</p>
+                  <div style="margin-top: 12px; font-size: 13px; color: #8b5cf6; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                    Manage <i class="ph ph-arrow-right"></i>
+                  </div>
+                </div>
+                
+                <div onclick="window.navigateTo('reports')" style="background: white; border: 2px solid #e2e8f0; border-radius: 14px; padding: 24px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden;" onmouseover="this.style.transform='translateY(-4px) scale(1.02)'; this.style.borderColor='#10b981'; this.style.boxShadow='0 12px 24px rgba(16, 185, 129, 0.2)'" onmouseout="this.style.transform=''; this.style.borderColor='#e2e8f0'; this.style.boxShadow=''">
+                  <div style="position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), transparent); border-radius: 0 0 0 100px;"></div>
+                  <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                    <i class="ph-fill ph-chart-line" style="font-size: 28px; color: white;"></i>
+                  </div>
+                  <h3 style="font-size: 17px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0;">Reports & Analytics</h3>
+                  <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">View financial reports & insights</p>
+                  <div style="margin-top: 12px; font-size: 13px; color: #10b981; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                    View data <i class="ph ph-arrow-right"></i>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+          
+          <style>
+            @keyframes float {
+              0%, 100% { transform: translateY(0px); }
+              50% { transform: translateY(-10px); }
+            }
+          </style>
         `;
       }
       return; // Exit early for homepage
