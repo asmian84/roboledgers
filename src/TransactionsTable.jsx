@@ -903,7 +903,7 @@ export function TransactionsTable({
     };
 
     return (
-        <div className="flex flex-col h-full w-full bg-white relative" style={{ transform: 'scale(0.96)', transformOrigin: 'top left' }}>
+        <div className="flex flex-col h-full w-full bg-white relative">
             {/* Batch Action Bar */}
             {Object.keys(rowSelection).length > 0 && (
                 <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
