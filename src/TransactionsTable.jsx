@@ -25,7 +25,9 @@ const CASEWARE_THEMES = {
         borderColor: '#f1f5f9',
         hoverBg: '#fefcf3',
         headerBg: '#fffef9',
-        headerColor: '#78716c'
+        headerColor: '#78716c',
+        rowBg: '#fffef9',
+        rowBgAlt: '#fefce8'
     },
     'classic': {
         fontFamily: 'Arial, Helvetica, sans-serif',
@@ -35,7 +37,9 @@ const CASEWARE_THEMES = {
         borderColor: '#d0d0d0',
         hoverBg: '#e8f4f8',
         headerBg: '#f0f0f0',
-        headerColor: '#333333'
+        headerColor: '#333333',
+        rowBg: '#ffffff',
+        rowBgAlt: '#f5f5f5'
     },
     'default': {
         fontFamily: 'Inter, -apple-system, system-ui, sans-serif',
@@ -45,7 +49,9 @@ const CASEWARE_THEMES = {
         borderColor: '#e5e7eb',
         hoverBg: '#f9fafb',
         headerBg: '#ffffff',
-        headerColor: '#6b7280'
+        headerColor: '#6b7280',
+        rowBg: '#ffffff',
+        rowBgAlt: '#f9fafb'
     },
     'ledger-pad': {
         fontFamily: '"Courier New", Courier, monospace',
@@ -55,7 +61,9 @@ const CASEWARE_THEMES = {
         borderColor: '#c7d2fe',
         hoverBg: '#eef2ff',
         headerBg: '#e0e7ff',
-        headerColor: '#4338ca'
+        headerColor: '#4338ca',
+        rowBg: '#ede9fe',
+        rowBgAlt: '#f5f3ff'
     },
     'post-it-note': {
         fontFamily: '"Comic Sans MS", "Chalkboard SE", cursive',
@@ -65,7 +73,9 @@ const CASEWARE_THEMES = {
         borderColor: '#fde047',
         hoverBg: '#fef9c3',
         headerBg: '#fef08a',
-        headerColor: '#713f12'
+        headerColor: '#713f12',
+        rowBg: '#fefce8',      // Light yellow
+        rowBgAlt: '#fffbeb'    // Lighter yellow
     },
     'rainbow': {
         fontFamily: 'Inter, sans-serif',
@@ -73,9 +83,11 @@ const CASEWARE_THEMES = {
         headerFontSize: '11px',
         rowHeight: 52,
         borderColor: '#e0e0e0',
-        hoverBg: 'linear-gradient(90deg, #fef3c7, #fce7f3, #dbeafe)',
+        hoverBg: '#fce7f3',
         headerBg: '#f3f4f6',
-        headerColor: '#374151'
+        headerColor: '#374151',
+        rowBg: '#fef3c7',      // Light yellow/cream
+        rowBgAlt: '#dbeafe'    // Light blue
     },
     'social': {
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
