@@ -1240,405 +1240,383 @@ window.RoboLedger = (function () {
                 if (originalAccountId === 'ALL' || !originalAccountId) {
                     account_id = this.generateAccountId(metadata);
                     console.log(`[INGEST] Generated account_id: ${account_id} from metadata`);
-                    // Update or create account metadata
-                    Accounts.updateMetadata(account_id, metadata);
-
-                    // STORE BALANCE COORDINATES if parser extracted them
-                    const account = Accounts.get(account_id);
-                    if (account) {
-                        if (parseResult?.openingBalanceCoords) {
-                            account.openingBalanceCoords = parseResult.openingBalanceCoords;
-                            console.log('[INGEST] ✅ Stored opening balance coords:', account.openingBalanceCoords);
-                        }
-                        if (parseResult?.closingBalanceCoords) {
-                            account.closingBalanceCoords = parseResult.closingBalanceCoords;
-                            console.log('[INGEST] ✅ Stored closing balance coords:', account.closingBalanceCoords);
-                        }
-                        // Save to localStorage
-                        save();
-                    }
-
-                    // RECONCILIATION SOURCE LINKS: Store PDF URL and balances
-                    const existingAccount = state.accounts.find(a => a.id === account_id);
-                    if (existingAccount && pdfBlobUrl) {
-                        existingAccount.pdfUrl = pdfBlobUrl;
-                        existingAccount.pdfFilename = file.name;
-                        console.log(`[RECON] Stored PDF URL for ${account_id}:`, pdfBlobUrl);
-                    }
-
-                    //Store opening balance if parser provided it
-                    if (existingAccount && parseResult && parseResult.openingBalance !== undefined) {
-                        existingAccount.openingBalance = parseResult.openingBalance;
-                        console.log(`[RECON] Stored opening balance for ${account_id}:`, parseResult.openingBalance);
-                    }
-
-                    // Store closing balance if parser provided it
-                    if (existingAccount && parseResult && parseResult.closingBalance !== undefined) {
-                        existingAccount.statementEndingBalance = parseResult.closingBalance;
-                        console.log(`[RECON] Stored closing balance for ${account_id}:`, parseResult.closingBalance);
-                    }
-
-                    // Store statement period if available
-                    if (existingAccount && parseResult && parseResult.statementPeriod) {
-                        existingAccount.statementPeriod = parseResult.statementPeriod;
-                        console.log(`[RECON] Stored statement period for ${account_id}:`, parseResult.statementPeriod);
-                    }
-
-                    // Store balance coordinates if available (for PDF snippet highlighting)
-                    if (existingAccount && parseResult) {
-                        if (parseResult.openingBalanceCoords) {
-                            existingAccount.openingBalanceCoords = parseResult.openingBalanceCoords;
-                            console.log(`[RECON] Stored opening balance coordinates for ${account_id}:`, parseResult.openingBalanceCoords);
-                        }
-                        if (parseResult.closingBalanceCoords) {
-                            existingAccount.closingBalanceCoords = parseResult.closingBalanceCoords;
-                            console.log(`[RECON] Stored closing balance coordinates for ${account_id}:`, parseResult.closingBalanceCoords);
-                        }
-                    }
-
-                    console.log(`[INGEST] DETECTED & UPDATED: ${metadata.name} (Transit: ${metadata.transit})`);
-                } else {
-                    const text = await file.text();
-                    rows = this.parseCSV(text);
-                    rows = rows.map(r => ({ ...r, source_file_id: sourceFileId }));
+                    existingAccount.pdfFilename = file.name;
+                    console.log(`[RECON] Stored PDF URL for ${account_id}:`, pdfBlobUrl);
                 }
 
-                let importedCount = 0;
+                //Store opening balance if parser provided it
+                if (existingAccount && parseResult && parseResult.openingBalance !== undefined) {
+                    existingAccount.openingBalance = parseResult.openingBalance;
+                    console.log(`[RECON] Stored opening balance for ${account_id}:`, parseResult.openingBalance);
+                }
 
-                for (const row of rows) {
-                    // Map common headers (CSV or PDF Regex)
-                    const date = row.date || row.transaction_date;
-                    const raw_description = row.description || row.memo || row.payee; // This is the Dirty Match
+                // Store closing balance if parser provided it
+                if (existingAccount && parseResult && parseResult.closingBalance !== undefined) {
+                    existingAccount.statementEndingBalance = parseResult.closingBalance;
+                    console.log(`[RECON] Stored closing balance for ${account_id}:`, parseResult.closingBalance);
+                }
 
-                    // Check if parser already provided debit/credit breakdown
-                    let amount, amount_cents, polarity;
+                // Store statement period if available
+                if (existingAccount && parseResult && parseResult.statementPeriod) {
+                    existingAccount.statementPeriod = parseResult.statementPeriod;
+                    console.log(`[RECON] Stored statement period for ${account_id}:`, parseResult.statementPeriod);
+                }
 
-                    if (row.debit !== undefined && row.credit !== undefined) {
-                        // Parser provided debit/credit columns (more accurate)
-                        const debitVal = parseFloat(row.debit || 0);
-                        const creditVal = parseFloat(row.credit || 0);
-
-                        if (debitVal > 0) {
-                            amount = debitVal;
-                            polarity = Polarity.DEBIT;
-                        } else if (creditVal > 0) {
-                            amount = creditVal;
-                            polarity = Polarity.CREDIT;
-                        } else {
-                            amount = parseFloat(row.amount || 0);
-                            polarity = amount >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
-                        }
-                    } else {
-                        // Fallback to amount column
-                        amount = parseFloat(row.amount || 0);
+                // Store balance coordinates if available (for PDF snippet highlighting)
+                if (existingAccount && parseResult) {
+                    if (parseResult.openingBalanceCoords) {
+                        existingAccount.openingBalanceCoords = parseResult.openingBalanceCoords;
+                        console.log(`[RECON] Stored opening balance coordinates for ${account_id}:`, parseResult.openingBalanceCoords);
                     }
-
-                    if (!date || isNaN(amount)) continue;
-
-                    // CLEAN THE NAME
-                    const clean_description = Brain.cleanDescription(raw_description);
-
-                    amount_cents = Math.round(Math.abs(amount) * 100);
-                    const tx_id = crypto.randomUUID();
-
-                    const inputs = {
-                        account_id,
-                        date,
-                        amount_cents,
-                        currency: 'CAD',
-                        raw_description: raw_description // Hash assumes original uniqueness
-                    };
-
-                    const txsig = await generateTxSig(inputs);
-
-                    // === POLARITY DETECTION (must happen before canonical object creation) ===
-                    // If parser didn't provide polarity, detect it
-                    if (!polarity) {
-                        const isLiability = metadata.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(metadata.name);
-                        if (isLiability) {
-                            polarity = amount_cents >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
-                        } else {
-                            polarity = amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
-                        }
+                    if (parseResult.closingBalanceCoords) {
+                        existingAccount.closingBalanceCoords = parseResult.closingBalanceCoords;
+                        console.log(`[RECON] Stored closing balance coordinates for ${account_id}:`, parseResult.closingBalanceCoords);
                     }
+                }
 
-                    // Keyword Heuristic (Override for ambiguous markers)
-                    const upperDesc = raw_description.toUpperCase();
-                    const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE', 'FX RATE'];
-                    const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND', 'PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'CASH BACK'];
+                console.log(`[INGEST] DETECTED & UPDATED: ${metadata.name} (Transit: ${metadata.transit})`);
+            } else {
+                const text = await file.text();
+                rows = this.parseCSV(text);
+                rows = rows.map(r => ({ ...r, source_file_id: sourceFileId }));
+            }
 
-                    if (debitKeywords.some(k => upperDesc.includes(k))) {
+            let importedCount = 0;
+
+            for (const row of rows) {
+                // Map common headers (CSV or PDF Regex)
+                const date = row.date || row.transaction_date;
+                const raw_description = row.description || row.memo || row.payee; // This is the Dirty Match
+
+                // Check if parser already provided debit/credit breakdown
+                let amount, amount_cents, polarity;
+
+                if (row.debit !== undefined && row.credit !== undefined) {
+                    // Parser provided debit/credit columns (more accurate)
+                    const debitVal = parseFloat(row.debit || 0);
+                    const creditVal = parseFloat(row.credit || 0);
+
+                    if (debitVal > 0) {
+                        amount = debitVal;
                         polarity = Polarity.DEBIT;
-                    } else if (creditKeywords.some(k => upperDesc.includes(k))) {
+                    } else if (creditVal > 0) {
+                        amount = creditVal;
                         polarity = Polarity.CREDIT;
+                    } else {
+                        amount = parseFloat(row.amount || 0);
+                        polarity = amount >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
                     }
+                } else {
+                    // Fallback to amount column
+                    amount = parseFloat(row.amount || 0);
+                }
 
-                    // 3. Trigger Categorization Brain (Decision Layer)
-                    const predicted_code = Brain.predict(clean_description); // Predict based on clean name
-                    const category = predicted_code ? COA.get(predicted_code) : null;
+                if (!date || isNaN(amount)) continue;
 
-                    // === PHASE 3: APPLY DESCRIPTION PARSER ===
-                    const parsedDesc = parseTransactionDescription(raw_description);
+                // CLEAN THE NAME
+                const clean_description = Brain.cleanDescription(raw_description);
 
-                    // Build canonical transaction object
-                    const canonical = {
-                        tx_id,
-                        account_id,
-                        date,
-                        ref: row.ref || null, // Capture Ref# from parser
-                        amount_cents: Math.abs(amount_cents),
-                        currency: 'CAD',
-                        polarity: polarity, // NOW polarity is defined!
+                amount_cents = Math.round(Math.abs(amount) * 100);
+                const tx_id = crypto.randomUUID();
 
-                        // Use parsed description or fallback to original
-                        description: clean_description, // PRIMARY LINE (CLEAN)
-                        payee: parsedDesc.payee || clean_description, // Parsed name
-                        transaction_type_label: parsedDesc.transaction_type_label, // Parsed type
-                        raw_description: raw_description, // SECONDARY LINE (DIRTY)
+                const inputs = {
+                    account_id,
+                    date,
+                    amount_cents,
+                    currency: 'CAD',
+                    raw_description: raw_description // Hash assumes original uniqueness
+                };
 
-                        sourceFileId: sourceFileId, // Link to workbench blob
-                        source_pdf: row.source_pdf || null, // PDF metadata for audit viewer
-                        txsig,
-                        metadata: {
-                            source: metadata.name,
-                            transit: metadata.transit,
-                            sub_detail: row.sub_detail || null
-                        },
-                        category_code: predicted_code || null,
-                        category_name: category ? category.name : 'UNCATEGORIZED',
-                        status: predicted_code ? TransactionStatus.PREDICTED : TransactionStatus.RAW,
-                        version: 1,
-                        created_at: new Date().toISOString()
+                const txsig = await generateTxSig(inputs);
+
+                // === POLARITY DETECTION (must happen before canonical object creation) ===
+                // If parser didn't provide polarity, detect it
+                if (!polarity) {
+                    const isLiability = metadata.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(metadata.name);
+                    if (isLiability) {
+                        polarity = amount_cents >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
+                    } else {
+                        polarity = amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
+                    }
+                }
+
+                // Keyword Heuristic (Override for ambiguous markers)
+                const upperDesc = raw_description.toUpperCase();
+                const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE', 'FX RATE'];
+                const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND', 'PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'CASH BACK'];
+
+                if (debitKeywords.some(k => upperDesc.includes(k))) {
+                    polarity = Polarity.DEBIT;
+                } else if (creditKeywords.some(k => upperDesc.includes(k))) {
+                    polarity = Polarity.CREDIT;
+                }
+
+                // 3. Trigger Categorization Brain (Decision Layer)
+                const predicted_code = Brain.predict(clean_description); // Predict based on clean name
+                const category = predicted_code ? COA.get(predicted_code) : null;
+
+                // === PHASE 3: APPLY DESCRIPTION PARSER ===
+                const parsedDesc = parseTransactionDescription(raw_description);
+
+                // Build canonical transaction object
+                const canonical = {
+                    tx_id,
+                    account_id,
+                    date,
+                    ref: row.ref || null, // Capture Ref# from parser
+                    amount_cents: Math.abs(amount_cents),
+                    currency: 'CAD',
+                    polarity: polarity, // NOW polarity is defined!
+
+                    // Use parsed description or fallback to original
+                    description: clean_description, // PRIMARY LINE (CLEAN)
+                    payee: parsedDesc.payee || clean_description, // Parsed name
+                    transaction_type_label: parsedDesc.transaction_type_label, // Parsed type
+                    raw_description: raw_description, // SECONDARY LINE (DIRTY)
+
+                    sourceFileId: sourceFileId, // Link to workbench blob
+                    source_pdf: row.source_pdf || null, // PDF metadata for audit viewer
+                    txsig,
+                    metadata: {
+                        source: metadata.name,
+                        transit: metadata.transit,
+                        sub_detail: row.sub_detail || null
+                    },
+                    category_code: predicted_code || null,
+                    category_name: category ? category.name : 'UNCATEGORIZED',
+                    status: predicted_code ? TransactionStatus.PREDICTED : TransactionStatus.RAW,
+                    version: 1,
+                    created_at: new Date().toISOString()
+                };
+
+                // === PHASE 4: APPLY AUTO-CATEGORIZATION (Respect Settings) ===
+                const settings = window.UI_STATE || {};
+                const isAutocatOn = settings.autocatEnabled !== false; // Default true
+                const minConfidence = settings.confidenceThreshold || 0.8;
+
+                if (isAutocatOn) {
+                    const autoCat = autoCategorizTransaction(canonical);
+                    if (autoCat.gl_account_code && !canonical.category_code) {
+                        // Check confidence vs threshold
+                        if (autoCat.confidence >= minConfidence) {
+                            canonical.gl_account_code = autoCat.gl_account_code;
+                            canonical.gl_account_name = autoCat.gl_account_name;
+                            canonical.category_confidence = autoCat.confidence;
+                            canonical.status = autoCat.status;
+                        } else {
+                            // Low confidence -> needs review
+                            canonical.status = 'needs_review';
+                            canonical.category_confidence = autoCat.confidence;
+                        }
+                    }
+                }
+
+                // === FALLBACK: Ensure all transactions have a COA code ===
+                if (!canonical.gl_account_code && !canonical.category_code) {
+                    // No category assigned - use 9970 (Uncategorized) as fallback
+                    const fallbackCOA = COA.get('9970');
+                    canonical.gl_account_code = '9970';
+                    canonical.gl_account_name = fallbackCOA ? fallbackCOA.name : 'Uncategorized';
+                    canonical.category_confidence = 0;
+                    canonical.category_source = 'fallback';
+                    canonical.status = 'needs_review';
+                }
+
+
+                // === PHASE 5: SALES TAX (GST/HST) CALCULATION ===
+                if (settings.gstEnabled) {
+                    const province = settings.province || 'ON';
+                    const taxRates = {
+                        'ON': 0.13,
+                        'BC': 0.05, // Just GST for now, PST usually ignored in simple ledger
+                        'AB': 0.05,
+                        'QC': 0.05
                     };
+                    const rate = taxRates[province] || 0.13;
 
-                    // === PHASE 4: APPLY AUTO-CATEGORIZATION (Respect Settings) ===
-                    const settings = window.UI_STATE || {};
-                    const isAutocatOn = settings.autocatEnabled !== false; // Default true
-                    const minConfidence = settings.confidenceThreshold || 0.8;
-
-                    if (isAutocatOn) {
-                        const autoCat = autoCategorizTransaction(canonical);
-                        if (autoCat.gl_account_code && !canonical.category_code) {
-                            // Check confidence vs threshold
-                            if (autoCat.confidence >= minConfidence) {
-                                canonical.gl_account_code = autoCat.gl_account_code;
-                                canonical.gl_account_name = autoCat.gl_account_name;
-                                canonical.category_confidence = autoCat.confidence;
-                                canonical.status = autoCat.status;
-                            } else {
-                                // Low confidence -> needs review
-                                canonical.status = 'needs_review';
-                                canonical.category_confidence = autoCat.confidence;
-                            }
-                        }
+                    // Tax = Total / (1 + rate) * rate
+                    // We only calculate tax if it's a debit (expense)
+                    if (canonical.polarity === 'DEBIT') {
+                        const amount = canonical.amount_cents / 100;
+                        const taxAmount = (amount / (1 + rate)) * rate;
+                        canonical.tax_cents = Math.round(taxAmount * 100);
+                        // console.log(`[TAX] Calculated ${province} tax: $${taxAmount.toFixed(2)} on $${amount.toFixed(2)}`);
                     }
+                }
 
-                    // === FALLBACK: Ensure all transactions have a COA code ===
-                    if (!canonical.gl_account_code && !canonical.category_code) {
-                        // No category assigned - use 9970 (Uncategorized) as fallback
-                        const fallbackCOA = COA.get('9970');
-                        canonical.gl_account_code = '9970';
-                        canonical.gl_account_name = fallbackCOA ? fallbackCOA.name : 'Uncategorized';
-                        canonical.category_confidence = 0;
-                        canonical.category_source = 'fallback';
-                        canonical.status = 'needs_review';
-                    }
+                // === PHASE 6: PERSISTENT REF# ASSIGNMENT ===
+                // Assign permanent REF# based on account, BEFORE storing
+                if (!canonical.ref) {
+                    // Get account to find prefix
+                    const account = Accounts.get(canonical.account_id);
+                    const accountRef = (account && account.ref) || 'TXN';
 
-
-                    // === PHASE 5: SALES TAX (GST/HST) CALCULATION ===
-                    if (settings.gstEnabled) {
-                        const province = settings.province || 'ON';
-                        const taxRates = {
-                            'ON': 0.13,
-                            'BC': 0.05, // Just GST for now, PST usually ignored in simple ledger
-                            'AB': 0.05,
-                            'QC': 0.05
-                        };
-                        const rate = taxRates[province] || 0.13;
-
-                        // Tax = Total / (1 + rate) * rate
-                        // We only calculate tax if it's a debit (expense)
-                        if (canonical.polarity === 'DEBIT') {
-                            const amount = canonical.amount_cents / 100;
-                            const taxAmount = (amount / (1 + rate)) * rate;
-                            canonical.tax_cents = Math.round(taxAmount * 100);
-                            // console.log(`[TAX] Calculated ${province} tax: $${taxAmount.toFixed(2)} on $${amount.toFixed(2)}`);
-                        }
-                    }
-
-                    // === PHASE 6: PERSISTENT REF# ASSIGNMENT ===
-                    // Assign permanent REF# based on account, BEFORE storing
-                    if (!canonical.ref) {
-                        // Get account to find prefix
-                        const account = Accounts.get(canonical.account_id);
-                        const accountRef = (account && account.ref) || 'TXN';
-
-                        // Calculate next counter by finding highest existing REF# for this account
-                        // NOTE: state.transactions is an OBJECT (keyed by tx ID), not array!
-                        const allTransactions = Object.values(state.transactions);
-                        const existingForAccount = allTransactions.filter(t => t.account_id === canonical.account_id);
-                        let maxCounter = 0;
-                        existingForAccount.forEach(tx => {
-                            if (tx.ref) {
-                                // Extract number from "AMEX1-034" -> 34
-                                const parts = tx.ref.split('-');
-                                if (parts.length === 2) {
-                                    const num = parseInt(parts[1], 10);
-                                    if (!isNaN(num) && num > maxCounter) {
-                                        maxCounter = num;
-                                    }
+                    // Calculate next counter by finding highest existing REF# for this account
+                    // NOTE: state.transactions is an OBJECT (keyed by tx ID), not array!
+                    const allTransactions = Object.values(state.transactions);
+                    const existingForAccount = allTransactions.filter(t => t.account_id === canonical.account_id);
+                    let maxCounter = 0;
+                    existingForAccount.forEach(tx => {
+                        if (tx.ref) {
+                            // Extract number from "AMEX1-034" -> 34
+                            const parts = tx.ref.split('-');
+                            if (parts.length === 2) {
+                                const num = parseInt(parts[1], 10);
+                                if (!isNaN(num) && num > maxCounter) {
+                                    maxCounter = num;
                                 }
                             }
-                        });
+                        }
+                    });
 
-                        const nextCounter = maxCounter + 1;
-                        canonical.ref = `${accountRef}-${String(nextCounter).padStart(3, '0')}`;
-                        console.log(`[LEDGER] Assigned persistent REF#: ${canonical.ref} to ${canonical.description}`);
-                    }
-
-                    if (Ledger.post(canonical)) {
-                        importedCount++;
-                    }
+                    const nextCounter = maxCounter + 1;
+                    canonical.ref = `${accountRef}-${String(nextCounter).padStart(3, '0')}`;
+                    console.log(`[LEDGER] Assigned persistent REF#: ${canonical.ref} to ${canonical.description}`);
                 }
 
-                return importedCount;
-            }
-        };
-
-        // --- COA SERVICE ---
-        const COA = {
-            init: function () {
-                COA_DEFAULTS.forEach(entry => state.coa[entry.code] = entry);
-            },
-            getAll: function () {
-                return Object.values(state.coa);
-            },
-            get: function (code) {
-                return state.coa[code];
-            }
-        };
-
-        // --- CATEGORIZATION BRAIN ---
-        const Brain = {
-            rules: [
-                { pattern: /adobe|google|aws|github/i, code: '4000' },
-                { pattern: /starbucks|uber|tim hortons/i, code: '8500' },
-                { pattern: /rent|lease|office/i, code: '8100' },
-                { pattern: /salary|payroll|wage/i, code: '6000' },
-                { pattern: /monthly fee|service charge/i, code: '8800' }
-            ],
-
-            predict: function (description) {
-                for (const rule of this.rules) {
-                    if (rule.pattern.test(description)) {
-                        return rule.code;
-                    }
+                if (Ledger.post(canonical)) {
+                    importedCount++;
                 }
-                return null; // Uncategorized
-            },
-
-            cleanDescription: function (text) {
-                if (!text) return "";
-
-                let clean = text;
-
-                // ═══════════════════════════════════════════════════════════
-                // DESCRIPTION CLEANING RULEBOOK v1.0
-                // Based on 905 user manual corrections (2026-02-11)
-                // ═══════════════════════════════════════════════════════════
-
-                // RULE 1: Remove date prefixes (Month DD, )
-                // Examples: "June 5, NAME" → "NAME"
-                clean = clean.replace(/^[A-Z][a-z]+\s+\d+,\s+/, '');
-
-                // RULE 2: Remove reference number prefixes (NNNN, )
-                // Examples: "0578, Online Banking" → "Online Banking"
-                clean = clean.replace(/^\d{4,},\s+/, '');
-
-                // RULE 3: Remove leading commas and spaces
-                // Examples: ",   NAME" → "NAME"
-                clean = clean.replace(/^,\s*/, '');
-
-                // RULE 4: Normalize E-Transfer labels
-                // Ensure consistent format: ", E-Transfer - Autodeposit"
-                if (clean.includes('Autodeposit') && !clean.includes('E-Transfer')) {
-                    clean = clean.replace(/\s*-?\s*Autodeposit/, ', E-Transfer - Autodeposit');
-                }
-
-                // RULE 5: Normalize transaction type labels
-                // Inter-Fi → Inter-FI
-                clean = clean.replace(/Inter-Fi\s/i, 'Inter-FI ');
-
-                // Swap transaction type and merchant for certain patterns
-                // "Automobile Rent TOYOTA" → "TOYOTA,Automobile Rent"
-                clean = clean.replace(/(Automobile Rent)\s+([A-Z\s]+)/i, (match, type, provider) => {
-                    return provider.toUpperCase().trim() + ',' + type;
-                });
-
-                // "Funds transfer PROVIDER" → "PROVIDER,Funds transfer"
-                clean = clean.replace(/(Funds [Tt]ransfer)\s+([A-Z\s]+)/i, (match, type, provider) => {
-                    return provider.toUpperCase().trim() + ',Funds transfer';
-                });
-
-                // RULE 6: Remove trailing account/reference numbers
-                // "Online Transfer to Deposit Account-8212" → "...Account-"
-                clean = clean.replace(/-\d{4,}$/, '-');
-                clean = clean.replace(/\s+\d{4,}$/, '');
-
-                // RULE 7: Collapse multiple spaces
-                clean = clean.replace(/\s{2,}/g, ' ');
-
-                // RULE 8: Trim whitespace
-                clean = clean.trim();
-
-                // ═══════════════════════════════════════════════════════════
-                // LEGACY CLEANING (Keep for backward compatibility)
-                // ═══════════════════════════════════════════════════════════
-
-                // Remove remaining technical noise
-                clean = clean
-                    .replace(/\b(?=\w*\d)(?=\w*[a-z])[a-z0-9]{8,15}\b/gi, '') // Hash detection
-                    .replace(/\b[0-9]{10,20}\b/g, '')    // Long numeric sequences
-                    .replace(/continued\s*Date\s*Desc/gi, '');
-
-                // Remove generic payment prefixes if they're standalone
-                const genericPrefixes = [
-                    /^e-Transfer\s*(?:sent|received|to|from)?\s*/gi,
-                    /^Online\s*Banking\s*transfer\s*-?\s*\d*/gi,
-                    /^Interac\s*e-Transfer\s*/gi,
-                    /^Pay\s+Employee-Vendor\s*/gi,
-                    /^Mobile\s+cheque\s+deposit\s*/gi,
-                    /^Direct\s+Deposits\s*\(PDS\)\s*service\s*total/gi,
-                    /^Misc\s*Payment\s*PAY-FILE\s*FEES/gi,
-                    /^BR\s*TO\s*BR\s*-?\s*/gi,
-                    /^-+\s*/g
-                ];
-
-                genericPrefixes.forEach(p => clean = clean.replace(p, ''));
-
-                // Final cleanup
-                clean = clean.trim().replace(/\s+/g, ' ');
-
-                if (!clean || clean.length < 2) return "Miscellaneous";
-
-                return clean;
             }
-        };
 
-        // --- INITIALIZE ---
-        load();
+            return importedCount;
+        }
+    };
+
+    // --- COA SERVICE ---
+    const COA = {
+        init: function () {
+            COA_DEFAULTS.forEach(entry => state.coa[entry.code] = entry);
+        },
+        getAll: function () {
+            return Object.values(state.coa);
+        },
+        get: function (code) {
+            return state.coa[code];
+        }
+    };
+
+    // --- CATEGORIZATION BRAIN ---
+    const Brain = {
+        rules: [
+            { pattern: /adobe|google|aws|github/i, code: '4000' },
+            { pattern: /starbucks|uber|tim hortons/i, code: '8500' },
+            { pattern: /rent|lease|office/i, code: '8100' },
+            { pattern: /salary|payroll|wage/i, code: '6000' },
+            { pattern: /monthly fee|service charge/i, code: '8800' }
+        ],
+
+        predict: function (description) {
+            for (const rule of this.rules) {
+                if (rule.pattern.test(description)) {
+                    return rule.code;
+                }
+            }
+            return null; // Uncategorized
+        },
+
+        cleanDescription: function (text) {
+            if (!text) return "";
+
+            let clean = text;
+
+            // ═══════════════════════════════════════════════════════════
+            // DESCRIPTION CLEANING RULEBOOK v1.0
+            // Based on 905 user manual corrections (2026-02-11)
+            // ═══════════════════════════════════════════════════════════
+
+            // RULE 1: Remove date prefixes (Month DD, )
+            // Examples: "June 5, NAME" → "NAME"
+            clean = clean.replace(/^[A-Z][a-z]+\s+\d+,\s+/, '');
+
+            // RULE 2: Remove reference number prefixes (NNNN, )
+            // Examples: "0578, Online Banking" → "Online Banking"
+            clean = clean.replace(/^\d{4,},\s+/, '');
+
+            // RULE 3: Remove leading commas and spaces
+            // Examples: ",   NAME" → "NAME"
+            clean = clean.replace(/^,\s*/, '');
+
+            // RULE 4: Normalize E-Transfer labels
+            // Ensure consistent format: ", E-Transfer - Autodeposit"
+            if (clean.includes('Autodeposit') && !clean.includes('E-Transfer')) {
+                clean = clean.replace(/\s*-?\s*Autodeposit/, ', E-Transfer - Autodeposit');
+            }
+
+            // RULE 5: Normalize transaction type labels
+            // Inter-Fi → Inter-FI
+            clean = clean.replace(/Inter-Fi\s/i, 'Inter-FI ');
+
+            // Swap transaction type and merchant for certain patterns
+            // "Automobile Rent TOYOTA" → "TOYOTA,Automobile Rent"
+            clean = clean.replace(/(Automobile Rent)\s+([A-Z\s]+)/i, (match, type, provider) => {
+                return provider.toUpperCase().trim() + ',' + type;
+            });
+
+            // "Funds transfer PROVIDER" → "PROVIDER,Funds transfer"
+            clean = clean.replace(/(Funds [Tt]ransfer)\s+([A-Z\s]+)/i, (match, type, provider) => {
+                return provider.toUpperCase().trim() + ',Funds transfer';
+            });
+
+            // RULE 6: Remove trailing account/reference numbers
+            // "Online Transfer to Deposit Account-8212" → "...Account-"
+            clean = clean.replace(/-\d{4,}$/, '-');
+            clean = clean.replace(/\s+\d{4,}$/, '');
+
+            // RULE 7: Collapse multiple spaces
+            clean = clean.replace(/\s{2,}/g, ' ');
+
+            // RULE 8: Trim whitespace
+            clean = clean.trim();
+
+            // ═══════════════════════════════════════════════════════════
+            // LEGACY CLEANING (Keep for backward compatibility)
+            // ═══════════════════════════════════════════════════════════
+
+            // Remove remaining technical noise
+            clean = clean
+                .replace(/\b(?=\w*\d)(?=\w*[a-z])[a-z0-9]{8,15}\b/gi, '') // Hash detection
+                .replace(/\b[0-9]{10,20}\b/g, '')    // Long numeric sequences
+                .replace(/continued\s*Date\s*Desc/gi, '');
+
+            // Remove generic payment prefixes if they're standalone
+            const genericPrefixes = [
+                /^e-Transfer\s*(?:sent|received|to|from)?\s*/gi,
+                /^Online\s*Banking\s*transfer\s*-?\s*\d*/gi,
+                /^Interac\s*e-Transfer\s*/gi,
+                /^Pay\s+Employee-Vendor\s*/gi,
+                /^Mobile\s+cheque\s+deposit\s*/gi,
+                /^Direct\s+Deposits\s*\(PDS\)\s*service\s*total/gi,
+                /^Misc\s*Payment\s*PAY-FILE\s*FEES/gi,
+                /^BR\s*TO\s*BR\s*-?\s*/gi,
+                /^-+\s*/g
+            ];
+
+            genericPrefixes.forEach(p => clean = clean.replace(p, ''));
+
+            // Final cleanup
+            clean = clean.trim().replace(/\s+/g, ' ');
+
+            if (!clean || clean.length < 2) return "Miscellaneous";
+
+            return clean;
+        }
+    };
+
+    // --- INITIALIZE ---
+    load();
     COA.init();
 
-        return {
-            Ledger,
-            Ingestion,
-            Accounts,
-            COA,
-            Brain,
-            TransactionStatus,
-            Polarity,
-            parseTransactionDescription,
-            autoCategorizTransaction
-        };
+    return {
+        Ledger,
+        Ingestion,
+        Accounts,
+        COA,
+        Brain,
+        TransactionStatus,
+        Polarity,
+        parseTransactionDescription,
+        autoCategorizTransaction
+    };
 
-    })();
+})();
