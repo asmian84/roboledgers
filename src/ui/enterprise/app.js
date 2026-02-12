@@ -47,7 +47,7 @@
     province: 'ON',
     gstEnabled: true,
     // Grid Appearance Settings (NEW in V5.1)
-    gridTheme: 'default',
+    gridTheme: 'post-it-note',
     gridFontSize: 13.5,
 
     // Transaction Import State
@@ -2144,7 +2144,7 @@
   window.resetSettings = function () {
     if (!confirm('Reset all settings to defaults?')) return;
 
-    UI_STATE.gridTheme = 'default';
+    UI_STATE.gridTheme = 'post-it-note';
     UI_STATE.gridFontSize = 13.5;
     UI_STATE.density = 'comfortable';
 
