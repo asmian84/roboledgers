@@ -1217,6 +1217,31 @@
       UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
     }
 
+    // Render breadcrumbs to DOM
+    const bcContainer = document.getElementById('breadcrumb');
+    if (bcContainer) {
+      bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
+        const isLast = i === UI_STATE.breadcrumbs.length - 1;
+        const isHome = bc.label.toLowerCase() === 'home';
+        const bcRoute = isHome ? 'home' : (bc.label === 'Transactions' ? 'import' : bc.label.toLowerCase());
+
+        return `
+          <div class="breadcrumb-item ${isLast ? 'active' : ''}" 
+               style="cursor: ${isLast ? 'default' : 'pointer'};"
+               onclick="${isLast ? '' : `window.navigateTo('${bcRoute}');`}">
+            ${isHome ? '<i class="ph ph-house breadcrumb-icon" style="margin-right: 6px; font-size: 14px; color: #3b82f6;"></i>' : ''}
+            <span class="breadcrumb-label" style="${!isLast ? 'color: #3b82f6; font-weight: 500;' : ''}">${bc.label}</span>
+          </div>
+          ${isLast ? '' : '<span class="breadcrumb-separator" style="margin: 0 10px; color: #cbd5e1;"><i class="ph ph-caret-right" style="font-size: 10px;"></i></span>'}
+        `;
+      }).join('') + `
+        <div style="flex: 1;"></div>
+        <button onclick="window.devReset()" style="padding: 4px 10px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 12px;" title="Clear all localStorage and reset (Dev only)">
+          ⚠️ DEV RESET
+        </button>
+      `;
+    }
+
     //Update sidebar
     document.querySelectorAll('.nav-item').forEach(item => {
       item.classList.toggle('active', item.dataset.route === route);
