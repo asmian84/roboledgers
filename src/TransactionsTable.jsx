@@ -939,7 +939,8 @@ export function TransactionsTable({
                             fontWeight: GRID_TOKENS.headerFontWeight,
                             letterSpacing: GRID_TOKENS.headerLetterSpacing,
                             color: GRID_TOKENS.headerColor,
-                            textTransform: 'uppercase'
+                            textTransform: 'uppercase',
+                            borderRight: `1px solid ${GRID_TOKENS.borderColor}`  // Vertical dividers
                         }}
                         onClick={header.column.getToggleSortingHandler()}
                     >
