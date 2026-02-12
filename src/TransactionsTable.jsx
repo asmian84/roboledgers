@@ -682,9 +682,9 @@ const columns = [
     columnHelper.display({
         id: 'balance',
         header: 'BALANCE',
-        size: 65,  // Further reduced to minimize right-side space
-        minSize: 60,
-        maxSize: 90,
+        size: 85,  // Wide enough for full balance numbers
+        minSize: 80,
+        maxSize: 100,
         cell: info => {
             // Get the sorted rows to calculate running balance
             const sortedRows = info.table.getRowModel().rows;
@@ -933,7 +933,7 @@ export function TransactionsTable({
                             height: GRID_TOKENS.headerHeight,
                             // Custom padding per column (match cell padding)
                             padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (away from wall)
-                                header.id === 'balance' ? '0 0 0 4px' :   // Balance: zero right padding
+                                header.id === 'balance' ? '0 0 0 2px' :   // Balance: minimal left, zero right
                                     `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
                             fontSize: GRID_TOKENS.headerFontSize,
                             fontWeight: GRID_TOKENS.headerFontWeight,
@@ -1014,7 +1014,7 @@ export function TransactionsTable({
                                                 flexShrink: 0,
                                                 // Custom padding per column
                                                 padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (away from wall)
-                                                    cell.column.id === 'balance' ? '0 0 0 4px' :   // Balance: zero right padding
+                                                    cell.column.id === 'balance' ? '0 0 0 2px' :   // Balance: minimal left, zero right
                                                         `0 ${GRID_TOKENS.rowPaddingX}`,                  // Others: default
                                                 borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
                                                 position: cell.column.id === 'category' ? 'relative' : undefined
