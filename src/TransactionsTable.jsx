@@ -204,6 +204,9 @@ const GRID_TOKENS_BASE = {
     negativeColor: '#ef4444',
     borderColor: '#f1f5f9',
     hoverBg: '#f8fafc',
+    rowBg: '#ffffff',        // Even rows
+    rowBgAlt: '#ffffff',     // Odd rows (same for default)
+    selectedRowBg: '#eff6ff',
 };
 
 // Apply theme overrides
@@ -899,15 +902,26 @@ export function TransactionsTable({
                         {rowVirtualizer.getVirtualItems().map(virtualRow => {
                             const row = table.getRowModel().rows[virtualRow.index];
                             const isSelected = row.getIsSelected();
+
+                            // Determine row background color from theme
+                            const rowIndex = virtualRow.index;
+                            const rowBg = isSelected
+                                ? (GRID_TOKENS.selectedRowBg || '#eff6ff')
+                                : (rowIndex % 2 === 0 ? GRID_TOKENS.rowBg : GRID_TOKENS.rowBgAlt);
+                            const hoverBg = GRID_TOKENS.hoverBg || '#f8fafc';
+
                             return (
                                 <div
                                     key={row.id}
-                                    className={`flex absolute top-0 left-0 w-full transition-colors group ${isSelected ? 'bg-blue-50/50' : 'hover:bg-[#f8fafc] bg-white'}`}
+                                    className="flex absolute top-0 left-0 w-full transition-colors group"
                                     style={{
                                         height: `${GRID_TOKENS.rowHeight}px`,
                                         transform: `translateY(${virtualRow.start}px)`,
-                                        borderBottom: `1px solid ${GRID_TOKENS.borderColor}`
+                                        borderBottom: `1px solid ${GRID_TOKENS.borderColor}`,
+                                        backgroundColor: rowBg
                                     }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = rowBg}
                                 >
                                     {row.getVisibleCells().map(cell => (
                                         <div
