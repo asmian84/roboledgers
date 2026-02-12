@@ -506,7 +506,7 @@ const columns = [
     // 1. Checkbox
     columnHelper.display({
         id: 'select',
-        size: 50,
+        size: 40,  // Tighter column
         enableResizing: false,
         header: ({ table }) => (
             <Checkbox
