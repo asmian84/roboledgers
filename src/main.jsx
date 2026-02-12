@@ -56,8 +56,13 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
  * Mount HomePage component
  */
 window.mountHomePage = () => {
+    console.log('[HOMEPAGE] mountHomePage called');
     const container = document.getElementById('txnGrid');
-    if (!container) return;
+    if (!container) {
+        console.error('[HOMEPAGE] Container #txnGrid not found!');
+        return;
+    }
+    console.log('[HOMEPAGE] Container found:', container);
 
     // Unmount existing root if needed
     if (window._txGridRoot && window._txGridRootContainer && !document.body.contains(window._txGridRootContainer)) {
@@ -67,15 +72,18 @@ window.mountHomePage = () => {
     }
 
     if (!window._txGridRoot) {
+        console.log('[HOMEPAGE] Creating new React root');
         window._txGridRoot = ReactDOM.createRoot(container);
         window._txGridRootContainer = container;
     }
 
+    console.log('[HOMEPAGE] Rendering HomePage component');
     window._txGridRoot.render(
         <React.StrictMode>
             <HomePage onNavigate={(route) => window.navigateTo(route)} />
         </React.StrictMode>
     );
+    console.log('[HOMEPAGE] Render complete');
 };
 
 // Alias for backward compatibility
