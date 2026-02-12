@@ -1224,7 +1224,9 @@
         }
 
         UI_STATE.currentRoute = route;
-        if (route === 'import') {
+        if (route === 'home') {
+          UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
+        } else if (route === 'import') {
           UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
         } else if (route === 'coa') {
           UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
@@ -1232,6 +1234,12 @@
           const label = route.charAt(0).toUpperCase() + route.slice(1);
           UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
         }
+
+        // Update sidebar active state
+        document.querySelectorAll('.nav-item').forEach(item => {
+          item.classList.toggle('active', item.dataset.route === route);
+        });
+
         window.updateWorkspace();
       };
     });
