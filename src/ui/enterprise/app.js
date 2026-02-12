@@ -3097,17 +3097,17 @@
           </div>
 
           <!-- Title -->
-          <div style="font-size: 20px; font-weight: 800; color: #1e293b; margin-bottom: 8px;">Processing Statement</div>
-          <div style="font-size: 13px; color: #64748b; margin-bottom: 32px;">${label}</div>
+          <div id="progress-title" style="font-size: 20px; font-weight: 800; color: #1e293b; margin-bottom: 8px;">Processing Statement</div>
+          <div id="progress-subtitle" style="font-size: 13px; color: #64748b; margin-bottom: 32px;">${label}</div>
 
           <!-- Progress Bar -->
           <div style="width: 100%; max-width: 400px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Progress</span>
-              <span style="font-size: 12px; font-weight: 800; color: #3b82f6;">${Math.round(progress)}%</span>
+              <span id="progress-file-count" style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Progress</span>
+              <span id="progress-txn-count" style="font-size: 12px; font-weight: 800; color: #3b82f6;">${Math.round(progress)}%</span>
             </div>
             <div style="height: 8px; background: #e2e8f0; border-radius: 10px; overflow: hidden; width: 100%; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);">
-              <div style="width: ${progress}%; height: 100%; background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%); transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 10px;"></div>
+              <div id="progress-bar-fill" style="width: ${progress}%; height: 100%; background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%); transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 10px;"></div>
             </div>
           </div>
 
