@@ -1442,6 +1442,9 @@
     localStorage.clear();
     sessionStorage.clear();
     window.RoboLedger.Ledger.reset();
+    if (window.RoboLedger.Accounts?.reset) {
+      window.RoboLedger.Accounts.reset();
+    }
 
     // Collect all async cleanup tasks
     const cleanupTasks = [];
@@ -3465,9 +3468,8 @@
     }
   }
 
-  // Clean up empty accounts on initialization
-  // TEMPORARILY DISABLED - Persistence bug causes transactions to not save
-  // cleanupEmptyAccounts();
+  // Clean up empty accounts on initialization (prevents hangover accounts)
+  cleanupEmptyAccounts();
 
   if (typeof init === 'function') init();
 })();
