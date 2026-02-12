@@ -1237,6 +1237,93 @@
     }
   };
 
+  // Show statement source (PDF snippet) for opening or closing balance
+  window.showStatementSource = function (type) {
+    const accountId = UI_STATE.selectedAccount;
+    if (!accountId || accountId === 'ALL') {
+      alert('Please select an account first');
+      return;
+    }
+
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const acc = accounts.find(a => a.id === accountId);
+    if (!acc) {
+      alert('Account not found');
+      return;
+    }
+
+    // Get the balance value
+    const balanceValue = type === 'opening' ?
+      (acc.openingBalance || 0) :
+      (acc.statementEndingBalance || 0);
+
+    // TODO: Get actual PDF URL and coordinates from account.pdfUrl or account.statements
+    // For now, show a modal with account info as placeholder
+
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+
+    // Create modal content
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    `;
+
+    content.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #1e293b;">Statement Source</h2>
+        <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" style="background: none; border: none; font-size: 24px; color: #94a3b8; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
+      </div>
+      
+      <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
+        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Account: <strong>${acc.ref || acc.name || 'Unknown'}</strong></div>
+        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Bank: <strong>${acc.bankName || 'N/A'}</strong></div>
+        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Balance Type: <strong>${type === 'opening' ? 'Opening Balance' : 'Closing Balance (Statement)'}</strong></div>
+        <div style="font-size: 16px; color: #1e293b; margin-top: 12px;">Amount: <strong>$${balanceValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
+      </div>
+      
+      <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fde047; margin-bottom: 16px;">
+        <div style="font-size: 13px; color: #92400e; font-weight: 600; margin-bottom: 4px;">🚧 Feature In Progress</div>
+        <div style="font-size: 12px; color: #92400e;">PDF snippet viewer will be integrated here to show the exact location of this balance on your bank statement.</div>
+      </div>
+      
+      <div style="font-size: 11px; color: #94a3b8; padding: 12px; background: #f1f5f9; border-radius: 6px;">
+        <strong>Next Phase:</strong> This will display a PDF preview with the balance amount highlighted, allowing you to verify the source directly from your uploaded statement.
+      </div>
+    `;
+
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+
+    console.log(`[RECON SOURCE] Showing ${type} balance source for ${acc.ref}:`, balanceValue);
+  };
+
   // Update Ref# prefix for transaction numbering
   window.updateRefPrefix = function (newPrefix) {
     const sanitized = newPrefix.toUpperCase().trim().substr(0, 8); // Limit to 8 chars
