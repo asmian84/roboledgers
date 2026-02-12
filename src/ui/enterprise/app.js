@@ -1245,135 +1245,71 @@
       return;
     }
 
-    const accounts = window.RoboLedger.Accounts.getAll();
-    const acc = accounts.find(a => a.id === accountId);
-    if (!acc) {
-      alert('Account not found');
+    const recon = window.RoboLedger.reconciliation[accountId];
+    if (!recon || !recon.pdf_url) {
+      alert('No statement PDF available for this account');
       return;
     }
 
-    // Get the balance value
-    const balanceValue = type === 'opening' ?
-      (acc.openingBalance || 0) :
-      (acc.statementEndingBalance || 0);
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const acc = accounts.find(a => a.id === accountId);
 
-    console.log(`[RECON SOURCE] Showing ${type} balance source for ${acc.ref}:`, balanceValue);
+    const page = type === 'opening' ? 1 : (recon.total_pages || 1);
+    const balanceType = type === 'opening' ? 'Opening' : 'Ending';
 
-    // Create modal overlay
-    const modal = document.createElement('div');
-    modal.id = 'statement-source-modal';
-    modal.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-    `;
+    console.log(`[BALANCE VIEW] Opening ${balanceType} balance - Page ${page}`);
 
-    // Create modal content
-    const content = document.createElement('div');
-    content.style.cssText = `
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      max-width: 800px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      position: relative;
-    `;
+    // Overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'balance-viewer-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1001;';
+    overlay.onclick = () => window.closeBalanceViewer();
+
+    // Panel - RIGHT SIDE (magnet to audit drawer)
+    const panel = document.createElement('div');
+    panel.id = 'balance-viewer-panel';
+    panel.style.cssText = 'position:fixed;top:0;right:0;width:50%;max-width:700px;height:100vh;background:white;box-shadow:-4px 0 12px rgba(0,0,0,0.1);z-index:999;display:flex;flex-direction:column;';
 
     // Header
     const header = document.createElement('div');
-    header.style.marginBottom = '20px';
-    const title = document.createElement('h2');
-    title.textContent = `Statement Source - ${type === 'opening' ? 'Opening' : 'Closing'} Balance`;
-    title.style.cssText = 'margin: 0; font-size: 18px; font-weight: 700; color: #1e293b; padding-right: 40px;';
-    header.appendChild(title);
-
-    // Close button
-    const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '&times;';
-    closeBtn.style.cssText = 'background: none; border: none; font-size: 32px; color: #94a3b8; cursor: pointer; padding: 0; line-height: 1; position: absolute; top: 20px; right: 24px;';
-    closeBtn.onclick = () => {
-      if (window.unmountPDFSnippet) {
-        window.unmountPDFSnippet('pdf-snippet-container');
-      }
-      modal.remove();
-    };
-
-    // Account info
-    const info = document.createElement('div');
-    info.style.cssText = 'background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;';
-    info.innerHTML = `
-      <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Account: <strong>${acc.ref || acc.name || 'Unknown'}</strong></div>
-      <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Bank: <strong>${acc.bankName || 'N/A'}</strong></div>
-      <div style="font-size: 16px; color: #1e293b; margin-top: 12px;">Amount: <strong>$${balanceValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
+    header.style.cssText = 'padding:16px 20px;background:#1e293b;color:white;display:flex;justify-content:space-between;align-items:center;';
+    header.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;">
+        <i class="ph ph-file-pdf" style="font-size:20px;"></i>
+        <span style="font-size:14px;font-weight:600;">${acc?.ref || accountId} - ${balanceType} Balance</span>
+      </div>
+      <button onclick="window.closeBalanceViewer()" style="border:none;background:rgba(255,255,255,0.1);color:white;width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:20px;">×</button>
     `;
 
-    // PDF snippet container
+    // PDF container
     const pdfContainer = document.createElement('div');
-    pdfContainer.id = 'pdf-snippet-container';
-    pdfContainer.style.cssText = 'margin-top: 16px;';
+    pdfContainer.id = 'balance-pdf-container';
+    pdfContainer.style.cssText = 'flex:1;overflow:auto;background:#f1f5f9;padding:20px;';
 
-    // Assemble modal
-    content.appendChild(closeBtn);
-    content.appendChild(header);
-    content.appendChild(info);
-    content.appendChild(pdfContainer);
-    modal.appendChild(content);
-    document.body.appendChild(modal);
+    panel.appendChild(header);
+    panel.appendChild(pdfContainer);
+    document.body.appendChild(overlay);
+    document.body.appendChild(panel);
 
-    // Close on overlay click
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        if (window.unmountPDFSnippet) {
-          window.unmountPDFSnippet('pdf-snippet-container');
-        }
-        modal.remove();
-      }
-    });
+    // Mount DocumentViewer
+    if (window.mountDocumentViewer) {
+      window.mountDocumentViewer('balance-pdf-container', {
+        type: 'pdf',
+        url: recon.pdf_url,
+        name: `${balanceType} Balance`,
+        page: page
+      });
+    }
+  };
 
-    // Mount PDF snippet if URL available
-    if (acc.pdfUrl && window.mountPDFSnippet) {
-      // Use actual coordinates from parser if available, otherwise fallback to estimated positions
-      let linePosition;
-
-      if (type === 'opening' && acc.openingBalanceCoords) {
-        linePosition = acc.openingBalanceCoords;
-        console.log(`[RECON] Using actual opening balance coordinates:`, linePosition);
-      } else if (type === 'closing' && acc.closingBalanceCoords) {
-        linePosition = acc.closingBalanceCoords;
-        console.log(`[RECON] Using actual closing balance coordinates:`, linePosition);
-      } else {
-        // Fallback to estimated positions
-        linePosition = {
-          top: type === 'opening' ? 700 : 650,
-          left: 50,
-          width: 500,
-          height: 50
-        };
-        console.log(`[RECON] Using estimated coordinates (parser didn't provide exact coords):`, linePosition);
-      }
-
-      // Small delay to ensure container is in DOM
-      setTimeout(() => {
-        window.mountPDFSnippet('pdf-snippet-container', acc.pdfUrl, linePosition.page || 1, linePosition);
-      }, 100);
-    } else {
-      // Show placeholder if no PDF
-      pdfContainer.innerHTML = `
-        <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fde047;">
-          <div style="font-size: 13px; color: #92400e; font-weight: 600; margin-bottom: 4px;">📄 No PDF Available</div>
-          <div style="font-size: 12px; color: #92400e;">Upload a statement to see the PDF source preview.</div>
-        </div>
-      `;
+  // Close balance viewer
+  window.closeBalanceViewer = function () {
+    const overlay = document.getElementById('balance-viewer-overlay');
+    const panel = document.getElementById('balance-viewer-panel');
+    if (overlay) overlay.remove();
+    if (panel) panel.remove();
+    if (window.unmountDocumentViewer) {
+      window.unmountDocumentViewer('balance-pdf-container');
     }
   };
 
