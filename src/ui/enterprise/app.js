@@ -2124,7 +2124,7 @@
         return `
           <div class="breadcrumb-item ${isLast ? 'active' : ''}" 
                style="cursor: ${isLast ? 'default' : 'pointer'};"
-               onclick="${isLast ? '' : `window.UI_STATE.currentRoute='${route}'; window.render();`}">
+               onclick="${isLast ? '' : `window.navigateTo('${route}');`}">
             ${isHome ? '<i class="ph ph-house breadcrumb-icon" style="margin-right: 6px; font-size: 14px; color: #3b82f6;"></i>' : ''}
             <span class="breadcrumb-label" style="${!isLast ? 'color: #3b82f6; font-weight: 500;' : ''}">${bc.label}</span>
           </div>
