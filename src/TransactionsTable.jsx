@@ -86,8 +86,8 @@ const CASEWARE_THEMES = {
         hoverBg: '#fce7f3',
         headerBg: '#f3f4f6',
         headerColor: '#374151',
-        rowBg: '#fef3c7',      // Light yellow/cream
-        rowBgAlt: '#dbeafe'    // Light blue
+        // Rainbow: cycle through multiple colors instead of just 2
+        rowColors: ['#fee2e2', '#fed7aa', '#fef3c7', '#d9f99d', '#bfdbfe', '#ddd6fe', '#fce7f3']  // Red, Orange, Yellow, Green, Blue, Purple, Pink
     },
     'social': {
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
