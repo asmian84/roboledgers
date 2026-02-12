@@ -1196,8 +1196,39 @@
       console.log(`[INIT] Theme restored: ${savedTheme}`);
     }
 
-    window.updateWorkspace();
+    render();
   }
+
+  // Navigation function for routing between pages  
+  window.navigateTo = function (route) {
+    console.log(`[NAVIGATE] → ${route}`);
+
+    UI_STATE.currentRoute = route;
+
+    // Update breadcrumbs
+    if (route === 'home') {
+      UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
+    } else if (route === 'import') {
+      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
+    } else if (route === 'coa') {
+      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
+    } else {
+      const label = route.charAt(0).toUpperCase() + route.slice(1);
+      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
+    }
+
+    //Update sidebar
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.route === route);
+    });
+
+    // Render
+    if (route === 'home') {
+      window.updateWorkspace(); // Enhanced homepage
+    } else {
+      render(); // Standard page rendering
+    }
+  };
 
   function setupNav() {
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -1223,24 +1254,8 @@
           return;
         }
 
-        UI_STATE.currentRoute = route;
-        if (route === 'home') {
-          UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
-        } else if (route === 'import') {
-          UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
-        } else if (route === 'coa') {
-          UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
-        } else {
-          const label = route.charAt(0).toUpperCase() + route.slice(1);
-          UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
-        }
-
-        // Update sidebar active state
-        document.querySelectorAll('.nav-item').forEach(item => {
-          item.classList.toggle('active', item.dataset.route === route);
-        });
-
-        window.updateWorkspace();
+        // Use the navigation function
+        window.navigateTo(route);
       };
     });
   }
