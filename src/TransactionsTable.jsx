@@ -231,7 +231,7 @@ const GRID_TOKENS_BASE = {
 
     // Row Dimensions
     rowHeight: 56, // Comfortable density (px)
-    rowPaddingX: '16px',
+    rowPaddingX: '4px',
 
     // Colors
     debitColor: '#111827',
@@ -542,8 +542,7 @@ const columns = [
                         fontWeight: GRID_TOKENS.cellFontWeight,
                         color: GRID_TOKENS.cellColor,
                         fontVariantNumeric: 'tabular-nums',
-                        whiteSpace: 'nowrap',
-                        paddingRight: '6px'
+                        whiteSpace: 'nowrap'
                     }}
                 >
                     {`${prefix}-${counter}`}
@@ -565,8 +564,7 @@ const columns = [
                     fontWeight: GRID_TOKENS.cellFontWeight,
                     color: GRID_TOKENS.cellColor,
                     fontVariantNumeric: 'tabular-nums',
-                    whiteSpace: 'nowrap',
-                    paddingRight: '6px'
+                    whiteSpace: 'nowrap'
                 }}
             >
                 {info.getValue()}
@@ -648,9 +646,9 @@ const columns = [
     //7. Account (COA Dropdown)
     columnHelper.accessor('category', {
         header: 'ACCOUNT',
-        size: 140,
-        minSize: 130,
-        maxSize: 180,
+        size: 160,
+        minSize: 150,
+        maxSize: 200,
         cell: ({ row }) => {
             const handleUpdateCategory = (code) => {
                 const txId = row.original.tx_id;
@@ -667,13 +665,11 @@ const columns = [
             };
 
             return (
-                <div style={{ paddingRight: '6px' }}>
-                    <COADropdown
-                        value={row.original.category || ''}
-                        onChange={handleUpdateCategory}
-                        txId={row.original.tx_id}
-                    />
-                </div>
+                <COADropdown
+                    value={row.original.category || ''}
+                    onChange={handleUpdateCategory}
+                    txId={row.original.tx_id}
+                />
             );
         }
     }),
