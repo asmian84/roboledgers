@@ -1506,18 +1506,14 @@
   window.applyGridSettings = function () {
     console.log('[GRID] Applying theme:', UI_STATE.gridTheme, 'Font size:', UI_STATE.gridFontSize);
 
-    // Force grid to re-render with new theme settings
-    // Use mountTransactionsTable (the current React bridge) instead of old renderTransactionsGrid
-    if (window.mountTransactionsTable) {
+    // Force grid to re-render with new GRID_TOKENS
+    if (window.renderTransactionsGrid) {
       const txns = window.RoboLedger ? window.RoboLedger.Ledger.getAll() : [];
       const filtered = UI_STATE.selectedAccount === 'ALL'
         ? txns
         : txns.filter(t => t.account_id === UI_STATE.selectedAccount);
 
-      window.mountTransactionsTable(filtered, UI_STATE.searchQuery);
-      console.log('[GRID] Theme applied and grid re-rendered');
-    } else {
-      console.warn('[GRID] mountTransactionsTable not available');
+      window.renderTransactionsGrid(filtered, UI_STATE.searchQuery);
     }
   };
 

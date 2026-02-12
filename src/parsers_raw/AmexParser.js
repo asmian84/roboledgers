@@ -81,15 +81,10 @@ AMEX FORMAT:
             console.log(`[AMEX] Extracted opening balance: ${openingBalance}`);
 
             // Find exact coordinates from lineMetadata
-            // Look for line with BOTH "Previous Balance" AND a dollar amount (more specific)
             if (lineMetadata && lineMetadata.length > 0) {
-                const balanceLine = lineMetadata.find(line => {
-                    if (!line.text) return false;
-                    const text = line.text.toLowerCase();
-                    // Must contain "previous balance" AND a number pattern
-                    return text.includes('previous balance') && /[\d,]+\.\d{2}/.test(line.text);
-                });
-
+                const balanceLine = lineMetadata.find(line =>
+                    line.text && line.text.toLowerCase().includes('previous balance')
+                );
                 if (balanceLine) {
                     openingBalanceCoords = {
                         page: balanceLine.page || 1,
@@ -98,8 +93,6 @@ AMEX FORMAT:
                         width: 500  // Approx width to show full balance line
                     };
                     console.log(`[AMEX] Found opening balance coords:`, openingBalanceCoords);
-                } else {
-                    console.warn(`[AMEX] Could not find "Previous Balance" line with amount in lineMetadata`);
                 }
             }
         }
@@ -114,16 +107,13 @@ AMEX FORMAT:
             console.log(`[AMEX] Extracted closing balance: ${closingBalance}`);
 
             // Find exact coordinates from lineMetadata
-            // Look for line with BOTH "New Balance" AND a dollar amount
             if (lineMetadata && lineMetadata.length > 0) {
-                const balanceLine = lineMetadata.find(line => {
-                    if (!line.text) return false;
-                    const text = line.text.toLowerCase();
-                    // Must contain "new balance" or "closing balance" AND a number pattern
-                    return (text.includes('new balance') || text.includes('closing balance')) &&
-                        /[\d,]+\.\d{2}/.test(line.text);
-                });
-
+                const balanceLine = lineMetadata.find(line =>
+                    line.text && (
+                        line.text.toLowerCase().includes('new balance') ||
+                        line.text.toLowerCase().includes('closing balance')
+                    )
+                );
                 if (balanceLine) {
                     closingBalanceCoords = {
                         page: balanceLine.page || 1,
@@ -132,8 +122,6 @@ AMEX FORMAT:
                         width: 500
                     };
                     console.log(`[AMEX] Found closing balance coords:`, closingBalanceCoords);
-                } else {
-                    console.warn(`[AMEX] Could not find "New Balance" line with amount in lineMetadata`);
                 }
             }
         }
