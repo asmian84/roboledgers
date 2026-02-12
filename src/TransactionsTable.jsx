@@ -560,6 +560,27 @@ export function TransactionsTable({ data: initialData, globalFilter: initialGlob
 
         // EXPERIMENTAL: Expose audit sidebar function
         window.openAuditSidebar = (row) => {
+            // Smart scroll logic: Only scroll if reconciliation/metadata bars would obscure view
+            const gridContainer = parentRef.current;
+            if (gridContainer) {
+                const scrollTop = gridContainer.scrollTop;
+
+                // Height of reconciliation bar + metadata area (approximate)
+                const topBarHeight = 280; // Adjust if needed based on your UI
+
+                // Only scroll down if:
+                // 1. We're near the top (scrollTop < topBarHeight)
+                // 2. AND this would help reveal the transaction row
+                if (scrollTop < topBarHeight) {
+                    // Scroll just enough to hide the top bars
+                    gridContainer.scrollTo({
+                        top: topBarHeight,
+                        behavior: 'smooth'
+                    });
+                }
+                // Otherwise, don't scroll - the transaction is already visible
+            }
+
             setSelectedAuditTransaction(row);
             setAuditSidebarOpen(true);
         };
