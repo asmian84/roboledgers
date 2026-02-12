@@ -1456,73 +1456,86 @@ window.RoboLedger = (function () {
 
             let clean = text;
 
-            // Phase 1: RECURSIVE PREFIX STRIP (Action/Verb Layer)
-            const prefixes = [
-                /^e-Transfer\s*(?:sent|received|to|from|autodeposit)?\s*/gi,
+            // ═══════════════════════════════════════════════════════════
+            // DESCRIPTION CLEANING RULEBOOK v1.0
+            // Based on 905 user manual corrections (2026-02-11)
+            // ═══════════════════════════════════════════════════════════
+
+            // RULE 1: Remove date prefixes (Month DD, )
+            // Examples: "June 5, NAME" → "NAME"
+            clean = clean.replace(/^[A-Z][a-z]+\s+\d+,\s+/, '');
+
+            // RULE 2: Remove reference number prefixes (NNNN, )
+            // Examples: "0578, Online Banking" → "Online Banking"
+            clean = clean.replace(/^\d{4,},\s+/, '');
+
+            // RULE 3: Remove leading commas and spaces
+            // Examples: ",   NAME" → "NAME"
+            clean = clean.replace(/^,\s*/, '');
+
+            // RULE 4: Normalize E-Transfer labels
+            // Ensure consistent format: ", E-Transfer - Autodeposit"
+            if (clean.includes('Autodeposit') && !clean.includes('E-Transfer')) {
+                clean = clean.replace(/\s*-?\s*Autodeposit/, ', E-Transfer - Autodeposit');
+            }
+
+            // RULE 5: Normalize transaction type labels
+            // Inter-Fi → Inter-FI
+            clean = clean.replace(/Inter-Fi\s/i, 'Inter-FI ');
+
+            // Swap transaction type and merchant for certain patterns
+            // "Automobile Rent TOYOTA" → "TOYOTA,Automobile Rent"
+            clean = clean.replace(/(Automobile Rent)\s+([A-Z\s]+)/i, (match, type, provider) => {
+                return provider.toUpperCase().trim() + ',' + type;
+            });
+
+            // "Funds transfer PROVIDER" → "PROVIDER,Funds transfer"
+            clean = clean.replace(/(Funds [Tt]ransfer)\s+([A-Z\s]+)/i, (match, type, provider) => {
+                return provider.toUpperCase().trim() + ',Funds transfer';
+            });
+
+            // RULE 6: Remove trailing account/reference numbers
+            // "Online Transfer to Deposit Account-8212" → "...Account-"
+            clean = clean.replace(/-\d{4,}$/, '-');
+            clean = clean.replace(/\s+\d{4,}$/, '');
+
+            // RULE 7: Collapse multiple spaces
+            clean = clean.replace(/\s{2,}/g, ' ');
+
+            // RULE 8: Trim whitespace
+            clean = clean.trim();
+
+            // ═══════════════════════════════════════════════════════════
+            // LEGACY CLEANING (Keep for backward compatibility)
+            // ═══════════════════════════════════════════════════════════
+
+            // Remove remaining technical noise
+            clean = clean
+                .replace(/\b(?=\w*\d)(?=\w*[a-z])[a-z0-9]{8,15}\b/gi, '') // Hash detection
+                .replace(/\b[0-9]{10,20}\b/g, '')    // Long numeric sequences
+                .replace(/continued\s*Date\s*Desc/gi, '');
+
+            // Remove generic payment prefixes if they're standalone
+            const genericPrefixes = [
+                /^e-Transfer\s*(?:sent|received|to|from)?\s*/gi,
                 /^Online\s*Banking\s*transfer\s*-?\s*\d*/gi,
                 /^Interac\s*e-Transfer\s*/gi,
-                /^-?\s*Autodeposit\s*/gi,
-                /^-?\s*Deposit\s+-\s*/gi,
                 /^Pay\s+Employee-Vendor\s*/gi,
                 /^Mobile\s+cheque\s+deposit\s*/gi,
                 /^Direct\s+Deposits\s*\(PDS\)\s*service\s*total/gi,
                 /^Misc\s*Payment\s*PAY-FILE\s*FEES/gi,
-                /^Misc\s*Payment/gi,
                 /^BR\s*TO\s*BR\s*-?\s*/gi,
-                /^Vortex\s*Strip/gi,
                 /^-+\s*/g
             ];
 
-            prefixes.forEach(p => clean = clean.replace(p, ''));
+            genericPrefixes.forEach(p => clean = clean.replace(p, ''));
 
-            // Phase 2: TECHNICAL TRASH STRIP (Hash/ID Layer)
-            // Only remove strings that look like actual hashes (have BOTH letters and numbers)
-            clean = clean
-                .replace(/\b(?=\w*\d)(?=\w*[a-z])[a-z0-9]{8,15}\b/gi, '') // Smart hash detection
-                .replace(/\b[0-9]{10,20}\b/g, '')    // Long numeric sequences
-                .replace(/continued\s*Date\s*Desc/gi, '');
+            // Final cleanup
+            clean = clean.trim().replace(/\s+/g, ' ');
 
-            // Phase 3: LOCATION & METADATA STRIP (keep intact names)
-            // Only strip trailing location/metadata, not split the core name
-            clean = clean
-                .replace(/,\s*[A-Z]{2,}\s*$/gi, '') // Strip trailing province codes
-                .replace(/#\d+$/g, '');              // Strip trailing store numbers
+            if (!clean || clean.length < 2) return "Miscellaneous";
 
-            // Phase 4: FLUFF & BANK NOISE
-            clean = clean
-                .replace(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{1,2}.*$/gi, '')
-                .replace(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/g, '')
-                .replace(/\b\d{4,8}\b/g, '')
-                .replace(/store\s*#?\d+/gi, '')
-                .replace(/^0?EBIT\s*CARD\s*(PURCHASE|PUR)/i, '')
-                .replace(/^(visa|mastercard|amex)\s*(debit|credit)?/i, '')
-                .replace(/^(pos|point\s*of\s*sale)/i, '')
-                .replace(/\s+(CALGARY|TORONTO|VANCOUVER|AB|BC|ON)\b.*$/i, '')
-                .replace(/\s+(INC|LTD|CORP|CO)\.?$/i, '');
-
-            // Phase 5: CANONICAL MERGE
-            let final = clean.trim().replace(/\s+/g, ' ');
-            if (!final || final.length < 2) return "Miscellaneous";
-
-            // Master Brand Force
-            const MASTERS = [
-                'UBER', 'STARBUCKS', 'TIM HORTONS', 'AMAZON', 'WALMART',
-                'SHELL', 'PETRO CANADA', 'ESSO', 'CHEVRON',
-                'SAFEWAY', 'COSTCO', 'BEST BUY', 'APPLE',
-                'GOOGLE', 'MICROSOFT', 'ADOBE', 'AWS',
-                'DOORDASH', 'SKIP THE DISHES', 'NETFLIX', 'SPOTIFY'
-            ];
-
-            // Master Brand Force (Disabled - too aggressive for Payee names)
-            // Only return the brand if the whole string IS just the brand
-            const upper = final.toUpperCase();
-            for (const m of MASTERS) {
-                if (upper === m) {
-                    return m;
-                }
-            }
-
-            return final;
+            return clean;
         }
     };
 
