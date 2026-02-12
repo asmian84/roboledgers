@@ -697,20 +697,62 @@
         const pageNo = (tx.source_locator && tx.source_locator.page) ? tx.source_locator.page : 1;
         const pdfPage = await pdf.getPage(pageNo);
 
-        const viewport = pdfPage.getViewport({ scale: 1.5 });
-        contentArea.innerHTML = `<canvas id="v5-stmt-canvas" style="width:100%; height:100%;"></canvas>`;
-        const canvas = document.getElementById('v5-stmt-canvas');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        const ctx = canvas.getContext('2d');
+        // Default scale: 1.0 to fit width naturally
+        let currentScale = 1.0;
 
-        await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+        const renderPage = async (scale) => {
+          const viewport = pdfPage.getViewport({ scale });
+          contentArea.innerHTML = `
+            <div style="display: flex; flex-direction: column; height: 100%;">
+              <div style="flex: 1; overflow: auto; background: #f8fafc; display: flex; justify-content: center; align-items: flex-start; padding: 20px;">
+                <canvas id="v5-stmt-canvas" style="box-shadow: 0 2px 8px rgba(0,0,0,0.1); background: white;"></canvas>
+              </div>
+              <div style="padding: 16px; background: white; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; gap: 12px;">
+                <button onclick="window.zoomPDF('out')" style="padding: 8px 16px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; color: #475569; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                  <i class="ph-bold ph-minus" style="font-size: 16px;"></i> Zoom Out
+                </button>
+                <span style="font-size: 14px; color: #64748b; min-width: 60px; text-align: center; font-weight: 600;" id="zoom-level">${Math.round(scale * 100)}%</span>
+                <button onclick="window.zoomPDF('in')" style="padding: 8px 16px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; color: #475569; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                  <i class="ph-bold ph-plus" style="font-size: 16px;"></i> Zoom In
+                </button>
+                <button onclick="window.zoomPDF('reset')" style="padding: 8px 16px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; color: #475569;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                  Reset
+                </button>
+              </div>
+            </div>
+          `;
 
-        if (tx.source_locator && tx.source_locator.y_coord) {
-          const screenY = viewport.height - tx.source_locator.y_coord;
-          ctx.fillStyle = 'rgba(255,230,0,0.35)';
-          ctx.fillRect(0, screenY - 12, canvas.width, 28);
-        }
+          const canvas = document.getElementById('v5-stmt-canvas');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          const ctx = canvas.getContext('2d');
+
+          await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+
+          // Highlight the transaction location
+          if (tx.source_locator && tx.source_locator.y_coord) {
+            // Use the y_coord directly without inverting (PDF coordinates start from bottom)
+            const highlightY = tx.source_locator.y_coord * scale;
+            ctx.fillStyle = 'rgba(255,230,0,0.4)';
+            ctx.fillRect(0, highlightY - 15, canvas.width, 30);
+          }
+        };
+
+        // Initial render
+        await renderPage(currentScale);
+
+        // Zoom controls
+        window.zoomPDF = async (direction) => {
+          if (direction === 'in') {
+            currentScale = Math.min(currentScale + 0.25, 3.0);
+          } else if (direction === 'out') {
+            currentScale = Math.max(currentScale - 0.25, 0.5);
+          } else if (direction === 'reset') {
+            currentScale = 1.0;
+          }
+          await renderPage(currentScale);
+          document.getElementById('zoom-level').innerText = `${Math.round(currentScale * 100)}%`;
+        };
 
       } catch (err) {
         console.error('[VIEWER] Failed to render PDF page', err);
