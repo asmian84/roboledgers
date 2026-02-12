@@ -14,6 +14,22 @@ export function DocumentViewer({ document, onBack }) {
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Render PDF page when doc or page changes
+    useEffect(() => {
+        if (pdfDoc && currentPage) {
+            renderPdfPage(pdfDoc, currentPage);
+        }
+
+        // Cleanup when page changes
+        return () => {
+            if (renderTaskRef.current) {
+                console.log('[DOC VIEWER] Cleaning up render task on page change');
+                renderTaskRef.current.cancel();
+                renderTaskRef.current = null;
+            }
+        };
+    }, [pdfDoc, currentPage]);
+
     // Load and render document
     useEffect(() => {
         if (!document || !document.url) {

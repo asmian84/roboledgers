@@ -1301,13 +1301,18 @@
     console.log(`[BALANCE VIEW] Computed style - right:`, window.getComputedStyle(panel).right);
     console.log(`[BALANCE VIEW] Computed style - position:`, window.getComputedStyle(panel).position);
 
-    // Mount DocumentViewer
+    // Get balance coordinates from account
+    const highlightCoords = type === 'opening' ? acc?.openingBalanceCoords : acc?.closingBalanceCoords;
+    console.log(`[BALANCE VIEW] Highlight coords for ${balanceType}:`, highlightCoords);
+
+    // Mount DocumentViewer with highlight coordinates
     if (window.mountDocumentViewer) {
       window.mountDocumentViewer('balance-pdf-container', {
         type: 'pdf',
         url: recon.pdf_url,
         name: `${balanceType} Balance`,
-        page: page
+        page: page,
+        highlightLine: highlightCoords // Pass the exact coordinates from parser
       });
     }
   };
