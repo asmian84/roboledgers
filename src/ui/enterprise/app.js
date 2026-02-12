@@ -2823,7 +2823,7 @@
           '\u003cdiv style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;"\u003e' +
           '\u003cdiv style="flex: 1; display: flex; align-items: center; gap: 8px; white-space: nowrap;"\u003eOpening: ' +
           '\u003cinput type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /\u003e' +
-          '\u003cbutton onclick="window.showStatementSource(\'opening\')" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #3b82f6; font-size: 9px; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;" title="View statement source"\u003e\u003cspan style="font-size: 11px;"\u003e📎\u003c/span\u003e Source\u003c/button\u003e' +
+          ' \u003cspan onclick="window.showStatementSource(\'opening\')" style="cursor: pointer; color: #3b82f6; font-size: 11px; margin-left: 4px;" title="View statement source"\u003e🔗\u003c/span\u003e' +
           '\u003c/div\u003e' +
           '\u003cdiv style="flex: 1; white-space: nowrap;"\u003eDebit: \u003cspan style="font-weight: 700; color: #ef4444;"\u003e$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '\u003c/span\u003e\u003c/div\u003e' +
           '\u003c/div\u003e' +
@@ -2838,7 +2838,7 @@
           '\u003cdiv style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;"\u003e' +
           '\u003cdiv style="flex: 1; display: flex; align-items: center; gap: 8px; white-space: nowrap;"\u003eEnding (Stmt): ' +
           '\u003cinput type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /\u003e' +
-          '\u003cbutton onclick="window.showStatementSource(\'closing\')" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #3b82f6; font-size: 9px; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;" title="View statement source"\u003e\u003cspan style="font-size: 11px;"\u003e📎\u003c/span\u003e Source\u003c/button\u003e' +
+          ' \u003cspan onclick="window.showStatementSource(\'closing\')" style="cursor: pointer; color: #3b82f6; font-size: 11px; margin-left: 4px;" title="View statement source"\u003e🔗\u003c/span\u003e' +
           '\u003c/div\u003e' +
           '\u003cdiv style="flex: 1;"\u003e\u003c/div\u003e' + // Empty cell for alignment
           '</div>' +
