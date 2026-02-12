@@ -18,6 +18,7 @@ import { PDFSnippet } from './PDFSnippet';
 
 export function AuditSidebar({ isOpen, onClose, transaction }) {
     const [showDocViewer, setShowDocViewer] = useState(false);
+    const [showLeftPanel, setShowLeftPanel] = useState(false); // NEW: Left slide-out panel
     const [viewerDocument, setViewerDocument] = useState(null); // {type, url, name}
     const [receipts, setReceipts] = useState([]);
     const sidebarRef = React.useRef(null);
@@ -69,7 +70,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
             page: transaction.source_pdf.page || 1,
             highlightLine: transaction.source_pdf.line_position || null
         });
-        setShowDocViewer(true);
+        setShowLeftPanel(true); // Open left panel instead of inline viewer
     };
 
     const handleViewReceipt = (receipt) => {
@@ -97,6 +98,86 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
 
     return (
         <>
+            {/* Left Slide-Out Panel for Full PDF View */}
+            {showLeftPanel && (
+                <>
+                    {/* Left Panel Overlay */}
+                    <div
+                        onClick={() => setShowLeftPanel(false)}
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'rgba(0, 0, 0, 0.5)',
+                            zIndex: 1001,
+                            transition: 'opacity 0.3s ease'
+                        }}
+                    />
+
+                    {/* Left Panel - Full PDF Viewer */}
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '70%',
+                        maxWidth: '900px',
+                        height: '100vh',
+                        background: 'white',
+                        boxShadow: '4px 0 12px rgba(0, 0, 0, 0.1)',
+                        zIndex: 1002,
+                        transform: showLeftPanel ? 'translateX(0)' : 'translateX(-100%)',
+                        transition: 'transform 0.3s ease',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }}>
+                        {/* Left Panel Header */}
+                        <div style={{
+                            padding: '16px 20px',
+                            background: '#1e293b',
+                            color: 'white',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <i className="ph ph-file-pdf" style={{ fontSize: '20px' }}></i>
+                                <span style={{ fontSize: '14px', fontWeight: 600 }}>
+                                    {viewerDocument?.name || 'Source Document'}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => setShowLeftPanel(false)}
+                                style={{
+                                    border: 'none',
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    color: 'white',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '20px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {/* PDF Viewer Content */}
+                        <div style={{ flex: 1, overflow: 'auto', background: '#f1f5f9' }}>
+                            <DocumentViewer
+                                document={viewerDocument}
+                                onClose={() => setShowLeftPanel(false)}
+                            />
+                        </div>
+                    </div>
+                </>
+            )}
+
             {/* Overlay - dims the main content */}
             <div
                 className={`audit-sidebar-overlay ${isOpen ? 'open' : ''}`}

@@ -125,13 +125,27 @@ export function PDFSnippet({ pdfUrl, page, linePosition }) {
     }
 
     return (
-        <div style={{
-            border: '1px solid #e2e8f0',
-            borderRadius: '6px',
-            overflow: 'hidden',
-            background: '#f8fafc',
-            position: 'relative'
-        }}>
+        <div
+            style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                background: '#f8fafc',
+                position: 'relative',
+                cursor: 'zoom-in'
+            }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.5)';
+                e.currentTarget.style.transition = 'transform 0.2s ease';
+                e.currentTarget.style.zIndex = '100';
+                e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.2)';
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.zIndex = '1';
+                e.currentTarget.style.boxShadow = 'none';
+            }}
+        >
             {isLoading && (
                 <div style={{
                     position: 'absolute',
