@@ -682,8 +682,8 @@ const columns = [
     columnHelper.display({
         id: 'balance',
         header: 'BALANCE',
-        size: 95,
-        minSize: 85,
+        size: 80,  // Reduced to minimize right-side space
+        minSize: 75,
         maxSize: 110,
         cell: info => {
             // Get the sorted rows to calculate running balance
@@ -932,7 +932,7 @@ export function TransactionsTable({
                             flexShrink: 0,
                             height: GRID_TOKENS.headerHeight,
                             // Custom padding per column (match cell padding)
-                            padding: header.id === 'select' ? '0 4px 0 0' :    // Checkbox: zero left, flush with edge
+                            padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (away from wall)
                                 header.id === 'balance' ? '0 0 0 4px' :   // Balance: zero right padding
                                     `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
                             fontSize: GRID_TOKENS.headerFontSize,
@@ -1013,7 +1013,7 @@ export function TransactionsTable({
                                                 minWidth: cell.column.id === 'description' ? '250px' : undefined,
                                                 flexShrink: 0,
                                                 // Custom padding per column
-                                                padding: cell.column.id === 'select' ? '0 4px 0 0' :    // Checkbox: zero left, flush
+                                                padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (away from wall)
                                                     cell.column.id === 'balance' ? '0 0 0 4px' :   // Balance: zero right padding
                                                         `0 ${GRID_TOKENS.rowPaddingX}`,                  // Others: default
                                                 borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
