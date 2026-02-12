@@ -1236,10 +1236,35 @@ window.RoboLedger = (function () {
                     };
                 });
 
+
                 // ===== INTELLIGENT ACCOUNT ID GENERATION =====
                 if (originalAccountId === 'ALL' || !originalAccountId) {
                     account_id = this.generateAccountId(metadata);
                     console.log(`[INGEST] Generated account_id: ${account_id} from metadata`);
+                }
+
+                // Update or create account metadata
+                Accounts.updateMetadata(account_id, metadata);
+
+                // STORE BALANCE COORDINATES if parser extracted them
+                const account = Accounts.get(account_id);
+                if (account) {
+                    if (parseResult?.openingBalanceCoords) {
+                        account.openingBalanceCoords = parseResult.openingBalanceCoords;
+                        console.log('[INGEST] ✅ Stored opening balance coords:', account.openingBalanceCoords);
+                    }
+                    if (parseResult?.closingBalanceCoords) {
+                        account.closingBalanceCoords = parseResult.closingBalanceCoords;
+                        console.log('[INGEST] ✅ Stored closing balance coords:', account.closingBalanceCoords);
+                    }
+                    // Save to localStorage
+                    save();
+                }
+
+                // RECONCILIATION SOURCE LINKS: Store PDF URL and balances
+                const existingAccount = state.accounts.find(a => a.id === account_id);
+                if (existingAccount && pdfBlobUrl) {
+                    existingAccount.pdfUrl = pdfBlobUrl;
                     existingAccount.pdfFilename = file.name;
                     console.log(`[RECON] Stored PDF URL for ${account_id}:`, pdfBlobUrl);
                 }
