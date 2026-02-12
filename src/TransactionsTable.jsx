@@ -278,9 +278,13 @@ let GRID_TOKENS = getActiveGridTokens();
 // Called from TransactionsTable component when props change
 window.recalculateGridTokens = function () {
     GRID_TOKENS = getActiveGridTokens();
+    window.GRID_TOKENS = GRID_TOKENS; // Expose for debugging
     console.log('[GRID_TOKENS] Recalculated for theme:', window.UI_STATE?.gridTheme);
     return GRID_TOKENS;
 };
+
+// Expose initial tokens
+window.GRID_TOKENS = GRID_TOKENS;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SUB-COMPONENTS
