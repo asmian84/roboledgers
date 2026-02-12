@@ -1942,6 +1942,32 @@
 
       return `
             <div class="setting-group">
+                <div class="setting-group-title">Tax Settings</div>
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Configure regional tax rates</div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">PROVINCE</label>
+                    <select id="settings-province" class="v5-select">
+                        <option value="ON" ${UI_STATE.province === 'ON' ? 'selected' : ''}>Ontario (13% HST)</option>
+                        <option value="BC" ${UI_STATE.province === 'BC' ? 'selected' : ''}>British Columbia (5% GST + 7% PST)</option>
+                        <option value="AB" ${UI_STATE.province === 'AB' ? 'selected' : ''}>Alberta (5% GST)</option>
+                        <option value="QC" ${UI_STATE.province === 'QC' ? 'selected' : ''}>Quebec (5% GST + 9.975% QST)</option>
+                        <option value="NS" ${UI_STATE.province === 'NS' ? 'selected' : ''}>Nova Scotia (15% HST)</option>
+                        <option value="NB" ${UI_STATE.province === 'NB' ? 'selected' : ''}>New Brunswick (15% HST)</option>
+                        <option value="MB" ${UI_STATE.province === 'MB' ? 'selected' : ''}>Manitoba (5% GST + 7% PST)</option>
+                        <option value="SK" ${UI_STATE.province === 'SK' ? 'selected' : ''}>Saskatchewan (5% GST + 6% PST)</option>
+                    </select>
+                </div>
+                <div class="column-toggle">
+                    <label>Enable GST/HST Extraction</label>
+                    <label class="switch">
+                        <input type="checkbox" id="settings-gst-enabled" ${UI_STATE.gstEnabled ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Automatically calculate tax based on regional rates</div>
+            </div>
+            
+            <div class="setting-group">
                 <div class="setting-group-title">Export Data</div>
                 <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Export your transactions and accounts</div>
                 <div style="padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
