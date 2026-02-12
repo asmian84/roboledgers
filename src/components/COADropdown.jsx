@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
  * COA Dropdown - Searchable, categorized Chart of Accounts selector
  * Groups accounts by: Assets, Liabilities, Equity, Revenue, Expenses
  */
-export function COADropdown({ value, onChange, txId, txDescription }) {
+export function COADropdown({ value, onChange, txId }) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [buttonRect, setButtonRect] = useState(null);
@@ -27,11 +27,9 @@ export function COADropdown({ value, onChange, txId, txDescription }) {
 
     // Find current selection
     const currentAccount = allAccounts.find(acc => acc.code === value);
-
-    // Show category name if assigned, otherwise show transaction description/merchant
     const displayValue = currentAccount
-        ? currentAccount.name  // Show category name (e.g., "Bank - chequing")
-        : (txDescription || 'Select Category');  // Show merchant/description as fallback
+        ? currentAccount.name  // Show only name (e.g., "Bank - chequing")
+        : 'Uncategorized';
 
     // Category labels and order
     const CATEGORIES = [
