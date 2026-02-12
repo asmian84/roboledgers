@@ -302,7 +302,8 @@
   };
 
   window.updateProgressBar = (current, total, fileName, stage, txnCount) => {
-    const percent = Math.round((current / total) * 100);
+    // If total is 100, current is already a percentage
+    const percent = total === 100 ? current : Math.round((current / total) * 100);
 
     // Null-safe updates - prevent silent failures on first upload
     const fill = document.getElementById('progress-bar-fill');
@@ -312,22 +313,14 @@
     const txnCountEl = document.getElementById('progress-txn-count');
 
     if (fill) {
-      // Show indeterminate pulsing animation during parsing stage
-      if (stage === 'Parsing PDF...') {
-        fill.style.width = '100%';
-        fill.style.background = 'linear-gradient(90deg, #3b82f6 25%, #60a5fa 50%, #3b82f6 75%)';
-        fill.style.backgroundSize = '200% 100%';
-        fill.style.animation = 'progressPulse 1.5s ease-in-out infinite';
-      } else {
-        // Normal percentage-based progress for other stages
-        fill.style.width = `${percent}%`;
-        fill.style.background = '#3b82f6';
-        fill.style.animation = 'none';
-      }
+      // Normal percentage-based progress
+      fill.style.width = `${percent}%`;
+      fill.style.background = 'linear-gradient(90deg, #3b82f6 0%, #10b981 100%)';
+      fill.style.animation = 'none';
     }
     if (title) title.textContent = stage;
     if (subtitle) subtitle.textContent = fileName;
-    if (fileCount) fileCount.textContent = `${current} / ${total} files`;
+    if (fileCount) fileCount.textContent = total === 100 ? `${percent}%` : `${current} / ${total} files`;
     if (txnCountEl) txnCountEl.textContent = `${txnCount} transactions`;
 
     // FORCE BROWSER REPAINT: Ensure progress bar updates are visible immediately
@@ -355,25 +348,57 @@
     for (let idx = 0; idx < files.length; idx++) {
       const file = files[idx];
       try {
-        // Update progress bar to show "Parsing PDF..." with pulsing animation
+        const baseProgress = (idx / files.length) * 100;
+        const fileProgressStep = 100 / files.length;
+
+        // Stage 1: Extracting (0-40% of file progress)
         await window.updateProgressBar(
-          idx + 1,
-          files.length,
+          Math.max(1, Math.round(baseProgress + (fileProgressStep * 0.1))),
+          100,
           file.name,
-          'Parsing PDF...',
+          '📄 Extracting transactions...',
           totalImported
         );
-
-        // Give browser time to paint the pulsing animation before parsing starts
         await new Promise(resolve => setTimeout(resolve, 100));
 
+        // Stage 2: Parsing (40-70% of file progress)
+        await window.updateProgressBar(
+          Math.round(baseProgress + (fileProgressStep * 0.4)),
+          100,
+          file.name,
+          '🔍 Parsing transactions...',
+          totalImported
+        );
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Actually process the file
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
         totalImported += imported;
 
-        // Update with results
+        // Stage 3: Categorizing (70-85% of file progress)
         await window.updateProgressBar(
-          idx + 1,
-          files.length,
+          Math.round(baseProgress + (fileProgressStep * 0.7)),
+          100,
+          file.name,
+          '🏷️ Categorizing transactions...',
+          totalImported
+        );
+        await new Promise(resolve => setTimeout(resolve, 80));
+
+        // Stage 4: Cleaning (85-95% of file progress)
+        await window.updateProgressBar(
+          Math.round(baseProgress + (fileProgressStep * 0.85)),
+          100,
+          file.name,
+          '✨ Cleaning data...',
+          totalImported
+        );
+        await new Promise(resolve => setTimeout(resolve, 80));
+
+        // Stage 5: Complete (95-100% of file progress)
+        await window.updateProgressBar(
+          Math.round(baseProgress + (fileProgressStep * 0.95)),
+          100,
           file.name,
           `✅ Imported ${imported} transactions`,
           totalImported
@@ -382,9 +407,9 @@
         console.log(`[UPLOAD] ${file.name}: ${imported} transactions imported`);
       } catch (err) {
         console.error('[UPLOAD] Parse error:', file.name, err);
-        window.updateProgressBar(
-          idx + 1,
-          files.length,
+        await window.updateProgressBar(
+          Math.round(((idx + 1) / files.length) * 100),
+          100,
           file.name,
           `❌ Parse failed`,
           totalImported
@@ -393,8 +418,8 @@
       }
     }
 
-    // Final update
-    window.updateProgressBar(files.length, files.length, 'Complete!', `Imported ${totalImported} transactions`, totalImported);
+    // Final update - 100% complete
+    await window.updateProgressBar(100, 100, '🎉 All files processed!', `✅ ${totalImported} transactions imported`, totalImported);
 
 
     // Hide progress bar after brief delay, then refresh grid
