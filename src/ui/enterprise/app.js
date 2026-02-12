@@ -840,8 +840,13 @@
               
               <!-- Welcome Header -->
               <div style="margin-bottom: 32px;">
-                <h1 style="font-size: 28px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Good ${new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}</h1>
-                <p style="font-size: 15px; color: #64748b; margin: 0;">Here's what's happening with your business today</p>
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+                  <img src="./roboledger_logo.png" alt="RoboLedger" style="width: 56px; height: 56px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+                  <div>
+                    <h1 style="font-size: 28px; font-weight: 700; color: #0f172a; margin: 0 0 4px 0;">Good ${new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}</h1>
+                    <p style="font-size: 15px; color: #64748b; margin: 0;">Here's what's happening with your business today</p>
+                  </div>
+                </div>
               </div>
 
               <!-- Financial Overview Cards -->
