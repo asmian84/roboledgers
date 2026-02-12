@@ -668,65 +668,67 @@ const columns = [
                 }
             };
 
-            value = { row.original.category || '' }
-            onChange = { handleUpdateCategory }
-            txId = { row.original.tx_id }
-            txDescription = { row.original.description }
+            return (
+                <COADropdown
+                    value={row.original.category || ''}
+                    onChange={handleUpdateCategory}
+                    txId={row.original.tx_id}
+                    txDescription={row.original.description}
                 />
             );
         }
     }),
 
-// 8. Balance (DYNAMIC CALCULATION - updates based on sort order)
-columnHelper.display({
-    id: 'balance',
-    header: 'BALANCE',
-    size: 85,  // Wide enough for full balance numbers
-    minSize: 80,
-    maxSize: 100,
-    cell: info => {
-        // Get the sorted rows to calculate running balance
-        const sortedRows = info.table.getRowModel().rows;
-        const currentRowIndex = sortedRows.findIndex(r => r.id === info.row.id);
+    // 8. Balance (DYNAMIC CALCULATION - updates based on sort order)
+    columnHelper.display({
+        id: 'balance',
+        header: 'BALANCE',
+        size: 85,  // Wide enough for full balance numbers
+        minSize: 80,
+        maxSize: 100,
+        cell: info => {
+            // Get the sorted rows to calculate running balance
+            const sortedRows = info.table.getRowModel().rows;
+            const currentRowIndex = sortedRows.findIndex(r => r.id === info.row.id);
 
-        // Get opening balance and account type
-        const firstRow = sortedRows[0]?.original;
-        const account = window.RoboLedger?.Accounts?.get(firstRow?.account_id);
-        const openingBalance = account?.openingBalance || 0;
-        const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
-            account?.type === 'liability' || account?.type === 'creditcard';
+            // Get opening balance and account type
+            const firstRow = sortedRows[0]?.original;
+            const account = window.RoboLedger?.Accounts?.get(firstRow?.account_id);
+            const openingBalance = account?.openingBalance || 0;
+            const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
+                account?.type === 'liability' || account?.type === 'creditcard';
 
-        // Calculate running balance from opening balance through current row
-        let runningBalance = openingBalance;
-        for (let i = 0; i <= currentRowIndex; i++) {
-            const row = sortedRows[i].original;
-            const debit = row.debit || 0;
-            const credit = row.credit || 0;
+            // Calculate running balance from opening balance through current row
+            let runningBalance = openingBalance;
+            for (let i = 0; i <= currentRowIndex; i++) {
+                const row = sortedRows[i].original;
+                const debit = row.debit || 0;
+                const credit = row.credit || 0;
 
-            if (isLiability) {
-                // Liability: debits decrease debt (payments), credits increase debt (purchases)
-                runningBalance = runningBalance - debit + credit;
-            } else {
-                // Asset: debits decrease balance (withdrawals), credits increase balance (deposits)
-                runningBalance = runningBalance - debit + credit;
+                if (isLiability) {
+                    // Liability: debits decrease debt (payments), credits increase debt (purchases)
+                    runningBalance = runningBalance - debit + credit;
+                } else {
+                    // Asset: debits decrease balance (withdrawals), credits increase balance (deposits)
+                    runningBalance = runningBalance - debit + credit;
+                }
             }
-        }
 
-        return (
-            <span
-                className="text-right block"
-                style={{
-                    fontSize: GRID_TOKENS.numberFontSize,
-                    fontWeight: GRID_TOKENS.numberFontWeight,
-                    color: runningBalance < 0 ? GRID_TOKENS.negativeColor : GRID_TOKENS.cellColor,
-                    fontVariantNumeric: 'tabular-nums'
-                }}
-            >
-                {formatCurrency(runningBalance)}
-            </span>
-        );
-    }
-}),
+            return (
+                <span
+                    className="text-right block"
+                    style={{
+                        fontSize: GRID_TOKENS.numberFontSize,
+                        fontWeight: GRID_TOKENS.numberFontWeight,
+                        color: runningBalance < 0 ? GRID_TOKENS.negativeColor : GRID_TOKENS.cellColor,
+                        fontVariantNumeric: 'tabular-nums'
+                    }}
+                >
+                    {formatCurrency(runningBalance)}
+                </span>
+            );
+        }
+    }),
 
     // Optional: Sales Tax (GST/HST)
     columnHelper.accessor('tax_cents', {
