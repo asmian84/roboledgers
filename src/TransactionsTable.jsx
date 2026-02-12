@@ -793,9 +793,9 @@ export function TransactionsTable({
 
     // Apply density-based rowHeight override
     const rowHeights = {
-        compact: 45,      // Increased spacing
-        comfortable: 53,  // 60% more breathing room
-        spacious: 70      // Spacious with comfort
+        compact: 36,      // 20% reduction
+        comfortable: 42,  // Sweet spot (Caseware-standard)
+        spacious: 56      // Balanced spacing
     };
     if (rowHeights[gridDensity]) {
         GRID_TOKENS.rowHeight = rowHeights[gridDensity];
