@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 export function DocumentViewer({ document, onBack }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
+    const renderTaskRef = useRef(null); // CRITICAL: Track render task to prevent canvas reuse
     const [isZoomed, setIsZoomed] = useState(false);
     const [pdfDoc, setPdfDoc] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
