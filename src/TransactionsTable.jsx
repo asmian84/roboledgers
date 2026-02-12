@@ -728,24 +728,33 @@ const columns = [
     // Optional: Sales Tax (GST/HST)
     columnHelper.accessor('tax_cents', {
         header: 'GST/HST',
-        size: 110,
-        minSize: 100,
-        maxSize: 130,
-        cell: info => {
-            const val = info.getValue();
-            return (
-                <span
-                    className="text-right block"
-                    style={{
-                        fontSize: GRID_TOKENS.cellFontSize,
-                        fontWeight: GRID_TOKENS.cellFontWeight,
-                        color: GRID_TOKENS.descLine2Color,
-                        fontVariantNumeric: 'tabular-nums'
-                    }}
-                >
-                    {val ? formatCurrency(val / 100) : '-'}
-                </span>
-            );
+        const val = info.getValue();
+        const row = info.row.original;
+
+        // Auto-calculate tax if column is visible and province set
+        let displayValue = val;
+        if(!val || val === 0) {
+            const province = window.UI_STATE?.province;
+            const amount = row.debit || row.credit || 0;
+            if(province && amount) {
+        const calculatedTax = calculateTax(amount, province);
+        displayValue = calculatedTax;
+    }
+            }
+
+return (
+    <span
+        className="text-right block"
+        style={{
+            fontSize: GRID_TOKENS.cellFontSize,
+            fontWeight: GRID_TOKENS.cellFontWeight,
+            color: GRID_TOKENS.descLine2Color,
+            fontVariantNumeric: 'tabular-nums'
+        }}
+    >
+        {displayValue ? `$${displayValue.toFixed(2)}` : '-'}
+    </span>
+);
         }
     }),
 ];
