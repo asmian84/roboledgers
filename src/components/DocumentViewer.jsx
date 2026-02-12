@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 export function DocumentViewer({ document, onBack }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
+    const renderTaskRef = useRef(null); // Track active render task
     const [isZoomed, setIsZoomed] = useState(false);
     const [pdfDoc, setPdfDoc] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -33,14 +34,15 @@ export function DocumentViewer({ document, onBack }) {
                     // Render the specified page or page 1
                     const pageNum = document.page || 1;
                     setCurrentPage(pageNum);
-                    await renderPdfPage(pdf, pageNum);
+                    // The actual rendering will happen in a separate useEffect triggered by pdfDoc and currentPage
                 } else if (['jpg', 'jpeg', 'png', 'gif'].includes(document.type)) {
                     // Render image directly
                     renderImage(document.url);
+                    setIsLoading(false); // Set loading to false immediately for images
                 } else {
                     console.warn('Unsupported document type:', document.type);
+                    setIsLoading(false);
                 }
-                setIsLoading(false);
             } catch (error) {
                 console.error('Error loading document:', error);
                 setIsLoading(false);
@@ -66,7 +68,9 @@ export function DocumentViewer({ document, onBack }) {
             viewport: viewport
         };
 
-        await page.render(renderContext).promise;
+        renderTaskRef.current = page.render(renderContext);
+        await renderTaskRef.current.promise;
+        renderTaskRef.current = null;
 
         // Draw highlight box if transaction line position is provided
         if (document.highlightLine) {
