@@ -19,7 +19,7 @@
     ingestionProgress: 0,
     ingestionLabel: null,
     isSettingsOpen: false,
-    settingsTab: 'system',
+    settingsTab: 'grid',
     activeTheme: 'Rainbow',
     resetConfirm: false,
     refError: null,
@@ -1825,137 +1825,63 @@
     drawer.innerHTML = `
       <div class="drawer-header" style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 12px;">
-              <div style="background: #f1f5f9; padding: 8px; border-radius: 8px; color: #64748b;"><i class="ph ph-gear-six" style="font-size: 1.2rem;"></i></div>
+              <div style="background: #f1f5f9; padding: 8px; border-radius: 8px; color: #64748b;">
+                  <i class="ph ph-gear-six" style="font-size: 1.2rem;"></i>
+              </div>
               <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0;">Settings</h2>
           </div>
-          <i class="ph ph-x close-drawer" style="font-size: 20px; cursor: pointer; color: #94a3b8;" onclick="window.toggleSettings(false)"></i>
+          <i class="ph ph-x close-drawer" style="font-size: 20px; cursor: pointer; color: #94a3b8;" onclick="toggleSettings(false)"></i>
       </div>
       <div class="drawer-tabs">
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'system' ? 'active' : ''}" data-tab="system">System</div>
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'columns' ? 'active' : ''}" data-tab="columns">Columns</div>
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'autocat' ? 'active' : ''}" data-tab="autocat">Auto-Cat</div>
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'preferences' ? 'active' : ''}" data-tab="preferences">Preferences</div>
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'advanced' ? 'active' : ''}" data-tab="advanced">Advanced</div>
+          <div class="drawer-tab ${UI_STATE.settingsTab === 'grid' ? 'active' : ''}" data-tab="grid">GRID</div>
+          <div class="drawer-tab ${UI_STATE.settingsTab === 'columns' ? 'active' : ''}" data-tab="columns">COLUMNS</div>
+          <div class="drawer-tab ${UI_STATE.settingsTab === 'data' ? 'active' : ''}" data-tab="data">DATA</div>
       </div>
       <div class="drawer-content">
           ${renderSettingsTabContent()}
       </div>
       <div class="drawer-footer">
-          <button class="btn-restored" style="background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;">Reset to Defaults</button>
+          <button class="btn-restored" style="background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;" onclick="window.resetSettings()">Reset to Defaults</button>
           <button class="btn-restored" onclick="window.saveSettings()">Save Settings</button>
       </div>
     `;
 
-    // Wire Tabs
+    // Wire tab switching
     drawer.querySelectorAll('.drawer-tab').forEach(tab => {
       tab.onclick = () => {
         UI_STATE.settingsTab = tab.dataset.tab;
         renderSettingsDrawer();
       };
     });
-
-    // Wire theme switcher - GRID SCOPED ONLY
-    const themeSelector = drawer.querySelector('#theme-selector');
-    if (themeSelector) {
-      themeSelector.addEventListener('change', (e) => {
-        const theme = e.target.value;
-        UI_STATE.activeTheme = theme;
-
-        // Apply theme to GRID CONTAINER ONLY, not to body
-        const gridContainer = document.getElementById('txnGrid');
-        if (gridContainer) {
-          console.log('[THEME DEBUG] Grid container found:', gridContainer);
-          console.log('[THEME DEBUG] Current classes:', gridContainer.className);
-
-          // Remove all theme classes
-          gridContainer.classList.remove('rainbow-theme', 'postit-theme', 'default-theme',
-            'caseware-blue-theme', 'caseware-gray-theme', 'caseware-green-theme',
-            'excel-theme', 'dark-theme');
-
-          // Add new theme class if not default
-          if (theme !== 'default') {
-            const themeClass = `${theme}-theme`;
-            gridContainer.classList.add(themeClass);
-            console.log('[THEME DEBUG] Added class:', themeClass);
-          }
-
-          console.log('[THEME DEBUG] New classes:', gridContainer.className);
-          console.log('[THEME DEBUG] Computed styles:', window.getComputedStyle(gridContainer).backgroundColor);
-        } else {
-          console.error('[THEME DEBUG] Grid container #txnGrid not found!');
-        }
-
-        // Persist to localStorage
-        localStorage.setItem('roboledger_theme', theme);
-        console.log(`[THEME] Applied to grid only: ${theme}`);
-      });
-    }
   }
 
   function renderSettingsTabContent() {
-    if (UI_STATE.settingsTab === 'system') {
+    // TAB 1: GRID - All appearance settings
+    if (UI_STATE.settingsTab === 'grid') {
       return `
             <div class="setting-group">
-                <div class="setting-group-title"><i class="ph ph-magnifying-glass-plus"></i> Workspace Dexterity (The Focus Lens)</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Slide to focus the magnification of bookkeeping detail.</div>
-                <input type="range" id="settings-dexterity" min="1" max="5" value="${UI_STATE.dexterity}" style="width: 100%; margin-bottom: 24px;">
-                
-                <div class="setting-group-title"><i class="ph ph-palette"></i> Appearance</div>
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">THEME</label>
-                    <select class="v5-select theme-selector" id="theme-selector">
-                        <option value="default" ${!UI_STATE.activeTheme || UI_STATE.activeTheme === 'default' ? 'selected' : ''}>Default</option>
-                        <option value="rainbow" ${UI_STATE.activeTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
-                        <option value="postit" ${UI_STATE.activeTheme === 'postit' ? 'selected' : ''}>Post-it</option>
-                        <option value="caseware-blue" ${UI_STATE.activeTheme === 'caseware-blue' ? 'selected' : ''}>Corporate</option>
-                        <option value="caseware-gray" ${UI_STATE.activeTheme === 'caseware-gray' ? 'selected' : ''}>Neutral</option>
-                        <option value="caseware-green" ${UI_STATE.activeTheme === 'caseware-green' ? 'selected' : ''}>Balanced</option>
-                        <option value="excel" ${UI_STATE.activeTheme === 'excel' ? 'selected' : ''}>Excel Classic</option>
-                        <option value="dark" ${UI_STATE.activeTheme === 'dark' ? 'selected' : ''}>Dark Mode</option>
-                    </select>
-                </div>
-
-                <div style="display: flex; gap: 16px;">
-                    <div style="flex: 1;">
-                        <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">FONT SIZE</label>
-                        <input type="range" id="settings-fontsize" min="10" max="18" value="${UI_STATE.fontSize}" class="v5-input" style="padding: 0;">
-                    </div>
-                </div>
+                <div class="setting-group-title">Professional Theme</div>
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Preset themes matching professional accounting software</div>
+                <select class="v5-select" id="settings-grid-theme" onchange="window.previewGridTheme(this.value)">
+                    <option value="vanilla" ${UI_STATE.gridTheme === 'vanilla' ? 'selected' : ''}>Vanilla</option>
+                    <option value="classic" ${UI_STATE.gridTheme === 'classic' ? 'selected' : ''}>Classic</option>
+                    <option value="default" ${UI_STATE.gridTheme === 'default' ? 'selected' : ''}>Default</option>
+                    <option value="ledger-pad" ${UI_STATE.gridTheme === 'ledger-pad' ? 'selected' : ''}>Ledger Pad</option>
+                    <option value="post-it-note" ${UI_STATE.gridTheme === 'post-it-note' ? 'selected' : ''}>Post-it Note</option>
+                    <option value="rainbow" ${UI_STATE.gridTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
+                    <option value="social" ${UI_STATE.gridTheme === 'social' ? 'selected' : ''}>Social</option>
+                    <option value="spectrum" ${UI_STATE.gridTheme === 'spectrum' ? 'selected' : ''}>Spectrum</option>
+                    <option value="subliminal" ${UI_STATE.gridTheme === 'subliminal' ? 'selected' : ''}>Subliminal</option>
+                    <option value="subtle" ${UI_STATE.gridTheme === 'subtle' ? 'selected' : ''}>Subtle</option>
+                    <option value="tracker" ${UI_STATE.gridTheme === 'tracker' ? 'selected' : ''}>Tracker</option>
+                    <option value="vintage" ${UI_STATE.gridTheme === 'vintage' ? 'selected' : ''}>Vintage</option>
+                    <option value="wave" ${UI_STATE.gridTheme === 'wave' ? 'selected' : ''}>Wave</option>
+                    <option value="webapp" ${UI_STATE.gridTheme === 'webapp' ? 'selected' : ''}>WebApp</option>
+                </select>
             </div>
+            
             <div class="setting-group">
-                <div class="setting-group-title">Row Density</div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'compact' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('compact')">Compact</button>
-                    <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'comfortable' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('comfortable')">Comfortable</button>
-                    <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'spacious' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('spacious')">Spacious</button>
-                </div>
-            </div>
-            <div class="setting-group">
-                <div class="setting-group-title"><i class="ph ph-table"></i> Grid Appearance</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Professional accounting grid themes and typography</div>
-                
-                <!-- Grid Theme Selector -->
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">PROFESSIONAL THEME</label>
-                    <select class="v5-select" id="settings-grid-theme" onchange="window.previewGridTheme(this.value)">
-                        <option value="vanilla" ${UI_STATE.gridTheme === 'vanilla' ? 'selected' : ''}>Vanilla</option>
-                        <option value="classic" ${UI_STATE.gridTheme === 'classic' ? 'selected' : ''}>Classic</option>
-                        <option value="default" ${UI_STATE.gridTheme === 'default' ? 'selected' : ''}>Default</option>
-                        <option value="ledger-pad" ${UI_STATE.gridTheme === 'ledger-pad' ? 'selected' : ''}>Ledger Pad</option>
-                        <option value="post-it-note" ${UI_STATE.gridTheme === 'post-it-note' ? 'selected' : ''}>Post-it Note</option>
-                        <option value="rainbow" ${UI_STATE.gridTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
-                        <option value="social" ${UI_STATE.gridTheme === 'social' ? 'selected' : ''}>Social</option>
-                        <option value="spectrum" ${UI_STATE.gridTheme === 'spectrum' ? 'selected' : ''}>Spectrum</option>
-                        <option value="subliminal" ${UI_STATE.gridTheme === 'subliminal' ? 'selected' : ''}>Subliminal</option>
-                        <option value="subtle" ${UI_STATE.gridTheme === 'subtle' ? 'selected' : ''}>Subtle</option>
-                        <option value="tracker" ${UI_STATE.gridTheme === 'tracker' ? 'selected' : ''}>Tracker</option>
-                        <option value="vintage" ${UI_STATE.gridTheme === 'vintage' ? 'selected' : ''}>Vintage</option>
-                        <option value="wave" ${UI_STATE.gridTheme === 'wave' ? 'selected' : ''}>Wave</option>
-                        <option value="webapp" ${UI_STATE.gridTheme === 'webapp' ? 'selected' : ''}>WebApp</option>
-                    </select>
-                </div>
-                
-                <!-- Grid Font Size -->
+                <div class="setting-group-title">Custom Adjustments</div>
                 <div style="margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label style="font-size: 11px; font-weight: 700; color: #94a3b8;">GRID FONT SIZE</label>
@@ -1964,46 +1890,38 @@
                     <input type="range" id="settings-grid-fontsize" min="9" max="16" step="0.5" value="${UI_STATE.gridFontSize}" 
                            style="width: 100%;" 
                            oninput="window.previewGridFontSize(this.value)">
+                    <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Overrides theme default</div>
+                </div>
+                
+                <div>
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 8px;">ROW HEIGHT</label>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'compact' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('compact')">Compact</button>
+                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'comfortable' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('comfortable')">Comfortable</button>
+                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'spacious' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('spacious')">Spacious</button>
+                    </div>
                 </div>
             </div>
         `;
     }
 
+    // TAB 2: COLUMNS - Visibility toggles
     if (UI_STATE.settingsTab === 'columns') {
-      // Get actual columns from Tabulator instance
-      let columns = [
+      const columns = [
         { field: 'date', label: 'Date', visible: true },
-        { field: 'ref', label: 'Ref#', visible: true },
+        { field: 'ref', label: 'Ref #', visible: true },
         { field: 'description', label: 'Description', visible: true },
-        { field: 'tax_cents', label: 'Sales Tax', visible: true },
         { field: 'debit_col', label: 'Debit', visible: true },
         { field: 'credit_col', label: 'Credit', visible: true },
         { field: 'balance', label: 'Balance', visible: true },
-        { field: 'coa_code', label: 'Category', visible: true }
+        { field: 'coa_code', label: 'Category', visible: true },
+        { field: 'tax_cents', label: 'Sales Tax', visible: false }
       ];
-
-      // If table exists, get actual column visibility
-      if (window.txnTable) {
-        const tableCols = window.txnTable.getColumns();
-        columns = columns.map(col => {
-          const tableCol = tableCols.find(c => c.getField() === col.field);
-          if (tableCol) {
-            col.visible = tableCol.isVisible();
-          }
-          return col;
-        });
-      }
-
-      // Load saved preferences
-      const saved = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
-      columns.forEach(col => {
-        if (saved[col.field] !== undefined) col.visible = saved[col.field];
-      });
 
       return `
             <div class="setting-group">
                 <div class="setting-group-title">Column Visibility</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Show or hide columns in the transaction grid.</div>
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Show or hide columns in the transaction grid</div>
                 ${columns.map(col => `
                     <div class="column-toggle">
                         <label>${col.label}</label>
@@ -2017,107 +1935,59 @@
         `;
     }
 
-    if (UI_STATE.settingsTab === 'autocat') {
-      return `
-            <div class="setting-group">
-                <div class="setting-group-title">Engine Control</div>
-                <div class="column-toggle">
-                    <label>Enable Auto-Categorization</label>
-                    <label class="switch">
-                        <input type="checkbox" id="settings-autocat-enabled" ${UI_STATE.autocatEnabled ? 'checked' : ''}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div style="margin-top: 16px;">
-                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">CONFIDENCE THRESHOLD (${Math.round(UI_STATE.confidenceThreshold * 100)}%)</label>
-                    <input type="range" id="settings-autocat-threshold" min="0" max="100" value="${UI_STATE.confidenceThreshold * 100}" style="width: 100%;">
-                </div>
-            </div>
-            <div class="setting-group">
-                <div class="setting-group-title">Active Rule Sets</div>
-                <div style="font-size: 12px; color: #1e293b;">
-                    <div style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;">
-                        <span>Business Expenses</span>
-                        <span style="color: #10b981; font-weight: 600;">ACTIVE</span>
-                    </div>
-                    <div style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;">
-                        <span>Personal / Living</span>
-                        <span style="color: #64748b;">DISABLED</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
+    // TAB 3: DATA - Export and management
+    if (UI_STATE.settingsTab === 'data') {
+      const txnCount = window.RoboLedger ? window.RoboLedger.Ledger.getAll().length : 0;
+      const accountCount = window.RoboLedger ? window.RoboLedger.Accounts.getAll().length : 0;
 
-    if (UI_STATE.settingsTab === 'preferences') {
       return `
             <div class="setting-group">
-                <div class="setting-group-title">REF Override</div>
-                <input type="text" id="settings-ref-override" class="v5-input" value="${UI_STATE.refOverride}" style="font-family: 'JetBrains Mono';">
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Auto-updates when bank is detected</div>
-            </div>
-            <div class="setting-group">
-                <div class="setting-group-title">Date Format</div>
-                <select id="settings-date-format" class="v5-select">
-                    <option value="MM/DD/YYYY" ${UI_STATE.dateFormat === 'MM/DD/YYYY' ? 'selected' : ''}>MM/DD/YYYY</option>
-                    <option value="DD/MM/YYYY" ${UI_STATE.dateFormat === 'DD/MM/YYYY' ? 'selected' : ''}>DD/MM/YYYY</option>
-                    <option value="YYYY-MM-DD" ${UI_STATE.dateFormat === 'YYYY-MM-DD' ? 'selected' : ''}>YYYY-MM-DD</option>
-                </select>
-            </div>
-            <div class="setting-group">
-                <div class="setting-group-title">Region & Tax</div>
-                <div style="margin-bottom: 12px;">
-                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">PROVINCE</label>
-                    <select id="settings-province" class="v5-select">
-                        <option value="ON" ${UI_STATE.province === 'ON' ? 'selected' : ''}>Ontario (13% HST)</option>
-                        <option value="BC" ${UI_STATE.province === 'BC' ? 'selected' : ''}>British Columbia (5% GST + 7% PST)</option>
-                        <option value="AB" ${UI_STATE.province === 'AB' ? 'selected' : ''}>Alberta (5% GST)</option>
-                        <option value="QC" ${UI_STATE.province === 'QC' ? 'selected' : ''}>Quebec (5% GST + 9.975% QST)</option>
-                    </select>
+                <div class="setting-group-title">Export Data</div>
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Export your transactions and accounts</div>
+                <div style="padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
+                    <div style="font-size: 12px; font-weight: 600; color: #1e293b;">${txnCount} transactions</div>
+                    <div style="font-size: 11px; color: #64748b;">${accountCount} accounts</div>
                 </div>
-                <div class="column-toggle">
-                    <label>Enable GST/HST Extraction</label>
-                    <label class="switch">
-                        <input type="checkbox" id="settings-gst-enabled" ${UI_STATE.gstEnabled ? 'checked' : ''}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                 <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Calculates tax amounts based on regional rates.</div>
-            </div>
-        `;
-    }
-
-    if (UI_STATE.settingsTab === 'advanced') {
-      return `
-            <div class="setting-group">
-                <div class="setting-group-title">Data Management</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
-                    <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('json')">Export JSON</button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('csv')">Export CSV</button>
+                    <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('json')">Export JSON</button>
                 </div>
-                <button class="btn-restored" style="width: 100%; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; margin-top: 8px;" onclick="window.devReset()">Purge Local Cache</button>
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">This will reset the application state and clear all transactions.</div>
             </div>
+            
             <div class="setting-group">
-                <div class="setting-group-title">System Info</div>
-                <div style="font-size: 11px; color: #64748b;">
-                    <div>Session ID: ${crypto.randomUUID().slice(0, 8)}</div>
-                    <div>Engine Version: ${UI_STATE.version}</div>
-                    <div>Mode: ${window.location.protocol === 'file:' ? 'Native/Local' : 'Enterprise/Web'}</div>
+                <div class="setting-group-title">System</div>
+                <div style="font-size: 11px; color: #64748b; margin-bottom: 12px;">
+                    <div>Version: ${UI_STATE.version}</div>
+                    <div>Mode: ${window.location.protocol === 'file:' ? 'Native' : 'Web'}</div>
                 </div>
+                <button class="btn-restored" style="width: 100%; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;" onclick="window.devReset()">Clear All Data</button>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">⚠️ This will delete all transactions and accounts</div>
             </div>
         `;
     }
 
-    return `<div style="padding: 40px; text-align: center; color: #94a3b8;">
-        <i class="ph ph-wrench" style="font-size: 40px; margin-bottom: 16px;"></i>
-        <div>Module Engineering in Progress</div>
-    </div>`;
+    return '';
   }
 
+  // Reset settings to defaults
+  window.resetSettings = function () {
+    if (!confirm('Reset all settings to defaults?')) return;
+
+    UI_STATE.gridTheme = 'default';
+    UI_STATE.gridFontSize = 13.5;
+    UI_STATE.density = 'comfortable';
+
+    localStorage.removeItem('roboledger_v5_settings');
+    renderSettingsDrawer();
+    window.applyGridSettings();
+
+    console.log('[SETTINGS] Reset to defaults');
+  };
+
   // ============================================
-  // AI AUDIT DRAWER
+  // AI AUDIT DRAWER (unchanged)
   // ============================================
+
 
   function toggleAuditDrawer(open) {
     UI_STATE.isAuditOpen = open;
