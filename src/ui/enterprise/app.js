@@ -2274,8 +2274,8 @@
   }
 
   function updateProgressUI() {
-    // Simply trigger a re-render - the HTML will show updated progress from UI_STATE
-    window.updateWorkspace();
+    // Trigger re-render - render() will check UI_STATE.isIngesting and show updated progress
+    render();
   }
 
   window.forceDeepRepair = () => {
