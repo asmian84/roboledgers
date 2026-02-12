@@ -2732,22 +2732,28 @@
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.7;">' +
           '<div style="font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
 
-          // Row 1: Opening + Debit
-          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Opening: <input type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /></div>' +
-          '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 700; color: #ef4444;">$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
-          '</div>' +
+          // Row 1: Opening + Debit (WITH PDF SOURCE LINK)
+          '\u003cdiv style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;"\u003e' +
+          '\u003cdiv style="flex: 1; display: flex; align-items: center; gap: 8px; white-space: nowrap;"\u003eOpening: ' +
+          '\u003cinput type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /\u003e' +
+          '\u003cbutton onclick="window.showStatementSource(\'opening\')" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #3b82f6; font-size: 9px; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;" title="View statement source"\u003e\u003cspan style="font-size: 11px;"\u003e📎\u003c/span\u003e Source\u003c/button\u003e' +
+          '\u003c/div\u003e' +
+          '\u003cdiv style="flex: 1; white-space: nowrap;"\u003eDebit: \u003cspan style="font-weight: 700; color: #ef4444;"\u003e$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '\u003c/span\u003e\u003c/div\u003e' +
+          '\u003c/div\u003e' +
 
           // Row 2: Ending (Calc) + Credit
-          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Ending (Calc): <span style="font-weight: 700; color: #3b82f6;">$' + calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
-          '<div style="flex: 1; white-space: nowrap;">Credit: <span style="font-weight: 700; color: #10b981;">$' + totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
-          '</div>' +
+          '\u003cdiv style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;"\u003e' +
+          '\u003cdiv style="flex: 1; white-space: nowrap;"\u003eEnding (Calc): \u003cspan style="font-weight: 700; color: #3b82f6;"\u003e$' + calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '\u003c/span\u003e\u003c/div\u003e' +
+          '\u003cdiv style="flex: 1; white-space: nowrap;"\u003eCredit: \u003cspan style="font-weight: 700; color: #10b981;"\u003e$' + totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '\u003c/span\u003e\u003c/div\u003e' +
+          '\u003c/div\u003e' +
 
-          // Row 3: Ending (Stmt) - editable
-          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
-          '<div style="flex: 1; white-space: nowrap;">Ending (Stmt): <input type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /></div>' +
-          '<div style="flex: 1;"></div>' + // Empty cell for alignment
+          // Row 3: Ending (Stmt) - editable (WITH PDF SOURCE LINK)
+          '\u003cdiv style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;"\u003e' +
+          '\u003cdiv style="flex: 1; display: flex; align-items: center; gap: 8px; white-space: nowrap;"\u003eEnding (Stmt): ' +
+          '\u003cinput type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /\u003e' +
+          '\u003cbutton onclick="window.showStatementSource(\'closing\')" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #3b82f6; font-size: 9px; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;" title="View statement source"\u003e\u003cspan style="font-size: 11px;"\u003e📎\u003c/span\u003e Source\u003c/button\u003e' +
+          '\u003c/div\u003e' +
+          '\u003cdiv style="flex: 1;"\u003e\u003c/div\u003e' + // Empty cell for alignment
           '</div>' +
 
           // Status row
