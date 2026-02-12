@@ -1238,6 +1238,8 @@
   };
 
   // Show statement source (PDF snippet) for opening or closing balance
+  // VERSION: 2026-02-12-15:35 - RIGHT SIDE PANEL
+  console.log('[BALANCE VIEWER] Function loaded - VERSION 2026-02-12-15:35');
   window.showStatementSource = function (type) {
     const accountId = UI_STATE.selectedAccount;
     if (!accountId || accountId === 'ALL') {
