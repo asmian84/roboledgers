@@ -2095,6 +2095,11 @@
                         <option value="NB" ${UI_STATE.province === 'NB' ? 'selected' : ''}>New Brunswick (15% HST)</option>
                         <option value="MB" ${UI_STATE.province === 'MB' ? 'selected' : ''}>Manitoba (5% GST + 7% PST)</option>
                         <option value="SK" ${UI_STATE.province === 'SK' ? 'selected' : ''}>Saskatchewan (5% GST + 6% PST)</option>
+                        <option value="PE" ${UI_STATE.province === 'PE' ? 'selected' : ''}>Prince Edward Island (15% HST)</option>
+                        <option value="NL" ${UI_STATE.province === 'NL' ? 'selected' : ''}>Newfoundland and Labrador (15% HST)</option>
+                        <option value="YT" ${UI_STATE.province === 'YT' ? 'selected' : ''}>Yukon (5% GST)</option>
+                        <option value="NT" ${UI_STATE.province === 'NT' ? 'selected' : ''}>Northwest Territories (5% GST)</option>
+                        <option value="NU" ${UI_STATE.province === 'NU' ? 'selected' : ''}>Nunavut (5% GST)</option>
                     </select>
                 </div>
                 <div class="column-toggle">

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
     useReactTable,
     getCoreRowModel,
@@ -8,8 +8,31 @@ import {
     createColumnHelper
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { COADropdown } from './components/COADropdown';
+import COADropdown from './components/COADropdown';
 import { AuditSidebar } from './components/AuditSidebar';
+
+// Canadian Tax Rates (GST, PST, HST, QST) by Province/Territory
+const TAX_RATES = {
+    'ON': { total: 13, gst: 0, pst: 0, hst: 13, qst: 0 },       // Ontario
+    'BC': { total: 12, gst: 5, pst: 7, hst: 0, qst: 0 },        // British Columbia
+    'AB': { total: 5, gst: 5, pst: 0, hst: 0, qst: 0 },         // Alberta
+    'QC': { total: 14.975, gst: 5, pst: 0, hst: 0, qst: 9.975 }, // Quebec
+    'NS': { total: 15, gst: 0, pst: 0, hst: 15, qst: 0 },       // Nova Scotia
+    'NB': { total: 15, gst: 0, pst: 0, hst: 15, qst: 0 },       // New Brunswick
+    'MB': { total: 12, gst: 5, pst: 7, hst: 0, qst: 0 },        // Manitoba
+    'SK': { total: 11, gst: 5, pst: 6, hst: 0, qst: 0 },        // Saskatchewan
+    'PE': { total: 15, gst: 0, pst: 0, hst: 15, qst: 0 },       // Prince Edward Island
+    'NL': { total: 15, gst: 0, pst: 0, hst: 15, qst: 0 },       // Newfoundland and Labrador
+    'YT': { total: 5, gst: 5, pst: 0, hst: 0, qst: 0 },         // Yukon
+    'NT': { total: 5, gst: 5, pst: 0, hst: 0, qst: 0 },         // Northwest Territories
+    'NU': { total: 5, gst: 5, pst: 0, hst: 0, qst: 0 }          // Nunavut
+};
+
+// Helper: Calculate GST/tax for a transaction amount
+function calculateTax(amount, province) {
+    if (!amount || !province || !TAX_RATES[province]) return 0;
+    return (amount * TAX_RATES[province].total) / 100;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GRID DESIGN TOKENS — SINGLE SOURCE OF TRUTH
