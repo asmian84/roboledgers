@@ -793,9 +793,9 @@ export function TransactionsTable({
 
     // Apply density-based rowHeight override
     const rowHeights = {
-        compact: 36,      // Ultra-tight
-        comfortable: 42,  // Caseware-standard (reduced from 56)
-        spacious: 56      // Reduced from 68
+        compact: 28,      // Ultra-tight (Excel-like)
+        comfortable: 33,  // Reduced whitespace (40% less)
+        spacious: 44      // Tighter spacious
     };
     if (rowHeights[gridDensity]) {
         GRID_TOKENS.rowHeight = rowHeights[gridDensity];
