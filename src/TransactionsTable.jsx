@@ -927,7 +927,10 @@ export function TransactionsTable({
                             minWidth: header.id === 'description' ? '250px' : undefined,
                             flexShrink: 0,
                             height: GRID_TOKENS.headerHeight,
-                            padding: `0 ${GRID_TOKENS.rowPaddingX}`,
+                            // Custom padding per column (match cell padding)
+                            padding: header.id === 'select' ? '0 4px 0 2px' :  // Checkbox: minimal left
+                                header.id === 'balance' ? '0 2px 0 4px' : // Balance: minimal right
+                                    `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
                             fontSize: GRID_TOKENS.headerFontSize,
                             fontWeight: GRID_TOKENS.headerFontWeight,
                             letterSpacing: GRID_TOKENS.headerLetterSpacing,
@@ -1005,7 +1008,10 @@ export function TransactionsTable({
                                                 flex: cell.column.id === 'description' ? '1 1 0' : undefined,
                                                 minWidth: cell.column.id === 'description' ? '250px' : undefined,
                                                 flexShrink: 0,
-                                                padding: `0 ${GRID_TOKENS.rowPaddingX}`,
+                                                // Custom padding per column
+                                                padding: cell.column.id === 'select' ? '0 4px 0 2px' :  // Checkbox: minimal left
+                                                    cell.column.id === 'balance' ? '0 2px 0 4px' : // Balance: minimal right
+                                                        `0 ${GRID_TOKENS.rowPaddingX}`,                  // Others: default
                                                 borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
                                                 position: cell.column.id === 'category' ? 'relative' : undefined
                                             }}
