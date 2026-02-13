@@ -234,7 +234,7 @@ AMEX FORMAT:
             // If in active section, look for transaction lines AND amounts
             if (currentSection) {
                 // FIRST: Scan for amounts on ANY line (they may be separate from descriptions)
-                // Skip FX summary amounts
+                // Skip FX summary amounts - BUT STORE their coordinates!
                 const lineAmountMatch = line.match(/([\d,]+\.\d{2})$/);
                 if (lineAmountMatch && !line.match(dateRegex)) {  // Only if NOT a transaction line
                     const amt = parseFloat(lineAmountMatch[1].replace(/,/g, ''));
@@ -244,8 +244,20 @@ AMEX FORMAT:
 
                     if (!isFXSummary) {
                         const signedAmount = line.includes('-') ? -amt : amt;
-                        currentSection.amounts.push(signedAmount);
-                        console.log(`[TX-AMT] Line ${i}: ${amt}`);
+
+                        // Store amount WITH metadata for spatial matching
+                        const amountData = {
+                            amount: signedAmount,
+                            lineIndex: i,
+                            coords: lineMetadata && lineMetadata[i] ? {
+                                page: lineMetadata[i].page || 1,
+                                y: lineMetadata[i].y || 0,
+                                x: lineMetadata[i].x || 0
+                            } : null
+                        };
+
+                        currentSection.amounts.push(amountData);
+                        console.log(`[TX-AMT] Line ${i} (Y=${amountData.coords?.y}): ${amt}`);
                     } else {
                         console.log(`[SKIP-FX] Line ${i}: ${amt} (FX summary)`);
                     }
@@ -320,13 +332,62 @@ AMEX FORMAT:
             amountLines = targetSection.amounts;
         }
 
-        // Match descriptions with amounts by position
+        // Match descriptions with amounts by SPATIAL PROXIMITY (not position!)
         console.log(`[AMEX] Found ${descriptionLines.length} descriptions, ${amountLines.length} amounts`);
-        const minLen = Math.min(descriptionLines.length, amountLines.length);
-        for (let i = 0; i < minLen; i++) {
+
+        // Create a copy of amounts for matching (to track which have been used)
+        const availableAmounts = [...amountLines];
+
+        for (let i = 0; i < descriptionLines.length; i++) {
             const desc = descriptionLines[i];
-            const amount = Math.abs(amountLines[i]);
-            const isPayment = amountLines[i] < 0 || desc.description.match(/PAYMENT|THANK YOU/i);
+            let matchedAmount = null;
+            let matchedIndex = -1;
+
+            // If description has PDF coordinates, find the nearest amount by Y-coordinate
+            if (desc.pdfCoords && desc.pdfCoords.top !== undefined) {
+                const descY = desc.pdfCoords.top;
+                const descPage = desc.pdfCoords.page;
+
+                let minDistance = Infinity;
+
+                // Find amount with closest Y-coordinate on same page
+                availableAmounts.forEach((amtData, idx) => {
+                    if (!amtData || !amtData.coords) return;  // Skip if no coords
+
+                    // Only match amounts on the same page and within reasonable distance (±50 pixels)
+                    if (amtData.coords.page === descPage) {
+                        const distance = Math.abs(amtData.coords.y - descY);
+                        if (distance < minDistance && distance < 50) {  // Same row or very close
+                            minDistance = distance;
+                            matchedAmount = amtData.amount;
+                            matchedIndex = idx;
+                        }
+                    }
+                });
+
+                if (matchedIndex >= 0) {
+                    // Remove matched amount from available pool
+                    availableAmounts[matchedIndex] = null;
+                    console.log(`[SPATIAL-MATCH] "${desc.description.substring(0, 30)}" (Y=${descY}) ← $${Math.abs(matchedAmount).toFixed(2)} (distance: ${minDistance}px)`);
+                } else {
+                    console.log(`[NO-MATCH] "${desc.description.substring(0, 30)}" (Y=${descY}) - no nearby amount found`);
+                }
+            } else {
+                // Fallback: use position-based matching if no coordinates
+                if (i < availableAmounts.length && availableAmounts[i]) {
+                    matchedAmount = availableAmounts[i].amount || availableAmounts[i];  // Handle both formats
+                    availableAmounts[i] = null;
+                    console.log(`[POSITION-MATCH] "${desc.description.substring(0, 30)}" ← $${Math.abs(matchedAmount).toFixed(2)} (no coords, fallback to position)`);
+                }
+            }
+
+            if (matchedAmount === null) {
+                console.warn(`[AMEX] No amount matched for: ${desc.description}`);
+                continue;  // Skip this transaction
+            }
+
+            const amount = Math.abs(matchedAmount);
+            const isPayment = matchedAmount < 0 || desc.description.match(/PAYMENT|THANK YOU/i);
 
             // Generate unique parser_ref for this transaction
             const sequenceNum = String(i + 1).padStart(3, '0');
