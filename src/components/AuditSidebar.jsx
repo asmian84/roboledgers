@@ -101,28 +101,12 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
             {/* Left Slide-Out Panel for Full PDF View */}
             {showLeftPanel && (
                 <>
-                    {/* Left Panel Overlay */}
-                    <div
-                        onClick={() => setShowLeftPanel(false)}
-                        style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: 'rgba(0, 0, 0, 0.5)',
-                            zIndex: 1001,
-                            transition: 'opacity 0.3s ease'
-                        }}
-                    />
-
-                    {/* Left Panel - Full PDF Viewer */}
+                    {/* Left Panel - Full PDF Viewer (NO OVERLAY) */}
                     <div style={{
                         position: 'fixed',
                         top: 0,
-                        left: 0,
-                        width: '70%',
-                        maxWidth: '900px',
+                        left: '60px', // Start after navbar
+                        width: 'calc(100% - 410px)', // Full width minus navbar (60px) and audit drawer (350px)
                         height: '100vh',
                         background: 'white',
                         boxShadow: '4px 0 12px rgba(0, 0, 0, 0.1)',
@@ -256,6 +240,118 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
 
                 {/* Body */}
                 <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
+
+                    {/* Transaction Identity */}
+                    {(transaction.parser_ref || transaction.pdfLocation) && (
+                        <div style={{
+                            backgroundColor: '#1a1f2e',
+                            padding: '16px',
+                            borderRadius: '8px',
+                            marginBottom: '16px',
+                            border: '1px solid #2a3f5f'
+                        }}>
+                            <div style={{
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                letterSpacing: '0.5px',
+                                color: '#64b5f6',
+                                marginBottom: '12px',
+                                textTransform: 'uppercase'
+                            }}>
+                                Transaction Identity
+                            </div>
+
+                            {transaction.parser_ref && (
+                                <div style={{ marginBottom: '12px' }}>
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>Parser Ref:</div>
+                                    <code style={{
+                                        backgroundColor: '#0f1419',
+                                        padding: '6px 10px',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        color: '#7dd3fc',
+                                        fontFamily: 'Monaco, monospace',
+                                        display: 'block'
+                                    }}>
+                                        {transaction.parser_ref}
+                                    </code>
+                                </div>
+                            )}
+
+                            {transaction.pdfLocation && (
+                                <>
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>PDF Location:</div>
+                                        <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                                            Page {transaction.pdfLocation.page}, Line {transaction.audit?.lineNumber}
+                                        </div>
+                                    </div>
+
+                                    {transaction.pdfLocation.lineText && (
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>Raw PDF Text:</div>
+                                            <pre style={{
+                                                backgroundColor: '#0f1419',
+                                                padding: '8px',
+                                                borderRadius: '4px',
+                                                fontSize: '10px',
+                                                color: '#94a3b8',
+                                                fontFamily: 'Monaco, monospace',
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-all',
+                                                maxHeight: '80px',
+                                                overflow: 'auto',
+                                                margin: 0
+                                            }}>
+                                                {transaction.pdfLocation.lineText}
+                                            </pre>
+                                        </div>
+                                    )}
+
+                                    <button
+                                        onClick={() => {
+                                            const account = window.RoboLedger.Accounts.get(transaction.account_id);
+                                            if (!account?.pdfUrl) {
+                                                alert('PDF not available for this transaction');
+                                                return;
+                                            }
+                                            setViewerDocument({
+                                                type: 'pdf',
+                                                url: account.pdfUrl,
+                                                name: account.pdfFilename || 'statement.pdf',
+                                                page: transaction.pdfLocation.page,
+                                                highlightLine: {
+                                                    top: transaction.pdfLocation.top,
+                                                    left: transaction.pdfLocation.left,
+                                                    width: transaction.pdfLocation.width,
+                                                    height: transaction.pdfLocation.height
+                                                }
+                                            });
+                                            setShowLeftPanel(true);
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            backgroundColor: '#3b82f6',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            fontSize: '13px',
+                                            fontWeight: '500',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <span>📄</span>
+                                        View in PDF
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     {/* Audit Metadata (Raw PDF Text) - SCROLLABLE */}
                     <div style={{ marginBottom: '20px' }}>
