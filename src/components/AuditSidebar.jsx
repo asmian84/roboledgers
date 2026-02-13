@@ -287,7 +287,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                         </div>
                                     </div>
 
-                                    {transaction.pdfLocation.lineText && (
+                                    {(transaction.audit?.rawText || transaction.pdfLocation?.lineText) && (
                                         <div style={{ marginBottom: '12px' }}>
                                             <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>Raw PDF Text:</div>
                                             <pre style={{
@@ -299,11 +299,11 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                                 fontFamily: 'Monaco, monospace',
                                                 whiteSpace: 'pre-wrap',
                                                 wordBreak: 'break-all',
-                                                maxHeight: '80px',
+                                                maxHeight: '120px',  // Increased to show FX lines
                                                 overflow: 'auto',
                                                 margin: 0
                                             }}>
-                                                {transaction.pdfLocation.lineText}
+                                                {transaction.audit?.rawText || transaction.pdfLocation?.lineText}
                                             </pre>
                                         </div>
                                     )}

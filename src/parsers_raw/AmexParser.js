@@ -412,9 +412,14 @@ AMEX FORMAT:
 
         for (const fxLine of fxLines) {
             // Find transaction with matching CAD amount (within $0.50 tolerance for rounding)
-            const matchedTx = transactions.find(tx =>
-                tx.debit > 0 && Math.abs(tx.debit - fxLine.cadAmount) <= 0.50
-            );
+            const matchedTx = transactions.find(tx => {
+                const matches = tx.debit > 0 && Math.abs(tx.debit - fxLine.cadAmount) <= 0.50;
+                if (tx.debit > 0) {
+                    const diff = Math.abs(tx.debit - fxLine.cadAmount);
+                    console.log(`  [FX-COMPARE] "${tx.description.substring(0, 25)}" debit=$${tx.debit.toFixed(2)} vs FX CAD=$${fxLine.cadAmount.toFixed(2)} (diff: $${diff.toFixed(2)}) ${matches ? '✅' : '❌'}`);
+                }
+                return matches;
+            });
 
             if (matchedTx) {
                 // Append FX line to rawText
