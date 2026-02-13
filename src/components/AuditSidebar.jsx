@@ -446,29 +446,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         )}
                     </div>
 
-                    {/* Edit History */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            EDIT HISTORY
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
-                            {transaction.edit_history?.length > 0 ? (
-                                transaction.edit_history.map((edit, idx) => (
-                                    <div key={idx} style={{ marginBottom: '6px' }}>
-                                        • {new Date(edit.timestamp).toLocaleString()} - {edit.description}
-                                    </div>
-                                ))
-                            ) : (
-                                <div style={{ fontStyle: 'italic', color: '#94a3b8' }}>No edits made</div>
-                            )}
-                        </div>
-                    </div>
+
 
                     {/* Categorization */}
                     <div style={{ marginBottom: '20px' }}>

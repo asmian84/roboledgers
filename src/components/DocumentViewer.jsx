@@ -192,27 +192,6 @@ export function DocumentViewer({ document, onBack }) {
                 fontSize: '12px',
                 color: '#64748b'
             }}>
-                <button
-                    onClick={onBack}
-                    style={{
-                        border: 'none',
-                        background: 'none',
-                        color: '#3b82f6',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.target.style.background = '#eff6ff'}
-                    onMouseLeave={(e) => e.target.style.background = 'none'}
-                >
-                    <i className="ph ph-arrow-left"></i> Back
-                </button>
                 <div style={{ fontSize: '11px' }}>
                     <span>{document?.name || 'document'}</span>
                     {document?.page && <span style={{ marginLeft: '8px', color: '#94a3b8' }}>Page {document.page}</span>}
