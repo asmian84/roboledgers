@@ -1526,6 +1526,8 @@ window.RoboLedger = (function () {
             }
 
             // Auto-categorize imported transactions using RuleEngine
+            // TEMPORARILY DISABLED - causing upload to halt
+            /*
             if (importedCount > 0 && window.RuleEngine) {
                 try {
                     console.log(`[LEDGER] Auto-categorizing ${importedCount} imported transactions...`);
@@ -1538,6 +1540,7 @@ window.RoboLedger = (function () {
                     // Don't halt upload on categorization failure
                 }
             }
+            */
 
             return importedCount;
         }
