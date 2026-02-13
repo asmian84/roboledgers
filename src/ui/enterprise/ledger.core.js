@@ -427,6 +427,10 @@ window.RoboLedger = (function () {
             return state.transactions[tx_id];
         },
 
+        getByParserRef: function (parser_ref) {
+            return Object.values(state.transactions).find(tx => tx.parser_ref === parser_ref);
+        },
+
         confirm: function (tx_id) {
             const tx = state.transactions[tx_id];
             if (tx && tx.status === TransactionStatus.PREDICTED) {
