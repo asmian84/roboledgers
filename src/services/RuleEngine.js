@@ -12,6 +12,12 @@ class RuleEngine {
     constructor() {
         this.STORAGE_KEY = 'roboledger_categorization_rules';
         this.rules = this.loadRules();
+
+        // Auto-import default rules if none exist
+        if (this.rules.length === 0) {
+            console.log('[RULE_ENGINE] No rules found, importing defaults...');
+            this.importDefaultRules();
+        }
     }
 
     /**
