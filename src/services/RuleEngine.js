@@ -151,7 +151,8 @@ class RuleEngine {
 
         // Fallback to vendor dictionary matching
         if (this.vendorMatcher && this.vendorMatcher.dictionary) {
-            const match = this.vendorMatcher.findMatch(transaction.description, 0.6);
+            // Pass full transaction for context-aware matching
+            const match = this.vendorMatcher.findMatch(transaction, 0.6);
             if (match) {
                 console.log(`[RULE_ENGINE] Vendor match for "${transaction.description}":`, match);
                 return {
@@ -159,7 +160,8 @@ class RuleEngine {
                     confidence: match.confidence,
                     method: 'vendor_dictionary',
                     vendor: match.vendor,
-                    industry: match.industry
+                    industry: match.industry,
+                    appliedRule: match.appliedRule // Track which smart rule was applied
                 };
             }
         }
