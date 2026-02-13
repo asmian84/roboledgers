@@ -391,8 +391,26 @@
         );
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Actually process the file
-        const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
+        // Actually process the file WITH TIMEOUT DETECTION
+        console.log(`[UPLOAD-DEBUG] ⏰ Starting processUpload for statement ${statementNum}/${totalStatements}: ${file.name}`);
+        const processingStartTime = Date.now();
+
+        // AGGRESSIVE TIMEOUT: If processUpload doesn't complete in 30 seconds, force an error
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            const elapsed = ((Date.now() - processingStartTime) / 1000).toFixed(1);
+            reject(new Error(`🔥 TIMEOUT: processUpload stuck for ${elapsed}s on statement ${statementNum}/${totalStatements} (${file.name}). Upload halted.`));
+          }, 30000); // 30 second timeout
+        });
+
+        const uploadPromise = window.RoboLedger.Ingestion.processUpload(file, account_id)
+          .then(result => {
+            const elapsed = ((Date.now() - processingStartTime) / 1000).toFixed(1);
+            console.log(`[UPLOAD-DEBUG] ✅ processUpload completed in ${elapsed}s for statement ${statementNum}/${totalStatements}`);
+            return result;
+          });
+
+        const imported = await Promise.race([uploadPromise, timeoutPromise]);
         totalImported += imported;
 
         // Stage 3: Categorizing (70-85% of file progress)
