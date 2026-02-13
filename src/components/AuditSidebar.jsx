@@ -353,52 +353,25 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         </div>
                     )}
 
-                    {/* Audit Metadata (Raw PDF Text) - SCROLLABLE */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            AUDIT METADATA
-                        </div>
-                        <div style={{
-                            background: '#1e293b',
-                            color: 'white',
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            fontFamily: 'Monaco, Consolas, monospace',
-                            fontSize: '12px',
-                            lineHeight: '1.6',
-                            overflowX: 'auto',
-                            whiteSpace: 'nowrap'
-                        }}>
-                            {transaction.source_pdf?.raw_line || `${transaction.date}    ${transaction.description}    ${transaction.amount < 0 ? transaction.amount : '+' + transaction.amount}`}
-                        </div>
-
-                        {/* PDF Visual Snippet - Shows actual transaction line from PDF */}
-                        {transaction.source_pdf?.url && (
-                            <div style={{ marginTop: '12px' }}>
-                                <div style={{
-                                    fontSize: '10px',
-                                    fontWeight: 600,
-                                    color: '#94a3b8',
-                                    marginBottom: '6px',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.5px'
-                                }}>
-                                    PDF SNIPPET
-                                </div>
-                                <PDFSnippet
-                                    pdfUrl={transaction.source_pdf.url}
-                                    page={transaction.source_pdf.page || 1}
-                                    linePosition={transaction.source_pdf.line_position}
-                                />
+                    {/* PDF Visual Snippet - Shows actual transaction line from PDF */}
+                    {transaction.source_pdf?.url && (
+                        <div style={{ marginBottom: '20px' }}>
+                            <div style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: '#64748b',
+                                letterSpacing: '0.5px',
+                                marginBottom: '10px'
+                            }}>
+                                PDF SNIPPET
                             </div>
-                        )}
-                    </div>
+                            <PDFSnippet
+                                pdfUrl={transaction.source_pdf.url}
+                                page={transaction.source_pdf.page || 1}
+                                linePosition={transaction.source_pdf.line_position}
+                            />
+                        </div>
+                    )}
 
                     {/* Attached Receipts - HORIZONTAL DRAG/DROP AREA */}
                     <div style={{ marginBottom: '20px' }}>
