@@ -3164,8 +3164,36 @@
           </select>
         </div>
 
-        <!-- RIGHT: Grid Settings Icon Only -->
+        <!-- RIGHT: Export + Grid Settings Icons -->
         <div style="display: flex; align-items: center; gap: 8px;">
+          <!-- Export Button with Dropdown -->
+          <div style="position: relative;">
+            <button id="export-btn" onclick="window.toggleExportMenu()" style="padding: 7px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'" title="Export Transactions">
+              <i class="ph ph-download-simple" style="font-size: 16px; color: #64748b;"></i>
+            </button>
+            
+            <!-- Export Dropdown Menu (hidden by default) -->
+            <div id="export-menu" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); min-width: 180px; z-index: 1000;">
+              <div onclick="window.TransactionExporter?.exportCurrentView('csv'); window.toggleExportMenu(false);" style="padding: 10px 16px; cursor: pointer; font-size: 13px; color: #1e293b; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                <i class="ph ph-file-csv" style="font-size: 16px; color: #10b981;"></i>
+                <span>Export CSV</span>
+              </div>
+              <div onclick="window.TransactionExporter?.exportCurrentView('excel'); window.toggleExportMenu(false);" style="padding: 10px 16px; cursor: pointer; font-size: 13px; color: #1e293b; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                <i class="ph ph-file-xls" style="font-size: 16px; color: #10b981;"></i>
+                <span>Export Excel CSV</span>
+              </div>
+              <div onclick="window.TransactionExporter?.exportCurrentView('json'); window.toggleExportMenu(false);" style="padding: 10px 16px; cursor: pointer; font-size: 13px; color: #1e293b; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                <i class="ph ph-file-code" style="font-size: 16px; color: #3b82f6;"></i>
+                <span>Export JSON</span>
+              </div>
+              <div onclick="window.TransactionExporter?.exportCurrentView('uncategorized'); window.toggleExportMenu(false);" style="padding: 10px 16px; cursor: pointer; font-size: 13px; color: #1e293b; display: flex; align-items: center; gap: 8px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                <i class="ph ph-funnel-simple" style="font-size: 16px; color: #f59e0b;"></i>
+                <span>Uncategorized Only</span>
+              </div>
+            </div>
+          </div>
+          
+         <!-- Settings Gear (existing) -->
           <button onclick="window.toggleSettings(true)" style="padding: 7px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'" title="Grid Settings (Appearance & Columns)">
             <i class="ph ph-gear-six" style="font-size: 16px; color: #64748b;"></i>
           </button>
@@ -3173,6 +3201,28 @@
       </div>
     `;
   }
+
+  // Toggle export menu dropdown
+  window.toggleExportMenu = function (show) {
+    const menu = document.getElementById('export-menu');
+    if (!menu) return;
+
+    if (show === undefined) {
+      // Toggle
+      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    } else {
+      menu.style.display = show ? 'block' : 'none';
+    }
+  };
+
+  // Close export menu when clicking outside
+  document.addEventListener('click', (e) => {
+    const exportBtn = document.getElementById('export-btn');
+    const exportMenu = document.getElementById('export-menu');
+    if (exportMenu && exportBtn && !exportBtn.contains(e.target) && !exportMenu.contains(e.target)) {
+      exportMenu.style.display = 'none';
+    }
+  });
 
   // Real-time opening balance update helper
   window.updateOpeningBalance = function (val) {
