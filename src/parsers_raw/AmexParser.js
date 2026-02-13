@@ -128,10 +128,19 @@ AMEX FORMAT:
 
         // Extract statement period
         let statementPeriod = '';
+        let statementId = `AMEX-${currentYear}`;
         const periodMatch = statementText.match(/Statement Period:?\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})\s+to\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i) ||
             statementText.match(/([A-Za-z]+\s+\d{1,2},\s+\d{4})\s+to\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
         if (periodMatch) {
             statementPeriod = `${periodMatch[1]} - ${periodMatch[2]}`;
+            // Extract month from end date for statement ID (AMEX-2022NOV)
+            const endDateMatch = periodMatch[2].match(/([A-Za-z]+)\s+\d{1,2},\s+(\d{4})/);
+            if (endDateMatch) {
+                const month = endDateMatch[1].toUpperCase().substring(0, 3);
+                const year = endDateMatch[2];
+                statementId = `AMEX-${year}${month}`;
+                console.log(`[AMEX] Generated statement ID: ${statementId}`);
+            }
             console.log(`[AMEX] Extracted statement period: ${statementPeriod}`);
         }
 
@@ -199,16 +208,36 @@ AMEX FORMAT:
                     continue;
                 }
 
-                // Collect descriptions
+                // Collect descriptions with PDF coordinates
                 const dateMatch = line.match(dateRegex);
                 if (dateMatch) {
                     const month = monthMap[dateMatch[1].toLowerCase()];
                     const day = dateMatch[2].padStart(2, '0');
                     const description = dateMatch[5].trim();
+
+                    // Extract PDF coordinates from lineMetadata
+                    let pdfCoords = null;
+                    if (lineMetadata && lineMetadata.length > 0) {
+                        const metaLine = lineMetadata.find(meta =>
+                            meta.text && meta.text.includes(description.substring(0, 30))
+                        );
+                        if (metaLine) {
+                            pdfCoords = {
+                                page: metaLine.page || 1,
+                                top: metaLine.y || 0,
+                                left: metaLine.x || 0,
+                                width: metaLine.width || 500,
+                                height: metaLine.height || 12,
+                                lineText: metaLine.text
+                            };
+                        }
+                    }
+
                     currentSection.descriptions.push({
                         date: `${currentYear}-${month}-${day}`,
                         description,
-                        rawLine: line
+                        rawLine: line,
+                        pdfCoords
                     });
                 }
             }
@@ -247,6 +276,10 @@ AMEX FORMAT:
             const amount = Math.abs(amountLines[i]);
             const isPayment = amountLines[i] < 0 || desc.description.match(/PAYMENT|THANK YOU/i);
 
+            // Generate unique parser_ref for this transaction
+            const sequenceNum = String(i + 1).padStart(3, '0');
+            const parser_ref = `${statementId}-${sequenceNum}`;
+
             transactions.push({
                 date: desc.date,
                 description: this.cleanCreditDescription(desc.description, [
@@ -257,7 +290,15 @@ AMEX FORMAT:
                 debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
                 credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
                 balance: 0,
-                audit: this.getSpatialMetadata(desc.description),
+                parser_ref,  // Unique ID: AMEX-2022NOV-001
+                pdfLocation: desc.pdfCoords,  // Exact PDF coordinates
+                audit: {
+                    ...this.getSpatialMetadata(desc.description),
+                    parser: 'AmexParser',
+                    parsedAt: new Date().toISOString(),
+                    statementId,
+                    lineNumber: i + 1
+                },
                 rawText: this.cleanRawText(`${desc.date} ${desc.description} ${amount}`),
                 refCode: desc.description.match(/\b([A-Z0-9]{15,})\b/)?.[1] || 'N/A'
             });
