@@ -163,40 +163,72 @@ AMEX FORMAT:
 
         console.log('%c[AMEX-DEBUG] Starting dual-phase scan...', 'color: orange; font-weight: bold');
 
-        // PHASE 2: Collect all transaction sections first, then pick the right one
-        const sections = [];
+        // DUAL-PHASE: First scan for section boundaries and collect FX lines separately
+        console.log('[AMEX-DEBUG] Starting dual-phase scan...');
         let currentSection = null;
+        const sections = [];
+        const fxLines = []; // NEW: Collect FX lines separately for later matching
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
 
-            // Start new section - but NOT if line starts with "Total of"
-            const isNewTransactions = line.includes('New Transactions for') || line.includes('New Payments');
-            const isTotal = line.startsWith('Total of');
-
-            if (isNewTransactions && !isTotal) {
+            // Detect start of transaction section (positive lookahead)
+            if (line.match(/^New (Transactions|Purchases|Payments)/i)) {
+                console.log(`%c✅ START SECTION ${sections.length + 1}: Line ${i} ${line}`, 'background: green; color: white; padding: 2px;');
                 if (currentSection) {
                     sections.push(currentSection);
                 }
                 currentSection = {
                     startLine: i,
                     startText: line,
-                    amounts: [],
-                    descriptions: []
+                    descriptions: [],
+                    amounts: []
                 };
-                console.log(`%c✅ START SECTION ${sections.length + 1}: Line ${i}`, 'color: green; font-weight: bold', line.substring(0, 60));
-                continue;
             }
 
-            // Stop current section at totals
-            if (currentSection && line.match(/Total of (?:New Transactions|Payment Activity)/i)) {
+            // Detect end of transaction section
+            if (line.match(/^Total of/i) && currentSection) {
+                console.log(`%c🛑 STOP SECTION ${sections.length + 1}: Line ${i} ${line}`, 'background: red; color: white; padding: 2px;');
                 currentSection.endLine = i;
                 currentSection.endText = line;
                 sections.push(currentSection);
-                console.log(`%c🛑 STOP SECTION ${sections.length}: Line ${i}`, 'color: red', line.substring(0, 60));
                 currentSection = null;
                 continue;
+            }
+
+            // Capture FX lines ANYWHERE in the document (not just in sections)
+            const fxPattern = /(?:UNITED STATES|CANADIAN|EUROS?|POUNDS?|YEN)\s+(?:DOLLAR|POUND|EUR)\s+([\d,]+\.?\d*)\s+([@\d.]+)/i;
+            const fxMatch = line.match(fxPattern);
+            if (fxMatch) {
+                const usdAmount = parseFloat(fxMatch[1].replace(/,/g, ''));
+                const rateStr = fxMatch[2].replace('@', '').trim();
+                const rate = parseFloat(rateStr);
+                const cadAmount = usdAmount * rate;
+
+                // Capture PDF coordinates for FX line
+                let fxCoords = null;
+                if (lineMetadata && lineMetadata[i]) {
+                    const metaLine = lineMetadata[i];
+                    fxCoords = {
+                        page: metaLine.page || 1,
+                        top: metaLine.y || 0,
+                        left: metaLine.x || 0,
+                        width: metaLine.width || 500,
+                        height: metaLine.height || 12,
+                        lineText: metaLine.text
+                    };
+                }
+
+                fxLines.push({
+                    text: line,
+                    usdAmount,
+                    rate,
+                    cadAmount,
+                    pdfCoords: fxCoords,
+                    lineIndex: i
+                });
+                console.log(`[FX-COLLECT] Line ${i}: USD ${usdAmount} @ ${rate} = CAD ${cadAmount.toFixed(2)}`);
             }
 
             // If in active section, look for transaction lines
@@ -235,46 +267,8 @@ AMEX FORMAT:
                         description,
                         rawLine: line,
                         pdfLineIndex: i,  // Track which PDF line this came from
-                        pdfCoords,
-                        continuationLines: []  // NEW: Array to hold multi-line details
+                        pdfCoords
                     });
-                }
-                // NEW: Detect continuation lines (FX conversion ONLY)
-                // CRITICAL: Only match FX conversion lines, NOT headers/names/etc
-                else if (currentSection.descriptions.length > 0) {
-                    // STRICT FX pattern - must contain currency + exchange rate (with @ or spaces)
-                    const isFXLine = line.match(/(?:UNITED STATES|CANADIAN|EUROS?|POUNDS?|YEN)\s+(?:DOLLAR|POUND|EUR)\s+[\d,]+\.?\d*\s+[@\d.]/i);
-
-                    // DEBUG: Log what we're testing
-                    if (line.includes('DOLLAR') || line.includes('@')) {
-                        console.log(`[FX-TEST] Line ${i}: "${line.substring(0, 60)}" -> ${isFXLine ? '✅ MATCH' : '❌ NO MATCH'}`);
-                    }
-
-                    // ONLY capture if it's an FX line - ignore everything else
-                    if (isFXLine) {
-                        const lastDesc = currentSection.descriptions[currentSection.descriptions.length - 1];
-
-                        // Capture PDF coordinates for continuation line
-                        let contPdfCoords = null;
-                        if (lineMetadata && lineMetadata[i]) {
-                            const metaLine = lineMetadata[i];
-                            contPdfCoords = {
-                                page: metaLine.page || 1,
-                                top: metaLine.y || 0,
-                                left: metaLine.x || 0,
-                                width: metaLine.width || 500,
-                                height: metaLine.height || 12,
-                                lineText: metaLine.text
-                            };
-                        }
-
-                        lastDesc.continuationLines.push({
-                            text: line,
-                            pdfLineIndex: i,
-                            pdfCoords: contPdfCoords
-                        });
-                        console.log(`[AMEX] Line ${i}: Captured FX continuation for previous transaction: "${line.substring(0, 50)}"`);
-                    }
                 }
             }
         }
@@ -305,7 +299,6 @@ AMEX FORMAT:
 
         // Match descriptions with amounts by position
         console.log(`[AMEX] Found ${descriptionLines.length} descriptions, ${amountLines.length} amounts`);
-
         const minLen = Math.min(descriptionLines.length, amountLines.length);
         for (let i = 0; i < minLen; i++) {
             const desc = descriptionLines[i];
@@ -315,15 +308,6 @@ AMEX FORMAT:
             // Generate unique parser_ref for this transaction
             const sequenceNum = String(i + 1).padStart(3, '0');
             const parser_ref = `${statementId}-${sequenceNum}`;
-
-            // Build complete metadata including all continuation lines
-            const fullRawText = [desc.rawLine, ...desc.continuationLines.map(c => c.text)].join('\n');
-
-            // Collect all PDF coordinates (main line + continuations)
-            const allPdfLines = [
-                { line: desc.rawLine, coords: desc.pdfCoords, type: 'main' },
-                ...desc.continuationLines.map(c => ({ line: c.text, coords: c.pdfCoords, type: 'continuation' }))
-            ];
 
             transactions.push({
                 date: desc.date,
@@ -335,16 +319,44 @@ AMEX FORMAT:
                 amount_cents: Math.round(amount * 100),
                 polarity: isPayment ? 'CREDIT' : 'DEBIT',
                 parser_ref,  // Unique parser ID
-                pdfLocation: desc.pdfCoords,  // Exact PDF coordinates
+                pdfLocation: desc.pdfCoords,  // Exact PDF coordinates for main line
                 audit: {
                     parser: 'AmexParser',
                     parsedAt: new Date().toISOString(),
                     statementId,
                     lineNumber: i + 1,
-                    rawText: fullRawText,  // Complete multi-line text
-                    allPdfLines: allPdfLines.filter(l => l.coords)  // All lines with coordinates
+                    rawText: desc.rawLine,  // Will be updated if FX line matches
+                    allPdfLines: [{ line: desc.rawLine, coords: desc.pdfCoords, type: 'main' }]  // Will be extended if FX matches
                 }
             });
+        }
+
+        // POST-PROCESSING: Match FX lines to transactions by amount
+        console.log(`[FX-MATCH] Attempting to match ${fxLines.length} FX lines to ${transactions.length} transactions`);
+
+        for (const fxLine of fxLines) {
+            const cadCents = Math.round(fxLine.cadAmount * 100);
+
+            // Find transaction with matching CAD amount (within $0.50 tolerance for rounding)
+            const matchedTx = transactions.find(tx =>
+                Math.abs(tx.amount_cents - cadCents) <= 50 && tx.polarity === 'DEBIT'
+            );
+
+            if (matchedTx) {
+                // Append FX line to rawText
+                matchedTx.audit.rawText += '\n' + fxLine.text;
+
+                // Add FX line to allPdfLines
+                matchedTx.audit.allPdfLines.push({
+                    line: fxLine.text,
+                    coords: fxLine.pdfCoords,
+                    type: 'continuation'
+                });
+
+                console.log(`[FX-MATCH] ✅ Matched FX line (USD ${fxLine.usdAmount} @ ${fxLine.rate} = CAD ${fxLine.cadAmount.toFixed(2)}) to transaction: ${matchedTx.description} (CAD ${(matchedTx.amount_cents / 100).toFixed(2)})`);
+            } else {
+                console.log(`[FX-MATCH] ❌ No match for FX line: CAD ${fxLine.cadAmount.toFixed(2)} (USD ${fxLine.usdAmount} @ ${fxLine.rate})`);
+            }
         }
 
         console.log(`[AMEX] Parsed ${transactions.length} transactions`);
