@@ -110,13 +110,7 @@
                         <i class="ph ph-book-open nav-icon"></i>
                         <span class="nav-label">Chart of Accounts</span>
                     </div>
-                    <div class="nav-item" data-route="source">
-                        <i class="ph ph-database nav-icon"></i>
-                        <span class="nav-label">Source Hub</span>
-                        <span
-                            style="font-size: 10px; font-weight: 700; color: #94a3b8; background: #334155; padding: 2px 6px; border-radius: 4px; margin-left: auto;">Phase
-                            2</span>
-                    </div>
+
                 </div>
 
                 <div class="nav-group">
@@ -125,14 +119,8 @@
                         <i class="ph ph-gear nav-icon"></i>
                         <span class="nav-label">Settings</span>
                     </div>
-                    <div class="nav-item" data-route="audit">
-                        <i class="ph ph-sparkle nav-icon"></i>
-                        <span class="nav-label">AI Audit</span>
-                    </div>
-                    <div class="nav-item" data-route="team">
-                        <i class="ph ph-users nav-icon"></i>
-                        <span class="nav-label">Team</span>
-                    </div>
+
+
                     <div class="nav-item" data-route="roadmap">
                         <i class="ph ph-map-trifold nav-icon"></i>
                         <span class="nav-label">Roadmap</span>
@@ -405,19 +393,19 @@
 </html>
 <!-- Export Button (Add to your toolbar manually) -->
 <script>
-// Global function to show export menu - call from your toolbar button
-window.showExportMenu = () => {
-    const options = [
-        { label: 'CSV', action: () => window.TransactionExporter?.exportCurrentView('csv') },
-        { label: 'Excel CSV', action: () => window.TransactionExporter?.exportCurrentView('excel') },
-        { label: 'JSON', action: () => window.TransactionExporter?.exportCurrentView('json') },
-        { label: 'Uncategorized Only', action: () => window.TransactionExporter?.exportCurrentView('uncategorized') }
-    ];
-    
-    // Simple native menu
-    const choice = prompt('Export format:\n1. CSV\n2. Excel CSV\n3. JSON\n4. Uncategorized Only\n\nEnter number (1-4):');
-    if (choice && options[parseInt(choice) - 1]) {
-        options[parseInt(choice) - 1].action();
-    }
-};
+    // Global function to show export menu - call from your toolbar button
+    window.showExportMenu = () => {
+        const options = [
+            { label: 'CSV', action: () => window.TransactionExporter?.exportCurrentView('csv') },
+            { label: 'Excel CSV', action: () => window.TransactionExporter?.exportCurrentView('excel') },
+            { label: 'JSON', action: () => window.TransactionExporter?.exportCurrentView('json') },
+            { label: 'Uncategorized Only', action: () => window.TransactionExporter?.exportCurrentView('uncategorized') }
+        ];
+
+        // Simple native menu
+        const choice = prompt('Export format:\n1. CSV\n2. Excel CSV\n3. JSON\n4. Uncategorized Only\n\nEnter number (1-4):');
+        if (choice && options[parseInt(choice) - 1]) {
+            options[parseInt(choice) - 1].action();
+        }
+    };
 </script>
