@@ -499,6 +499,17 @@ window.RoboLedger = (function () {
             return false;
         },
 
+        updateTransaction: function (tx_id, updates) {
+            const tx = state.transactions[tx_id];
+            if (tx) {
+                Object.assign(tx, updates);
+                save();
+                console.log(`[LEDGER] Updated transaction ${tx_id}:`, updates);
+                return true;
+            }
+            return false;
+        },
+
         updateDescription: function (tx_id, new_description) {
             const tx = state.transactions[tx_id];
             if (tx) {

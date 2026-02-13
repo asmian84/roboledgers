@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { COADropdown } from './components/COADropdown';
+import { CategoryDropdown } from './components/CategoryDropdown';
 import { AuditSidebar } from './components/AuditSidebar';
 
 // Canadian Tax Rates (GST, PST, HST, QST) by Province/Territory
@@ -673,6 +674,42 @@ const columns = [
                     value={row.original.category || ''}
                     onChange={handleUpdateCategory}
                     txId={row.original.tx_id}
+                />
+            );
+        }
+    }),
+
+    // 8. Category (Categorization Dropdown)
+    columnHelper.accessor('category_id', {
+        header: 'CATEGORY',
+        size: 180,
+        minSize: 160,
+        maxSize: 220,
+        cell: ({ row }) => {
+            const handleUpdateCategoryId = (categoryId, categoryPath) => {
+                const txId = row.original.tx_id;
+
+                // Update in ledger
+                if (window.RoboLedger?.Ledger?.updateTransaction) {
+                    window.RoboLedger.Ledger.updateTransaction(txId, {
+                        category_id: categoryId,
+                        category_path: categoryPath,
+                        category_method: 'manual',
+                        categorized_at: new Date().toISOString()
+                    });
+                }
+
+                // Trigger workspace refresh
+                if (window.updateWorkspace) {
+                    window.updateWorkspace();
+                }
+            };
+
+            return (
+                <CategoryDropdown
+                    value={row.original.category_id || null}
+                    onChange={handleUpdateCategoryId}
+                    categories={window.CategoryService?.getTree?.() || []}
                 />
             );
         }
