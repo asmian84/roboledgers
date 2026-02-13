@@ -233,21 +233,22 @@ AMEX FORMAT:
 
             // If in active section, look for transaction lines
             if (currentSection) {
-                // ONLY capture transactions (lines with dates) - extract amount FROM the same line
+                // Scan for amounts (on separate lines from descriptions)
+                // Section boundaries ensure we don't capture summary amounts
+                const amountMatch = line.match(/([\d,]+\.\d{2})$/);
+                if (amountMatch) {
+                    const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
+                    const signedAmount = line.includes('-') ? -amt : amt;
+                    currentSection.amounts.push(signedAmount);
+                    console.log(`[TX-AMT] Line ${i}: ${amt}`);
+                }
+
+                // Capture transaction descriptions (lines with dates)
                 const dateMatch = line.match(dateRegex);
                 if (dateMatch) {
                     const [, month1, day1, month2, day2, description] = dateMatch;
                     const month = monthMap[month2.toLowerCase()];
                     const day = day2.padStart(2, '0');
-                    
-                    // Extract amount from THIS transaction line (at the end)
-                    const amountMatch = line.match(/([\d,]+\.\d{2})$/);
-                    if (amountMatch) {
-                        const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
-                        const signedAmount = line.includes('-') ? -amt : amt;
-                        currentSection.amounts.push(signedAmount);
-                        console.log(`[TX-LINE] ${i}: ${amt} from "${description.substring(0, 40)}"`);
-                    }
 
                     // Capture PDF coordinates for this line
                     let pdfCoords = null;
