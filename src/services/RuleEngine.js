@@ -13,6 +13,9 @@ class RuleEngine {
         this.STORAGE_KEY = 'roboledger_categorization_rules';
         this.rules = this.loadRules();
 
+        // Initialize vendor matcher
+        this.vendorMatcher = new window.VendorMatcher();
+
         // Auto-import default rules if none exist
         if (this.rules.length === 0) {
             console.log('[RULE_ENGINE] No rules found, importing defaults...');
@@ -122,11 +125,12 @@ class RuleEngine {
 
     /**
      * Apply rules to a transaction
-     * Returns { coa_code, rule_id, confidence } or null
+     * Returns { coa_code, rule_id, confidence, method } or null
      */
     applyRules(transaction, rules = null) {
         const activeRules = rules || this.getEnabledRules();
 
+        // Try rule-based matching first
         for (const rule of activeRules) {
             if (this.matchesConditions(transaction, rule.conditions, rule.logic)) {
                 // Update stats
@@ -145,8 +149,24 @@ class RuleEngine {
             }
         }
 
+        // Fallback to vendor dictionary matching
+        if (this.vendorMatcher && this.vendorMatcher.dictionary) {
+            const match = this.vendorMatcher.findMatch(transaction.description, 0.6);
+            if (match) {
+                console.log(`[RULE_ENGINE] Vendor match for "${transaction.description}":`, match);
+                return {
+                    coa_code: match.coaCode,
+                    confidence: match.confidence,
+                    method: 'vendor_dictionary',
+                    vendor: match.vendor,
+                    industry: match.industry
+                };
+            }
+        }
+
         return null;
     }
+
 
     /**
      * Check if transaction matches all/any conditions based on logic
