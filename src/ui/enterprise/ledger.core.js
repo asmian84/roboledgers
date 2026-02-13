@@ -1406,6 +1406,12 @@ window.RoboLedger = (function () {
                     sourceFileId: sourceFileId, // Link to workbench blob
                     source_pdf: row.source_pdf || null, // PDF metadata for audit viewer
                     txsig,
+
+                    // TRANSACTION IDENTITY SYSTEM
+                    parser_ref: row.parser_ref || null,  // Unique parser-generated ID (e.g., AMEX-2022NOV-001)
+                    pdfLocation: row.pdfLocation || null, // Exact PDF coordinates for highlighting
+                    audit: row.audit || null,  // Parser audit metadata
+
                     metadata: {
                         source: metadata.name,
                         transit: metadata.transit,
