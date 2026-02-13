@@ -328,8 +328,9 @@ AMEX FORMAT:
                     "PAYMENT THANK YOU", "PURCHASE", "CASH ADVANCE",
                     "INTEREST CHARGE", "MEMBERSHIP FEE", "LATE FEE"
                 ]),
-                amount_cents: Math.round(amount * 100),
-                polarity: isPayment ? 'CREDIT' : 'DEBIT',
+                debit: isPayment ? 0 : amount,
+                credit: isPayment ? amount : 0,
+                balance: 0,  // Not used by ledger
                 parser_ref,  // Unique parser ID
                 pdfLocation: desc.pdfCoords,  // Exact PDF coordinates for main line
                 audit: {
@@ -347,11 +348,9 @@ AMEX FORMAT:
         console.log(`[FX-MATCH] Attempting to match ${fxLines.length} FX lines to ${transactions.length} transactions`);
 
         for (const fxLine of fxLines) {
-            const cadCents = Math.round(fxLine.cadAmount * 100);
-
             // Find transaction with matching CAD amount (within $0.50 tolerance for rounding)
             const matchedTx = transactions.find(tx =>
-                Math.abs(tx.amount_cents - cadCents) <= 50 && tx.polarity === 'DEBIT'
+                tx.debit > 0 && Math.abs(tx.debit - fxLine.cadAmount) <= 0.50
             );
 
             if (matchedTx) {
@@ -365,7 +364,7 @@ AMEX FORMAT:
                     type: 'continuation'
                 });
 
-                console.log(`[FX-MATCH] ✅ Matched FX line (USD ${fxLine.usdAmount} @ ${fxLine.rate} = CAD ${fxLine.cadAmount.toFixed(2)}) to transaction: ${matchedTx.description} (CAD ${(matchedTx.amount_cents / 100).toFixed(2)})`);
+                console.log(`[FX-MATCH] ✅ Matched FX line (USD ${fxLine.usdAmount} @ ${fxLine.rate} = CAD ${fxLine.cadAmount.toFixed(2)}) to transaction: ${matchedTx.description} (CAD ${matchedTx.debit.toFixed(2)})`);
             } else {
                 console.log(`[FX-MATCH] ❌ No match for FX line: CAD ${fxLine.cadAmount.toFixed(2)} (USD ${fxLine.usdAmount} @ ${fxLine.rate})`);
             }
