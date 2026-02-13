@@ -242,8 +242,8 @@ AMEX FORMAT:
                 // NEW: Detect continuation lines (FX conversion ONLY)
                 // CRITICAL: Only match FX conversion lines, NOT headers/names/etc
                 else if (currentSection.descriptions.length > 0) {
-                    // STRICT FX pattern - must contain currency + @ symbol for exchange rate
-                    const isFXLine = line.match(/(?:UNITED STATES|CANADIAN|EUROS?|POUNDS?|YEN)\s+(?:DOLLAR|POUND|EUR).*@/i);
+                    // STRICT FX pattern - must contain currency + exchange rate (with @ or spaces)
+                    const isFXLine = line.match(/(?:UNITED STATES|CANADIAN|EUROS?|POUNDS?|YEN)\s+(?:DOLLAR|POUND|EUR)\s+[\d,]+\.?\d*\s+[@\d.]/i);
 
                     // DEBUG: Log what we're testing
                     if (line.includes('DOLLAR') || line.includes('@')) {
