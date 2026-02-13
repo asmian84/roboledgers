@@ -47,10 +47,9 @@ export function DocumentViewer({ document, onBack }) {
                     const pdf = await loadingTask.promise;
                     setPdfDoc(pdf);
 
-                    // Render the specified page or page 1
+                    // Set page number - rendering will happen in useEffect above
                     const pageNum = document.page || 1;
                     setCurrentPage(pageNum);
-                    await renderPdfPage(pdf, pageNum);
                 } else if (['jpg', 'jpeg', 'png', 'gif'].includes(document.type)) {
                     // Render image directly
                     renderImage(document.url);
@@ -71,7 +70,11 @@ export function DocumentViewer({ document, onBack }) {
         // Cancel any ongoing render first
         if (renderTaskRef.current) {
             console.log('[DOC VIEWER] Canceling previous render');
-            renderTaskRef.current.cancel();
+            try {
+                renderTaskRef.current.cancel();
+            } catch (e) {
+                // Already cancelled or completed
+            }
             renderTaskRef.current = null;
         }
 
@@ -97,7 +100,9 @@ export function DocumentViewer({ document, onBack }) {
             viewport: viewport
         };
 
-        await page.render(renderContext).promise;
+        // Store render task so we can cancel it if needed
+        renderTaskRef.current = page.render(renderContext);
+        await renderTaskRef.current.promise;
 
         // Draw highlight box if transaction line position is provided
         if (document.highlightLine) {
