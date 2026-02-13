@@ -1525,6 +1525,14 @@ window.RoboLedger = (function () {
                 }
             }
 
+            // Auto-categorize imported transactions using RuleEngine
+            if (importedCount > 0 && window.RuleEngine) {
+                console.log(`[LEDGER] Auto-categorizing ${importedCount} imported transactions...`);
+                const allTransactions = Ledger.getAll();
+                const result = window.RuleEngine.bulkCategorize(allTransactions);
+                console.log(`[LEDGER] Auto-categorization complete: ${result.categorized} categorized, ${result.skipped} skipped`);
+            }
+
             return importedCount;
         }
     };
