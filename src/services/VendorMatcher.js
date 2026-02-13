@@ -73,7 +73,7 @@ class VendorMatcher {
      * Find best vendor match for a transaction description
      * Returns: { vendor, coaCode, accountName, industry, confidence }
      */
-    findMatch(description, threshold = 0.6) {
+    findMatch(descriptionOrTx, threshold = 0.6) {
         if (!this.dictionary || this.dictionary.length === 0) {
             return null;
         }
@@ -83,12 +83,11 @@ class VendorMatcher {
             ? { description: descriptionOrTx }
             : descriptionOrTx;
 
-        const description = transaction.description || '';
 
         let bestMatch = null;
         let bestScore = 0;
 
-        const desc = description.toLowerCase().trim();
+        const desc = (transaction.description || '').toLowerCase().trim();
 
         for (const entry of this.dictionary) {
             // Try matching against multiple fields
