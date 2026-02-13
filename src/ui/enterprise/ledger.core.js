@@ -1176,6 +1176,9 @@ window.RoboLedger = (function () {
             if (file.name.toLowerCase().endsWith('.pdf')) {
                 console.log('[INGEST] 📄 PDF detected:', file.name);
 
+                let text = '';
+                let lineCoordinates = [];
+
                 try {
                     // Create blob URL that can be used by PDF viewer
                     pdfBlobUrl = URL.createObjectURL(file);
@@ -1188,8 +1191,8 @@ window.RoboLedger = (function () {
                     const pdfData = await this.extractTextFromPDF(buffer);
                     console.log('[INGEST] ✅ PDF text extraction complete');
 
-                    const text = pdfData.text; // Destructure text
-                    const lineCoordinates = pdfData.lineCoordinates; // Get coordinates
+                    text = pdfData.text; // Destructure text
+                    lineCoordinates = pdfData.lineCoordinates; // Get coordinates
 
                     console.log('[INGEST] 📝 Extracted text length:', text.length, 'characters');
                     console.log('[INGEST] 📍 Line coordinates captured:', lineCoordinates.length, 'lines');
