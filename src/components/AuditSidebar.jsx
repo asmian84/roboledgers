@@ -399,242 +399,183 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                             </div>
                         )}
                     </div>
-
-                    {/* Source Document */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            SOURCE DOCUMENT
-                        </div>
-
-                        {!showDocViewer ? (
-                            <>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    marginBottom: '10px',
-                                    fontSize: '13px',
-                                    color: '#475569'
-                                }}>
-                                    <i className="ph ph-file-pdf" style={{ color: '#ef4444', fontSize: '18px' }}></i>
-                                    <span>{transaction.source_pdf?.filename || 'statement.pdf'}</span>
-                                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>
-                                        (Page {transaction.source_pdf?.page || 1})
-                                    </span>
-                                </div>
-                                <button
-                                    onClick={handleViewSourceDocument}
-                                    style={{
-                                        width: '100%',
-                                        padding: '10px 16px',
-                                        background: '#3b82f6',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: 600,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        transition: 'background 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => e.target.style.background = '#2563eb'}
-                                    onMouseLeave={(e) => e.target.style.background = '#3b82f6'}
-                                >
-                                    View Source Document <i className="ph ph-arrow-square-out"></i>
-                                </button>
-                            </>
-                        ) : (
-                            // Document Viewer - SUPPORTS PDF, JPG, PNG, DOCX
-                            <DocumentViewer
-                                document={viewerDocument}
-                                onBack={handleBackToAudit}
-                            />
                         )}
-                    </div>
-
-                    {/* Attached Receipts - HORIZONTAL DRAG/DROP AREA */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            ATTACHED RECEIPTS
-                        </div>
-
-                        {/* Horizontal Drag/Drop Area */}
-                        <label style={{
-                            width: '100%',
-                            minHeight: '100px',
-                            border: '2px dashed #cbd5e1',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            background: '#f8fafc',
-                            transition: 'all 0.2s',
-                            padding: '20px'
-                        }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = '#3b82f6';
-                                e.currentTarget.style.background = '#eff6ff';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = '#cbd5e1';
-                                e.currentTarget.style.background = '#f8fafc';
-                            }}>
-                            <input
-                                type="file"
-                                accept=".pdf,.jpg,.jpeg,.png"
-                                onChange={handleUploadReceipt}
-                                style={{ display: 'none' }}
-                            />
-                            <i className="ph ph-upload-simple" style={{ fontSize: '32px', color: '#94a3b8', marginBottom: '8px' }}></i>
-                            <span style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginBottom: '4px' }}>
-                                Drag & drop receipts here
-                            </span>
-                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                                or click to browse
-                            </span>
-                            <div style={{ marginTop: '8px', fontSize: '11px', color: '#cbd5e1' }}>
-                                PDF, JPG, PNG supported
-                            </div>
-                        </label>
-
-                        {/* Show uploaded receipts as thumbnails */}
-                        {receipts.length > 0 && (
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
-                                {receipts.map((receipt, idx) => (
-                                    <div key={idx} style={{
-                                        width: '80px',
-                                        height: '80px',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '6px',
-                                        overflow: 'hidden',
-                                        cursor: 'pointer',
-                                        position: 'relative'
-                                    }}>
-                                        <img src={receipt.thumbnail} alt={receipt.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Edit History */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            EDIT HISTORY
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
-                            {transaction.edit_history?.length > 0 ? (
-                                transaction.edit_history.map((edit, idx) => (
-                                    <div key={idx} style={{ marginBottom: '6px' }}>
-                                        • {new Date(edit.timestamp).toLocaleString()} - {edit.description}
-                                    </div>
-                                ))
-                            ) : (
-                                <div style={{ fontStyle: 'italic', color: '#94a3b8' }}>No edits made</div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Categorization */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            letterSpacing: '0.5px',
-                            marginBottom: '10px'
-                        }}>
-                            CATEGORIZATION
-                        </div>
-                        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6' }}>
-                            <div style={{ marginBottom: '6px' }}>
-                                <strong>Method:</strong> {transaction.categorization?.method || 'Manual'}
-                                {transaction.categorization?.confidence && ` (${transaction.categorization.confidence}% confidence)`}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <strong>Matched:</strong>
-                                <span>{transaction.description}</span>
-                                <span>→</span>
-                                <span style={{
-                                    background: '#3b82f6',
-                                    color: 'white',
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
-                                    fontSize: '11px',
-                                    fontWeight: 600
-                                }}>
-                                    {transaction.account || '5970'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
-                        <button style={{
-                            flex: 1,
-                            padding: '10px 16px',
-                            background: '#3b82f6',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            transition: 'background 0.2s'
-                        }}
-                            onMouseEnter={(e) => e.target.style.background = '#2563eb'}
-                            onMouseLeave={(e) => e.target.style.background = '#3b82f6'}>
-                            Edit
-                        </button>
-                        <button style={{
-                            padding: '10px 16px',
-                            background: 'white',
-                            color: '#dc2626',
-                            border: '1px solid #fecaca',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            transition: 'all 0.2s'
-                        }}
-                            onMouseEnter={(e) => {
-                                e.target.style.background = '#fef2f2';
-                                e.target.style.borderColor = '#fca5a5';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.target.style.background = 'white';
-                                e.target.style.borderColor = '#fecaca';
-                            }}>
-                            Delete
-                        </button>
-                    </div>
-
                 </div>
+
+                {/* Attached Receipts - HORIZONTAL DRAG/DROP AREA */}
+                <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#64748b',
+                        letterSpacing: '0.5px',
+                        marginBottom: '10px'
+                    }}>
+                        ATTACHED RECEIPTS
+                    </div>
+
+                    {/* Horizontal Drag/Drop Area */}
+                    <label style={{
+                        width: '100%',
+                        minHeight: '100px',
+                        border: '2px dashed #cbd5e1',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        background: '#f8fafc',
+                        transition: 'all 0.2s',
+                        padding: '20px'
+                    }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#3b82f6';
+                            e.currentTarget.style.background = '#eff6ff';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#cbd5e1';
+                            e.currentTarget.style.background = '#f8fafc';
+                        }}>
+                        <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={handleUploadReceipt}
+                            style={{ display: 'none' }}
+                        />
+                        <i className="ph ph-upload-simple" style={{ fontSize: '32px', color: '#94a3b8', marginBottom: '8px' }}></i>
+                        <span style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginBottom: '4px' }}>
+                            Drag & drop receipts here
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                            or click to browse
+                        </span>
+                        <div style={{ marginTop: '8px', fontSize: '11px', color: '#cbd5e1' }}>
+                            PDF, JPG, PNG supported
+                        </div>
+                    </label>
+
+                    {/* Show uploaded receipts as thumbnails */}
+                    {receipts.length > 0 && (
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
+                            {receipts.map((receipt, idx) => (
+                                <div key={idx} style={{
+                                    width: '80px',
+                                    height: '80px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '6px',
+                                    overflow: 'hidden',
+                                    cursor: 'pointer',
+                                    position: 'relative'
+                                }}>
+                                    <img src={receipt.thumbnail} alt={receipt.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Edit History */}
+                <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#64748b',
+                        letterSpacing: '0.5px',
+                        marginBottom: '10px'
+                    }}>
+                        EDIT HISTORY
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
+                        {transaction.edit_history?.length > 0 ? (
+                            transaction.edit_history.map((edit, idx) => (
+                                <div key={idx} style={{ marginBottom: '6px' }}>
+                                    • {new Date(edit.timestamp).toLocaleString()} - {edit.description}
+                                </div>
+                            ))
+                        ) : (
+                            <div style={{ fontStyle: 'italic', color: '#94a3b8' }}>No edits made</div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Categorization */}
+                <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#64748b',
+                        letterSpacing: '0.5px',
+                        marginBottom: '10px'
+                    }}>
+                        CATEGORIZATION
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6' }}>
+                        <div style={{ marginBottom: '6px' }}>
+                            <strong>Method:</strong> {transaction.categorization?.method || 'Manual'}
+                            {transaction.categorization?.confidence && ` (${transaction.categorization.confidence}% confidence)`}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <strong>Matched:</strong>
+                            <span>{transaction.description}</span>
+                            <span>→</span>
+                            <span style={{
+                                background: '#3b82f6',
+                                color: 'white',
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: 600
+                            }}>
+                                {transaction.account || '5970'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
+                    <button style={{
+                        flex: 1,
+                        padding: '10px 16px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        transition: 'background 0.2s'
+                    }}
+                        onMouseEnter={(e) => e.target.style.background = '#2563eb'}
+                        onMouseLeave={(e) => e.target.style.background = '#3b82f6'}>
+                        Edit
+                    </button>
+                    <button style={{
+                        padding: '10px 16px',
+                        background: 'white',
+                        color: '#dc2626',
+                        border: '1px solid #fecaca',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        transition: 'all 0.2s'
+                    }}
+                        onMouseEnter={(e) => {
+                            e.target.style.background = '#fef2f2';
+                            e.target.style.borderColor = '#fca5a5';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.background = 'white';
+                            e.target.style.borderColor = '#fecaca';
+                        }}>
+                        Delete
+                    </button>
+                </div>
+
             </div>
+        </div >
         </>
     );
 }
