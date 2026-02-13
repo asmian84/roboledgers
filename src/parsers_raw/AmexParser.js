@@ -215,28 +215,27 @@ AMEX FORMAT:
                     const day = dateMatch[2].padStart(2, '0');
                     const description = dateMatch[5].trim();
 
-                    // Extract PDF coordinates from lineMetadata
+                    // Extract PDF coordinates by LINE INDEX (not text search!)
+                    // lineMetadata[i] corresponds to lines[i] - exact 1:1 mapping
                     let pdfCoords = null;
-                    if (lineMetadata && lineMetadata.length > 0) {
-                        const metaLine = lineMetadata.find(meta =>
-                            meta.text && meta.text === line
-                        );
-                        if (metaLine) {
-                            pdfCoords = {
-                                page: metaLine.page || 1,
-                                top: metaLine.y || 0,
-                                left: metaLine.x || 0,
-                                width: metaLine.width || 500,
-                                height: metaLine.height || 12,
-                                lineText: metaLine.text
-                            };
-                        }
+                    if (lineMetadata && lineMetadata[i]) {
+                        const metaLine = lineMetadata[i];
+                        pdfCoords = {
+                            page: metaLine.page || 1,
+                            top: metaLine.y || 0,
+                            left: metaLine.x || 0,
+                            width: metaLine.width || 500,
+                            height: metaLine.height || 12,
+                            lineText: metaLine.text
+                        };
+                        console.log(`[AMEX] Line ${i}: Matched "${description.substring(0, 40)}" to PDF coords page ${pdfCoords.page} Y=${pdfCoords.top}`);
                     }
 
                     currentSection.descriptions.push({
                         date: `${currentYear}-${month}-${day}`,
                         description,
                         rawLine: line,
+                        pdfLineIndex: i,  // Track which PDF line this came from
                         pdfCoords
                     });
                 }
