@@ -331,46 +331,7 @@ class RuleEngine {
     /**
      * Import default rules with COA codes
      */
-    importDefaultRules() {
-        const defaultRules = [
-            {
-                name: 'TELUS → Telephone & Internet (6400)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'TELUS' }],
-                action: { coa_code: '6400' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'NETFLIX → Software & Subscriptions (7200)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'NETFLIX' }],
-                action: { coa_code: '7200' },
-                logic: 'AND',
-                priority: 7
-            },
-            {
-                name: 'OPENPHONE → Telephone & Internet (6400)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'OPENPHONE' }],
-                action: { coa_code: '6400' },
-                logic: 'AND',
-                priority: 7
-            },
-            {
-                name: 'Gas Stations → Fuel (8300)',
-                conditions: [
-                    { field: 'description', operator: 'contains', value: 'GAS' },
-                ],
-                action: { coa_code: '8300' },
-                logic: 'OR',
-                priority: 6
-            }
-        ];
 
-        defaultRules.forEach(r => {
-            this.createRule(r.name, r.conditions, r.action, r.logic, r.priority);
-        });
-
-        console.log('[RULE_ENGINE] Imported default rules with COA codes');
-    }
 }
 
 // Singleton instance
