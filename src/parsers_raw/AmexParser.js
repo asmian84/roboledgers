@@ -233,23 +233,6 @@ AMEX FORMAT:
 
             // If in active section, look for transaction lines
             if (currentSection) {
-                // Scan for amounts (on separate lines from descriptions)
-                // Skip amounts that match FX CAD amounts (summary section)
-                const amountMatch = line.match(/([\d,]+\.\d{2})$/);
-                if (amountMatch) {
-                    const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
-
-                    // Check if this amount matches any FX CAD amount (within $0.50)
-                    const isFXSummaryAmount = fxLines.some(fx => Math.abs(fx.cadAmount - amt) < 0.50);
-
-                    if (!isFXSummaryAmount) {
-                        const signedAmount = line.includes('-') ? -amt : amt;
-                        currentSection.amounts.push(signedAmount);
-                        console.log(`[TX-AMT] Line ${i}: ${amt}`);
-                    } else {
-                        console.log(`[SKIP-FX-SUMMARY] Line ${i}: ${amt} (matches FX CAD amount)`);
-                    }
-                }
 
                 // Capture transaction descriptions (lines with dates)
                 const dateMatch = line.match(dateRegex);
@@ -257,6 +240,17 @@ AMEX FORMAT:
                     const [, month1, day1, month2, day2, description] = dateMatch;
                     const month = monthMap[month2.toLowerCase()];
                     const day = day2.padStart(2, '0');
+
+                    // Extract amount from THIS line (at the end, after description)
+                    const amountMatch = line.match(/([\d,]+\.\d{2})$/);
+                    if (amountMatch) {
+                        const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
+                        const signedAmount = line.includes('-') ? -amt : amt;
+                        currentSection.amounts.push(signedAmount);
+                        console.log(`[TX-EXTRACT] Line ${i}: "${description.substring(0, 30)}" → $${amt}`);
+                    } else {
+                        console.log(`[TX-NO-AMT] Line ${i}: "${description.substring(0, 30)}" (no amount on line)`);
+                    }
 
                     // Capture PDF coordinates for this line
                     let pdfCoords = null;
