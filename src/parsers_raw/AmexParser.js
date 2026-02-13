@@ -231,17 +231,34 @@ AMEX FORMAT:
                 console.log(`[FX-COLLECT] Line ${i}: USD ${usdAmount} @ ${rate} = CAD ${cadAmount.toFixed(2)}`);
             }
 
-            // If in active section, look for transaction lines
+            // If in active section, look for transaction lines AND amounts
             if (currentSection) {
+                // FIRST: Scan for amounts on ANY line (they may be separate from descriptions)
+                // Skip FX summary amounts
+                const lineAmountMatch = line.match(/([\d,]+\.\d{2})$/);
+                if (lineAmountMatch && !line.match(dateRegex)) {  // Only if NOT a transaction line
+                    const amt = parseFloat(lineAmountMatch[1].replace(/,/g, ''));
 
-                // Capture transaction descriptions (lines with dates)
+                    // Skip if this matches an FX CAD amount (summary section)
+                    const isFXSummary = fxLines.some(fx => Math.abs(fx.cadAmount - amt) < 0.50);
+
+                    if (!isFXSummary) {
+                        const signedAmount = line.includes('-') ? -amt : amt;
+                        currentSection.amounts.push(signedAmount);
+                        console.log(`[TX-AMT] Line ${i}: ${amt}`);
+                    } else {
+                        console.log(`[SKIP-FX] Line ${i}: ${amt} (FX summary)`);
+                    }
+                }
+
+                // SECOND: Capture transaction descriptions (lines with dates)
                 const dateMatch = line.match(dateRegex);
                 if (dateMatch) {
                     const [, month1, day1, month2, day2, description] = dateMatch;
                     const month = monthMap[month2.toLowerCase()];
                     const day = day2.padStart(2, '0');
 
-                    // Extract amount from THIS line (at the end, after description)
+                    // Try to extract amount from THIS line (fallback if on same line)
                     const amountMatch = line.match(/([\d,]+\.\d{2})$/);
                     if (amountMatch) {
                         const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
