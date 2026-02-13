@@ -234,13 +234,21 @@ AMEX FORMAT:
             // If in active section, look for transaction lines
             if (currentSection) {
                 // Scan for amounts (on separate lines from descriptions)
-                // Section boundaries ensure we don't capture summary amounts
+                // Skip amounts that match FX CAD amounts (summary section)
                 const amountMatch = line.match(/([\d,]+\.\d{2})$/);
                 if (amountMatch) {
                     const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
-                    const signedAmount = line.includes('-') ? -amt : amt;
-                    currentSection.amounts.push(signedAmount);
-                    console.log(`[TX-AMT] Line ${i}: ${amt}`);
+
+                    // Check if this amount matches any FX CAD amount (within $0.50)
+                    const isFXSummaryAmount = fxLines.some(fx => Math.abs(fx.cadAmount - amt) < 0.50);
+
+                    if (!isFXSummaryAmount) {
+                        const signedAmount = line.includes('-') ? -amt : amt;
+                        currentSection.amounts.push(signedAmount);
+                        console.log(`[TX-AMT] Line ${i}: ${amt}`);
+                    } else {
+                        console.log(`[SKIP-FX-SUMMARY] Line ${i}: ${amt} (matches FX CAD amount)`);
+                    }
                 }
 
                 // Capture transaction descriptions (lines with dates)
