@@ -234,33 +234,24 @@ AMEX FORMAT:
             // If in active section, look for transaction lines AND amounts
             if (currentSection) {
                 // FIRST: Scan for amounts on ANY line (they may be separate from descriptions)
-                // Skip FX summary amounts - BUT STORE their coordinates!
                 const lineAmountMatch = line.match(/([\d,]+\.\d{2})$/);
                 if (lineAmountMatch && !line.match(dateRegex)) {  // Only if NOT a transaction line
                     const amt = parseFloat(lineAmountMatch[1].replace(/,/g, ''));
+                    const signedAmount = line.includes('-') ? -amt : amt;
 
-                    // Skip if this matches an FX CAD amount (summary section)
-                    const isFXSummary = fxLines.some(fx => Math.abs(fx.cadAmount - amt) < 0.50);
+                    // Store amount WITH metadata for spatial matching
+                    const amountData = {
+                        amount: signedAmount,
+                        lineIndex: i,
+                        coords: lineMetadata && lineMetadata[i] ? {
+                            page: lineMetadata[i].page || 1,
+                            y: lineMetadata[i].y || 0,
+                            x: lineMetadata[i].x || 0
+                        } : null
+                    };
 
-                    if (!isFXSummary) {
-                        const signedAmount = line.includes('-') ? -amt : amt;
-
-                        // Store amount WITH metadata for spatial matching
-                        const amountData = {
-                            amount: signedAmount,
-                            lineIndex: i,
-                            coords: lineMetadata && lineMetadata[i] ? {
-                                page: lineMetadata[i].page || 1,
-                                y: lineMetadata[i].y || 0,
-                                x: lineMetadata[i].x || 0
-                            } : null
-                        };
-
-                        currentSection.amounts.push(amountData);
-                        console.log(`[TX-AMT] Line ${i} (Y=${amountData.coords?.y}): ${amt}`);
-                    } else {
-                        console.log(`[SKIP-FX] Line ${i}: ${amt} (FX summary)`);
-                    }
+                    currentSection.amounts.push(amountData);
+                    console.log(`[TX-AMT] Line ${i} (Y=${amountData.coords?.y}): ${amt}`);
                 }
 
                 // SECOND: Capture transaction descriptions (lines with dates)
@@ -354,10 +345,10 @@ AMEX FORMAT:
                 availableAmounts.forEach((amtData, idx) => {
                     if (!amtData || !amtData.coords) return;  // Skip if no coords
 
-                    // Only match amounts on the same page and within reasonable distance (±50 pixels)
+                    // Only match amounts on the same page and within reasonable distance (±100 pixels)
                     if (amtData.coords.page === descPage) {
                         const distance = Math.abs(amtData.coords.y - descY);
-                        if (distance < minDistance && distance < 50) {  // Same row or very close
+                        if (distance < minDistance && distance < 100) {  // Allow larger distance for Amex PDFs
                             minDistance = distance;
                             matchedAmount = amtData.amount;
                             matchedIndex = idx;
