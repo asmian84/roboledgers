@@ -1530,7 +1530,7 @@ window.RoboLedger = (function () {
                 try {
                     console.log(`[LEDGER] Auto-categorizing ${importedCount} imported transactions...`);
                     // Only categorize the newly imported transactions, not ALL transactions
-                    const recentTxs = transactions.slice(0, importedCount);
+                    const recentTxs = parsedTransactions.slice(0, importedCount);
                     const result = window.RuleEngine.bulkCategorize(recentTxs);
                     console.log(`[LEDGER] Auto-categorization complete: ${result.categorized} categorized, ${result.skipped} skipped`);
                 } catch (error) {
