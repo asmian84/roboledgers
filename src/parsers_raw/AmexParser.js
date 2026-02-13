@@ -239,17 +239,14 @@ AMEX FORMAT:
                         continuationLines: []  // NEW: Array to hold multi-line details
                     });
                 }
-                // NEW: Detect continuation lines (FX conversion, additional details)
-                // These lines don't start with a date but belong to the previous transaction
+                // NEW: Detect continuation lines (FX conversion ONLY)
+                // CRITICAL: Only match FX conversion lines, NOT headers/names/etc
                 else if (currentSection.descriptions.length > 0) {
-                    // Check if this line is a continuation (FX conversion, split details, etc.)
+                    // STRICT FX pattern - must contain currency + @ symbol for exchange rate
                     const isFXLine = line.match(/(?:UNITED STATES|CANADIAN|EUROS?|POUNDS?|YEN)\s+(?:DOLLAR|POUND|EUR).*@/i);
-                    const isDetailLine = !line.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i) &&
-                        !line.match(/Total of/i) &&
-                        !line.match(/^Page \d/i) &&
-                        !amountMatch; // Not just an amount line
 
-                    if (isFXLine || (isDetailLine && line.length > 10)) {
+                    // ONLY capture if it's an FX line - ignore everything else
+                    if (isFXLine) {
                         const lastDesc = currentSection.descriptions[currentSection.descriptions.length - 1];
 
                         // Capture PDF coordinates for continuation line
@@ -271,7 +268,7 @@ AMEX FORMAT:
                             pdfLineIndex: i,
                             pdfCoords: contPdfCoords
                         });
-                        console.log(`[AMEX] Line ${i}: Captured continuation line for previous transaction: "${line.substring(0, 50)}"`);
+                        console.log(`[AMEX] Line ${i}: Captured FX continuation for previous transaction: "${line.substring(0, 50)}"`);
                     }
                 }
             }
