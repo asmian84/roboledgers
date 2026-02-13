@@ -1178,6 +1178,7 @@ window.RoboLedger = (function () {
 
                 let text = '';
                 let lineCoordinates = [];
+                let parseResult = null;
 
                 try {
                     // Create blob URL that can be used by PDF viewer
@@ -1200,7 +1201,7 @@ window.RoboLedger = (function () {
 
                     // Try specialized parser first, fallback to detection
                     console.log('[INGEST] 🔍 Calling parsePDFText...');
-                    const parseResult = await this.parsePDFText(text, lineCoordinates); // PASS LINE COORDS
+                    parseResult = await this.parsePDFText(text, lineCoordinates); // PASS LINE COORDS
                     console.log('[INGEST] ✅ Parser returned:', parseResult);
                     console.log('[INGEST] 📊 Transactions found:', parseResult?.transactions?.length || 0);
 

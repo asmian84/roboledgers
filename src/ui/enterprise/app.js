@@ -364,6 +364,9 @@
 
     for (let idx = 0; idx < files.length; idx++) {
       const file = files[idx];
+      const statementNum = idx + 1;
+      const totalStatements = files.length;
+
       try {
         const baseProgress = (idx / files.length) * 100;
         const fileProgressStep = 100 / files.length;
@@ -373,7 +376,7 @@
           Math.max(1, Math.round(baseProgress + (fileProgressStep * 0.1))),
           100,
           file.name,
-          'Extracting transactions...',
+          `Processing statement ${statementNum} of ${totalStatements} • Extracting transaction data...`,
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -383,7 +386,7 @@
           Math.round(baseProgress + (fileProgressStep * 0.4)),
           100,
           file.name,
-          'Parsing transactions...',
+          `Processing statement ${statementNum} of ${totalStatements} • Parsing transactions...`,
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -397,7 +400,7 @@
           Math.round(baseProgress + (fileProgressStep * 0.7)),
           100,
           file.name,
-          'Categorizing transactions...',
+          `Processing statement ${statementNum} of ${totalStatements} • Categorizing transactions...`,
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 80));
@@ -407,7 +410,7 @@
           Math.round(baseProgress + (fileProgressStep * 0.85)),
           100,
           file.name,
-          'Cleaning data...',
+          `Processing statement ${statementNum} of ${totalStatements} • Cleaning data...`,
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 80));
@@ -417,11 +420,11 @@
           Math.round(baseProgress + (fileProgressStep * 0.95)),
           100,
           file.name,
-          `Imported ${imported} transactions`,
+          `Statement ${statementNum} of ${totalStatements} complete • Imported ${imported} transactions`,
           totalImported
         );
 
-        console.log(`[UPLOAD] ${file.name}: ${imported} transactions imported`);
+        console.log(`[UPLOAD] ${statementNum}/${totalStatements} - ${file.name}: ${imported} transactions imported`);
       } catch (err) {
         console.error('[UPLOAD] Parse error:', file.name, err);
         await window.updateProgressBar(
