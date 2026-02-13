@@ -395,12 +395,22 @@
         console.log(`[UPLOAD-DEBUG] ⏰ Starting processUpload for statement ${statementNum}/${totalStatements}: ${file.name}`);
         const processingStartTime = Date.now();
 
-        // AGGRESSIVE TIMEOUT: If processUpload doesn't complete in 30 seconds, force an error
+        // AGGRESSIVE TIMEOUT: If processUpload doesn't complete in 10 seconds, force an error
+        // SPECIAL CASE: Skip Statement_Jan 2023.pdf if it times out (known problematic file)
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
             const elapsed = ((Date.now() - processingStartTime) / 1000).toFixed(1);
-            reject(new Error(`🔥 TIMEOUT: processUpload stuck for ${elapsed}s on statement ${statementNum}/${totalStatements} (${file.name}). Upload halted.`));
-          }, 30000); // 30 second timeout
+            const errorMsg = `🔥 TIMEOUT: processUpload stuck for ${elapsed}s on statement ${statementNum}/${totalStatements} (${file.name}). Upload halted.`;
+
+            // If it's Statement_Jan 2023.pdf, log warning and skip instead of failing
+            if (file.name.includes('Statement_Jan 2023')) {
+              console.warn(`⚠️ SKIPPING PROBLEMATIC FILE: ${file.name} (timeout after ${elapsed}s)`);
+              console.warn('This file consistently causes hangs. Continuing with remaining files...');
+              reject(new Error(`SKIP:${file.name}`)); // Special error prefix to identify skip
+            } else {
+              reject(new Error(errorMsg));
+            }
+          }, 10000); // 10 second timeout (reduced from 30s for faster detection)
         });
 
         const uploadPromise = window.RoboLedger.Ingestion.processUpload(file, account_id)
@@ -444,6 +454,22 @@
 
         console.log(`[UPLOAD] ${statementNum}/${totalStatements} - ${file.name}: ${imported} transactions imported`);
       } catch (err) {
+        // Special handling for SKIP errors (problematic files that timeout)
+        if (err.message && err.message.startsWith('SKIP:')) {
+          const skippedFile = err.message.replace('SKIP:', '');
+          console.warn(`[UPLOAD] ⚠️ Skipped: ${skippedFile} (timeout)`);
+          await window.updateProgressBar(
+            Math.round(((idx + 1) / files.length) * 100),
+            100,
+            file.name,
+            `⏭️ Skipped (timeout)`,
+            totalImported
+          );
+          // Continue to next file instead of stopping
+          continue;
+        }
+
+        // Regular error handling for other failures
         console.error('[UPLOAD] Parse error:', file.name, err);
         await window.updateProgressBar(
           Math.round(((idx + 1) / files.length) * 100),
