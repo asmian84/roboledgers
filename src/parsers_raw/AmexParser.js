@@ -219,7 +219,7 @@ AMEX FORMAT:
                     let pdfCoords = null;
                     if (lineMetadata && lineMetadata.length > 0) {
                         const metaLine = lineMetadata.find(meta =>
-                            meta.text && meta.text.includes(description.substring(0, 30))
+                            meta.text && meta.text === line
                         );
                         if (metaLine) {
                             pdfCoords = {
