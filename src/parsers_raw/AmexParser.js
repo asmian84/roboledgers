@@ -338,9 +338,11 @@ AMEX FORMAT:
                     parser: 'AmexParser',
                     parsedAt: new Date().toISOString(),
                     statementId,
-                    rawText: this.cleanRawText(`${desc.date} ${desc.description} ${amount}`),
-                    refCode: desc.description.match(/\b([A-Z0-9]{15,})\b/)?.[1] || 'N/A'
-                });
+                    lineNumber: i + 1,
+                    rawText: fullRawText,  // Complete multi-line text
+                    allPdfLines: allPdfLines.filter(l => l.coords)  // All lines with coordinates
+                }
+            });
         }
 
         console.log(`[AMEX] Parsed ${transactions.length} transactions`);
