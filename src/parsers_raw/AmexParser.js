@@ -245,6 +245,11 @@ AMEX FORMAT:
                     // STRICT FX pattern - must contain currency + @ symbol for exchange rate
                     const isFXLine = line.match(/(?:UNITED STATES|CANADIAN|EUROS?|POUNDS?|YEN)\s+(?:DOLLAR|POUND|EUR).*@/i);
 
+                    // DEBUG: Log what we're testing
+                    if (line.includes('DOLLAR') || line.includes('@')) {
+                        console.log(`[FX-TEST] Line ${i}: "${line.substring(0, 60)}" -> ${isFXLine ? '✅ MATCH' : '❌ NO MATCH'}`);
+                    }
+
                     // ONLY capture if it's an FX line - ignore everything else
                     if (isFXLine) {
                         const lastDesc = currentSection.descriptions[currentSection.descriptions.length - 1];
