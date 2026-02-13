@@ -322,6 +322,8 @@
     <script type="module" src="src/services/CategoryService.js"></script>
     <script type="module" src="src/services/VendorMatcher.js"></script>
     <script type="module" src="src/services/RuleEngine.js"></script>
+    <script src="src/services/TransactionExporter.js"></script>
+
 
     <script src="src/ui/enterprise/ledger.core.js"></script>
     <script src="src/ui/enterprise/app.js"></script>
@@ -401,3 +403,21 @@
 </body>
 
 </html>
+<!-- Export Button (Add to your toolbar manually) -->
+<script>
+// Global function to show export menu - call from your toolbar button
+window.showExportMenu = () => {
+    const options = [
+        { label: 'CSV', action: () => window.TransactionExporter?.exportCurrentView('csv') },
+        { label: 'Excel CSV', action: () => window.TransactionExporter?.exportCurrentView('excel') },
+        { label: 'JSON', action: () => window.TransactionExporter?.exportCurrentView('json') },
+        { label: 'Uncategorized Only', action: () => window.TransactionExporter?.exportCurrentView('uncategorized') }
+    ];
+    
+    // Simple native menu
+    const choice = prompt('Export format:\n1. CSV\n2. Excel CSV\n3. JSON\n4. Uncategorized Only\n\nEnter number (1-4):');
+    if (choice && options[parseInt(choice) - 1]) {
+        options[parseInt(choice) - 1].action();
+    }
+};
+</script>
