@@ -679,42 +679,6 @@ const columns = [
         }
     }),
 
-    // 8. Category (Categorization Dropdown)
-    columnHelper.accessor('category_id', {
-        header: 'CATEGORY',
-        size: 180,
-        minSize: 160,
-        maxSize: 220,
-        cell: ({ row }) => {
-            const handleUpdateCategoryId = (categoryId, categoryPath) => {
-                const txId = row.original.tx_id;
-
-                // Update in ledger
-                if (window.RoboLedger?.Ledger?.updateTransaction) {
-                    window.RoboLedger.Ledger.updateTransaction(txId, {
-                        category_id: categoryId,
-                        category_path: categoryPath,
-                        category_method: 'manual',
-                        categorized_at: new Date().toISOString()
-                    });
-                }
-
-                // Trigger workspace refresh
-                if (window.updateWorkspace) {
-                    window.updateWorkspace();
-                }
-            };
-
-            return (
-                <CategoryDropdown
-                    value={row.original.category_id || null}
-                    onChange={handleUpdateCategoryId}
-                    categories={window.CategoryService?.getTree?.() || []}
-                />
-            );
-        }
-    }),
-
     // 8. Balance (DYNAMIC CALCULATION - updates based on sort order)
     columnHelper.display({
         id: 'balance',
