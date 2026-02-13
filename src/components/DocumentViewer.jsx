@@ -102,7 +102,15 @@ export function DocumentViewer({ document, onBack }) {
 
         // Store render task so we can cancel it if needed
         renderTaskRef.current = page.render(renderContext);
-        await renderTaskRef.current.promise;
+        try {
+            await renderTaskRef.current.promise;
+        } catch (e) {
+            if (e.name === 'RenderingCancelledException') {
+                // Expected when switching pages - suppress this
+                return;
+            }
+            throw e;
+        }
 
         // Draw highlight box if transaction line position is provided
         if (document.highlightLine) {
