@@ -1176,45 +1176,55 @@ window.RoboLedger = (function () {
             if (file.name.toLowerCase().endsWith('.pdf')) {
                 console.log('[INGEST] 📄 PDF detected:', file.name);
 
-                // Create blob URL that can be used by PDF viewer
-                pdfBlobUrl = URL.createObjectURL(file);
-                console.log('[INGEST] 🔗 Created blob URL:', pdfBlobUrl);
+                try {
+                    // Create blob URL that can be used by PDF viewer
+                    pdfBlobUrl = URL.createObjectURL(file);
+                    console.log('[INGEST] 🔗 Created blob URL:', pdfBlobUrl);
 
-                const buffer = await file.arrayBuffer();
-                console.log('[INGEST] 📦 Buffer size:', buffer.byteLength, 'bytes');
+                    const buffer = await file.arrayBuffer();
+                    console.log('[INGEST] 📦 Buffer size:', buffer.byteLength, 'bytes');
 
-                const pdfData = await this.extractTextFromPDF(buffer);
-                const text = pdfData.text; // Destructure text
-                const lineCoordinates = pdfData.lineCoordinates; // Get coordinates
+                    console.log('[INGEST] 🔄 Starting PDF text extraction...');
+                    const pdfData = await this.extractTextFromPDF(buffer);
+                    console.log('[INGEST] ✅ PDF text extraction complete');
 
-                console.log('[INGEST] 📝 Extracted text length:', text.length, 'characters');
-                console.log('[INGEST] 📍 Line coordinates captured:', lineCoordinates.length, 'lines');
-                console.log('[INGEST] 📝 First 500 chars:', text.substring(0, 500));
+                    const text = pdfData.text; // Destructure text
+                    const lineCoordinates = pdfData.lineCoordinates; // Get coordinates
 
-                // Try specialized parser first, fallback to detection
-                console.log('[INGEST] 🔍 Calling parsePDFText...');
-                const parseResult = await this.parsePDFText(text, lineCoordinates); // PASS LINE COORDS
-                console.log('[INGEST] ✅ Parser returned:', parseResult);
-                console.log('[INGEST] 📊 Transactions found:', parseResult?.transactions?.length || 0);
+                    console.log('[INGEST] 📝 Extracted text length:', text.length, 'characters');
+                    console.log('[INGEST] 📍 Line coordinates captured:', lineCoordinates.length, 'lines');
+                    console.log('[INGEST] 📝 First 500 chars:', text.substring(0, 500));
 
-                // Extract balance coordinates from parser if available
-                if (parseResult?.openingBalanceCoords) {
-                    console.log('[INGEST] 📍 Opening balance coords:', parseResult.openingBalanceCoords);
+                    // Try specialized parser first, fallback to detection
+                    console.log('[INGEST] 🔍 Calling parsePDFText...');
+                    const parseResult = await this.parsePDFText(text, lineCoordinates); // PASS LINE COORDS
+                    console.log('[INGEST] ✅ Parser returned:', parseResult);
+                    console.log('[INGEST] 📊 Transactions found:', parseResult?.transactions?.length || 0);
+
+                    // Extract balance coordinates from parser if available
+                    if (parseResult?.openingBalanceCoords) {
+                        console.log('[INGEST] 📍 Opening balance coords:', parseResult.openingBalanceCoords);
+                    }
+                    if (parseResult?.closingBalanceCoords) {
+                        console.log('[INGEST] 📍 Closing balance coords:', parseResult.closingBalanceCoords);
+                    }
+
+                    if (parseResult && parseResult.metadata && Object.keys(parseResult.metadata).length > 0) {
+                        metadata = parseResult.metadata;
+                        rows = parseResult.transactions || [];
+                        console.log(`[INGEST] Parser extracted metadata:`, metadata);
+                    } else {
+                        // Fallback to old detection method
+                        console.warn('[INGEST] ⚠️ Parser returned no metadata, using fallback detection');
+                        metadata = this.detectInstitution(text);
+                        rows = parseResult || [];
+                    }
+                } catch (pdfError) {
+                    console.error('[INGEST] ❌ PDF processing failed for', file.name, ':', pdfError);
+                    console.error('[INGEST] Error stack:', pdfError.stack);
+                    throw pdfError; // Re-throw to be caught by outer handler
                 }
-                if (parseResult?.closingBalanceCoords) {
-                    console.log('[INGEST] 📍 Closing balance coords:', parseResult.closingBalanceCoords);
-                }
 
-                if (parseResult && parseResult.metadata && Object.keys(parseResult.metadata).length > 0) {
-                    metadata = parseResult.metadata;
-                    rows = parseResult.transactions || [];
-                    console.log(`[INGEST] Parser extracted metadata:`, metadata);
-                } else {
-                    // Fallback to old detection method
-                    console.warn('[INGEST] ⚠️ Parser returned no metadata, using fallback detection');
-                    metadata = this.detectInstitution(text);
-                    rows = parseResult || [];
-                }
 
                 // Attach source file id AND PDF blob URL to each parsed row
                 // NOW with coordinate matching for highlights!
