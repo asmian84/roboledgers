@@ -391,8 +391,8 @@ AMEX FORMAT:
                     "PAYMENT THANK YOU", "PURCHASE", "CASH ADVANCE",
                     "INTEREST CHARGE", "MEMBERSHIP FEE", "LATE FEE"
                 ]),
-                debit: isPayment ? 0 : amount,
-                credit: isPayment ? amount : 0,
+                debit: isPayment ? amount : 0,
+                credit: isPayment ? 0 : amount,
                 balance: 0,  // Not used by ledger
                 parser_ref,  // Unique parser ID
                 pdfLocation: desc.pdfCoords,  // Exact PDF coordinates for main line
@@ -471,8 +471,8 @@ AMEX FORMAT:
             date: isoDate,
             description,
             amount: absAmount,
-            debit: isPayment ? 0 : absAmount,
-            credit: isPayment ? absAmount : 0,
+            debit: isPayment ? absAmount : 0,
+            credit: isPayment ? 0 : absAmount,
             balance: 0,
             audit: this.getSpatialMetadata(originalLine),
             rawText: this.cleanRawText(originalLine),

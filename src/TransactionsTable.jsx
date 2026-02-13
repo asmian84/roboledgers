@@ -594,20 +594,16 @@ const columns = [
         maxSize: 100,
         cell: info => {
             const val = info.getValue();
-            const row = info.row.original;
-            // Get account to determine type
-            const account = window.RoboLedger?.Accounts?.get(row.account_id);
-            const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
-                account?.type === 'liability' || account?.type === 'creditcard';
-            // Liabilities: debit=green (payment reduces debt), Assets: debit=red (withdrawal reduces balance)
-            const debitColor = isLiability ? '#10b981' : '#ef4444';
+            // Debit is ALWAYS green (good)
+            // - For liabilities: debit = payment (reduces debt)
+            // - For assets: debit = deposit (increases balance)
             return (
                 <span
                     className="text-right block"
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: debitColor,
+                        color: '#10b981', // Green - always positive action
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
@@ -625,20 +621,16 @@ const columns = [
         maxSize: 100,
         cell: info => {
             const val = info.getValue();
-            const row = info.row.original;
-            // Get account to determine type
-            const account = window.RoboLedger?.Accounts?.get(row.account_id);
-            const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
-                account?.type === 'liability' || account?.type === 'creditcard';
-            // Liabilities: credit=red (purchase increases debt), Assets: credit=green (deposit increases balance)
-            const creditColor = isLiability ? '#ef4444' : '#10b981';
+            // Credit is ALWAYS red (bad)
+            // - For liabilities: credit = purchase (increases debt)
+            // - For assets: credit = withdrawal (decreases balance)
             return (
                 <span
                     className="text-right block"
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: creditColor,
+                        color: '#ef4444', // Red - always negative action
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
