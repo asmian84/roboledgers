@@ -199,24 +199,23 @@ AMEX FORMAT:
                 continue;
             }
 
-            // Collect data for current section
+            // If in active section, look for transaction lines
             if (currentSection) {
-                // Collect amounts
-                if (line.match(/^-?[\d,]+\.\d{2}$/)) {
-                    const amount = parseFloat(line.replace(/,/g, ''));
-                    currentSection.amounts.push(amount);
-                    continue;
+                // Capture amounts
+                const amountMatch = line.match(/([\d,]+\.\d{2})$/);
+                if (amountMatch) {
+                    const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
+                    currentSection.amounts.push(line.includes('-') ? -amt : amt);
                 }
 
-                // Collect descriptions with PDF coordinates
+                // Capture description lines
                 const dateMatch = line.match(dateRegex);
                 if (dateMatch) {
-                    const month = monthMap[dateMatch[1].toLowerCase()];
-                    const day = dateMatch[2].padStart(2, '0');
-                    const description = dateMatch[5].trim();
+                    const [, month1, day1, month2, day2, description] = dateMatch;
+                    const month = monthMap[month2.toLowerCase()];
+                    const day = day2.padStart(2, '0');
 
-                    // Extract PDF coordinates by LINE INDEX (not text search!)
-                    // lineMetadata[i] corresponds to lines[i] - exact 1:1 mapping
+                    // Capture PDF coordinates for this line
                     let pdfCoords = null;
                     if (lineMetadata && lineMetadata[i]) {
                         const metaLine = lineMetadata[i];
@@ -236,8 +235,44 @@ AMEX FORMAT:
                         description,
                         rawLine: line,
                         pdfLineIndex: i,  // Track which PDF line this came from
-                        pdfCoords
+                        pdfCoords,
+                        continuationLines: []  // NEW: Array to hold multi-line details
                     });
+                }
+                // NEW: Detect continuation lines (FX conversion, additional details)
+                // These lines don't start with a date but belong to the previous transaction
+                else if (currentSection.descriptions.length > 0) {
+                    // Check if this line is a continuation (FX conversion, split details, etc.)
+                    const isFXLine = line.match(/(?:UNITED STATES|CANADIAN|EUROS?|POUNDS?|YEN)\s+(?:DOLLAR|POUND|EUR).*@/i);
+                    const isDetailLine = !line.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i) &&
+                        !line.match(/Total of/i) &&
+                        !line.match(/^Page \d/i) &&
+                        !amountMatch; // Not just an amount line
+
+                    if (isFXLine || (isDetailLine && line.length > 10)) {
+                        const lastDesc = currentSection.descriptions[currentSection.descriptions.length - 1];
+
+                        // Capture PDF coordinates for continuation line
+                        let contPdfCoords = null;
+                        if (lineMetadata && lineMetadata[i]) {
+                            const metaLine = lineMetadata[i];
+                            contPdfCoords = {
+                                page: metaLine.page || 1,
+                                top: metaLine.y || 0,
+                                left: metaLine.x || 0,
+                                width: metaLine.width || 500,
+                                height: metaLine.height || 12,
+                                lineText: metaLine.text
+                            };
+                        }
+
+                        lastDesc.continuationLines.push({
+                            text: line,
+                            pdfLineIndex: i,
+                            pdfCoords: contPdfCoords
+                        });
+                        console.log(`[AMEX] Line ${i}: Captured continuation line for previous transaction: "${line.substring(0, 50)}"`);
+                    }
                 }
             }
         }
@@ -279,28 +314,33 @@ AMEX FORMAT:
             const sequenceNum = String(i + 1).padStart(3, '0');
             const parser_ref = `${statementId}-${sequenceNum}`;
 
+            // Build complete metadata including all continuation lines
+            const fullRawText = [desc.rawLine, ...desc.continuationLines.map(c => c.text)].join('\n');
+
+            // Collect all PDF coordinates (main line + continuations)
+            const allPdfLines = [
+                { line: desc.rawLine, coords: desc.pdfCoords, type: 'main' },
+                ...desc.continuationLines.map(c => ({ line: c.text, coords: c.pdfCoords, type: 'continuation' }))
+            ];
+
             transactions.push({
                 date: desc.date,
+                ref: null, // Will be assigned by ledger system
                 description: this.cleanCreditDescription(desc.description, [
                     "PAYMENT THANK YOU", "PURCHASE", "CASH ADVANCE",
                     "INTEREST CHARGE", "MEMBERSHIP FEE", "LATE FEE"
                 ]),
-                amount,
-                debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
-                credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
-                balance: 0,
-                parser_ref,  // Unique ID: AMEX-2022NOV-001
+                amount_cents: Math.round(amount * 100),
+                polarity: isPayment ? 'CREDIT' : 'DEBIT',
+                parser_ref,  // Unique parser ID
                 pdfLocation: desc.pdfCoords,  // Exact PDF coordinates
                 audit: {
-                    ...this.getSpatialMetadata(desc.description),
                     parser: 'AmexParser',
                     parsedAt: new Date().toISOString(),
                     statementId,
-                    lineNumber: i + 1
-                },
-                rawText: this.cleanRawText(`${desc.date} ${desc.description} ${amount}`),
-                refCode: desc.description.match(/\b([A-Z0-9]{15,})\b/)?.[1] || 'N/A'
-            });
+                    rawText: this.cleanRawText(`${desc.date} ${desc.description} ${amount}`),
+                    refCode: desc.description.match(/\b([A-Z0-9]{15,})\b/)?.[1] || 'N/A'
+                });
         }
 
         console.log(`[AMEX] Parsed ${transactions.length} transactions`);
