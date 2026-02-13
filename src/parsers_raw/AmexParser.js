@@ -233,11 +233,17 @@ AMEX FORMAT:
 
             // If in active section, look for transaction lines
             if (currentSection) {
-                // Capture amounts
-                const amountMatch = line.match(/([\d,]+\.\d{2})$/);
-                if (amountMatch) {
-                    const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
-                    currentSection.amounts.push(line.includes('-') ? -amt : amt);
+                // Check if this is an FX line first (to avoid counting FX amounts as transaction amounts)
+                const fxPattern = /(?:UNITED STATES|CANADIAN|EUROS?|POUNDS?|YEN)\s+(?:DOLLAR|POUND|EUR)\s+([\d,]+\.?\d*)\s+([@\d.]+)/i;
+                const isFXLine = fxPattern.test(line);
+
+                // Capture amounts (but skip FX lines)
+                if (!isFXLine) {
+                    const amountMatch = line.match(/([\d,]+\.\d{2})$/);
+                    if (amountMatch) {
+                        const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
+                        currentSection.amounts.push(line.includes('-') ? -amt : amt);
+                    }
                 }
 
                 // Capture description lines
