@@ -78,10 +78,17 @@ class VendorMatcher {
             return null;
         }
 
+        // Handle both string description and transaction object
+        const transaction = typeof descriptionOrTx === 'string'
+            ? { description: descriptionOrTx }
+            : descriptionOrTx;
+
+        const description = transaction.description || '';
+
         let bestMatch = null;
         let bestScore = 0;
 
-        const desc = (description || '').toLowerCase().trim();
+        const desc = description.toLowerCase().trim();
 
         for (const entry of this.dictionary) {
             // Try matching against multiple fields
