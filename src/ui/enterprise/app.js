@@ -2039,15 +2039,18 @@
 
     // TAB 2: COLUMNS - Visibility toggles
     if (UI_STATE.settingsTab === 'columns') {
+      // Load saved column preferences from localStorage
+      const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+
       const columns = [
-        { field: 'date', label: 'Date', visible: true },
-        { field: 'ref', label: 'Ref #', visible: true },
-        { field: 'description', label: 'Description', visible: true },
-        { field: 'debit_col', label: 'Debit', visible: true },
-        { field: 'credit_col', label: 'Credit', visible: true },
-        { field: 'balance', label: 'Balance', visible: true },
-        { field: 'coa_code', label: 'Category', visible: true },
-        { field: 'tax_cents', label: 'Sales Tax', visible: false }
+        { field: 'date', label: 'Date', visible: savedPrefs.date !== false }, // default true
+        { field: 'ref', label: 'Ref #', visible: savedPrefs.ref !== false },
+        { field: 'description', label: 'Description', visible: savedPrefs.description !== false },
+        { field: 'debit_col', label: 'Debit', visible: savedPrefs.debit_col !== false },
+        { field: 'credit_col', label: 'Credit', visible: savedPrefs.credit_col !== false },
+        { field: 'balance', label: 'Balance', visible: savedPrefs.balance !== false },
+        { field: 'coa_code', label: 'Category', visible: savedPrefs.coa_code !== false },
+        { field: 'tax_cents', label: 'Sales Tax', visible: savedPrefs.tax_cents === true } // default false
       ];
 
       return `
