@@ -210,6 +210,9 @@ RBC MASTERCARD FORMAT:
         // The grid expects 'Description\nType'
         const finalDescription = `${cleanDesc}\n${type}`;
 
+        // Build audit data for source document viewing
+        const auditData = this.buildAuditData(pending.fullRaw, 'RBCMastercardParser');
+
         return {
             date: pending.date,
             description: finalDescription,
@@ -227,7 +230,8 @@ RBC MASTERCARD FORMAT:
             _transit: '00000',
             _acct: pending.accountNumber || '',
             rawText: pending.fullRaw,
-            audit: this.getSpatialMetadata(pending.rawDescLines[0])
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit
         };
     }
 }
