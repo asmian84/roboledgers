@@ -106,7 +106,7 @@ window.RoboLedger = (function () {
         { code: '8400', name: 'Office Supplies', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '8500', name: 'Travel & Local Transportation', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '8550', name: 'Meals & Entertainment', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8600', name: 'Dues & Subscriptions', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
+        { code: '8600', name: 'Office Supplies & Postage', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '8700', name: 'Bank Charges', class: 'EXP_OP_FIN', root: 'EXPENSE', balance: 0 },
         { code: '8800', name: 'Bank & Interest Charges', class: 'EXP_OP_FIN', root: 'EXPENSE', balance: 0 },
         { code: '8900', name: 'Professional Fees (Accounting/Legal)', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
