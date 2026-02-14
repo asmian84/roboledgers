@@ -73,7 +73,7 @@ class RuleEngine {
 
         this.rules.push(newRule);
         this.saveRules();
-        console.log(`[RULE_ENGINE] Created rule: ${name}`);
+        // console.log(`[RULE_ENGINE] Created rule: ${name}`);
         return newRule;
     }
 
@@ -138,7 +138,7 @@ class RuleEngine {
                 rule.stats.last_matched = new Date().toISOString();
                 this.saveRules();
 
-                console.log(`[RULE_ENGINE] Matched rule "${rule.name}" for transaction:`, transaction.description);
+                // console.log(`[RULE_ENGINE] Matched rule "${rule.name}" for transaction:`, transaction.description);
 
                 return {
                     coa_code: rule.action.coa_code,
@@ -154,7 +154,7 @@ class RuleEngine {
             // Pass full transaction for context-aware matching
             const match = this.vendorMatcher.findMatch(transaction, 0.6);
             if (match) {
-                console.log(`[RULE_ENGINE] Vendor match for "${transaction.description}":`, match);
+                // console.log(`[RULE_ENGINE] Vendor match for "${transaction.description}":`, match);
                 return {
                     coa_code: match.coaCode,
                     confidence: match.confidence,
