@@ -3194,7 +3194,7 @@
 
     return `
       <!-- Sticky Filter Toolbar -->
-      <div style="position: sticky; top: 0; z-index: 30; height: 44px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 12px;">
+      <div style="position: sticky; top: 0; z-index: 100; height: 44px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">
         <!-- LEFT: Ref Prefix + Search + Account Filter -->
         <div style="display: flex; align-items: center; gap: 8px;">
           <!-- Ref# Prefix Input -->
