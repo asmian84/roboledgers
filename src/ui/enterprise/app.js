@@ -2808,7 +2808,7 @@
             if (folders.size > 1) {
               console.log('[UPLOAD] Found PDFs across', folders.size, 'subfolders:', Array.from(folders));
               const folderList = Array.from(folders).slice(0, 5).join(', ');
-              constMoreText = folders.size > 5 ? ('... +' + (folders.size - 5) + ' more') : '';
+              const moreText = folders.size > 5 ? ('... +' + (folders.size - 5) + ' more') : '';
               alert('Found ' + pdfFiles.length + ' PDF files across ' + folders.size + ' subfolders:\\n\\n' + folderList + MoreText + '\\n\\nReady to process all files.');
             }
           }
