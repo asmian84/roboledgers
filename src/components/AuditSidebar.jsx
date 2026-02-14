@@ -287,16 +287,16 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                 </div>
                             )}
 
-                            {transaction.pdfLocation && (
+                            {(transaction.pdfLocation || transaction.source_pdf) && (
                                 <>
                                     <div style={{ marginBottom: '12px' }}>
                                         <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>PDF Location:</div>
                                         <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                                            Page {transaction.pdfLocation.page}, Line {transaction.audit?.lineNumber}
+                                            Page {transaction.pdfLocation?.page || transaction.source_pdf?.page}, Line {transaction.audit?.lineNumber || 'N/A'}
                                         </div>
                                     </div>
 
-                                    {(transaction.audit?.rawText || transaction.pdfLocation?.lineText) && (
+                                    {(transaction.audit?.rawText || transaction.pdfLocation?.lineText || transaction.source_pdf?.raw_line) && (
                                         <div style={{ marginBottom: '12px' }}>
                                             <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>Raw PDF Text:</div>
                                             <pre style={{
@@ -312,7 +312,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                                 overflow: 'auto',
                                                 margin: 0
                                             }}>
-                                                {transaction.audit?.rawText || transaction.pdfLocation?.lineText}
+                                                {transaction.audit?.rawText || transaction.pdfLocation?.lineText || transaction.source_pdf?.raw_line}
                                             </pre>
                                         </div>
                                     )}
