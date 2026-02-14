@@ -15,18 +15,10 @@ class ScotiaCreditCardParser extends BaseBankParser {
         console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
-                // Extract balances using base helper
+        // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
 
         const transactions = [];
-
-        // Extract opening balance (Previous Balance)
-        let openingBalance = 0;
-        const previousBalanceMatch = statementText.match(/Previous\s+Balance\s+.*?([\d,]+\.\d{2})/i);
-        if (previousBalanceMatch) {
-            openingBalance = parseFloat(previousBalanceMatch[1].replace(/,/g, ''));
-            console.log(`[SCOTIA-CC] Extracted opening balance: ${openingBalance}`);
-        }
 
         // EXTRACT METADATA (Institution, Transit, Account)
         const acctMatch = statementText.match(/(?:Account)[:#]?\s*([\d-]{7,})/i);
@@ -115,7 +107,7 @@ class ScotiaCreditCardParser extends BaseBankParser {
         }
 
         console.log(`[SCOTIA-CC] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata, openingBalance , openingBalance, closingBalance, statementPeriod };
+        return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 
     extractTransaction(text, isoDate, originalLine) {

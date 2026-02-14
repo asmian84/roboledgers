@@ -104,7 +104,7 @@ SCOTIABANK AMEX FORMAT:
         }
 
         console.log(`[SCOTIA-AMEX] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata, openingBalance, openingBalance, closingBalance, statementPeriod };
+        return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     };
 
     extractTransaction(text, isoDate, originalLine) {

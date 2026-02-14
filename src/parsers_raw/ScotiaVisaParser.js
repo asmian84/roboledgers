@@ -116,7 +116,7 @@ SCOTIABANK VISA FORMAT:
         }
 
         console.log(`[SCOTIA-VISA] Parsed ${transactions.length} transactions`);
-        return { transactions, metadata: parsedMetadata, openingBalance, openingBalance, closingBalance, statementPeriod };
+        return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     };
 
     extractTransaction(text, isoDate, originalLine) {

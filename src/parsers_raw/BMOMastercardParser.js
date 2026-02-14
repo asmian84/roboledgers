@@ -107,7 +107,7 @@ BMO MASTERCARD FORMAT:
 
 
     console.log(`[BMO-MC] Parsed ${transactions.length} transactions`);
-    return { transactions, metadata: parsedMetadata, openingBalance, openingBalance, closingBalance, statementPeriod };
+    return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
   };
 
 
