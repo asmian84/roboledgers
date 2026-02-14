@@ -3556,6 +3556,11 @@
                 Browse folders (include subfolders)
               </span>
             </label>
+            <div id="folderHelpText" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 4px;">
+              <p style="margin: 0; font-size: 12px; color: #1e40af; line-height: 1.5;">
+                <strong>📁 Note:</strong> Your browser will ask permission to upload files. Click "Upload" when prompted - this is a security feature.
+              </p>
+            </div>
           </div>
           
           <!-- Upload Button -->
@@ -3933,6 +3938,7 @@ window.updateFileType = function () {
 window.updateBrowseMode = function () {
   const checkbox = document.getElementById('browseFoldersCheckbox');
   const input = document.getElementById('mainFileInput');
+  const helpText = document.getElementById('folderHelpText');
 
   if (!checkbox || !input) return;
 
@@ -3941,13 +3947,15 @@ window.updateBrowseMode = function () {
     input.setAttribute('webkitdirectory', '');
     input.setAttribute('mozdirectory', '');
     input.setAttribute('directory', '');
+    if (helpText) helpText.style.display = 'block';
     console.log('[UPLOAD] Folder browsing enabled');
   } else {
-    // Disable folder browsing (individual files only)
+    // Disable folder browsing (single files)
     input.removeAttribute('webkitdirectory');
     input.removeAttribute('mozdirectory');
     input.removeAttribute('directory');
-    console.log('[UPLOAD] Individual file browsing');
+    if (helpText) helpText.style.display = 'none';
+    console.log('[UPLOAD] Single file mode enabled');
   }
 };
 
