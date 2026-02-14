@@ -501,6 +501,9 @@ AMEX FORMAT:
         const isPayment = amount < 0 || /payment|credit|thank you/i.test(description);
         const absAmount = Math.abs(amount);
 
+        // Build audit data for source document viewing
+        const auditData = this.buildAuditData(originalLine, 'AmexParser');
+
         return {
             date: isoDate,
             description,
@@ -508,7 +511,8 @@ AMEX FORMAT:
             debit: isPayment ? absAmount : 0,
             credit: isPayment ? 0 : absAmount,
             balance: 0,
-            audit: this.getSpatialMetadata(originalLine),
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit,
             rawText: this.cleanRawText(originalLine),
             refCode: originalLine.match(/\b([A-Z0-9]{15,})\b/)?.[1] || 'N/A'
         };

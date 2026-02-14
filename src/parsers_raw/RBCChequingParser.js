@@ -341,6 +341,7 @@ SMART PARSING RULES:
         if (g.isCredit) runningBalance += g.amount;
         else runningBalance -= g.amount;
 
+        const auditData1 = this.buildAuditData(g.line, 'RBCChequingParser');
         transactions.push({
           date: g.date,
           description: g.description,
@@ -349,7 +350,8 @@ SMART PARSING RULES:
           credit: g.isCredit ? g.amount : 0,
           balance: runningBalance,
           _brand: 'RBC', _tag: 'Chequing',
-          audit: this.getSpatialMetadata(g.line)
+          pdfLocation: auditData1.pdfLocation,
+          audit: auditData1.audit
         });
       });
       gapBuffer = [];
@@ -367,6 +369,7 @@ SMART PARSING RULES:
             if (g.isCredit) runningBalance += g.amount;
             else runningBalance -= g.amount;
 
+            const auditData2 = this.buildAuditData(g.line, 'RBCChequingParser');
             transactions.push({
               date: g.date,
               description: g.description,
@@ -375,7 +378,8 @@ SMART PARSING RULES:
               credit: g.isCredit ? g.amount : 0,
               balance: runningBalance,
               _brand: 'RBC', _tag: 'Chequing', _accountType: 'Chequing',
-              audit: this.getSpatialMetadata(g.line)
+              pdfLocation: auditData2.pdfLocation,
+              audit: auditData2.audit
             });
           });
           gapBuffer = [];
@@ -392,6 +396,7 @@ SMART PARSING RULES:
           runningBalance = row.balance;
         }
 
+        const auditData3 = this.buildAuditData(row.line, 'RBCChequingParser');
         transactions.push({
           date: row.date,
           description: row.description,
@@ -400,7 +405,8 @@ SMART PARSING RULES:
           credit: isCredit ? row.amount : 0,
           balance: runningBalance,
           _brand: 'RBC', _tag: 'Chequing', _accountType: 'Chequing',
-          audit: this.getSpatialMetadata(row.line)
+          pdfLocation: auditData3.pdfLocation,
+          audit: auditData3.audit
         });
 
       } else {
@@ -417,6 +423,7 @@ SMART PARSING RULES:
         if (isCredit) runningBalance += g.amount;
         else runningBalance -= g.amount;
 
+        const auditData4 = this.buildAuditData(g.line, 'RBCChequingParser');
         transactions.push({
           date: g.date,
           description: g.description,
@@ -425,7 +432,8 @@ SMART PARSING RULES:
           credit: isCredit ? g.amount : 0,
           balance: runningBalance,
           _brand: 'RBC', _tag: 'Chequing',
-          audit: this.getSpatialMetadata(g.line)
+          pdfLocation: auditData4.pdfLocation,
+          audit: auditData4.audit
         });
       });
     }

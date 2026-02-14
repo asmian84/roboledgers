@@ -3574,11 +3574,6 @@
           </button>
         </div>
         
-        <div style="margin-top: 16px; font-size: 12px; color: #94a3b8; max-width: 500px; line-height: 1.6;">
-          <strong>PDF:</strong> Surgical parsing for RBC, TD, BMO, Scotia, CIBC, Amex<br>
-          <strong>CSV/XLSX:</strong> Generic import for any bank
-        </div>
-        
         <!-- Hidden file input -->
         <input 
           type="file" 
