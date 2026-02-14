@@ -693,13 +693,10 @@ class RuleEngine {
             // ═══════════════════════════════════════════════════════
             // TRAVEL & ENTERTAINMENT (COA 8100)
             // ═══════════════════════════════════════════════════════
-            {
-                name: 'AIRBNB → Travel & Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'AIRBNB' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 8
-            },
+            // REMOVED: AIRBNB auto-categorization
+            // Reason: Airbnb can be INCOME (for hosts) or EXPENSE (for travelers)
+            // The rule was incorrectly categorizing Airbnb host income as an expense.
+            // Users should manually categorize Airbnb transactions based on context.
             {
                 name: 'WIFI/AIRLINE → Travel & Entertainment (8100)',
                 conditions: [{ field: 'description', operator: 'regex', value: 'WIFIONBOARD|WESTJET|PAC-WESTJET' }],
