@@ -948,6 +948,82 @@ export function TransactionsTable({
         setGlobalFilter(initialGlobalFilter || '');
     }, [initialGlobalFilter]);
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BATCH ACTION HANDLERS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Auto-categorize selected transactions using RuleEngine
+     */
+    const handleBulkCategorize = () => {
+        const selectedTxIds = Object.keys(rowSelection);
+        if (selectedTxIds.length === 0) return;
+
+        // Get selected transactions
+        const selectedTxs = selectedTxIds
+            .map(id => window.RoboLedger?.Ledger?.transactions[id])
+            .filter(Boolean);
+
+        if (selectedTxs.length === 0) {
+            alert('No valid transactions selected');
+            return;
+        }
+
+        // Use RuleEngine to bulk categorize
+        const results = window.RoboLedger?.RuleEngine?.bulkCategorize(selectedTxs);
+
+        if (results) {
+            // Show results
+            const message = `✅ Categorized ${results.categorized}/${selectedTxs.length} transactions`;
+            console.log('[BULK_CATEGORIZE]', message, results);
+
+            // Show toast if available
+            if (window.showToast) {
+                window.showToast(message, 'success');
+            } else {
+                alert(message);
+            }
+
+            // Clear selection
+            setRowSelection({});
+
+            // Force re-render
+            setData([...data]);
+        } else {
+            alert('Bulk categorization failed - RuleEngine not available');
+        }
+    };
+
+    /**
+     * Delete selected transactions
+     */
+    const handleBulkDelete = () => {
+        const selectedTxIds = Object.keys(rowSelection);
+        if (selectedTxIds.length === 0) return;
+
+        if (!confirm(`Delete ${selectedTxIds.length} selected transactions? This cannot be undone.`)) {
+            return;
+        }
+
+        // Delete each transaction
+        let deleted = 0;
+        selectedTxIds.forEach(txId => {
+            if (window.RoboLedger?.Ledger?.deleteTransaction?.(txId)) {
+                deleted++;
+            }
+        });
+
+        console.log(`[BULK_DELETE] Deleted ${deleted}/${selectedTxIds.length} transactions`);
+
+        // Clear selection
+        setRowSelection({});
+
+        // Force re-render by updating data
+        if (window.RoboLedger?.Ledger) {
+            setData(window.RoboLedger.Ledger.getAllTransactions());
+        }
+    };
+
     // Expose column visibility control to window (for settings drawer)
     useEffect(() => {
         window.setGridColumnVisibility = (columnId, visible) => {
@@ -1048,9 +1124,19 @@ export function TransactionsTable({
                 <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
                     <span className="text-sm font-bold text-blue-900">{Object.keys(rowSelection).length} selected</span>
                     <div className="ml-auto flex items-center gap-2">
-                        <button className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">Categorize</button>
+                        <button
+                            onClick={handleBulkCategorize}
+                            className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                            Categorize
+                        </button>
                         <button className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">Match</button>
-                        <button className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-white border border-red-300 rounded hover:bg-red-50">Delete</button>
+                        <button
+                            onClick={handleBulkDelete}
+                            className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-white border border-red-300 rounded hover:bg-red-50"
+                        >
+                            Delete
+                        </button>
                         <button onClick={() => setRowSelection({})} className="ml-2 p-1.5 text-gray-500 hover:text-gray-700">
                             <i className="ph ph-x text-sm"></i>
                         </button>

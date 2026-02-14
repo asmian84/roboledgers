@@ -486,6 +486,11 @@ window.RoboLedger = (function () {
         updateCategory: function (tx_id, category_code) {
             const tx = state.transactions[tx_id];
             if (tx) {
+                // Check if this is a correction (category changed)
+                const isCorrection = tx.category && tx.category !== category_code;
+                const previousCategory = tx.category;
+
+                // Update category
                 tx.category = category_code;
                 tx.category_code = category_code; // Fallback field
                 const account = COA.get(category_code);
@@ -493,6 +498,22 @@ window.RoboLedger = (function () {
                     tx.category_name = account.name;
                 }
                 save();
+
+                // CONTINUOUS LEARNING: Capture user correction
+                if (window.RoboLedger?.RuleEngine?.userCorrections) {
+                    // Always capture - even if first categorization, it's a learning opportunity
+                    window.RoboLedger.RuleEngine.userCorrections.addCorrection(
+                        tx.description,
+                        category_code
+                    );
+
+                    if (isCorrection) {
+                        console.log(`[LEARNING] 🎓 Correction: ${tx.description} (${previousCategory} → ${category_code})`);
+                    } else {
+                        console.log(`[LEARNING] 📝 Trained: ${tx.description} → ${category_code}`);
+                    }
+                }
+
                 console.log(`[LEDGER] Updated category for ${tx_id}: ${category_code}`);
                 return true;
             }

@@ -11,6 +11,7 @@
 
 import FuzzyMatcher from './FuzzyMatcher.js';
 import VendorNormalizer from './VendorNormalizer.js';
+import UserCorrections from './UserCorrections.js';
 
 class RuleEngine {
     constructor() {
@@ -20,7 +21,10 @@ class RuleEngine {
         // Initialize vendor matcher (existing)
         this.vendorMatcher = new window.VendorMatcher();
 
-        // Initialize fuzzy matcher with training data
+        // Initialize user corrections
+        this.userCorrections = new UserCorrections();
+
+        // Initialize fuzzy matcher with training data + user corrections
         this.initializeFuzzyMatcher();
 
         // Auto-import default rules if none exist
@@ -31,15 +35,23 @@ class RuleEngine {
     }
 
     /**
-     * Initialize fuzzy matcher with training data
+     * Initialize fuzzy matcher with training data and user corrections
      */
     async initializeFuzzyMatcher() {
         try {
             const response = await fetch('/src/data/vendor_training.json');
             const trainingData = await response.json();
-            this.fuzzyMatcher = new FuzzyMatcher(trainingData);
+
+            // Load user corrections
+            const userCorrections = this.userCorrections.getCorrections();
+
+            // Initialize with both datasets
+            this.fuzzyMatcher = new FuzzyMatcher(trainingData, userCorrections);
+
             const stats = this.fuzzyMatcher.getStats();
-            console.log(`[RULE_ENGINE] 🧠 FuzzyMatcher loaded: ${stats.totalVendors} vendors, ${stats.totalTransactions} training examples`);
+            const userStats = this.userCorrections.getStats();
+            console.log(`[RULE_ENGINE] 🧠 FuzzyMatcher loaded: ${stats.totalVendors} vendors`);
+            console.log(`[RULE_ENGINE] 📚 User trained: ${userStats.vendors} vendors, ${userStats.totalCorrections} corrections`);
         } catch (e) {
             console.warn('[RULE_ENGINE] Failed to load fuzzy matcher:', e);
             this.fuzzyMatcher = null;

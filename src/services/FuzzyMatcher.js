@@ -5,18 +5,70 @@ import VendorNormalizer from './VendorNormalizer.js';
  * Uses training data from manually categorized transactions
  */
 class FuzzyMatcher {
-    constructor(trainingData) {
-        this.trainingData = trainingData || {};
-        this.vendorList = Object.keys(this.trainingData);
-        console.log(`🧠 FuzzyMatcher initialized with ${this.vendorList.length} vendors`);
+    constructor(trainingData, userCorrections = {}) {
+        this.staticTraining = trainingData || {};
+        this.userCorrections = userCorrections;
+        this.mergeTrainingData();
     }
 
     /**
-     * Calculate Levenshtein distance between two strings
-     * @param {string} a - First string
-     * @param {string} b -Second string
-     * @returns {number} - Edit distance
+     * Merge static training data with user corrections
+     * User corrections OVERRIDE static training with boosted confidence
      */
+    mergeTrainingData() {
+        // Start with static training
+        this.trainingData = { ...this.staticTraining };
+
+        // Override with user corrections (higher priority)
+        for (const [vendor, coaCounts] of Object.entries(this.userCorrections)) {
+            const total = Object.values(coaCounts).reduce((sum, c) => sum + c, 0);
+            const mostCommon = Object.entries(coaCounts)
+                .sort((a, b) => b[1] - a[1])[0];
+
+            const confidence = mostCommon[1] / total;
+
+            // ADAPTIVE LEARNING: Boost confidence based on correction frequency
+            // More corrections = higher confidence (logarithmic boost)
+            const adaptiveBoost = Math.min(0.15, Math.log(total + 1) / 20);
+            const finalConfidence = Math.min(1.0, confidence + adaptiveBoost);
+
+            // User corrections completely replace static training
+            this.trainingData[vendor] = {
+                coa: parseInt(mostCommon[0]),
+                count: total,
+                confidence: finalConfidence,
+                source: 'user_trained',
+                userCorrectionCount: total,
+                alternatives: Object.entries(coaCounts)
+                    .filter(([coa]) => coa !== mostCommon[0])
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                    .map(([coa, count]) => ({ coa: parseInt(coa), count }))
+            };
+        }
+
+        this.vendorList = Object.keys(this.trainingData);
+        console.log(`[FUZZY_MATCHER] Merged data: ${this.vendorList.length} vendors (${Object.keys(this.userCorrections).length} user-trained)`);
+    }
+
+    /**
+   * Update user corrections and re-merge training data (hot reload)
+   * @param {Object} corrections - New user corrections
+   */
+    updateUserCorrections(corrections) {
+        this.userCorrections = corrections;
+        this.mergeTrainingData();
+
+        const userTrained = Object.keys(corrections).length;
+        console.log(`[FUZZY_MATCHER] 🔄 Reloaded with ${userTrained} user-trained vendors`);
+    }
+
+    /**
+       * Calculate Levenshtein distance between two strings
+       * @param {string} a - First string
+       * @param {string} b -Second string
+       * @returns {number} - Edit distance
+       */
     static levenshteinDistance(a, b) {
         const matrix = [];
 
