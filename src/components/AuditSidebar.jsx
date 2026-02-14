@@ -287,96 +287,102 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                 </div>
                             )}
 
-                            {(transaction.pdfLocation || transaction.source_pdf) && (
-                                <>
-                                    <div style={{ marginBottom: '12px' }}>
-                                        <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>PDF Location:</div>
-                                        <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                                            Page {transaction.pdfLocation?.page || transaction.source_pdf?.page}, Line {transaction.audit?.lineNumber || 'N/A'}
-                                        </div>
-                                    </div>
-
-                                    {(transaction.audit?.rawText || transaction.pdfLocation?.lineText || transaction.source_pdf?.raw_line) && (
+                            {(() => {
+                                const shouldShow = !!(transaction.pdfLocation || transaction.source_pdf);
+                                console.log('[AUDIT_SIDEBAR] Should show Transaction Identity section?', shouldShow);
+                                console.log('[AUDIT_SIDEBAR] pdfLocation:', transaction.pdfLocation);
+                                console.log('[AUDIT_SIDEBAR] source_pdf:', transaction.source_pdf);
+                                return shouldShow;
+                            })() && (
+                                    <>
                                         <div style={{ marginBottom: '12px' }}>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>Raw PDF Text:</div>
-                                            <pre style={{
-                                                backgroundColor: '#0f1419',
-                                                padding: '8px',
-                                                borderRadius: '4px',
-                                                fontSize: '10px',
-                                                color: '#94a3b8',
-                                                fontFamily: 'Monaco, monospace',
-                                                whiteSpace: 'pre-wrap',
-                                                wordBreak: 'break-all',
-                                                maxHeight: '120px',  // Increased to show FX lines
-                                                overflow: 'auto',
-                                                margin: 0
-                                            }}>
-                                                {transaction.audit?.rawText || transaction.pdfLocation?.lineText || transaction.source_pdf?.raw_line}
-                                            </pre>
+                                            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>PDF Location:</div>
+                                            <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                                                Page {transaction.pdfLocation?.page || transaction.source_pdf?.page}, Line {transaction.audit?.lineNumber || 'N/A'}
+                                            </div>
                                         </div>
-                                    )}
 
-                                    <button
-                                        onClick={() => {
-                                            // Use source_pdf if available (from parser), otherwise try account.pdfUrl
-                                            if (transaction.source_pdf?.url) {
-                                                setViewerDocument({
-                                                    type: 'pdf',
-                                                    url: transaction.source_pdf.url,
-                                                    name: transaction.source_pdf.filename || 'statement.pdf',
-                                                    page: transaction.source_pdf.page || transaction.pdfLocation.page,
-                                                    highlightLine: transaction.source_pdf.line_position || {
-                                                        top: transaction.pdfLocation.top,
-                                                        left: transaction.pdfLocation.left,
-                                                        width: transaction.pdfLocation.width,
-                                                        height: transaction.pdfLocation.height
+                                        {(transaction.audit?.rawText || transaction.pdfLocation?.lineText || transaction.source_pdf?.raw_line) && (
+                                            <div style={{ marginBottom: '12px' }}>
+                                                <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>Raw PDF Text:</div>
+                                                <pre style={{
+                                                    backgroundColor: '#0f1419',
+                                                    padding: '8px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '10px',
+                                                    color: '#94a3b8',
+                                                    fontFamily: 'Monaco, monospace',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-all',
+                                                    maxHeight: '120px',  // Increased to show FX lines
+                                                    overflow: 'auto',
+                                                    margin: 0
+                                                }}>
+                                                    {transaction.audit?.rawText || transaction.pdfLocation?.lineText || transaction.source_pdf?.raw_line}
+                                                </pre>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={() => {
+                                                // Use source_pdf if available (from parser), otherwise try account.pdfUrl
+                                                if (transaction.source_pdf?.url) {
+                                                    setViewerDocument({
+                                                        type: 'pdf',
+                                                        url: transaction.source_pdf.url,
+                                                        name: transaction.source_pdf.filename || 'statement.pdf',
+                                                        page: transaction.source_pdf.page || transaction.pdfLocation.page,
+                                                        highlightLine: transaction.source_pdf.line_position || {
+                                                            top: transaction.pdfLocation.top,
+                                                            left: transaction.pdfLocation.left,
+                                                            width: transaction.pdfLocation.width,
+                                                            height: transaction.pdfLocation.height
+                                                        }
+                                                    });
+                                                    setShowLeftPanel(true);
+                                                } else {
+                                                    // Fallback to account.pdfUrl (legacy)
+                                                    const account = window.RoboLedger.Accounts.get(transaction.account_id);
+                                                    if (!account?.pdfUrl) {
+                                                        alert('PDF not available for this transaction');
+                                                        return;
                                                     }
-                                                });
-                                                setShowLeftPanel(true);
-                                            } else {
-                                                // Fallback to account.pdfUrl (legacy)
-                                                const account = window.RoboLedger.Accounts.get(transaction.account_id);
-                                                if (!account?.pdfUrl) {
-                                                    alert('PDF not available for this transaction');
-                                                    return;
+                                                    setViewerDocument({
+                                                        type: 'pdf',
+                                                        url: account.pdfUrl,
+                                                        name: account.pdfFilename || 'statement.pdf',
+                                                        page: transaction.pdfLocation.page,
+                                                        highlightLine: {
+                                                            top: transaction.pdfLocation.top,
+                                                            left: transaction.pdfLocation.left,
+                                                            width: transaction.pdfLocation.width,
+                                                            height: transaction.pdfLocation.height
+                                                        }
+                                                    });
+                                                    setShowLeftPanel(true);
                                                 }
-                                                setViewerDocument({
-                                                    type: 'pdf',
-                                                    url: account.pdfUrl,
-                                                    name: account.pdfFilename || 'statement.pdf',
-                                                    page: transaction.pdfLocation.page,
-                                                    highlightLine: {
-                                                        top: transaction.pdfLocation.top,
-                                                        left: transaction.pdfLocation.left,
-                                                        width: transaction.pdfLocation.width,
-                                                        height: transaction.pdfLocation.height
-                                                    }
-                                                });
-                                                setShowLeftPanel(true);
-                                            }
-                                        }}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px',
-                                            backgroundColor: '#3b82f6',
-                                            color: 'white',
-                                            border: 'none',
-                                            borderRadius: '6px',
-                                            fontSize: '13px',
-                                            fontWeight: '500',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '6px'
-                                        }}
-                                    >
-                                        <span>📄</span>
-                                        View in PDF
-                                    </button>
-                                </>
-                            )}
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px',
+                                                backgroundColor: '#3b82f6',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                fontSize: '13px',
+                                                fontWeight: '500',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px'
+                                            }}
+                                        >
+                                            <span>📄</span>
+                                            View in PDF
+                                        </button>
+                                    </>
+                                )}
                         </div>
                     )}
 
