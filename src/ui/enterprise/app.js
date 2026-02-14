@@ -1288,7 +1288,7 @@
       return;
     }
 
-    const recon = window.RoboLedger.reconciliation[accountId];
+    const recon = window.RoboLedger?.reconciliation?.[accountId];
     if (!recon || !recon.pdf_url) {
       alert('No statement PDF available for this account');
       return;
