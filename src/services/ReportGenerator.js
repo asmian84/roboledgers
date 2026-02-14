@@ -351,6 +351,76 @@ class ReportGenerator {
         };
     }
 
+    /**
+   * Generate Financial Ratios
+   * Calculate key financial metrics: liquidity, profitability, efficiency, leverage
+   */
+    generateFinancialRatios(startDate, endDate, asOfDate = null) {
+        // Use end date as "as of" date if not specified
+        const balanceDate = asOfDate || endDate;
+
+        // Get financial statements
+        const incomeStatement = this.generateIncomeStatement(startDate, endDate);
+        const balanceSheet = this.generateBalanceSheet(balanceDate);
+
+        const revenue = incomeStatement.totals.revenue;
+        const cogs = incomeStatement.totals.cogs;
+        const expenses = incomeStatement.totals.expenses;
+        const netIncome = incomeStatement.totals.netIncome;
+        const grossProfit = incomeStatement.totals.grossProfit;
+
+        const assets = balanceSheet.totals.assets;
+        const liabilities = balanceSheet.totals.liabilities;
+        const equity = balanceSheet.totals.equity;
+
+        // Calculate current assets/liabilities (simplified - would need account classification)
+        const currentAssets = assets; // TODO: Filter by current asset accounts
+        const currentLiabilities = liabilities; // TODO: Filter by current liability accounts
+
+        return {
+            // Profitability Ratios
+            profitability: {
+                grossMargin: revenue > 0 ? (grossProfit / revenue) * 100 : 0,
+                netMargin: revenue > 0 ? (netIncome / revenue) * 100 : 0,
+                roa: assets > 0 ? (netIncome / assets) * 100 : 0, // Return on Assets
+                roe: equity > 0 ? (netIncome / equity) * 100 : 0  // Return on Equity
+            },
+
+            // Liquidity Ratios
+            liquidity: {
+                currentRatio: currentLiabilities > 0 ? currentAssets / currentLiabilities : 0,
+                workingCapital: currentAssets - currentLiabilities
+            },
+
+            // Leverage Ratios
+            leverage: {
+                debtToEquity: equity > 0 ? liabilities / equity : 0,
+                debtToAssets: assets > 0 ? (liabilities / assets) * 100 : 0,
+                equityRatio: assets > 0 ? (equity / assets) * 100 : 0
+            },
+
+            // Efficiency Ratios
+            efficiency: {
+                assetTurnover: assets > 0 ? revenue / assets : 0,
+                revenuePerDollarAsset: assets > 0 ? revenue / assets : 0
+            },
+
+            // Base Metrics
+            metrics: {
+                revenue,
+                cogs,
+                grossProfit,
+                expenses,
+                netIncome,
+                assets,
+                liabilities,
+                equity
+            },
+
+            period: { startDate, endDate, asOfDate: balanceDate }
+        };
+    }
+
     // Helper methods
     addToCategory(categoryArray, code, name, amount) {
         let existing = categoryArray.find(c => c.code === code);

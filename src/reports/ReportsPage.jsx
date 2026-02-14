@@ -64,6 +64,13 @@ export function ReportsPage() {
             title: 'GST/HST Report',
             description: 'Tax collected vs paid',
             color: 'red'
+        },
+        {
+            id: 'financial-ratios',
+            icon: 'ph-chart-line',
+            title: 'Financial Ratios',
+            description: 'Profitability & liquidity metrics',
+            color: 'violet'
         }
     ];
 
@@ -75,7 +82,8 @@ export function ReportsPage() {
         cyan: { bg: 'bg-cyan-50', border: 'border-cyan-200', icon: 'text-cyan-600', hover: 'hover:bg-cyan-100' },
         teal: { bg: 'bg-teal-50', border: 'border-teal-200', icon: 'text-teal-600', hover: 'hover:bg-teal-100' },
         orange: { bg: 'bg-orange-50', border: 'border-orange-200', icon: 'text-orange-600', hover: 'hover:bg-orange-100' },
-        red: { bg: 'bg-red-50', border: 'border-red-200', icon: 'text-red-600', hover: 'hover:bg-red-100' }
+        red: { bg: 'bg-red-50', border: 'border-red-200', icon: 'text-red-600', hover: 'hover:bg-red-100' },
+        violet: { bg: 'bg-violet-50', border: 'border-violet-200', icon: 'text-violet-600', hover: 'hover:bg-violet-100' }
     };
 
     return (
