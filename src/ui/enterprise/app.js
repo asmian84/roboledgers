@@ -2744,8 +2744,9 @@
             <input 
               type="file" 
               id="folder-upload-bulk" 
-              webkitdirectory 
-              directory 
+              webkitdirectory="" 
+              mozdirectory="" 
+              directory="" 
               multiple 
               style="display: none;" 
               onchange="window.handleFileInput(this, 'bulk')">
