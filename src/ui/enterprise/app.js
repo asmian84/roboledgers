@@ -3163,7 +3163,7 @@
         </div>
 
         <!-- Compact Terminal Strip -->
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; height: 120px; overflow: hidden; margin: 8px 16px; padding: 10px 0;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; height: 120px; overflow: hidden; margin: 8px 0; padding: 10px 0;">
           
           <!-- LEFT: Reconciliation (40%) -->
           <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 16px; display: flex; flex-direction: column; justify-content: center;">
