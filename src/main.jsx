@@ -66,9 +66,10 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     // Load saved column preferences from localStorage
     const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
     const columnVisibility = {
-        // NOTE: Pass the visible value directly - TransactionsTable.jsx handles TanStack inversion
-        // tax_cents defaults to FALSE (hidden) unless user explicitly enabled it
-        tax_cents: savedPrefs.tax_cents === true
+        // TanStack Grid uses INVERTED logic in state: false = visible, true = hidden
+        // If user enabled tax (savedPrefs.tax_cents === true), pass false to TanStack (visible)
+        // If user disabled tax (savedPrefs.tax_cents === false/undefined), pass true to TanStack (hidden)
+        tax_cents: savedPrefs.tax_cents !== true
     };
     console.log('[MAIN.JSX] Initial column visibility from localStorage:', columnVisibility);
 
