@@ -699,16 +699,23 @@ const columns = [
         filterFn: 'auto',
         cell: info => {
             const val = info.getValue();
-            // Debit is ALWAYS green (good)
-            // - For liabilities: debit = payment (reduces debt)
-            // - For assets: debit = deposit (increases balance)
+            const row = info.row.original;
+            const account = accounts.find(a => a.id === row.account_id);
+            const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
+                account?.type === 'liability' || account?.type === 'creditcard';
+
+            // Color logic:
+            // - ASSET accounts (chequing/savings): Debits are BAD (withdrawals) = RED
+            // - LIABILITY accounts (credit cards): Debits are GOOD (payments reduce debt) = GREEN
+            const color = isLiability ? '#10b981' : '#ef4444';
+
             return (
                 <span
                     className="text-right block"
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: '#10b981', // Green - always positive action
+                        color: color,
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
@@ -728,16 +735,23 @@ const columns = [
         filterFn: 'auto',
         cell: info => {
             const val = info.getValue();
-            // Credit is ALWAYS red (bad)
-            // - For liabilities: credit = purchase (increases debt)
-            // - For assets: credit = withdrawal (decreases balance)
+            const row = info.row.original;
+            const account = accounts.find(a => a.id === row.account_id);
+            const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
+                account?.type === 'liability' || account?.type === 'creditcard';
+
+            // Color logic:
+            // - ASSET accounts (chequing/savings): Credits are GOOD (deposits) = GREEN
+            // - LIABILITY accounts (credit cards): Credits are BAD (charges increase debt) = RED
+            const color = isLiability ? '#ef4444' : '#10b981';
+
             return (
                 <span
                     className="text-right block"
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: '#ef4444', // Red - always negative action
+                        color: color,
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
