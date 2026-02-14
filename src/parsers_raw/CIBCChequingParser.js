@@ -182,6 +182,9 @@ CIBC CHEQUING FORMAT:
             balance = amounts[0];
         }
 
+        // Build audit data for source document viewing
+        const auditData = this.buildAuditData(originalLine || text, 'CIBCChequingParser');
+
         return {
             date: dateStr,
             description: description,
@@ -193,6 +196,8 @@ CIBC CHEQUING FORMAT:
             _brand: 'CIBC',
             _bank: 'CIBC',
             _tag: 'Chequing',
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit,
             rawText: this.cleanRawText(originalLine || text)
         };
     }

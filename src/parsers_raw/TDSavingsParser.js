@@ -324,6 +324,9 @@ SMART PARSING RULES:
             balance = -Math.abs(balance);
         }
 
+        // Build audit data for source document viewing
+        const auditData = this.buildAuditData(text, 'TDSavingsParser');
+
         return {
             date: dateStr,
             description: description,
@@ -334,7 +337,9 @@ SMART PARSING RULES:
             _inst: '004',
             _brand: 'TD',
             _bank: 'TD',
-            _tag: 'Chequing',
+            _tag: 'Savings',
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit,
             rawText: this.cleanRawText(text)
         };
     }
