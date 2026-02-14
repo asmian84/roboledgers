@@ -3556,11 +3556,6 @@
                 Browse folders (include subfolders)
               </span>
             </label>
-            <div id="folderHelpText" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 4px;">
-              <p style="margin: 0; font-size: 12px; color: #1e40af; line-height: 1.5;">
-                <strong>📁 Note:</strong> Your browser will ask permission to upload files. Click "Upload" when prompted - this is a security feature.
-              </p>
-            </div>
           </div>
           
           <!-- Upload Button -->
