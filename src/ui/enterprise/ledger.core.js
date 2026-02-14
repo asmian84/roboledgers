@@ -1418,7 +1418,7 @@ window.RoboLedger = (function () {
             for (const row of rows) {
                 // Map common headers (CSV or PDF Regex)
                 const date = row.date || row.transaction_date;
-                const raw_description = row.description || row.memo || row.payee; // This is the Dirty Match
+                const raw_description = row.description || row.memo || row.payee || ''; // FIX: Fallback to empty string to prevent undefined
 
                 // Check if parser already provided debit/credit breakdown
                 let amount, amount_cents, polarity;
@@ -1466,21 +1466,25 @@ window.RoboLedger = (function () {
                 if (!polarity) {
                     const isLiability = metadata.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(metadata.name);
                     if (isLiability) {
-                        polarity = amount_cents >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
+                        // CREDIT CARD: positive amount = DEBIT (spent), negative = CREDIT (payment)
+                        polarity = amount >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
                     } else {
-                        polarity = amount_cents >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
+                        // BANK ACCOUNT (CHEQUING/SAVINGS): positive amount = CREDIT (deposit), negative = DEBIT (withdrawal)
+                        polarity = amount >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
                     }
                 }
 
                 // Keyword Heuristic (Override for ambiguous markers)
-                const upperDesc = raw_description.toUpperCase();
-                const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE', 'FX RATE'];
-                const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND', 'PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'CASH BACK'];
+                if (raw_description) { // FIX: Check if raw_description exists before calling toUpperCase()
+                    const upperDesc = raw_description.toUpperCase();
+                    const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE', 'FX RATE'];
+                    const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND', 'PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'CASH BACK'];
 
-                if (debitKeywords.some(k => upperDesc.includes(k))) {
-                    polarity = Polarity.DEBIT;
-                } else if (creditKeywords.some(k => upperDesc.includes(k))) {
-                    polarity = Polarity.CREDIT;
+                    if (debitKeywords.some(k => upperDesc.includes(k))) {
+                        polarity = Polarity.DEBIT;
+                    } else if (creditKeywords.some(k => upperDesc.includes(k))) {
+                        polarity = Polarity.CREDIT;
+                    }
                 }
 
                 // 3. Trigger Categorization Brain (Decision Layer)
