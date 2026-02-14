@@ -3456,7 +3456,6 @@
     return `
       <div class="transactions-workspace" style="width: 100%; height: 100%; display: flex; flex-direction: column; background: #ffffff;">
         ${getAccountWorkspaceHeaderHTML()}
-        ${hasData ? getFilterToolbarHTML() : ''}
         ${mainContent}
       </div>
       `;

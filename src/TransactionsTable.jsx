@@ -11,6 +11,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { COADropdown } from './components/COADropdown';
 import { CategoryDropdown } from './components/CategoryDropdown';
 import { AuditSidebar } from './components/AuditSidebar';
+import { FilterToolbar } from './components/FilterToolbar';
 
 // Canadian Tax Rates (GST, PST, HST, QST) by Province/Territory
 const TAX_RATES = {
@@ -1057,8 +1058,22 @@ export function TransactionsTable({
                 </div>
             )}
 
+            {/* Filter Toolbar - Sticky at top */}
+            <FilterToolbar
+                refPrefix={window.UI_STATE?.refPrefix || 'CHQ1'}
+                searchQuery={window.UI_STATE?.searchQuery || ''}
+                selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
+                accounts={window.RoboLedger?.Accounts?.getAll() || []}
+                onRefPrefixChange={(value) => window.updateRefPrefix?.(value)}
+                onSearchChange={(value) => window.handleSearch?.(value)}
+                onAccountChange={(value) => window.switchAccount?.(value)}
+                onToggleFilters={() => window.toggleGridFilters?.()}
+                onToggleSettings={() => window.toggleSettings?.(true)}
+                onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
+            />
+
             {/* Grid Header */}
-            <div className="flex bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-0 z-20">
+            <div className="flex bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-[44px] z-20">
                 {table.getFlatHeaders().map(header => (
                     <div
                         key={header.id}
@@ -1102,7 +1117,7 @@ export function TransactionsTable({
 
             {/* Inline Filters Row - Collapsible */}
             {showFilters && (
-                <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[36px] z-19" style={{ transition: 'all 0.2s ease' }}>
+                <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[88px] z-19" style={{ transition: 'all 0.2s ease' }}>
                     {table.getFlatHeaders().map(header => (
                         <div
                             key={`filter-${header.id}`}
