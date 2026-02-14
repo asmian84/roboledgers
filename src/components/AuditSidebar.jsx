@@ -310,24 +310,42 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
 
                                     <button
                                         onClick={() => {
-                                            const account = window.RoboLedger.Accounts.get(transaction.account_id);
-                                            if (!account?.pdfUrl) {
-                                                alert('PDF not available for this transaction');
-                                                return;
-                                            }
-                                            setViewerDocument({
-                                                type: 'pdf',
-                                                url: account.pdfUrl,
-                                                name: account.pdfFilename || 'statement.pdf',
-                                                page: transaction.pdfLocation.page,
-                                                highlightLine: {
-                                                    top: transaction.pdfLocation.top,
-                                                    left: transaction.pdfLocation.left,
-                                                    width: transaction.pdfLocation.width,
-                                                    height: transaction.pdfLocation.height
+                                            // Use source_pdf if available (from parser), otherwise try account.pdfUrl
+                                            if (transaction.source_pdf?.url) {
+                                                setViewerDocument({
+                                                    type: 'pdf',
+                                                    url: transaction.source_pdf.url,
+                                                    name: transaction.source_pdf.filename || 'statement.pdf',
+                                                    page: transaction.source_pdf.page || transaction.pdfLocation.page,
+                                                    highlightLine: transaction.source_pdf.line_position || {
+                                                        top: transaction.pdfLocation.top,
+                                                        left: transaction.pdfLocation.left,
+                                                        width: transaction.pdfLocation.width,
+                                                        height: transaction.pdfLocation.height
+                                                    }
+                                                });
+                                                setShowLeftPanel(true);
+                                            } else {
+                                                // Fallback to account.pdfUrl (legacy)
+                                                const account = window.RoboLedger.Accounts.get(transaction.account_id);
+                                                if (!account?.pdfUrl) {
+                                                    alert('PDF not available for this transaction');
+                                                    return;
                                                 }
-                                            });
-                                            setShowLeftPanel(true);
+                                                setViewerDocument({
+                                                    type: 'pdf',
+                                                    url: account.pdfUrl,
+                                                    name: account.pdfFilename || 'statement.pdf',
+                                                    page: transaction.pdfLocation.page,
+                                                    highlightLine: {
+                                                        top: transaction.pdfLocation.top,
+                                                        left: transaction.pdfLocation.left,
+                                                        width: transaction.pdfLocation.width,
+                                                        height: transaction.pdfLocation.height
+                                                    }
+                                                });
+                                                setShowLeftPanel(true);
+                                            }
                                         }}
                                         style={{
                                             width: '100%',
