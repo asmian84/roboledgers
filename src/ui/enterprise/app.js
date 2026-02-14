@@ -3508,6 +3508,17 @@
           <line x1="70" y1="64" x2="82" y2="64" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
           <path d="M55 105 L60 110 L65 105" stroke="#94a3b8" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
+        
+        <!-- Bank Icons Row -->
+        <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; max-width: 600px; margin-left: auto; margin-right: auto;">
+          <img src="/src/ui/enterprise/assets/logos/rbc.png" alt="RBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="RBC Royal Bank">
+          <img src="/src/ui/enterprise/assets/logos/td.png" alt="TD" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="TD Canada Trust">
+          <img src="/src/ui/enterprise/assets/logos/bmo.png" alt="BMO" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="BMO Bank of Montreal">
+          <img src="/src/ui/enterprise/assets/logos/scotia.png" alt="Scotia" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="Scotiabank">
+          <img src="/src/ui/enterprise/assets/logos/cibc.png" alt="CIBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="CIBC">
+          <img src="/src/ui/enterprise/assets/logos/amex.png" alt="Amex" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="American Express">
+        </div>
+        
         <div style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 8px;">No transactions yet.</div>
         <div style="font-size: 14px; color: #64748b; max-width: 480px; text-align: center; line-height: 1.5; margin-bottom: 32px;">Import your bank statements to get started.</div>
         
@@ -3524,6 +3535,7 @@
               onchange="window.updateFileType()"
               style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-weight: 500; color: #1e293b; background: white; cursor: pointer;"
             >
+              <option value="" disabled selected style="color: #94a3b8;">Bank feed</option>
               <option value="pdf">PDF Only (Bank Statements)</option>
               <option value="csv">CSV/XLSX Only (Spreadsheets)</option>
               <option value="all">All File Types</option>
