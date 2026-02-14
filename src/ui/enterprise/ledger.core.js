@@ -431,6 +431,29 @@ window.RoboLedger = (function () {
             return Object.values(state.transactions).find(tx => tx.parser_ref === parser_ref);
         },
 
+        // REPORTS: Query transactions by date range
+        getTransactionsByDateRange: function (startDate, endDate, accountIds = null) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+
+            return Object.values(state.transactions).filter(tx => {
+                const txDate = new Date(tx.date);
+                const inRange = txDate >= start && txDate <= endDate;
+                const matchAccount = !accountIds || (Array.isArray(accountIds) ? accountIds.includes(tx.account_id) : tx.account_id === accountIds);
+                return inRange && matchAccount;
+            });
+        },
+
+        // REPORTS: Get all transactions (alias for compatibility)
+        getAllTransactions: function () {
+            return this.getAll();
+        },
+
+        // REPORTS: Get account by ID
+        getAccount: function (accountId) {
+            return state.accounts.find(acc => acc.id === accountId);
+        },
+
         confirm: function (tx_id) {
             const tx = state.transactions[tx_id];
             if (tx && tx.status === TransactionStatus.PREDICTED) {
