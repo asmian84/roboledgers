@@ -4005,3 +4005,194 @@ if (typeof init === 'function') init();
     window.handleFilesSelected(filteredFiles);
     input.value = '';
   };
+
+  // Debug: Show account statistics
+  window.debugAccountStats = function() {
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const allTransactions = window.RoboLedger.Ledger.getAll();
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📊 ACCOUNT STATISTICS DEBUG');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('Total Accounts:', accounts.length);
+    console.log('Total Transactions:', allTransactions.length);
+    console.log('');
+    
+    const stats = accounts.map(acc => {
+      const txns = allTransactions.filter(t => t.account_id === acc.id);
+      return {
+        id: acc.id,
+        ref: acc.ref,
+        bank: acc.bankName,
+        type: acc.accountType,
+        txnCount: txns.length,
+        openingBalance: (acc.openingBalance || 0) / 100,
+        account: acc
+      };
+    }).sort((a, b) => b.txnCount - a.txnCount);
+    
+    // Show accounts with transactions
+    console.log('✅ ACCOUNTS WITH TRANSACTIONS:');
+    console.log('─────────────────────────────────────────────────────');
+    stats.filter(s => s.txnCount > 0).forEach(s => {
+      console.log(`   ${s.ref.padEnd(30)} | ${String(s.txnCount).padStart(5)} txns | ${s.bank || 'Unknown'} ${s.type || ''}`);
+    });
+    
+    console.log('');
+    
+    // Show empty accounts (hangover badges)
+    const emptyAccounts = stats.filter(s => s.txnCount === 0);
+    if (emptyAccounts.length > 0) {
+      console.log('⚠️  EMPTY ACCOUNTS (Hangover badges):');
+      console.log('─────────────────────────────────────────────────────');
+      emptyAccounts.forEach(s => {
+        console.log(`   ${s.ref.padEnd(30)} | ID: ${s.id} | Opening: $${s.openingBalance}`);
+      });
+      console.log('');
+      console.log(`💡 Found ${emptyAccounts.length} empty account(s)`);
+      console.log('   Run: window.cleanupEmptyAccounts() to remove them');
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+    
+    return {
+      total: accounts.length,
+      withTransactions: stats.filter(s => s.txnCount > 0).length,
+      empty: emptyAccounts.length,
+      stats: stats
+    };
+  };
+
+  // Cleanup function to remove empty accounts
+  window.cleanupEmptyAccounts = function() {
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const allTransactions = window.RoboLedger.Ledger.getAll();
+    
+    const emptyAccounts = accounts.filter(acc => {
+      const txns = allTransactions.filter(t => t.account_id === acc.id);
+      return txns.length === 0;
+    });
+    
+    if (emptyAccounts.length === 0) {
+      console.log('✅ No empty accounts to clean up');
+      return;
+    }
+    
+    console.log(`🧹 Removing ${emptyAccounts.length} empty account(s)...`);
+    emptyAccounts.forEach(acc => {
+      console.log(`   - Removing: ${acc.ref} (ID: ${acc.id})`);
+      window.RoboLedger.Accounts.remove(acc.id);
+    });
+    
+    console.log('✅ Cleanup complete! Refresh the page.');
+    render(); // Re-render UI
+  };
+
+  // Enhanced debug with parser tracking
+  window.debugAccountsWithParsers = function() {
+    const accounts = window.RoboLedger.Accounts.getAll();
+    const allTransactions = window.RoboLedger.Ledger.getAll();
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📊 ACCOUNT PARSER TRACKING DEBUG');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('Total Accounts:', accounts.length);
+    console.log('Total Transactions:', allTransactions.length);
+    console.log('');
+    
+    const stats = accounts.map(acc => {
+      const txns = allTransactions.filter(t => t.account_id === acc.id);
+      
+      // Detect parser from account metadata
+      let parser = 'Unknown';
+      if (acc.bankName) {
+        parser = acc.bankName; // RBC, TD, BMO, Scotia, CIBC, Amex
+      } else if (acc.id.includes('CC-AMEX')) {
+        parser = 'Amex';
+      } else if (acc.id.includes('CC-VISA')) {
+        parser = 'Visa (Unknown Bank)';
+      } else if (acc.id.includes('CC-MC')) {
+        parser = 'Mastercard (Unknown Bank)';
+      } else if (acc.id.includes('BANK-')) {
+        parser = 'Generic Bank';
+      } else if (acc.id.includes('GENERIC')) {
+        parser = 'GENERIC PARSER';
+      }
+      
+      // Try to get parser from first transaction
+      if (txns.length > 0 && txns[0].source) {
+        parser = txns[0].source + ' Parser';
+      }
+      
+      return {
+        id: acc.id,
+        ref: acc.ref,
+        parser: parser,
+        bank: acc.bankName || 'Unknown',
+        type: acc.accountType || 'Unknown',
+        txnCount: txns.length,
+        openingBalance: (acc.openingBalance || 0) / 100,
+        createdAt: acc.createdAt || 'Unknown',
+        account: acc
+      };
+    }).sort((a, b) => b.txnCount - a.txnCount);
+    
+    // Group by parser
+    const byParser = {};
+    stats.forEach(s => {
+      if (!byParser[s.parser]) {
+        byParser[s.parser] = { total: 0, withTxns: 0, empty: 0, accounts: [] };
+      }
+      byParser[s.parser].total++;
+      if (s.txnCount > 0) {
+        byParser[s.parser].withTxns++;
+      } else {
+        byParser[s.parser].empty++;
+      }
+      byParser[s.parser].accounts.push(s);
+    });
+    
+    // Show parser summary
+    console.log('🔍 ACCOUNTS BY PARSER:');
+    console.log('─────────────────────────────────────────────────────');
+    Object.keys(byParser).sort().forEach(parserName => {
+      const data = byParser[parserName];
+      const emptyWarning = data.empty > 0 ? ` ⚠️  ${data.empty} EMPTY` : '';
+      console.log(`   ${parserName.padEnd(25)} | ${String(data.total).padStart(2)} accounts | ${String(data.withTxns).padStart(2)} with txns${emptyWarning}`);
+    });
+    
+    console.log('');
+    
+    // Show empty accounts grouped by parser
+    const emptyAccounts = stats.filter(s => s.txnCount === 0);
+    if (emptyAccounts.length > 0) {
+      console.log('⚠️  EMPTY ACCOUNTS BY PARSER:');
+      console.log('─────────────────────────────────────────────────────');
+      
+      const emptyByParser = {};
+      emptyAccounts.forEach(s => {
+        if (!emptyByParser[s.parser]) emptyByParser[s.parser] = [];
+        emptyByParser[s.parser].push(s);
+      });
+      
+      Object.keys(emptyByParser).sort().forEach(parserName => {
+        console.log(`\n   🔴 ${parserName} (${emptyByParser[parserName].length} empty):`);
+        emptyByParser[parserName].forEach(s => {
+          console.log(`      - ${s.ref.padEnd(25)} | ID: ${s.id}`);
+        });
+      });
+      
+      console.log('');
+      console.log(`💡 Found ${emptyAccounts.length} empty account(s) from ${Object.keys(emptyByParser).length} parser(s)`);
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+    
+    return {
+      total: accounts.length,
+      withTransactions: stats.filter(s => s.txnCount > 0).length,
+      empty: emptyAccounts.length,
+      byParser: byParser,
+      stats: stats
+    };
+  };
