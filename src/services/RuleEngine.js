@@ -6,20 +6,43 @@
  * - Multiple conditions with AND/OR logic
  * - Priority-based rule application
  * - Auto-categorization and bulk operations
+ * - ML-based fuzzy matching fallback
  */
+
+import FuzzyMatcher from './FuzzyMatcher.js';
+import VendorNormalizer from './VendorNormalizer.js';
 
 class RuleEngine {
     constructor() {
         this.STORAGE_KEY = 'roboledger_categorization_rules';
         this.rules = this.loadRules();
 
-        // Initialize vendor matcher
+        // Initialize vendor matcher (existing)
         this.vendorMatcher = new window.VendorMatcher();
+
+        // Initialize fuzzy matcher with training data
+        this.initializeFuzzyMatcher();
 
         // Auto-import default rules if none exist
         if (this.rules.length === 0) {
             console.log('[RULE_ENGINE] No rules found, importing defaults...');
             this.importDefaultRules();
+        }
+    }
+
+    /**
+     * Initialize fuzzy matcher with training data
+     */
+    async initializeFuzzyMatcher() {
+        try {
+            const response = await fetch('/src/data/vendor_training.json');
+            const trainingData = await response.json();
+            this.fuzzyMatcher = new FuzzyMatcher(trainingData);
+            const stats = this.fuzzyMatcher.getStats();
+            console.log(`[RULE_ENGINE] 🧠 FuzzyMatcher loaded: ${stats.totalVendors} vendors, ${stats.totalTransactions} training examples`);
+        } catch (e) {
+            console.warn('[RULE_ENGINE] Failed to load fuzzy matcher:', e);
+            this.fuzzyMatcher = null;
         }
     }
 
@@ -162,6 +185,23 @@ class RuleEngine {
                     vendor: match.vendor,
                     industry: match.industry,
                     appliedRule: match.appliedRule // Track which smart rule was applied
+                };
+            }
+        }
+
+        // Fallback to ML-based fuzzy matching
+        if (this.fuzzyMatcher) {
+            const match = this.fuzzyMatcher.match(transaction.description);
+            if (match && match.coa && match.confidence > 0.7) {
+                // console.log(`[RULE_ENGINE] Fuzzy match for "${transaction.description}":`, match);
+                return {
+                    coa_code: match.coa,
+                    confidence: match.confidence,
+                    method: 'fuzzy_ml',
+                    match_type: match.matchType,
+                    matched_vendor: match.matchedVendor,
+                    similarity_score: match.similarityScore,
+                    training_count: match.count
                 };
             }
         }
