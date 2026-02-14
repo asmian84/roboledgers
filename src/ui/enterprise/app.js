@@ -3535,10 +3535,10 @@
               onchange="window.updateFileType()"
               style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-weight: 500; color: #1e293b; background: white; cursor: pointer;"
             >
-              <option value="" disabled selected style="color: #94a3b8;">Bank feed</option>
-              <option value="pdf">PDF Only (Bank Statements)</option>
+              <option value="pdf" selected>PDF Only (Bank Statements)</option>
               <option value="csv">CSV/XLSX Only (Spreadsheets)</option>
               <option value="all">All File Types</option>
+              <option value="" disabled style="color: #94a3b8;">Bank feed (coming soon)</option>
             </select>
           </div>
           
