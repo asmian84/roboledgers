@@ -2782,7 +2782,7 @@
         // File input handler
         window.handleFileInput = function(input, mode) {
           const files = Array.from(input.files);
-          console.log('[UPLOAD] Mode:', mode, 'Files:', files.length);
+          console.log('[UPLOAD] Mode:', mode, 'Total files:', files.length);
           
           // Filter for PDFs only (exclude CSV, XLSX, etc.)
           const pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
@@ -2793,10 +2793,28 @@
             return;
           }
           
+          // Detect subfolders (from file.webkitRelativePath)
+          if (mode === 'bulk' && pdfFiles.length > 0 && pdfFiles[0].webkitRelativePath) {
+            const folders = new Set();
+            pdfFiles.forEach(f => {
+              const pathParts = f.webkitRelativePath.split('/');
+              if (pathParts.length > 1) {
+                // Get first subfolder name (e.g., "AMEX Aeroplan", "RBC Checking 1167")
+                folders.add(pathParts[pathParts.length - 2] || pathParts[0]);
+              }
+            });
+            
+            if (folders.size > 1) {
+              console.log('[UPLOAD] Found PDFs across', folders.size, 'subfolders:', Array.from(folders));
+              const folderList = Array.from(folders).slice(0, 5).join(', ');
+              constMoreText = folders.size > 5 ? ('... +' + (folders.size - 5) + ' more') : '';
+              alert('Found ' + pdfFiles.length + ' PDF files across ' + folders.size + ' subfolders:\\n\\n' + folderList + MoreText + '\\n\\nReady to process all files.');
+            }
+          }
+          
           if (pdfFiles.length < files.length) {
             const skipped = files.length - pdfFiles.length;
             console.log('[UPLOAD] Filtered out', skipped, 'non-PDF files');
-            alert('Found ' + pdfFiles.length + ' PDF files. Skipped ' + skipped + ' non-PDF files (CSV/XLSX/etc).');
           }
           
           console.log('[UPLOAD] Processing', pdfFiles.length, 'PDF files through surgical parsers');
