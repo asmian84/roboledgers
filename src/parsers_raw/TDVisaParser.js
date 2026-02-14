@@ -139,6 +139,8 @@ TD VISA FORMAT:
         const isNegative = amounts[0].includes('-');
         const isPayment = /payment|credit|refund/i.test(description) || isNegative;
 
+        const auditData = this.buildAuditData(originalLine, 'TDVisaParser');
+
         return {
             date: isoDate,
             description: description || 'Transaction',
@@ -150,7 +152,8 @@ TD VISA FORMAT:
             _tag: 'Visa',
             _accountType: 'CreditCard',
             rawText: this.cleanRawText(originalLine),
-            audit: this.getSpatialMetadata(originalLine)
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit
         };
     }
 

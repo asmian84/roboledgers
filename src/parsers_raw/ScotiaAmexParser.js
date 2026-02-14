@@ -123,6 +123,8 @@ SCOTIABANK AMEX FORMAT:
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
         const isPayment = /payment|credit|refund/i.test(description);
 
+        const auditData = this.buildAuditData(originalLine, 'ScotiaAmexParser');
+
         return {
             date: isoDate,
             description,
@@ -131,7 +133,8 @@ SCOTIABANK AMEX FORMAT:
             credit: isPayment ? amount : 0,
             balance,
             rawText: this.cleanRawText(originalLine),
-            audit: this.getSpatialMetadata(originalLine)
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit
         };
     }
 

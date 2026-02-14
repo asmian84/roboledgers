@@ -141,6 +141,8 @@ class ScotiaCreditCardParser extends BaseBankParser {
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/[,-]/g, '')) : 0;
         const isPayment = isNegative || /payment|credit|refund/i.test(description);
 
+        const auditData = this.buildAuditData(originalLine, 'ScotiaCreditCardParser');
+
         return {
             date: isoDate,
             description,
@@ -150,7 +152,8 @@ class ScotiaCreditCardParser extends BaseBankParser {
             balance,
             rawText: this.cleanRawText(originalLine),
             refCode: originalLine.match(/\b([A-Z0-9]{15,})\b/)?.[1] || 'N/A',
-            audit: this.getSpatialMetadata(originalLine)
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit
         };
     }
 }

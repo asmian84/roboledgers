@@ -108,6 +108,8 @@ BMO US FORMAT:
             credit = amount;
         }
 
+        const auditData = this.buildAuditData(originalLine, 'BMOUSParser');
+
         return {
             date: isoDate,
             description: description || 'BMO US Transaction',
@@ -116,7 +118,8 @@ BMO US FORMAT:
             credit,
             balance,
             rawText: this.cleanRawText(originalLine),
-            audit: this.getSpatialMetadata(originalLine),
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit
             _brand: 'BMOUS',
             _tag: 'Chequing'
         };

@@ -127,6 +127,8 @@ BMO MASTERCARD FORMAT:
     const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
     const isPayment = /payment|credit|refund/i.test(description);
 
+    const auditData = this.buildAuditData(originalLine, 'BMOMastercardParser');
+
     return {
       date: isoDate,
       description,
@@ -135,7 +137,8 @@ BMO MASTERCARD FORMAT:
       credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
       balance,
       rawText: this.cleanRawText(originalLine),
-      audit: this.getSpatialMetadata(originalLine)
+      pdfLocation: auditData.pdfLocation,
+      audit: auditData.audit
     };
   }
 

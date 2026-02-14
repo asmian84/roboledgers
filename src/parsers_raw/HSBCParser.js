@@ -110,6 +110,8 @@ HSBC BANK FORMAT:
             debit = amount;
         }
 
+        const auditData = this.buildAuditData(originalLine, 'HSBCParser');
+
         return {
             date: isoDate,
             description: description || 'HSBC Transaction',
@@ -118,7 +120,8 @@ HSBC BANK FORMAT:
             credit,
             balance,
             rawText: this.cleanRawText(originalLine),
-            audit: this.getSpatialMetadata(originalLine),
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit
             _brand: 'HSBC',
             _tag: 'Chequing'
         };

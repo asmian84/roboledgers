@@ -140,6 +140,8 @@ ATB FINANCIAL FORMAT:
             }
         }
 
+        const auditData = this.buildAuditData(originalLine, 'ATBParser');
+
         return {
             date: isoDate,
             description: description || 'ATB Transaction',
@@ -148,7 +150,8 @@ ATB FINANCIAL FORMAT:
             credit,
             balance,
             rawText: this.cleanRawText(originalLine),
-            audit: this.getSpatialMetadata(originalLine),
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit
             _brand: 'ATB',
             _tag: isMastercard ? 'Mastercard' : 'Chequing'
         };

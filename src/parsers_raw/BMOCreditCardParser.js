@@ -50,6 +50,8 @@ class BMOCreditCardParser extends BaseBankParser {
             // Determine type by keywords
             const isPayment = /payment|credit|refund/i.test(description);
 
+            const auditData = this.buildAuditData(line, 'BMOCreditCardParser');
+
             transactions.push({
                 date: isoDate,
                 description,
@@ -61,7 +63,8 @@ class BMOCreditCardParser extends BaseBankParser {
                 _tag: 'CreditCard',
                 _accountType: 'CreditCard', // [NEW] Explicit liability flagging
                 rawText: this.cleanRawText(line),
-                audit: this.getSpatialMetadata(line)
+                pdfLocation: auditData.pdfLocation,
+                audit: auditData.audit
             });
         }
 

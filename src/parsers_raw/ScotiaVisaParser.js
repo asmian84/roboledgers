@@ -135,6 +135,8 @@ SCOTIABANK VISA FORMAT:
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
         const isPayment = /payment|credit|refund|THANK YOU|REWARD/i.test(description);
 
+        const auditData = this.buildAuditData(originalLine, 'ScotiaVisaParser');
+
         return {
             date: isoDate,
             description,
@@ -146,7 +148,8 @@ SCOTIABANK VISA FORMAT:
             _tag: 'Visa',
             _accountType: 'CreditCard',
             rawText: this.cleanRawText(originalLine),
-            audit: this.getSpatialMetadata(originalLine)
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit
         };
     }
 
