@@ -498,6 +498,104 @@ function formatCurrency(value) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// FILTER COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Text Filter (for Description, Ref#)
+function TextFilter({ column }) {
+    const value = column.getFilterValue() || '';
+    const [localValue, setLocalValue] = useState(value);
+
+    // Debounce filter updates
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            column.setFilterValue(localValue || undefined);
+        }, 300);
+        return () => clearTimeout(timeout);
+    }, [localValue, column]);
+
+    return (
+        <input
+            type="text"
+            value={localValue}
+            onChange={e => setLocalValue(e.target.value)}
+            placeholder="Filter..."
+            style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '11px',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                outline: 'none',
+            }}
+        />
+    );
+}
+
+// Category Filter (Dropdown)
+function CategoryFilter({ column }) {
+    const value = column.getFilterValue() || '';
+
+    // Get unique categories from window.RoboLedger
+    const categories = useMemo(() => {
+        const coa = window.RoboLedger?.COA?.getAll() || [];
+        return coa.map(c => ({ code: c.code, name: c.name }));
+    }, []);
+
+    return (
+        <select
+            value={value}
+            onChange={e => column.setFilterValue(e.target.value || undefined)}
+            style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '11px',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                outline: 'none',
+                background: 'white'
+            }}
+        >
+            <option value="">All</option>
+            <option value="UNCATEGORIZED">Uncategorized</option>
+            {categories.filter(cat => cat.code !== '9970').map(cat => (
+                <option key={cat.code} value={cat.code}>{cat.name}</option>
+            ))}
+        </select>
+    );
+}
+
+// Amount Filter (supports >, <, =, range)
+function AmountFilter({ column }) {
+    const value = column.getFilterValue() || '';
+    const [localValue, setLocalValue] = useState(value);
+
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            column.setFilterValue(localValue || undefined);
+        }, 300);
+        return () => clearTimeout(timeout);
+    }, [localValue, column]);
+
+    return (
+        <input
+            type="text"
+            value={localValue}
+            onChange={e => setLocalValue(e.target.value)}
+            placeholder=">100"
+            style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '11px',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                outline: 'none',
+            }}
+        />
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // COLUMN DEFINITIONS — PROPER ORDER
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -562,6 +660,8 @@ const columns = [
         size: 95,
         minSize: 90,
         maxSize: 105,
+        enableColumnFilter: true,
+        filterFn: 'includesString',
         cell: info => (
             <span
                 style={{
@@ -583,6 +683,8 @@ const columns = [
         header: 'DESCRIPTION',
         minSize: 250,
         size: 400,
+        enableColumnFilter: true,
+        filterFn: 'includesString',
         cell: ({ row }) => <DescriptionCell row={row.original} />
     }),
 
@@ -592,6 +694,8 @@ const columns = [
         size: 85,
         minSize: 75,
         maxSize: 100,
+        enableColumnFilter: true,
+        filterFn: 'auto',
         cell: info => {
             const val = info.getValue();
             // Debit is ALWAYS green (good)
@@ -619,6 +723,8 @@ const columns = [
         size: 85,
         minSize: 75,
         maxSize: 100,
+        enableColumnFilter: true,
+        filterFn: 'auto',
         cell: info => {
             const val = info.getValue();
             // Credit is ALWAYS red (bad)
@@ -646,6 +752,25 @@ const columns = [
         size: 160,
         minSize: 150,
         maxSize: 200,
+        enableColumnFilter: true,
+        filterFn: (row, columnId, filterValue) => {
+            const categoryValue = row.getValue(columnId);
+
+            // Special case: "UNCATEGORIZED" should match what COADropdown displays as "Uncategorized"
+            // COADropdown shows "Uncategorized" when: !currentAccount (code not found in COA list OR empty/null)
+            if (filterValue === 'UNCATEGORIZED') {
+                if (!categoryValue || categoryValue === '' || categoryValue === 'Uncategorized') {
+                    return true; // Empty/null category
+                }
+                // Also check if the code exists in COA - if not, it shows as "Uncategorized"
+                const coaAccounts = window.RoboLedger?.COA?.getAll() || [];
+                const accountExists = coaAccounts.some(acc => acc.code === categoryValue);
+                return !accountExists; // If code doesn't exist in COA, it displays as "Uncategorized"
+            }
+
+            // Otherwise exact match by code
+            return categoryValue === filterValue;
+        },
         cell: ({ row }) => {
             const handleUpdateCategory = (code) => {
                 const txId = row.original.tx_id;
@@ -804,6 +929,10 @@ export function TransactionsTable({
     const [rowSelection, setRowSelection] = useState({});
     const [density] = useState('comfortable'); // Fixed at comfortable for now
 
+    // INLINE FILTERS: State for column-specific filters
+    const [columnFilters, setColumnFilters] = useState([]);
+    const [showFilters, setShowFilters] = useState(false);
+
     // EXPERIMENTAL: Audit sidebar state
     const [auditSidebarOpen, setAuditSidebarOpen] = useState(false);
     const [selectedAuditTransaction, setSelectedAuditTransaction] = useState(null);
@@ -829,36 +958,50 @@ export function TransactionsTable({
 
         // EXPERIMENTAL: Expose audit sidebar function
         window.openAuditSidebar = (row) => {
-            // Smart scroll logic: Only scroll if reconciliation/metadata bars would obscure view
             const gridContainer = parentRef.current;
             if (gridContainer) {
                 const scrollTop = gridContainer.scrollTop;
-
-                // Height of reconciliation bar + metadata area (approximate)
-                const topBarHeight = 280; // Adjust if needed based on your UI
-
-                // Only scroll down if:
-                // 1. We're near the top (scrollTop < topBarHeight)
-                // 2. AND this would help reveal the transaction row
+                const topBarHeight = 280;
                 if (scrollTop < topBarHeight) {
-                    // Scroll just enough to hide the top bars
                     gridContainer.scrollTo({
                         top: topBarHeight,
                         behavior: 'smooth'
                     });
                 }
-                // Otherwise, don't scroll - the transaction is already visible
             }
-
             setSelectedAuditTransaction(row);
             setAuditSidebarOpen(true);
         };
 
+        // FILTERS: Expose toggle for filter button in app.js
+        window.toggleGridFilters = () => {
+            setShowFilters(prev => !prev);
+        };
+        window.getGridFiltersVisible = () => showFilters;
+        window.getActiveFiltersCount = () => columnFilters.length;
+
         return () => {
             delete window.setGridColumnVisibility;
             delete window.openAuditSidebar;
+            delete window.toggleGridFilters;
+            delete window.getGridFiltersVisible;
+            delete window.getActiveFiltersCount;
         };
-    }, []);
+    }, [columnFilters, showFilters]);
+
+    // Update filter badge count in app.js
+    useEffect(() => {
+        const filterBadge = document.getElementById('filter-count-badge');
+        if (filterBadge) {
+            const count = columnFilters.length;
+            if (count > 0) {
+                filterBadge.textContent = count;
+                filterBadge.style.display = 'block';
+            } else {
+                filterBadge.style.display = 'none';
+            }
+        }
+    }, [columnFilters]);
 
     const table = useReactTable({
         data,
@@ -868,10 +1011,12 @@ export function TransactionsTable({
             globalFilter,
             columnVisibility,
             rowSelection,
+            columnFilters, // Enable column-specific filters
         },
         onSortingChange: setSorting,
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
+        onColumnFiltersChange: setColumnFilters, // Handle filter changes
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
@@ -954,6 +1099,44 @@ export function TransactionsTable({
                     </div>
                 ))}
             </div>
+
+            {/* Inline Filters Row - Collapsible */}
+            {showFilters && (
+                <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[36px] z-19" style={{ transition: 'all 0.2s ease' }}>
+                    {table.getFlatHeaders().map(header => (
+                        <div
+                            key={`filter-${header.id}`}
+                            className={`relative flex items-center ${getStickyClass(header.id)}`}
+                            style={{
+                                width: header.id === 'description' ? undefined : header.getSize(),
+                                flex: header.id === 'description' ? '1 1 0' : undefined,
+                                minWidth: header.id === 'description' ? '250px' : undefined,
+                                flexShrink: 0,
+                                height: '40px',
+                                padding: header.id === 'select' ? '0 4px 0 6px' :
+                                    header.id === 'balance' ? '0 6px 0 2px' :
+                                        `0 ${GRID_TOKENS.rowPaddingX}`,
+                                borderRight: `1px solid ${GRID_TOKENS.borderColor}`
+                            }}
+                        >
+                            {/* Render appropriate filter input based on column */}
+                            {header.column.getCanFilter() && (() => {
+                                const columnId = header.id;
+                                if (columnId === 'description' || columnId === 'ref') {
+                                    return <TextFilter column={header.column} />;
+                                } else if (columnId === 'category') {
+                                    return <CategoryFilter column={header.column} />;
+                                } else if (columnId === 'debit' || columnId === 'credit' || columnId === 'balance') {
+                                    return <AmountFilter column={header.column} />;
+                                } else if (columnId === 'date') {
+                                    return <TextFilter column={header.column} />;
+                                }
+                                return null;
+                            })()}
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* Virtualized Body */}
             <div

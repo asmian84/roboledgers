@@ -747,8 +747,29 @@ window.RoboLedger = (function () {
          * Preserves line breaks by detecting Y-coordinate changes
          * NOW ALSO RETURNS LINE COORDINATES for highlighting
          */
-        extractTextFromPDF: async function (arrayBuffer) {
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        extractTextFromPDF: async function (arrayBuffer, timeoutMs = 15000) {
+            console.log(`[PDF.js] Starting extraction with ${timeoutMs}ms timeout...`);
+
+            // Create a timeout promise that rejects
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error(`PDF_EXTRACTION_TIMEOUT: PDF.js getDocument() timed out after ${timeoutMs}ms. This PDF may be corrupted or use unsupported compression.`));
+                }, timeoutMs);
+            });
+
+            // Race between PDF loading and timeout
+            const pdf = await Promise.race([
+                pdfjsLib.getDocument({
+                    data: arrayBuffer,
+                    useSystemFonts: true,      // Skip custom font embedding
+                    disableFontFace: true,      // Don't load custom fonts
+                    verbosity: 0                 // Suppress PDF.js warnings
+                }).promise,
+                timeoutPromise
+            ]);
+
+            console.log(`[PDF.js] ✅ Document loaded successfully (${pdf.numPages} pages)`);
+
             let fullText = '';
             const lineCoordinates = []; // Store coordinates for each line
 
@@ -1189,11 +1210,18 @@ window.RoboLedger = (function () {
                     console.log('[INGEST] 📦 Buffer size:', buffer.byteLength, 'bytes');
 
                     console.log('[INGEST] 🔄 Starting PDF text extraction...');
-                    const pdfData = await this.extractTextFromPDF(buffer);
-                    console.log('[INGEST] ✅ PDF text extraction complete');
-
-                    text = pdfData.text; // Destructure text
-                    lineCoordinates = pdfData.lineCoordinates; // Get coordinates
+                    try {
+                        const pdfData = await this.extractTextFromPDF(buffer);
+                        console.log('[INGEST] ✅ PDF text extraction complete');
+                        text = pdfData.text;
+                        lineCoordinates = pdfData.lineCoordinates;
+                    } catch (extractionError) {
+                        if (extractionError.message && extractionError.message.startsWith('PDF_EXTRACTION_TIMEOUT')) {
+                            console.error('[INGEST] ⚠️ PDF extraction timed out:', extractionError.message);
+                            throw new Error(`PDF_TIMEOUT: This PDF cannot be processed due to incompatible formatting. Please export this statement as CSV from your bank and upload instead.`);
+                        }
+                        throw extractionError; // Re-throw other errors
+                    }
 
                     console.log('[INGEST] 📝 Extracted text length:', text.length, 'characters');
                     console.log('[INGEST] 📍 Line coordinates captured:', lineCoordinates.length, 'lines');
@@ -1336,6 +1364,7 @@ window.RoboLedger = (function () {
             }
 
             let importedCount = 0;
+            const importedTxIds = []; // Track IDs of newly imported transactions for categorization
 
             for (const row of rows) {
                 // Map common headers (CSV or PDF Regex)
@@ -1536,17 +1565,16 @@ window.RoboLedger = (function () {
 
                 if (Ledger.post(canonical)) {
                     importedCount++;
+                    importedTxIds.push(canonical.tx_id); // Track for auto-categorization
                 }
             }
 
             // Auto-categorize imported transactions using RuleEngine
-            // TEMPORARILY DISABLED - causing upload to halt
-            /*
             if (importedCount > 0 && window.RuleEngine) {
                 try {
                     console.log(`[LEDGER] Auto-categorizing ${importedCount} imported transactions...`);
-                    // Only categorize the newly imported transactions, not ALL transactions
-                    const recentTxs = parsedTransactions.slice(0, importedCount);
+                    // Fetch the newly imported transactions from state by their IDs
+                    const recentTxs = importedTxIds.map(id => state.transactions[id]).filter(Boolean);
                     const result = window.RuleEngine.bulkCategorize(recentTxs);
                     console.log(`[LEDGER] Auto-categorization complete: ${result.categorized} categorized, ${result.skipped} skipped`);
                 } catch (error) {
@@ -1554,7 +1582,7 @@ window.RoboLedger = (function () {
                     // Don't halt upload on categorization failure
                 }
             }
-            */
+
 
             return importedCount;
         }

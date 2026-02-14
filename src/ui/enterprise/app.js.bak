@@ -2819,19 +2819,28 @@
     const reconContent = document.getElementById('reconciliation-content');
     if (reconContent) {
       if (isAllMode) {
-        // ALL MODE: "All Accounts at a glance" - Simple summary without reconciliation status
+        // ALL MODE: Match single account view exactly (same fonts, same structure)
         var allTxns = window.RoboLedger.Ledger.getAll();
         var aggTotalDebits = allTxns.filter(function (t) { return t.polarity === 'DEBIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
         var aggTotalCredits = allTxns.filter(function (t) { return t.polarity === 'CREDIT'; }).reduce(function (sum, t) { return sum + (t.amount_cents || 0); }, 0) / 100;
         var aggOpeningBalance = accounts.reduce(function (sum, a) { return sum + (a.openingBalance || 0); }, 0);
-        var totalBalance = aggOpeningBalance - aggTotalDebits + aggTotalCredits;
-        var netActivity = aggTotalCredits - aggTotalDebits;
+        var calculatedEnding = aggOpeningBalance - aggTotalDebits + aggTotalCredits;
 
-        reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b;">' +
-          '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-top: 2px; margin-bottom: 4px;">All Accounts at a glance</div>' +
-          '<div>Total Balance: <span style="font-weight: 600;">$' + totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
-          '<div>Total Debits: <span style="font-weight: 600; color: #ef4444;">$' + aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span> \u2022 Total Credits: <span style="font-weight: 600; color: #10b981;">$' + aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
-          '<div>Net Activity: <span style="font-weight: 600;">$' + netActivity.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+        reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.7;">' +
+          '<div style="font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
+          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
+          '<div style="flex: 1; white-space: nowrap;">Opening: <span style="font-weight: 700; color: #1e293b;">$' + aggOpeningBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Debit: <span style="font-weight: 700; color: #ef4444;">$' + aggTotalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '</div>' +
+          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
+          '<div style="flex: 1; white-space: nowrap;">Ending (Calc): <span style="font-weight: 700; color: #3b82f6;">$' + calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '<div style="flex: 1; white-space: nowrap;">Credit: <span style="font-weight: 700; color: #10b981;">$' + aggTotalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '</div>' +
+          '<div style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;">' +
+          '<div style="flex: 1; white-space: nowrap;">Ending (Stmt): <span style="font-weight: 700; color: #1e293b;">$' + calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</span></div>' +
+          '<div style="flex: 1;"></div>' +
+          '</div>' +
+          '<div style="font-size: 11px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;"><span style="color: #10b981;">✓ RECONCILED</span></div>' +
           '</div>';
       } else if (!acc) {
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 11px; color: #1e293b;">&gt; Select account...</div>';
@@ -2867,8 +2876,9 @@
         const hasStatementEnding = statementEnding !== 0;
         // 3-row layout: Opening+Debit, Ending(Calc)+Credit, Ending(Stmt)
         reconContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.7;">' +
-          '<div style="font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 1px; margin-top: 2px; margin-bottom: 4px;">RECONCILIATION</div>' +
-          // Row 1: Opening + Debit (WITH EDITABLE INPUT + PDF LINK)
+          '<div style="font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">RECONCILIATION</div>' +
+
+          // Row 1: Opening + Debit (WITH PDF SOURCE LINK)
           '\u003cdiv style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;"\u003e' +
           '\u003cdiv style="flex: 1; display: flex; align-items: center; gap: 8px; white-space: nowrap;"\u003eOpening: ' +
           '\u003cinput type="text" id="opening-balance-input" value="$' + openingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" oninput="window.handleOpeningBalanceInput(this)" onblur="window.formatOpeningBalance(this)" onclick="this.select()" /\u003e' +
@@ -2876,21 +2886,24 @@
           '\u003c/div\u003e' +
           '\u003cdiv style="flex: 1; white-space: nowrap;"\u003eDebit: \u003cspan style="font-weight: 700; color: #ef4444;"\u003e$' + totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '\u003c/span\u003e\u003c/div\u003e' +
           '\u003c/div\u003e' +
+
           // Row 2: Ending (Calc) + Credit
           '\u003cdiv style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;"\u003e' +
           '\u003cdiv style="flex: 1; white-space: nowrap;"\u003eEnding (Calc): \u003cspan style="font-weight: 700; color: #3b82f6;"\u003e$' + calculatedEnding.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '\u003c/span\u003e\u003c/div\u003e' +
           '\u003cdiv style="flex: 1; white-space: nowrap;"\u003eCredit: \u003cspan style="font-weight: 700; color: #10b981;"\u003e$' + totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '\u003c/span\u003e\u003c/div\u003e' +
           '\u003c/div\u003e' +
-          // Row 3: Ending (Stmt) - EDITABLE + PDF LINK
+
+          // Row 3: Ending (Stmt) - editable (WITH PDF SOURCE LINK)
           '\u003cdiv style="display: flex; align-items: center; gap: 24px; margin-bottom: 2px;"\u003e' +
           '\u003cdiv style="flex: 1; display: flex; align-items: center; gap: 8px; white-space: nowrap;"\u003eEnding (Stmt): ' +
           '\u003cinput type="text" id="stmt-ending-input" value="$' + (hasStatementEnding ? statementEnding : calculatedEnding).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '" style="border: none; border-bottom: 1px solid #cbd5e1; background: transparent; font-family: ' + terminalFont + '; font-size: 12px; font-weight: 700; color: #1e293b; width: 90px; padding: 2px 4px;" onblur="window.saveStatementEnding(this.value)" onclick="this.select()" /\u003e' +
           ' \u003cspan onclick="window.showStatementSource(\'closing\')" style="cursor: pointer; color: #3b82f6; font-size: 11px; margin-left: 4px;" title="View statement source"\u003e🔗\u003c/span\u003e' +
           '\u003c/div\u003e' +
-          '\u003cdiv style="flex: 1;"\u003e\u003c/div\u003e' +
-          '\u003c/div\u003e' +
+          '\u003cdiv style="flex: 1;"\u003e\u003c/div\u003e' + // Empty cell for alignment
+          '</div>' +
+
           // Status row
-          '\u003cdiv style="font-size: 11px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;"\u003e' + statusHTML + '\u003c/div\u003e' +
+          '<div style="font-size: 11px; font-weight: 600; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">' + statusHTML + '</div>' +
           '</div>';
       }
     }
@@ -2916,16 +2929,8 @@
           periodText = dates[0].toISOString().split('T')[0] + ' TO ' + dates[dates.length - 1].toISOString().split('T')[0];
         }
 
-        // Account badges
-        var allBadge = '<span style="background: #1e293b; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace;">ALL</span>';
-        var badgesList = accounts.map(function (a) {
-          var isRecon = isAccountReconciled(a);
-          return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>';
-        }).join(' ');
-
-        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; min-height: 85px;">' +
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
-          '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">' + allBadge + ' ' + badgesList + '</div>' +
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #64748b; margin-bottom: 6px;">' +
           '<span style="color: #1e293b; font-weight: 600;">Consolidated View</span> • ' + accounts.length + ' accounts' +
           '</div>' +
@@ -2935,6 +2940,7 @@
           '<span style="color: #10b981;">Credits: ' + creditTotal.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '<sup style="font-size: 8px;">' + creditCount + '</sup></span>' +
           '</div>' +
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #1e293b; margin-bottom: 6px;">Period: <span style="font-weight: 600;">' + periodText + '</span></div>' +
+          '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">' + allBadge + ' ' + badgesList + '</div>' +
           '</div>';
       } else if (acc) {
         // SINGLE MODE: ACCOUNT METADATA heading + breadcrumb + transaction counts + icon (48px) + text
@@ -2972,7 +2978,7 @@
           transitInfo = 'Transit ' + (acc.transit || '00000') + ' \u2022 Inst ' + (acc.inst || '003') + ' \u2022 Acct \u2022\u2022\u2022\u2022' + ((acc.accountNumber || '').slice(-4) || '2443');
         }
 
-        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; min-height: 85px;">' +
+        metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #64748b; margin-bottom: 6px;">' +
           '<span onclick="window.switchAccount(\'ALL\')" style="cursor: pointer; color: #3b82f6;">ALL</span>' +
@@ -3163,7 +3169,7 @@
         </div>
 
         <!-- Compact Terminal Strip -->
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; height: 120px; overflow: hidden; margin: 8px 16px; padding: 10px 0;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: stretch; min-height: 120px; overflow: hidden; margin: 8px 16px;">
           
           <!-- LEFT: Reconciliation (40%) -->
           <div style="flex: 2; border-right: 1px solid #e2e8f0; padding: 8px 16px; display: flex; flex-direction: column; justify-content: center;">
