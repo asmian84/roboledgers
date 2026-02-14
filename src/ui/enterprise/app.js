@@ -3508,59 +3508,108 @@
           <path d="M55 105 L60 110 L65 105" stroke="#94a3b8" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <div style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 8px;">No transactions yet.</div>
-        <div style="font-size: 14px; color: #64748b; max-width: 480px; text-align: center; line-height: 1.5; margin-bottom: 24px;">Import your bank statement or add your first entry manually to get started.</div>
+        <div style="font-size: 14px; color: #64748b; max-width: 480px; text-align: center; line-height: 1.5; margin-bottom: 32px;">Import your bank statements to get started.</div>
         
-        <!-- Upload Button -->
-        <button 
-          onclick="document.getElementById('fileInput').click()" 
-          style="
-            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-            color: white;
-            border: none;
-            padding: 14px 32px;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-            transition: transform 0.2s, box-shadow 0.2s;
-          "
-          onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(59, 130, 246, 0.4)';"
-          onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.3)';"
-        >
-          <i class="ph ph-upload-simple" style="font-size: 20px;"></i>
-          Import Bank Statement
-        </button>
-        
-        <div style="margin-top: 16px; font-size: 12px; color: #94a3b8;">
-          Supports PDF statements from RBC, TD, BMO, Scotiabank, CIBC
+        <!-- Simple Upload Controls -->
+        <div style="background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 28px; max-width: 450px; margin: 0 auto 24px;">
+          
+          <!-- File Type Dropdown -->
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 13px; font-weight: 600; color: #64748b; margin-bottom: 8px;">
+              File Type
+            </label>
+            <select 
+              id="fileTypeSelect" 
+              onchange="window.updateFileType()"
+              style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-weight: 500; color: #1e293b; background: white; cursor: pointer;"
+            >
+              <option value="pdf">PDF Only (Bank Statements)</option>
+              <option value="csv">CSV/XLSX Only (Spreadsheets)</option>
+              <option value="all">All File Types</option>
+            </select>
+          </div>
+          
+          <!-- Browse Folders Checkbox -->
+          <div style="margin-bottom: 24px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #f8fafc; border-radius: 8px; border: 2px solid #e2e8f0;">
+              <input 
+                type="checkbox" 
+                id="browseFoldersCheckbox" 
+                onchange="window.updateBrowseMode()"
+                style="width: 18px; height: 18px; cursor: pointer;"
+              >
+              <span style="font-size: 14px; font-weight: 600; color: #1e293b;">
+                <i class="ph ph-folder-open" style="margin-right: 6px;"></i>
+                Browse folders (include subfolders)
+              </span>
+            </label>
+          </div>
+          
+          <!-- Upload Button -->
+          <button 
+            onclick="document.getElementById('mainFileInput').click()" 
+            style="
+              width: 100%;
+              background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+              color: white;
+              border: none;
+              padding: 16px 32px;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 600;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 12px;
+              box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+              transition: transform 0.2s, box-shadow 0.2s;
+            "
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(59, 130, 246, 0.4)';"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.3)';"
+          >
+            <i class="ph ph-upload-simple" style="font-size: 22px;"></i>
+            <span id="uploadButtonText">Import PDF Statements</span>
+          </button>
         </div>
+        
+        <div style="margin-top: 16px; font-size: 12px; color: #94a3b8; max-width: 500px; line-height: 1.6;">
+          <strong>PDF:</strong> Surgical parsing for RBC, TD, BMO, Scotia, CIBC, Amex<br>
+          <strong>CSV/XLSX:</strong> Generic import for any bank
+        </div>
+        
+        <!-- Hidden file input -->
+        <input 
+          type="file" 
+          id="mainFileInput" 
+          accept=".pdf"
+          multiple 
+          style="display: none;" 
+          onchange="window.handleMainUpload(this)"
+        >
       </div>
       `;
   }
 
   function renderTransactionsRestored() {
-    const accounts = window.RoboLedger.Accounts.getAll();
-    const allTransactions = window.RoboLedger.Ledger.getAll();
-    const filteredData = UI_STATE.selectedAccount === 'ALL' ? allTransactions : allTransactions.filter(t => t.account_id === UI_STATE.selectedAccount);
-    const hasData = filteredData.length > 0;
+  const accounts = window.RoboLedger.Accounts.getAll();
+  const allTransactions = window.RoboLedger.Ledger.getAll();
+  const filteredData = UI_STATE.selectedAccount === 'ALL' ? allTransactions : allTransactions.filter(t => t.account_id === UI_STATE.selectedAccount);
+  const hasData = filteredData.length > 0;
 
-    // Flat workspace structure - NO CARDS
-    let mainContent = "";
-    if (UI_STATE.isIngesting) {
-      mainContent = getTxnIngestionHTML(); // Only show progress card, no empty grid below
-    } else if (!hasData) {
-      mainContent = `
+  // Flat workspace structure - NO CARDS
+  let mainContent = "";
+  if (UI_STATE.isIngesting) {
+    mainContent = getTxnIngestionHTML(); // Only show progress card, no empty grid below
+  } else if (!hasData) {
+    mainContent = `
       <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: #fafbfc;">
         ${getTxnEmptyStateHTML()}
       </div>
       `;
-    } else {
-      // Edge-to-edge grid
-      mainContent = `
+  } else {
+    // Edge-to-edge grid
+    mainContent = `
       <div style="flex: 1; display: flex; flex-direction: column; background: white;">
         <!-- Inline Progress Bar (above grid) -->
         <div id="parsing-progress-inline" style="display: none; background: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px 24px; margin: 16px 24px; border-radius: 8px;">
@@ -3582,129 +3631,129 @@
         <div id="txnGrid" style="height: 100%; width: 100%; display: flex; flex-direction: column;"></div>
       </div>
       `;
-    }
+  }
 
-    return `
+  return `
       <div class="transactions-workspace" style="width: 100%; height: 100%; display: flex; flex-direction: column; background: #ffffff;">
         ${getAccountWorkspaceHeaderHTML()}
         ${mainContent}
       </div>
       `;
+}
+
+function initGrid(passedData) {
+  const gridDiv = document.querySelector('#txnGrid');
+  if (!gridDiv) return;
+
+  // Use passed data or fetch all from Ledger
+  let data = passedData || window.RoboLedger.Ledger.getAll();
+  if (!data || data.length === 0) return;
+
+  // React Mounting Logic (TanStack Table - Vite Bundled)
+  const canUseReact = window.mountTransactionsTable && !window.location.protocol.startsWith('file');
+
+  if (canUseReact) {
+    console.log("[GRID] Mounting React/TanStack grid...");
+    window.mountTransactionsTable(data, UI_STATE.searchQuery);
+
+    // Apply grid-scoped theme after grid renders
+    setTimeout(() => {
+      const gridContainer = document.getElementById('txnGrid');
+      if (gridContainer && UI_STATE.activeTheme && UI_STATE.activeTheme !== 'default') {
+        gridContainer.classList.remove('rainbow-theme', 'postit-theme', 'default-theme');
+        gridContainer.classList.add(`${UI_STATE.activeTheme}-theme`);
+        console.log(`[THEME] Applied to grid: ${UI_STATE.activeTheme}`);
+      }
+    }, 100);
+
+    return;
   }
 
-  function initGrid(passedData) {
-    const gridDiv = document.querySelector('#txnGrid');
-    if (!gridDiv) return;
+  // No React bridge available
+  console.error("[GRID] React bridge missing. Grid cannot render. Make sure you're accessing via Vite dev server (port 5173).");
+}
 
-    // Use passed data or fetch all from Ledger
-    let data = passedData || window.RoboLedger.Ledger.getAll();
-    if (!data || data.length === 0) return;
+// --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
+/* These are now wired via the React bridge and global state */
 
-    // React Mounting Logic (TanStack Table - Vite Bundled)
-    const canUseReact = window.mountTransactionsTable && !window.location.protocol.startsWith('file');
 
-    if (canUseReact) {
-      console.log("[GRID] Mounting React/TanStack grid...");
-      window.mountTransactionsTable(data, UI_STATE.searchQuery);
+// Global exports for Action Bar
+window.bulkCategorize = () => {
+  // Updated for React: This will need to pull selection from React state or a shared selection store
+  console.warn("[Bulk] bulkCategorize invoked. Selection handling pending React integration.");
+  // window.showAIAuditPanel(targets, 'selected');
+};
 
-      // Apply grid-scoped theme after grid renders
-      setTimeout(() => {
-        const gridContainer = document.getElementById('txnGrid');
-        if (gridContainer && UI_STATE.activeTheme && UI_STATE.activeTheme !== 'default') {
-          gridContainer.classList.remove('rainbow-theme', 'postit-theme', 'default-theme');
-          gridContainer.classList.add(`${UI_STATE.activeTheme}-theme`);
-          console.log(`[THEME] Applied to grid: ${UI_STATE.activeTheme}`);
-        }
-      }, 100);
+window.bulkDelete = () => {
+  console.warn("[Bulk] bulkDelete invoked. Selection handling pending React integration.");
+  /*
+  const targets = []; // Get from React selection
+  if (confirm(`Delete ${ targets.length } transactions ? `)) {
+    targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
+    window.window.updateWorkspace();
+  }
+  */
+};
 
-      return;
-    }
+window.toggleWorkbench = function (isOpen, fileId = null) {
+  UI_STATE.workbenchOpen = isOpen;
+  UI_STATE.activeFileId = fileId || UI_STATE.activeFileId;
 
-    // No React bridge available
-    console.error("[GRID] React bridge missing. Grid cannot render. Make sure you're accessing via Vite dev server (port 5173).");
+  if (isOpen) {
+    document.body.classList.add('workbench-active');
+    renderWorkbenchPDF(UI_STATE.activeFileId);
+  } else {
+    document.body.classList.remove('workbench-active');
+  }
+};
+
+async function renderWorkbenchPDF(fileId) {
+  const container = document.getElementById('v5-pdf-curtain-content');
+  const label = document.getElementById('v5-curtain-filename');
+  if (!container) return;
+
+  const fileBlob = window.RoboLedger.Accounts.getFile(fileId);
+  if (!fileBlob) {
+    container.innerHTML = `<div style="padding: 40px; color: #94a3b8;">Source file not found in memory.</div>`;
+    return;
   }
 
-  // --- WORKSPACE HANDLERS (UPDATED FOR REACT) ---
-  /* These are now wired via the React bridge and global state */
+  label.innerText = fileBlob.name;
+  container.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center;"><i class="ph ph-circle-notch ph-spin"></i> Rendering PDF...</div>`;
 
+  try {
+    const arrayBuffer = await fileBlob.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.5 });
 
-  // Global exports for Action Bar
-  window.bulkCategorize = () => {
-    // Updated for React: This will need to pull selection from React state or a shared selection store
-    console.warn("[Bulk] bulkCategorize invoked. Selection handling pending React integration.");
-    // window.showAIAuditPanel(targets, 'selected');
-  };
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+    canvas.style.width = "100%";
+    canvas.style.height = "auto";
 
-  window.bulkDelete = () => {
-    console.warn("[Bulk] bulkDelete invoked. Selection handling pending React integration.");
-    /*
-    const targets = []; // Get from React selection
-    if (confirm(`Delete ${ targets.length } transactions ? `)) {
-      targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
-      window.window.updateWorkspace();
-    }
-    */
-  };
+    container.innerHTML = '';
+    container.appendChild(canvas);
+    container.style.overflowY = 'auto';
 
-  window.toggleWorkbench = function (isOpen, fileId = null) {
-    UI_STATE.workbenchOpen = isOpen;
-    UI_STATE.activeFileId = fileId || UI_STATE.activeFileId;
-
-    if (isOpen) {
-      document.body.classList.add('workbench-active');
-      renderWorkbenchPDF(UI_STATE.activeFileId);
-    } else {
-      document.body.classList.remove('workbench-active');
-    }
-  };
-
-  async function renderWorkbenchPDF(fileId) {
-    const container = document.getElementById('v5-pdf-curtain-content');
-    const label = document.getElementById('v5-curtain-filename');
-    if (!container) return;
-
-    const fileBlob = window.RoboLedger.Accounts.getFile(fileId);
-    if (!fileBlob) {
-      container.innerHTML = `<div style="padding: 40px; color: #94a3b8;">Source file not found in memory.</div>`;
-      return;
-    }
-
-    label.innerText = fileBlob.name;
-    container.innerHTML = `<div style="height: 100%; display: flex; align-items: center; justify-content: center;"><i class="ph ph-circle-notch ph-spin"></i> Rendering PDF...</div>`;
-
-    try {
-      const arrayBuffer = await fileBlob.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 1.5 });
-
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      canvas.style.width = "100%";
-      canvas.style.height = "auto";
-
-      container.innerHTML = '';
-      container.appendChild(canvas);
-      container.style.overflowY = 'auto';
-
-      await page.render({ canvasContext: context, viewport: viewport }).promise;
-    } catch (e) {
-      console.error("PDF Render Error:", e);
-      container.innerHTML = `<div style="padding: 40px; color: #ef4444;">Failed to render PDF. Browser may be blocking background tasks.</div>`;
-    }
+    await page.render({ canvasContext: context, viewport: viewport }).promise;
+  } catch (e) {
+    console.error("PDF Render Error:", e);
+    container.innerHTML = `<div style="padding: 40px; color: #ef4444;">Failed to render PDF. Browser may be blocking background tasks.</div>`;
   }
+}
 
-  window.showAIAuditPanel = function (targets, mode) {
-    let panel = document.getElementById('ai-audit-panel');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'ai-audit-panel';
-      document.body.appendChild(panel);
-    }
-    const modeLabel = mode === 'selected' ? `${targets.length} Selected Vendors` : `${targets.length} Vendors for Forensic Audit`;
-    panel.innerHTML = `
+window.showAIAuditPanel = function (targets, mode) {
+  let panel = document.getElementById('ai-audit-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'ai-audit-panel';
+    document.body.appendChild(panel);
+  }
+  const modeLabel = mode === 'selected' ? `${targets.length} Selected Vendors` : `${targets.length} Vendors for Forensic Audit`;
+  panel.innerHTML = `
       <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
       <div style="background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); max-width: 500px; width: 90%; overflow: hidden;">
 
@@ -3746,104 +3795,213 @@
       </div >
       `;
 
-    document.getElementById('start-audit-btn').onclick = () => {
-      panel.remove();
-      UI_STATE.isIngesting = true;
-      UI_STATE.ingestionProgress = 0;
-      UI_STATE.ingestionLabel = "AI Analysis in progress...";
-      window.updateWorkspace();
+  document.getElementById('start-audit-btn').onclick = () => {
+    panel.remove();
+    UI_STATE.isIngesting = true;
+    UI_STATE.ingestionProgress = 0;
+    UI_STATE.ingestionLabel = "AI Analysis in progress...";
+    window.updateWorkspace();
 
-      // Mock processing
-      let intv = setInterval(() => {
-        UI_STATE.ingestionProgress += 10;
-        if (UI_STATE.ingestionProgress >= 100) {
-          clearInterval(intv);
-          UI_STATE.isIngesting = false;
-          window.updateWorkspace();
-        }
+    // Mock processing
+    let intv = setInterval(() => {
+      UI_STATE.ingestionProgress += 10;
+      if (UI_STATE.ingestionProgress >= 100) {
+        clearInterval(intv);
+        UI_STATE.isIngesting = false;
         window.updateWorkspace();
-      }, 300);
-    };
+      }
+      window.updateWorkspace();
+    }, 300);
   };
+};
 
-  // Expose toggle helpers to window scope
-  if (typeof toggleSettings !== 'undefined') window.toggleSettings = toggleSettings;
-  window.toggleWorkbench = window.toggleWorkbench;
-  window.openSourceFile = (id) => window.toggleWorkbench(true, id);
+// Expose toggle helpers to window scope
+if (typeof toggleSettings !== 'undefined') window.toggleSettings = toggleSettings;
+window.toggleWorkbench = window.toggleWorkbench;
+window.openSourceFile = (id) => window.toggleWorkbench(true, id);
 
-  // Keyboard shortcut: Cmd+. to toggle inspector panel
-  document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === '.') {
-      e.preventDefault();
-      if (window.togglePanel) window.togglePanel();
-    }
-  });
+// Keyboard shortcut: Cmd+. to toggle inspector panel
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+    e.preventDefault();
+    if (window.togglePanel) window.togglePanel();
+  }
+});
 
-  // Global click handler for account ref badges
-  // Makes any blue badge (CHQ1, SAV1, etc.) clickable to switch accounts
-  document.addEventListener('click', (e) => {
-    const target = e.target;
+// Global click handler for account ref badges
+// Makes any blue badge (CHQ1, SAV1, etc.) clickable to switch accounts
+document.addEventListener('click', (e) => {
+  const target = e.target;
 
-    // Check if clicked element is a blue account ref badge using computed styles
-    if (target.tagName === 'SPAN') {
-      const computedStyle = window.getComputedStyle(target);
-      const bgColor = computedStyle.backgroundColor;
-      const fontFamily = computedStyle.fontFamily;
+  // Check if clicked element is a blue account ref badge using computed styles
+  if (target.tagName === 'SPAN') {
+    const computedStyle = window.getComputedStyle(target);
+    const bgColor = computedStyle.backgroundColor;
+    const fontFamily = computedStyle.fontFamily;
 
-      // Check for blue badge: rgb(59, 130, 246) = #3b82f6
-      if (bgColor && bgColor.includes('59, 130, 246') &&
-        fontFamily && fontFamily.includes('JetBrains Mono')) {
+    // Check for blue badge: rgb(59, 130, 246) = #3b82f6
+    if (bgColor && bgColor.includes('59, 130, 246') &&
+      fontFamily && fontFamily.includes('JetBrains Mono')) {
 
-        // Find the account ID from the closest parent with onclick or data attribute
-        let parent = target.parentElement;
-        let accountId = null;
+      // Find the account ID from the closest parent with onclick or data attribute
+      let parent = target.parentElement;
+      let accountId = null;
 
-        // Try to extract account ID from parent's onclick attribute
-        if (parent && parent.onclick) {
-          const onclickStr = parent.onclick.toString();
-          const match = onclickStr.match(/switchAccount\('([^']+)'\)/);
-          if (match) accountId = match[1];
-        }
-
-        // If we found an account ID, switch to it
-        if (accountId) {
-          console.log(`[BADGE CLICK] Switching to: ${accountId}`);
-          window.switchAccount(accountId);
-        } else {
-          console.warn('[BADGE CLICK] Could not determine account ID from badge');
-        }
+      // Try to extract account ID from parent's onclick attribute
+      if (parent && parent.onclick) {
+        const onclickStr = parent.onclick.toString();
+        const match = onclickStr.match(/switchAccount\('([^']+)'\)/);
+        if (match) accountId = match[1];
       }
-    }
-  });
 
-  /**
-   * Remove accounts with 0 transactions from storage
-   * Runs on app initialization to clean orphaned accounts
-   */
-  function cleanupEmptyAccounts() {
-    const accounts = window.RoboLedger?.Accounts?.getAll() || [];
-    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
-
-    let cleaned = 0;
-    accounts.forEach(acc => {
-      const txns = allTxns.filter(t => t.account_id === acc.id);
-      if (txns.length === 0) {
-        console.log('[CLEANUP] Removing empty account:', acc.id, acc.name);
-        if (window.RoboLedger?.Accounts?.remove) {
-          window.RoboLedger.Accounts.remove(acc.id);
-          cleaned++;
-        }
+      // If we found an account ID, switch to it
+      if (accountId) {
+        console.log(`[BADGE CLICK] Switching to: ${accountId}`);
+        window.switchAccount(accountId);
+      } else {
+        console.warn('[BADGE CLICK] Could not determine account ID from badge');
       }
-    });
-
-    if (cleaned > 0) {
-      console.log(`[CLEANUP] Removed ${cleaned} empty account(s)`);
     }
   }
+});
 
-  // Clean up empty accounts on initialization (prevents hangover accounts)
-  cleanupEmptyAccounts();
+/**
+ * Remove accounts with 0 transactions from storage
+ * Runs on app initialization to clean orphaned accounts
+ */
+function cleanupEmptyAccounts() {
+  const accounts = window.RoboLedger?.Accounts?.getAll() || [];
+  const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
 
-  if (typeof init === 'function') init();
-})();
+  let cleaned = 0;
+  accounts.forEach(acc => {
+    const txns = allTxns.filter(t => t.account_id === acc.id);
+    if (txns.length === 0) {
+      console.log('[CLEANUP] Removing empty account:', acc.id, acc.name);
+      if (window.RoboLedger?.Accounts?.remove) {
+        window.RoboLedger.Accounts.remove(acc.id);
+        cleaned++;
+      }
+    }
+  });
 
+  if (cleaned > 0) {
+    console.log(`[CLEANUP] Removed ${cleaned} empty account(s)`);
+  }
+}
+
+// Clean up empty accounts on initialization (prevents hangover accounts)
+cleanupEmptyAccounts();
+
+if (typeof init === 'function') init();
+}) ();
+
+
+  // Upload UI JavaScript handlers
+  window.updateFileType = function() {
+    const select = document.getElementById('fileTypeSelect');
+    const input = document.getElementById('mainFileInput');
+    const buttonText = document.getElementById('uploadButtonText');
+    
+    if (!select || !input || !buttonText) return;
+    
+    const fileType = select.value;
+    
+    // Update accept attribute for native browser filter
+    if (fileType === 'pdf') {
+      input.setAttribute('accept', '.pdf');
+      buttonText.textContent = 'Import PDF Statements';
+    } else if (fileType === 'csv') {
+      input.setAttribute('accept', '.csv,.xlsx,.xls');
+      buttonText.textContent = 'Import CSV/XLSX Files';
+    } else {
+      input.removeAttribute('accept');
+      buttonText.textContent = 'Import Files';
+    }
+    
+    console.log('[UPLOAD] File type set to:', fileType);
+  };
+
+  window.updateBrowseMode = function() {
+    const checkbox = document.getElementById('browseFoldersCheckbox');
+    const input = document.getElementById('mainFileInput');
+    
+    if (!checkbox || !input) return;
+    
+    if (checkbox.checked) {
+      // Enable folder browsing
+      input.setAttribute('webkitdirectory', '');
+      input.setAttribute('mozdirectory', '');
+      input.setAttribute('directory', '');
+      console.log('[UPLOAD] Folder browsing enabled');
+    } else {
+      // Disable folder browsing (individual files only)
+      input.removeAttribute('webkitdirectory');
+      input.removeAttribute('mozdirectory');
+      input.removeAttribute('directory');
+      console.log('[UPLOAD] Individual file browsing');
+    }
+  };
+
+  window.handleMainUpload = function(input) {
+    const files = Array.from(input.files);
+    const select = document.getElementById('fileTypeSelect');
+    const checkbox = document.getElementById('browseFoldersCheckbox');
+    
+    if (!select) {
+      console.warn('[UPLOAD] File type select not found, processing all files');
+      window.handleFilesSelected(files);
+      input.value = '';
+      return;
+    }
+    
+    const fileType = select.value;
+    const isFolderMode = checkbox && checkbox.checked;
+    
+    console.log('[UPLOAD] Processing:', files.length, 'files, Type:', fileType, 'Folder mode:', isFolderMode);
+    
+    let filteredFiles = files;
+    
+    // Apply filter based on selected type
+    if (fileType === 'pdf') {
+      filteredFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+    } else if (fileType === 'csv') {
+      filteredFiles = files.filter(f => {
+        const name = f.name.toLowerCase();
+        return name.endsWith('.csv') || name.endsWith('.xlsx') || name.endsWith('.xls');
+      });
+    }
+    // 'all' means no filtering
+    
+    if (filteredFiles.length === 0) {
+      const typeName = fileType === 'pdf' ? 'PDF' : fileType === 'csv' ? 'CSV/XLSX' : '';
+      alert('No ' + typeName + ' files found. Please select the correct file types or change your filter.');
+      input.value = '';
+      return;
+    }
+    
+    // Show subfolder summary for folder mode
+    if (isFolderMode && filteredFiles.length > 0 && filteredFiles[0].webkitRelativePath) {
+      const folders = new Set();
+      filteredFiles.forEach(f => {
+        const pathParts = f.webkitRelativePath.split('/');
+        if (pathParts.length > 1) {
+          folders.add(pathParts[pathParts.length - 2] || pathParts[0]);
+        }
+      });
+      
+      if (folders.size > 0) {
+        const folderList = Array.from(folders).slice(0, 5).join(', ');
+        const moreText = folders.size > 5 ? (' and ' + (folders.size - 5) + ' more') : '';
+        const typeName = fileType === 'pdf' ? 'PDF' : fileType === 'csv' ? 'CSV/XLSX' : '';
+        alert('Found ' + filteredFiles.length + ' ' + typeName + ' files across ' + folders.size + ' subfolders:\n\n' + folderList + moreText + '\n\nReady to process.');
+      }
+    }
+    
+    if (filteredFiles.length < files.length) {
+      console.log('[UPLOAD] Filtered out', files.length - filteredFiles.length, 'files');
+    }
+    
+    window.handleFilesSelected(filteredFiles);
+    input.value = '';
+  };
