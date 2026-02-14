@@ -63,13 +63,22 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     const density = window.UI_STATE?.density || 'comfortable';
     console.log(`[MAIN.JSX] Grid density:`, density);
 
+    // Load saved column preferences from localStorage
+    const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+    const columnVisibility = {
+        // TanStack Grid uses INVERTED logic: true = hidden, false = visible
+        tax_cents: savedPrefs.tax_cents !== true  // Hide tax unless explicitly enabled
+    };
+    console.log('[MAIN.JSX] Initial column visibility:', columnVisibility);
+
     // Create props object and save for updateGridDensity
     const gridProps = {
         data: pureTransactions,
         globalFilter: filterQuery,
         gridTheme: theme,
         gridFontSize: fontSize,
-        gridDensity: density
+        gridDensity: density,
+        columnVisibility: columnVisibility
     };
     window._txGridProps = gridProps;
 
@@ -120,7 +129,10 @@ window.setGridColumnVisibility = (columnId, visible) => {
     if (!window._txGridProps.columnVisibility) {
         window._txGridProps.columnVisibility = {};
     }
-    window._txGridProps.columnVisibility[columnId] = visible;
+
+    // TanStack Grid uses INVERTED logic: true = hidden, false = visible
+    // So if we want to SHOW a column (visible=true), we set it to false in TanStack
+    window._txGridProps.columnVisibility[columnId] = !visible;
 
     // Re-render with updated props
     window._txGridRoot.render(
