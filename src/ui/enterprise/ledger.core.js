@@ -1511,7 +1511,18 @@ window.RoboLedger = (function () {
                     raw_description: raw_description, // SECONDARY LINE (DIRTY)
 
                     sourceFileId: sourceFileId, // Link to workbench blob
-                    source_pdf: row.source_pdf || null, // PDF metadata for audit viewer
+                    source_pdf: row.source_pdf || (row.pdfLocation && pdfBlobUrl ? {
+                        url: pdfBlobUrl,
+                        filename: file.name,
+                        page: row.pdfLocation.page || 1,
+                        raw_line: row.rawText || `${row.date} ${row.description} ${row.debit || row.credit}`,
+                        line_position: {
+                            top: row.pdfLocation.top,
+                            left: row.pdfLocation.left,
+                            width: row.pdfLocation.width,
+                            height: row.pdfLocation.height
+                        }
+                    } : null), // PDF metadata for audit viewer
                     txsig,
 
                     // TRANSACTION IDENTITY SYSTEM
