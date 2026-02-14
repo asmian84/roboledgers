@@ -60,6 +60,50 @@ class BaseBankParser {
     }
 
     /**
+     * UNIVERSAL HELPER: Build complete audit data for source document viewing
+     * Creates both pdfLocation (for PDF highlighting) and audit (for metadata)
+     * 
+     * @param {string|Array} rawText - Raw transaction line(s) from PDF
+     * @param {string} parserName - Name of parser (e.g., "BMOChequingParser")
+     * @returns {Object} { pdfLocation, audit } ready to add to transaction
+     */
+    buildAuditData(rawText, parserName = null) {
+        const lines = Array.isArray(rawText) ? rawText : [rawText];
+        const auditMetadata = lines.map(line => this.getSpatialMetadata(line)).filter(Boolean);
+
+        // Merge multi-line audit data
+        const mergedAudit = auditMetadata.length > 1
+            ? this.mergeAuditMetadata(auditMetadata)
+            : auditMetadata[0];
+
+        if (!mergedAudit) {
+            return { pdfLocation: null, audit: null };
+        }
+
+        // Build pdfLocation for AuditSidebar highlighting
+        const pdfLocation = {
+            page: mergedAudit.page || 1,
+            top: mergedAudit.y || 0,
+            left: 50,
+            width: 500,
+            height: mergedAudit.height || 12
+        };
+
+        // Build audit metadata
+        const audit = {
+            parser: parserName || this.bankName,
+            parsedAt: new Date().toISOString(),
+            lineNumber: null, // Parser can override
+            rawText: lines.join('\n'),
+            page: mergedAudit.page || 1,
+            y: mergedAudit.y || 0,
+            height: mergedAudit.height || 12
+        };
+
+        return { pdfLocation, audit };
+    }
+
+    /**
      * Find audit metadata for a specific line of text
      */
     findAuditMetadata(targetText, lineMetadata) {

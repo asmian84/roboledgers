@@ -231,6 +231,9 @@ BMO CHEQUING FORMAT:
         // Skip if no actual transaction amount
         if (debit === 0 && credit === 0) return null;
 
+        // Build audit data for source document viewing
+        const auditData = this.buildAuditData(fullLine, 'BMOChequingParser');
+
         return {
             date: isoDate,
             description: description,
@@ -238,7 +241,8 @@ BMO CHEQUING FORMAT:
             debit: debit,
             credit: credit,
             balance: balance,
-            ...metadata,
+            pdfLocation: auditData.pdfLocation,
+            audit: auditData.audit,
             rawText: this.cleanRawText(fullLine)
         };
     }
