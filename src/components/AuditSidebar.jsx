@@ -56,6 +56,15 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
 
     if (!isOpen || !transaction) return null;
 
+    // DEBUG: Log transaction structure for source PDF investigation
+    console.log('[AUDIT_SIDEBAR] Transaction object:', transaction);
+    console.log('[AUDIT_SIDEBAR] Has source_pdf?', !!transaction.source_pdf);
+    console.log('[AUDIT_SIDEBAR] source_pdf:', transaction.source_pdf);
+    console.log('[AUDIT_SIDEBAR] Has pdfLocation?', !!transaction.pdfLocation);
+    console.log('[AUDIT_SIDEBAR] pdfLocation:', transaction.pdfLocation);
+    console.log('[AUDIT_SIDEBAR] Has audit?', !!transaction.audit);
+    console.log('[AUDIT_SIDEBAR] audit:', transaction.audit);
+
     const handleViewSourceDocument = () => {
         // NO FALLBACK - show error if no PDF
         if (!transaction.source_pdf?.url) {
