@@ -1206,6 +1206,11 @@ window.RoboLedger = (function () {
                     pdfBlobUrl = URL.createObjectURL(file);
                     console.log('[INGEST] 🔗 Created blob URL:', pdfBlobUrl);
 
+                    // Check if file is from OneDrive cloud storage (not fully downloaded)
+                    if (file.size === 0) {
+                        throw new Error('CLOUD_FILE_ERROR: This file appears to be a cloud placeholder (size = 0). Please ensure the file is fully downloaded from OneDrive/cloud storage before uploading. Right-click the file in Finder and select "Download" or "Always Keep on This Device".');
+                    }
+
                     const buffer = await file.arrayBuffer();
                     console.log('[INGEST] 📦 Buffer size:', buffer.byteLength, 'bytes');
 
