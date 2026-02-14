@@ -163,27 +163,100 @@
 
         <!-- Utility Bar (Shows when sidebar collapsed) -->
         <aside id="utility-bar" class="utility-bar">
-            <div class="utility-bar-header">QUICK STATS</div>
+            <div class="utility-bar-header">DASHBOARD</div>
+
+            <!-- Transaction Stats -->
+            <div class="utility-card">
+                <div class="utility-card-title">Transactions</div>
+                <div class="utility-stat" id="util-total-txns">0</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;" id="util-date-range">No data</div>
+            </div>
+
+            <!-- Pending Work -->
+            <div class="utility-card">
+                <div class="utility-card-title">Pending</div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="font-size: 11px; color: #64748b;">Uncategorized</span>
+                    <span class="utility-stat" style="font-size: 14px; color: #ef4444;" id="util-uncategorized">0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="font-size: 11px; color: #64748b;">Needs Review</span>
+                    <span class="utility-stat" style="font-size: 14px; color: #f59e0b;" id="util-needs-review">0</span>
+                </div>
+            </div>
 
             <!-- Total Balance Card -->
             <div class="utility-card">
-                <div class="utility-card-title">Total Balance</div>
+                <div class="utility-card-title">Net Position</div>
                 <div class="utility-stat" id="util-total-balance">$0.00</div>
+                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px;">
+                    <div>
+                        <div style="color: #64748b;">In</div>
+                        <div style="color: #10b981; font-weight: 600; font-family: 'JetBrains Mono', monospace;"
+                            id="util-total-in">$0</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="color: #64748b;">Out</div>
+                        <div style="color: #ef4444; font-weight: 600; font-family: 'JetBrains Mono', monospace;"
+                            id="util-total-out">$0</div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Account Badges -->
+            <!-- Quick P&L -->
             <div class="utility-card">
-                <div class="utility-card-title">Accounts</div>
+                <div class="utility-card-title">Quick P&L</div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="font-size: 11px; color: #64748b;">Revenue</span>
+                    <span
+                        style="font-size: 12px; font-weight: 600; color: #10b981; font-family: 'JetBrains Mono', monospace;"
+                        id="util-revenue">$0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="font-size: 11px; color: #64748b;">Expenses</span>
+                    <span
+                        style="font-size: 12px; font-weight: 600; color: #ef4444; font-family: 'JetBrains Mono', monospace;"
+                        id="util-expenses">$0</span>
+                </div>
+                <div
+                    style="border-top: 1px solid #e2e8f0; margin-top: 6px; padding-top: 6px; display: flex; justify-content: space-between;">
+                    <span style="font-size: 11px; font-weight: 700; color: #1e293b;">Net Income</span>
+                    <span class="utility-stat" style="font-size: 14px;" id="util-net-income">$0</span>
+                </div>
+            </div>
+
+            <!-- Category Allocation -->
+            <div class="utility-card">
+                <div class="utility-card-title">Top Categories</div>
+                <div id="util-category-chart" style="margin-top: 8px;">
+                    <!-- Populated by JavaScript -->
+                    <div style="text-align: center; padding: 12px; color: #94a3b8; font-size: 11px;">
+                        No categories
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Accounts -->
+            <div class="utility-card">
+                <div class="utility-card-title">Active Accounts</div>
                 <div id="util-account-badges" class="utility-badges">
                     <!-- Populated by JavaScript -->
+                    <div style="text-align: center; padding: 12px; color: #94a3b8; font-size: 11px;">
+                        No accounts loaded
+                    </div>
                 </div>
             </div>
 
             <!-- Quick Actions -->
-            <div class="utility-card">
-                <button class="btn-primary" style="width: 100%; padding: 10px; border-radius: 6px;"
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button class="btn-primary" style="width: 100%; padding: 10px; border-radius: 6px; font-size: 12px;"
                     onclick="window.openFilePicker()">
-                    <i class="ph ph-upload"></i> Quick Import
+                    <i class="ph ph-upload"></i> Upload Files
+                </button>
+                <button class="btn-secondary"
+                    style="width: 100%; padding: 10px; border-radius: 6px; font-size: 12px; background: white; border: 1px solid #e2e8f0; color: #1e293b;"
+                    onclick="window.exportTransactions()">
+                    <i class="ph ph-download-simple"></i> Export
                 </button>
             </div>
         </aside>
@@ -257,6 +330,7 @@
     <!-- Magic Hub removed -->
 
     <script src="ledger.core.js"></script>
+    <script src="utility-bar.js"></script>
     <script src="app.js?v=20260212-1621"></script> <!-- Cache bust: Flush @ 350px + highlight coords -->
 </body>
 
