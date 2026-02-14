@@ -700,7 +700,7 @@ const columns = [
         cell: info => {
             const val = info.getValue();
             const row = info.row.original;
-            const account = accounts.find(a => a.id === row.account_id);
+            const account = window.RoboLedger?.Accounts?.get(row.account_id);
             const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
                 account?.type === 'liability' || account?.type === 'creditcard';
 
@@ -736,7 +736,7 @@ const columns = [
         cell: info => {
             const val = info.getValue();
             const row = info.row.original;
-            const account = accounts.find(a => a.id === row.account_id);
+            const account = window.RoboLedger?.Accounts?.get(row.account_id);
             const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
                 account?.type === 'liability' || account?.type === 'creditcard';
 
