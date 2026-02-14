@@ -1042,7 +1042,7 @@ export function TransactionsTable({
     };
 
     return (
-        <div className="flex flex-col h-full w-full bg-white relative">
+        <div className="flex flex-col h-full w-full bg-white relative overflow-auto" ref={parentRef} style={{ scrollbarGutter: 'stable' }}>
             {/* Batch Action Bar */}
             {Object.keys(rowSelection).length > 0 && (
                 <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
@@ -1153,12 +1153,9 @@ export function TransactionsTable({
                 </div>
             )}
 
+
             {/* Virtualized Body */}
-            <div
-                ref={parentRef}
-                className="flex-1 overflow-auto bg-white"
-                style={{ scrollbarGutter: 'stable' }}
-            >
+            <div className="flex-1 bg-white">
                 {data.length > 0 ? (
                     <div
                         className="relative w-full"
