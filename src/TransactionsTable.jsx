@@ -1183,7 +1183,18 @@ export function TransactionsTable({
     return (
         <div className={`flex h-full w-full bg-white relative ${activePanel ? 'split-pane-active' : 'flex-col'}`} style={{ scrollbarGutter: 'stable' }}>
             {/* Main Grid Container - CRITICAL: This is the scrolling container with parentRef */}
-            <div className="flex flex-col" style={{ flex: 1, minWidth: 0, overflowX: 'hidden', overflowY: 'auto' }} ref={parentRef}>
+            <div
+                className="flex flex-col"
+                style={{
+                    flex: activePanel ? '0 1 auto' : 1,  // Don't grow when panel is open
+                    minWidth: 0,  // Allow flexbox to shrink below content size
+                    maxWidth: activePanel ? '77%' : '100%',  // Constrain to 77% when panel open
+                    width: activePanel ? '77%' : '100%',  // Explicit width when panel open
+                    overflowX: 'hidden',
+                    overflowY: 'auto'
+                }}
+                ref={parentRef}
+            >
                 {/* Batch Action Bar */}
                 {Object.keys(rowSelection).length > 0 && (
                     <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
