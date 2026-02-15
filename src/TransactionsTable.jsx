@@ -960,9 +960,6 @@ export function TransactionsTable({
     // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
     const [activePanel, setActivePanel] = useState(null);
 
-    // DRILL-DOWN: Account filter for Trial Balance drill-down
-    const [selectedAccountFilter, setSelectedAccountFilter] = useState(null);
-
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
         setData(initialData || []);
@@ -1123,7 +1120,7 @@ export function TransactionsTable({
 
     // Update filter badge count in app.js
     useEffect(() => {
-        const filterBadge = document.getElementById('filter-count-badge');
+        const filterBadge = document.getElementById('column-filter-badge');
         if (filterBadge) {
             const count = columnFilters.length;
             if (count > 0) {
@@ -1135,8 +1132,9 @@ export function TransactionsTable({
         }
     }, [columnFilters]);
 
+    // TABLE INSTANCE: React Table with all features enabled
     const table = useReactTable({
-        data,
+        data,  // Use data directly - filtering handled by columnFilters
         columns,
         state: {
             sorting,
@@ -1146,6 +1144,7 @@ export function TransactionsTable({
             columnFilters, // Enable column-specific filters
         },
         onSortingChange: setSorting,
+        onGlobalFilterChange: setGlobalFilter,
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
         onColumnFiltersChange: setColumnFilters, // Handle filter changes
@@ -1154,6 +1153,8 @@ export function TransactionsTable({
         getFilteredRowModel: getFilteredRowModel(),
         columnResizeMode: 'onChange',
         enableRowSelection: true,
+        enableMultiRowSelection: true,
+        getRowId: (row) => row.id || String(row.ref),
     });
 
     const parentRef = useRef(null);
@@ -1431,9 +1432,15 @@ export function TransactionsTable({
                     <LiveReportPanel
                         reportType="trial-balance"
                         transactions={data}
-                        selectedAccount={selectedAccountFilter}
-                        onAccountClick={(accountCode) => setSelectedAccountFilter(accountCode)}
-                        onClearFilter={() => setSelectedAccountFilter(null)}
+                        selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
+                        onAccountClick={(accountCode) => {
+                            // Set category column filter
+                            setColumnFilters([{ id: 'category', value: accountCode }]);
+                        }}
+                        onClearFilter={() => {
+                            // Clear category column filter
+                            setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
+                        }}
                     />
                 )}
             </ResizablePanel>
