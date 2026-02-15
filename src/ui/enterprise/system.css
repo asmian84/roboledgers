@@ -4179,3 +4179,65 @@ body.sidebar-collapsed .utility-bar {
     background: #2563eb;
     transform: translateX(-2px);
 }
+
+/* === DETAIL MODE: Animated Sidebar Toggle Button === */
+.sidebar-toggle-btn {
+    position: fixed;
+    top: 20px;
+    left: 250px;
+    /* Position at edge of sidebar */
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    border: none;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    transition: all 0.3s ease;
+    animation: detail-mode-pulse 2s ease-in-out infinite;
+}
+
+.sidebar-toggle-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+    animation: none;
+    /* Stop pulsing on hover */
+}
+
+.sidebar-toggle-btn i {
+    transition: transform 0.3s ease;
+}
+
+/* Pulse/glow animation */
+@keyframes detail-mode-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        transform: scale(1);
+    }
+
+    50% {
+        box-shadow: 0 6px 24px rgba(59, 130, 246, 0.8), 0 0 40px rgba(139, 92, 246, 0.4);
+        transform: scale(1.05);
+    }
+}
+
+/* When sidebar is collapsed, move button and change icon */
+body.sidebar-collapsed .sidebar-toggle-btn {
+    left: 80px;
+    /* Move to collapsed sidebar edge */
+    animation: none;
+    /* Stop pulsing when collapsed */
+}
+
+body.sidebar-collapsed .sidebar-toggle-btn i {
+    transform: rotate(180deg);
+    /* Flip to right-facing arrow */
+}

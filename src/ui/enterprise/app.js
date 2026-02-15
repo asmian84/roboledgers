@@ -504,6 +504,12 @@
         // Render - this will naturally exclude progress bar since isIngesting is false
         render();
 
+        // DETAIL MODE: Show animated sidebar toggle after grid loads
+        const toggleBtn = document.getElementById('sidebar-toggle');
+        if (toggleBtn) {
+          toggleBtn.style.display = 'flex';
+        }
+
         console.log('[UPLOAD] Upload workflow complete - grid should be visible');
       } catch (err) {
         console.error('[UPLOAD] Error in completion flow:', err);
@@ -580,13 +586,13 @@
         setTimeout(() => window.updateUtilityBar(), 100);
       }
 
-      // Update button icon
+      // Update button icon and title
       if (isCollapsed) {
         toggleBtn.innerHTML = '<i class="ph ph-caret-right"></i>';
-        toggleBtn.title = 'Expand';
+        toggleBtn.title = 'Exit Detail Mode';
       } else {
         toggleBtn.innerHTML = '<i class="ph ph-caret-left"></i>';
-        toggleBtn.title = 'Collapse';
+        toggleBtn.title = 'Enter Detail Mode';
       }
     }
   };
