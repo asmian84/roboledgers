@@ -4013,9 +4013,31 @@ window.handleMainUpload = function (input) {
   }
   // 'all' means no filtering
 
+  console.log('[UPLOAD] Filtered:', filteredFiles.length, 'files');
+
   if (filteredFiles.length === 0) {
-    const typeName = fileType === 'pdf' ? 'PDF' : fileType === 'csv' ? 'CSV/XLSX' : '';
-    alert('No ' + typeName + ' files found. Please select the correct file types or change your filter.');
+    alert(`No ${fileType === 'pdf' ? 'PDF' : 'CSV/Excel'} files found in selection.`);
+    input.value = '';
+    return;
+  }
+
+  // Show custom confirmation with file count differentiation
+  const totalCount = files.length;
+  const filteredCount = filteredFiles.length;
+  const fileTypeName = fileType === 'pdf' ? 'PDF' :
+    fileType === 'csv' ? 'CSV/Excel file' :
+      'file';
+
+  let confirmMessage;
+  if (filteredCount === totalCount) {
+    // All files match the filter
+    confirmMessage = `Upload ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} to this site?\n\nThis will upload all files from "${isFolderMode ? 'selected folders' : 'selection'}". Only do this if you trust the site.`;
+  } else {
+    // Show filtered vs total count
+    confirmMessage = `Upload ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} (out of ${totalCount} total files)?\n\nThis will upload all ${fileTypeName}s from "${isFolderMode ? 'selected folders' : 'selection'}". Only do this if you trust the site.`;
+  }
+
+  if (!confirm(confirmMessage)) {
     input.value = '';
     return;
   }
