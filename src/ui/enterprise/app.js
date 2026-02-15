@@ -2536,6 +2536,7 @@
     switch (UI_STATE.currentRoute) {
       case 'import': return renderTransactionsRestored();
       case 'coa': return renderCOAPage();
+      case 'reports': return renderReportsPage();
       case 'home': return renderHome();
       default: return renderPlaceholder(UI_STATE.currentRoute.toUpperCase());
     }
@@ -3599,6 +3600,20 @@
         >
       </div>
       `;
+  }
+
+  function renderReportsPage() {
+    // Return container for React component
+    // Mount after a brief delay to ensure DOM is ready
+    setTimeout(() => {
+      if (window.mountReportsPage) {
+        window.mountReportsPage();
+      }
+    }, 50);
+
+    return `
+      <div id="reports-container" style="width: 100%; height: 100%; display: flex; flex-direction: column;"></div>
+    `;
   }
 
   function renderTransactionsRestored() {

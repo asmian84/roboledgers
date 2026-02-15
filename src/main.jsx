@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { TransactionsTable } from './TransactionsTable';
+import { ReportsPage } from './reports/ReportsPage';
 
 /**
  * Global Bridge: Exposes the mounting function to the Vanilla JS shell (app.js)
@@ -221,3 +222,46 @@ window.setTxGridFilter = (filterValue) => {
 };
 
 console.log('[VITE] React bridge established.');
+
+/**
+ * Mount ReportsPage React component
+ */
+window.mountReportsPage = () => {
+    const container = document.getElementById('reports-container');
+    if (!container) {
+        console.error('[MAIN.JSX] Reports container not found');
+        return;
+    }
+
+    console.log('[MAIN.JSX] Mounting ReportsPage');
+
+    if (window._reportsRoot && window._reportsRootContainer && !document.body.contains(window._reportsRootContainer)) {
+        try { window._reportsRoot.unmount(); } catch (e) { /* ignore */ }
+        window._reportsRoot = null;
+        window._reportsRootContainer = null;
+    }
+
+    if (!window._reportsRoot) {
+        window._reportsRoot = ReactDOM.createRoot(container);
+        window._reportsRootContainer = container;
+    }
+
+    window._reportsRoot.render(
+        <React.StrictMode>
+            <ReportsPage />
+        </React.StrictMode>
+    );
+};
+
+window.unmountReportsPage = () => {
+    if (window._reportsRoot) {
+        try {
+            window._reportsRoot.unmount();
+            console.log('[MAIN.JSX] ✓ Reports unmounted');
+        } catch (e) {
+            console.warn('[MAIN.JSX] ⚠ Reports unmount error:', e);
+        }
+        window._reportsRoot = null;
+        window._reportsRootContainer = null;
+    }
+};
