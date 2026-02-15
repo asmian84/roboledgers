@@ -1913,18 +1913,23 @@
 
   // Toggle inspector panel states
   window.togglePanel = function (targetState) {
-    if (targetState) {
-      UI_STATE.panelState = targetState;
-    } else {
-      // Cycle through states: collapsed → expanded → closed → collapsed
-      if (UI_STATE.panelState === 'collapsed') {
-        UI_STATE.panelState = 'expanded';
-      } else if (UI_STATE.panelState === 'expanded') {
-        UI_STATE.panelState = 'closed';
-      } else {
-        UI_STATE.panelState = 'collapsed';
-      }
-    }
+    console.log('[PANEL_TOGGLE] togglePanel called with targetState:', targetState);
+
+    const currentState = UI_STATE.panelState;
+    console.log('[PANEL_TOGGLE] Current panel state:', currentState);
+
+    // If targetState passed, use it; otherwise toggle
+    let newState = targetState !== undefined ? targetState : (currentState === 'expanded' ? 'collapsed' : 'expanded');
+
+    console.log('[PANEL_TOGGLE] New panel state:', newState);
+    UI_STATE.panelState = newState;
+
+    // Dispatch sidebar collapsed event which TransactionsTable listens to
+    // This ensures both sidebar collapse AND utility bar icon work the same way
+    const isCollapsed = newState === 'expanded';
+    console.log('[PANEL_TOGGLE] Dispatching sidebarCollapsed event:', isCollapsed);
+    window.dispatchEvent(new CustomEvent('sidebarCollapsed', { detail: { isCollapsed } }));
+
     window.updateWorkspace();
     // Redraw grid to handle column visibility
     if (window.txnTable) {

@@ -970,16 +970,20 @@ export function TransactionsTable({
         setGlobalFilter(initialGlobalFilter || '');
     }, [initialGlobalFilter]);
 
-    // DETAIL MODE: Listen for sidebar collapse and auto-open utility bar
+    // DETAIL MODE: Sidebar collapse detection
     useEffect(() => {
-        const handleSidebarCollapse = (event) => {
-            const { collapsed } = event.detail;
+        const handleSidebarCollapse = (e) => {
+            const isCollapsed = e.detail?.isCollapsed ?? false;
+            console.log('[DETAIL_MODE] Sidebar collapsed event received:', isCollapsed);
+            console.log('[DETAIL_MODE] Current activePanel:', activePanel);
 
-            if (collapsed) {
-                // DETAIL MODE ON: Auto-open utility bar
+            if (isCollapsed) {
+                // DETAIL MODE ON: Open utility bar automatically
+                console.log('[DETAIL_MODE] Activating utility panel');
                 setActivePanel('utility');
 
-                // Auto-scroll to FilterToolbar
+                // Auto-scroll to FilterToolbar (hide reconciliation/metadata)
+                console.log('[DETAIL_MODE] Auto-scrolling to FilterToolbar');
                 if (parentRef.current) {
                     setTimeout(() => {
                         const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
@@ -987,11 +991,13 @@ export function TransactionsTable({
                         headerCards.forEach(card => {
                             scrollAmount += card.offsetHeight;
                         });
+                        console.log('[DETAIL_MODE] Scroll amount calculated:', scrollAmount);
                         parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
                     }, 100);
                 }
             } else {
                 // DETAIL MODE OFF: Close all panels
+                console.log('[DETAIL_MODE] Deactivating all panels');
                 setActivePanel(null);
             }
         };
