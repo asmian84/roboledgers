@@ -122,15 +122,25 @@ window.updateUtilityBar = function () {
     if (accounts.length > 0) {
         const accountColors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444'];
 
-        badgesContainer.innerHTML = accounts.slice(0, 5).map((acc, idx) => `
-        <div 
-          class="utility-badge" 
-          style="background: ${accountColors[idx % accountColors.length]};"
-          onclick="window.updateWorkspace('${acc.id}')"
-        >
-          ${acc.name || acc.id}
-        </div>
-      `).join('');
+        // Filter out empty accounts (only show accounts with transactions)
+        const activeAccounts = accounts.filter(acc => {
+            const txnCount = allTxns.filter(t => t.account_id === acc.id).length;
+            return txnCount > 0;
+        });
+
+        if (activeAccounts.length > 0) {
+            badgesContainer.innerHTML = activeAccounts.slice(0, 5).map((acc, idx) => `
+            <div 
+              class="utility-badge" 
+              style="background: ${accountColors[idx % accountColors.length]};"
+              onclick="window.updateWorkspace('${acc.id}')"
+            >
+              ${acc.ref || acc.id}
+            </div>
+          `).join('');
+        } else {
+            badgesContainer.innerHTML = '<div style="text-align: center; padding: 12px; color: #94a3b8; font-size: 11px;">No active accounts</div>';
+        }
     } else {
         badgesContainer.innerHTML = '<div style="text-align: center; padding: 12px; color: #94a3b8; font-size: 11px;">No accounts loaded</div>';
     }
