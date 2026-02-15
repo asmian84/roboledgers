@@ -1172,8 +1172,8 @@ export function TransactionsTable({
 
     return (
         <div className={`flex h-full w-full bg-white relative ${activePanel ? 'split-pane-active' : 'flex-col overflow-auto'}`} ref={parentRef} style={{ scrollbarGutter: 'stable' }}>
-            {/* Main Grid Container */}
-            <div className="flex flex-col h-full relative overflow-auto" style={{ flex: activePanel ? '1 1 auto' : undefined }}>
+            {/* Main Grid Container - CRITICAL: min-width: 0 prevents overflow when panel opens */}
+            <div className="flex flex-col overflow-auto" style={{ flex: 1, minWidth: 0 }}>
                 {/* Batch Action Bar */}
                 {Object.keys(rowSelection).length > 0 && (
                     <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
