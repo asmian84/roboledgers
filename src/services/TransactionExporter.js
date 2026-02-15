@@ -16,18 +16,24 @@ class TransactionExporter {
         // CSV headers
         const headers = ['Date', 'Ref', 'Description', 'Debit', 'Credit', 'Balance', 'Account (COA)', 'Category', 'Status'];
 
-        // Build CSV rows
-        const rows = transactions.map(tx => [
-            tx.date || '',
-            tx.ref || tx.tx_id || '',
-            `"${(tx.description || '').replace(/"/g, '""')}"`, // Escape quotes
-            tx.debit || '',
-            tx.credit || '',
-            tx.balance || '',
-            tx.coa_code || tx.account_code || '',
-            `"${(tx.category || '').replace(/"/g, '""')}"`,
-            tx.status || 'Imported'
-        ].join(','));
+        // Build CSV rows - use amount_cents + polarity
+        const rows = transactions.map(tx => {
+            const amount = (tx.amount_cents || 0) / 100;
+            const debit = tx.polarity === 'DEBIT' ? amount.toFixed(2) : '';
+            const credit = tx.polarity === 'CREDIT' ? amount.toFixed(2) : '';
+
+            return [
+                tx.date || '',
+                tx.ref || tx.tx_id || '',
+                `"${(tx.description || '').replace(/"/g, '""')}"`, // Escape quotes
+                debit,
+                credit,
+                tx.balance_cents ? (tx.balance_cents / 100).toFixed(2) : '',
+                tx.coa_code || tx.account_code || tx.category || '',
+                `"${(tx.category || '').replace(/"/g, '""')}"`,
+                tx.status || 'Imported'
+            ].join(',');
+        });
 
         const csv = [headers.join(','), ...rows].join('\n');
 
@@ -47,17 +53,23 @@ class TransactionExporter {
         // Same as CSV but with UTF-8 BOM for Excel compatibility
         const headers = ['Date', 'Ref', 'Description', 'Debit', 'Credit', 'Balance', 'Account (COA)', 'Category', 'Status'];
 
-        const rows = transactions.map(tx => [
-            tx.date || '',
-            tx.ref || tx.tx_id || '',
-            `"${(tx.description || '').replace(/"/g, '""')}"`,
-            tx.debit || '',
-            tx.credit || '',
-            tx.balance || '',
-            tx.coa_code || tx.account_code || '',
-            `"${(tx.category || '').replace(/"/g, '""')}"`,
-            tx.status || 'Imported'
-        ].join(','));
+        const rows = transactions.map(tx => {
+            const amount = (tx.amount_cents || 0) / 100;
+            const debit = tx.polarity === 'DEBIT' ? amount.toFixed(2) : '';
+            const credit = tx.polarity === 'CREDIT' ? amount.toFixed(2) : '';
+
+            return [
+                tx.date || '',
+                tx.ref || tx.tx_id || '',
+                `"${(tx.description || '').replace(/"/g, '""')}"`,
+                debit,
+                credit,
+                tx.balance_cents ? (tx.balance_cents / 100).toFixed(2) : '',
+                tx.coa_code || tx.account_code || tx.category || '',
+                `"${(tx.category || '').replace(/"/g, '""')}"`,
+                tx.status || 'Imported'
+            ].join(',');
+        });
 
         const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n'); // UTF-8 BOM
 
@@ -116,13 +128,15 @@ class TransactionExporter {
      * Export current grid state (respects filters and sorting)
      */
     static exportCurrentView(format = 'csv') {
-        // Get transactions from the current grid
-        const gridData = window._txGridProps?.data || window.RoboLedger?.getAllTransactions?.() || [];
+        // Get transactions from the Ledger
+        const gridData = window.RoboLedger?.Ledger?.getAll() || [];
 
         if (gridData.length === 0) {
             alert('No transactions in current view');
             return;
         }
+
+        console.log(`[EXPORT] Exporting ${gridData.length} transactions in format: ${format}`);
 
         // Generate filename with timestamp
         const timestamp = new Date().toISOString().split('T')[0];
