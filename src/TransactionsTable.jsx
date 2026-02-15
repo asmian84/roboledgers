@@ -960,6 +960,9 @@ export function TransactionsTable({
     // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
     const [activePanel, setActivePanel] = useState(null);
 
+    // DRILL-DOWN: Account filter for Trial Balance drill-down
+    const [selectedAccountFilter, setSelectedAccountFilter] = useState(null);
+
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
         setData(initialData || []);
@@ -1428,6 +1431,9 @@ export function TransactionsTable({
                     <LiveReportPanel
                         reportType="trial-balance"
                         transactions={data}
+                        selectedAccount={selectedAccountFilter}
+                        onAccountClick={(accountCode) => setSelectedAccountFilter(accountCode)}
+                        onClearFilter={() => setSelectedAccountFilter(null)}
                     />
                 )}
             </ResizablePanel>

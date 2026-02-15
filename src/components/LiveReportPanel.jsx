@@ -4,8 +4,15 @@ import ReportGenerator from '../services/ReportGenerator.js';
 /**
  * LiveReportPanel - Real-time updating report panel for split-pane view
  * Displays financial reports alongside transaction grid with live updates
+ * Supports drill-down filtering by clicking account rows
  */
-export function LiveReportPanel({ reportType = 'trial-balance', transactions }) {
+export function LiveReportPanel({
+    reportType = 'trial-balance',
+    transactions,
+    selectedAccount = null,
+    onAccountClick,
+    onClearFilter
+}) {
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
 
@@ -150,6 +157,25 @@ export function LiveReportPanel({ reportType = 'trial-balance', transactions }) 
                             {reportData.isBalanced ? '✓ Balanced' : '⚠ Out of Balance'}
                         </div>
                     </div>
+
+                    {/* Breadcrumb Navigation */}
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
+                        <span
+                            onClick={onClearFilter}
+                            className={`${selectedAccount ? 'cursor-pointer hover:text-blue-600 hover:underline' : 'text-gray-900 font-semibold'}`}
+                        >
+                            All Accounts
+                        </span>
+                        {selectedAccount && (
+                            <>
+                                <i className="ph ph-caret-right text-gray-400"></i>
+                                <span className="text-blue-600 font-semibold">
+                                    {reportData.accounts.find(a => a.code === selectedAccount)?.name || selectedAccount}
+                                </span>
+                            </>
+                        )}
+                    </div>
+
                     <p className="text-xs text-gray-500">
                         {reportData.accounts.length} accounts · Live updates
                     </p>
@@ -168,8 +194,18 @@ export function LiveReportPanel({ reportType = 'trial-balance', transactions }) 
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {reportData.accounts.map(account => (
-                                <tr key={account.code} className="hover:bg-gray-50">
-                                    <td className="py-2 font-mono text-gray-600">{account.code}</td>
+                                <tr
+                                    key={account.code}
+                                    onClick={() => onAccountClick?.(account.code)}
+                                    className={`cursor-pointer transition-colors ${selectedAccount === account.code
+                                            ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                                            : 'hover:bg-gray-50'
+                                        }`}
+                                    title="Click to filter grid by this account"
+                                >
+                                    <td className={`py-2 font-mono text-gray-600 ${selectedAccount === account.code ? 'pl-2' : ''}`}>
+                                        {account.code}
+                                    </td>
                                     <td className="py-2 text-gray-900">{account.name}</td>
                                     <td className="py-2 text-right font-mono tabular-nums text-gray-900">
                                         {account.debit > 0 ? formatCurrency(account.debit) : '—'}
