@@ -887,11 +887,11 @@ const columns = [
 
             return (
                 <span
-                    className="text-right block"
+                    className="text-right block font-mono"
                     style={{
-                        fontSize: GRID_TOKENS.cellFontSize,
-                        fontWeight: GRID_TOKENS.cellFontWeight,
-                        color: GRID_TOKENS.descLine2Color,
+                        fontSize: GRID_TOKENS.numberFontSize,
+                        fontWeight: GRID_TOKENS.numberFontWeight,
+                        color: GRID_TOKENS.numberColor,
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
@@ -912,7 +912,7 @@ export function TransactionsTable({
     gridTheme = 'default',
     gridFontSize = 13.5,
     gridDensity = 'comfortable',
-    columnVisibility: initialColumnVisibility = { tax_cents: false }
+    columnVisibility: initialColumnVisibility = { tax_cents: true }
 }) {
     // CRITICAL: Update UI_STATE with new theme values
     if (window.UI_STATE) {
