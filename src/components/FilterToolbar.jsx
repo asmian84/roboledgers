@@ -14,6 +14,7 @@ export function FilterToolbar({
     onAccountChange,
     onToggleFilters,
     onToggleSettings,
+    onToggleReportPanel,
     onExport
 }) {
     const [showExportMenu, setShowExportMenu] = useState(false);
@@ -128,6 +129,15 @@ export function FilterToolbar({
                     title="Toggle Column Filters"
                 >
                     <i className="ph ph-funnel text-base text-[#64748b]"></i>
+                </button>
+
+                {/* Report Panel Toggle Button */}
+                <button
+                    onClick={onToggleReportPanel}
+                    className="relative px-2.5 py-2 border border-[#e2e8f0] bg-white rounded-md cursor-pointer flex items-center gap-1.5 transition-colors hover:bg-[#f1f5f9]"
+                    title="Toggle Live Report Panel"
+                >
+                    <i className="ph ph-chart-bar text-base text-[#64748b]"></i>
                 </button>
 
                 {/* Settings Gear */}
