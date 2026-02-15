@@ -1198,10 +1198,16 @@ export function TransactionsTable({
                         const newPanel = activePanel === 'utility' ? null : 'utility';
                         setActivePanel(newPanel);
 
-                        // Auto-scroll when opening
+                        // Auto-scroll to hide top cards and show only filter toolbar
                         if (newPanel === 'utility' && parentRef.current) {
                             setTimeout(() => {
-                                parentRef.current.scrollTo({ top: 200, behavior: 'smooth' });
+                                // Scroll past all header cards to show FilterToolbar at top
+                                const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
+                                let scrollAmount = 0;
+                                headerCards.forEach(card => {
+                                    scrollAmount += card.offsetHeight;
+                                });
+                                parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
                             }, 100);
                         }
                     }}
@@ -1383,7 +1389,7 @@ export function TransactionsTable({
                         activePanel === 'report' ? 'Live Trial Balance' :
                             'Panel'
                 }
-                defaultWidth={activePanel === 'utility' ? 450 : 600}
+                defaultWidth={activePanel === 'utility' ? 480 : 600}
                 minWidth={400}
                 maxWidth={900}
             >
