@@ -96,11 +96,11 @@ const CASEWARE_THEMES = {
         headerFontSize: '11px',
         rowHeight: 52,
         borderColor: '#fde047',
-        hoverBg: '#fef9c3',
+        hoverBg: '#fef08a',        // Darker yellow on hover
         headerBg: '#fef08a',
         headerColor: '#713f12',
-        rowBg: '#fefce8',      // Light yellow
-        rowBgAlt: '#fffbeb'    // Lighter yellow
+        rowBg: '#fef9c3',          // Visible yellow (same as old hover)
+        rowBgAlt: '#fefce8'        // Slightly lighter yellow
     },
     'rainbow': {
         fontFamily: 'Inter, sans-serif',

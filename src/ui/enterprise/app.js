@@ -3067,11 +3067,7 @@
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #64748b; margin-bottom: 6px;">' +
           '<span style="color: #1e293b; font-weight: 600;">Consolidated View</span> • ' + accounts.length + ' accounts' +
           '</div>' +
-          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #1e293b; margin-bottom: 8px;">' +
-          'Transactions: <span style="font-weight: 600;">' + totalTxnCount + '</span>  |  ' +
-          '<span style="color: #ef4444;">Debits: ' + debitTotal.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '<sup style="font-size: 8px;">' + debitCount + '</sup></span>  |  ' +
-          '<span style="color: #10b981;">Credits: ' + creditTotal.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '<sup style="font-size: 8px;">' + creditCount + '</sup></span>' +
-          '</div>' +
+
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #1e293b; margin-bottom: 6px;">Period: <span style="font-weight: 600;">' + periodText + '</span></div>' +
           '</div>';
       } else if (acc) {
