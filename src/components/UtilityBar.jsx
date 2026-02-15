@@ -1,5 +1,112 @@
 import React from 'react';
 
+// Vibrant color palette for pie chart
+const CHART_COLORS = [
+    '#3b82f6', // blue
+    '#ef4444', // red
+    '#10b981', // green
+    '#f59e0b', // amber
+    '#8b5cf6', // purple
+    '#ec4899', // pink
+    '#14b8a6', // teal
+    '#f97316', // orange
+    '#6366f1', // indigo
+    '#84cc16', // lime
+    '#06b6d4', // cyan
+    '#f43f5e', // rose
+];
+
+/**
+ * Simple SVG Pie Chart
+ */
+function PieChart({ data, size = 200 }) {
+    if (!data || data.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
+                No data to display
+            </div>
+        );
+    }
+
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    let currentAngle = -90; // Start at top
+
+    const slices = data.map((item, index) => {
+        const percentage = (item.value / total) * 100;
+        const angle = (item.value / total) * 360;
+        const startAngle = currentAngle;
+        const endAngle = currentAngle + angle;
+
+        currentAngle = endAngle;
+
+        // Calculate slice path
+        const startRad = (startAngle * Math.PI) / 180;
+        const endRad = (endAngle * Math.PI) / 180;
+        const radius = size / 2 - 10;
+        const centerX = size / 2;
+        const centerY = size / 2;
+
+        const x1 = centerX + radius * Math.cos(startRad);
+        const y1 = centerY + radius * Math.sin(startRad);
+        const x2 = centerX + radius * Math.cos(endRad);
+        const y2 = centerY + radius * Math.sin(endRad);
+
+        const largeArc = angle > 180 ? 1 : 0;
+
+        const pathData = [
+            `M ${centerX} ${centerY}`,
+            `L ${x1} ${y1}`,
+            `A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`,
+            'Z'
+        ].join(' ');
+
+        return {
+            path: pathData,
+            color: CHART_COLORS[index % CHART_COLORS.length],
+            label: item.label,
+            value: item.value,
+            percentage: percentage.toFixed(1)
+        };
+    });
+
+    return (
+        <div className="space-y-3">
+            {/* SVG Pie Chart */}
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="mx-auto">
+                {slices.map((slice, index) => (
+                    <path
+                        key={index}
+                        d={slice.path}
+                        fill={slice.color}
+                        stroke="white"
+                        strokeWidth="2"
+                        className="transition-opacity hover:opacity-80 cursor-pointer"
+                    />
+                ))}
+            </svg>
+
+            {/* Legend */}
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {slices.map((slice, index) => (
+                    <div key={index} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div
+                                className="w-3 h-3 rounded-sm flex-shrink-0"
+                                style={{ backgroundColor: slice.color }}
+                            />
+                            <span className="text-gray-700 truncate">{slice.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                            <span className="font-semibold text-gray-900">{slice.value}</span>
+                            <span className="text-gray-500 w-10 text-right">{slice.percentage}%</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 /**
  * UtilityBar - Side panel showing reconciliation stats, metadata, and dashboard
  * Replaces the old overlay utility bar with integrated split-pane design
@@ -102,6 +209,15 @@ export function UtilityBar({ transactions = [] }) {
                 </div>
             </div>
 
+            {/* Category Distribution Pie Chart */}
+            <div className="p-4 bg-white border-b border-gray-200">
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Category Distribution</h3>
+                <PieChart
+                    data={getCategoryDistribution(transactions)}
+                    size={180}
+                />
+            </div>
+
             {/* Metadata */}
             <div className="p-4 bg-white">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Metadata</h3>
@@ -141,6 +257,27 @@ export function UtilityBar({ transactions = [] }) {
             </div>
         </div>
     );
+}
+
+// Helper to get category distribution for pie chart
+function getCategoryDistribution(transactions) {
+    const categoryCounts = {};
+
+    transactions.forEach(tx => {
+        const cat = tx.category || 'Uncategorized';
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+
+    return Object.entries(categoryCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([code, count]) => {
+            // Try to get friendly name from COA
+            const account = window.RoboLedger?.COA?.get(String(code));
+            return {
+                label: account?.name || code,
+                value: count
+            };
+        });
 }
 
 // Helper to get top 5 categories by transaction count
