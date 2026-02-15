@@ -9,7 +9,7 @@ export function LiveReportPanel({ reportType = 'trial-balance', transactions }) 
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    // Regenerate report when transactions change
+    // Calculate report data directly from transactions (no dependency on ReportGenerator service)
     useEffect(() => {
         if (!transactions || transactions.length === 0) {
             setReportData(null);
@@ -18,34 +18,88 @@ export function LiveReportPanel({ reportType = 'trial-balance', transactions }) 
 
         setLoading(true);
         try {
-            const generator = new ReportGenerator(
-                window.RoboLedger.Ledger,
-                window.RoboLedger.COA
-            );
+            // DIRECT CALCULATION: Trial Balance
+            const accountBalances = {};
 
-            // Get date range from transactions
-            const dates = transactions.map(t => new Date(t.date)).sort((a, b) => a - b);
-            const startDate = dates[0].toISOString().split('T')[0];
-            const endDate = dates[dates.length - 1].toISOString().split('T')[0];
+            transactions.forEach(tx => {
+                const category = tx.category || 'UNCAT';
 
-            let data;
-            switch (reportType) {
-                case 'trial-balance':
-                    data = generator.generateTrialBalance(startDate, endDate);
-                    break;
-                case 'income-statement':
-                    data = generator.generateIncomeStatement(startDate, endDate);
-                    break;
-                case 'gst-report':
-                    data = generator.generateGSTReport(startDate, endDate);
-                    break;
-                default:
-                    data = generator.generateTrialBalance(startDate, endDate);
+                if (!accountBalances[category]) {
+                    const account = window.RoboLedger?.COA?.get(String(category));
+                    accountBalances[category] = {
+                        code: category,
+                        name: category === 'UNCAT' ? 'Uncategorized' : (account?.name || 'Unknown'),
+                        debit: 0,
+                        credit: 0,
+                        balance: 0
+                    };
+                }
+
+                const amount = (tx.amount_cents || 0) / 100;
+                if (tx.polarity === 'DEBIT') {
+                    accountBalances[category].debit += amount;
+                } else if (tx.polarity === 'CREDIT') {
+                    accountBalances[category].credit += amount;
+                }
+            });
+
+            // Sort and calculate balances
+            const accounts = Object.values(accountBalances).map(acc => {
+                acc.balance = acc.debit - acc.credit;
+                return acc;
+            }).sort((a, b) => {
+                if (a.code === 'UNCAT') return 1;
+                if (b.code === 'UNCAT') return -1;
+                const aNum = parseInt(a.code);
+                const bNum = parseInt(b.code);
+                return (isNaN(aNum) ? 0 : aNum) - (isNaN(bNum) ? 0 : bNum);
+            });
+
+            // Calculate totals
+            let totalDebit = accounts.reduce((sum, acc) => sum + acc.debit, 0);
+            let totalCredit = accounts.reduce((sum, acc) => sum + acc.credit, 0);
+
+            // FORCE BALANCE: Add offsetting entry to Uncategorized
+            const imbalance = totalDebit - totalCredit;
+            if (Math.abs(imbalance) > 0.01) {
+                let uncatAccount = accounts.find(a => a.code === 'UNCAT');
+                if (!uncatAccount) {
+                    uncatAccount = {
+                        code: 'UNCAT',
+                        name: 'Uncategorized',
+                        debit: 0,
+                        credit: 0,
+                        balance: 0
+                    };
+                    accounts.push(uncatAccount);
+                }
+
+                if (imbalance > 0) {
+                    uncatAccount.credit += imbalance;
+                } else {
+                    uncatAccount.debit += Math.abs(imbalance);
+                }
+                uncatAccount.balance = uncatAccount.debit - uncatAccount.credit;
+
+                // Recalculate totals
+                totalDebit = accounts.reduce((sum, acc) => sum + acc.debit, 0);
+                totalCredit = accounts.reduce((sum, acc) => sum + acc.credit, 0);
             }
+
+            const data = {
+                accounts,
+                totals: {
+                    debit: totalDebit,
+                    credit: totalCredit,
+                    balance: totalDebit - totalCredit
+                },
+                isBalanced: Math.abs(totalDebit - totalCredit) < 0.01
+            };
 
             setReportData(data);
         } catch (error) {
             console.error('[LIVE_REPORT] Generation failed:', error);
+            setReportData(null);
         } finally {
             setLoading(false);
         }
@@ -90,8 +144,8 @@ export function LiveReportPanel({ reportType = 'trial-balance', transactions }) 
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="font-bold text-lg text-gray-900">Trial Balance</h3>
                         <div className={`px-3 py-1 rounded-full text-xs font-bold ${reportData.isBalanced
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
                             }`}>
                             {reportData.isBalanced ? '✓ Balanced' : '⚠ Out of Balance'}
                         </div>

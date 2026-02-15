@@ -1,17 +1,15 @@
-
 /* Split-Pane Layout for Live Reports */
-.split-pane-container {
+.split-pane-active {
   display: flex;
   flex-direction: row;
   gap: 0;
-  background: #e5e7eb;
 }
 
-.live-report-panel {
-  width: 600px;
-  min-width: 400px;
-  max-width: 800px;
-  flex-shrink: 0;
-  height: 100%;
-  overflow-y: auto;
+.resize-handle {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.resizable-panel {
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
 }

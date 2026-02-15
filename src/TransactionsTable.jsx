@@ -13,6 +13,7 @@ import { CategoryDropdown } from './components/CategoryDropdown';
 import { AuditSidebar } from './components/AuditSidebar';
 import { FilterToolbar } from './components/FilterToolbar';
 import { LiveReportPanel } from './components/LiveReportPanel';
+import { ResizablePanel } from './components/ResizablePanel';
 
 // Canadian Tax Rates (GST, PST, HST, QST) by Province/Territory
 const TAX_RATES = {
@@ -953,8 +954,8 @@ export function TransactionsTable({
     const [auditSidebarOpen, setAuditSidebarOpen] = useState(false);
     const [selectedAuditTransaction, setSelectedAuditTransaction] = useState(null);
 
-    // LIVE REPORT PANEL: Split-pane view state
-    const [showReportPanel, setShowReportPanel] = useState(false);
+    // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
+    const [activePanel, setActivePanel] = useState(null);
 
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
@@ -1137,9 +1138,9 @@ export function TransactionsTable({
 
 
     return (
-        <div className={`flex h-full w-full bg-white relative ${showReportPanel ? 'split-pane-container' : 'flex-col overflow-auto'}`} ref={parentRef} style={{ scrollbarGutter: 'stable' }}>
+        <div className={`flex h-full w-full bg-white relative ${activePanel ? 'split-pane-active' : 'flex-col overflow-auto'}`} ref={parentRef} style={{ scrollbarGutter: 'stable' }}>
             {/* Main Grid Container */}
-            <div className="flex flex-col h-full relative overflow-auto" style={{ flex: showReportPanel ? '1 1 60%' : undefined }}>
+            <div className="flex flex-col h-full relative overflow-auto" style={{ flex: activePanel ? '1 1 auto' : undefined }}>
                 {/* Batch Action Bar */}
                 {Object.keys(rowSelection).length > 0 && (
                     <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
@@ -1176,7 +1177,20 @@ export function TransactionsTable({
                     onAccountChange={(value) => window.switchAccount?.(value)}
                     onToggleFilters={() => window.toggleGridFilters?.()}
                     onToggleSettings={() => window.toggleSettings?.(true)}
-                    onToggleReportPanel={() => setShowReportPanel(!showReportPanel)}
+                    onToggleReportPanel={() => {
+                        const newPanel = activePanel === 'report' ? null : 'report';
+                        setActivePanel(newPanel);
+
+                        // Auto-scroll to hide header containers (like audit drawer)
+                        if (newPanel === 'report' && parentRef.current) {
+                            const headerContainers = parentRef.current.querySelector('.batch-action-bar, .reconciliation-container, .metadata-container');
+                            if (headerContainers) {
+                                setTimeout(() => {
+                                    parentRef.current.scrollTo({ top: 200, behavior: 'smooth' });
+                                }, 100);
+                            }
+                        }
+                    }}
                     onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
                 />
 
@@ -1346,13 +1360,20 @@ export function TransactionsTable({
                 />
             </div>
 
-            {/* LIVE REPORT PANEL: Conditionally render side-by-side */}
-            {showReportPanel && (
+            {/* RESIZABLE PANEL SYSTEM: Mutual exclusion - only one panel visible */}
+            <ResizablePanel
+                isOpen={activePanel === 'report'}
+                onClose={() => setActivePanel(null)}
+                title="Live Trial Balance"
+                defaultWidth={600}
+                minWidth={400}
+                maxWidth={900}
+            >
                 <LiveReportPanel
                     reportType="trial-balance"
                     transactions={data}
                 />
-            )}
+            </ResizablePanel>
         </div>
     );
 }
