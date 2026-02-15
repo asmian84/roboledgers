@@ -66,7 +66,9 @@ RBC VISA FORMAT:
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
 
-        const dateRegex = /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{1,2})/i;
+        // RBC Visa format: Date is embedded in description like "JUL 11 PAYMENT - THANK YOU"
+        // NOT at the start of line
+        const dateRegex = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{1,2})/i;
         const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
         let pendingDescription = '';
@@ -78,12 +80,16 @@ RBC VISA FORMAT:
             const trimmed = line.trim();
             if (!trimmed || trimmed.match(/Opening Balance|Previous Balance|Page \d/i)) continue;
 
+            // Check if line contains a date AND an amount (complete transaction line)
             const dateMatch = trimmed.match(dateRegex);
-            if (dateMatch) {
-                const isoDate = `${currentYear}-${monthMap[dateMatch[1].toLowerCase()]}-${dateMatch[2].padStart(2, '0')}`;
-                const remainder = trimmed.substring(dateMatch[0].length).trim();
+            const hasAmount = /[\d,]+\.\d{2}/.test(trimmed);
 
-                const extracted = this.extractTransaction(remainder, isoDate, line);
+            if (dateMatch && hasAmount) {
+                // Extract date from the match
+                const isoDate = `${currentYear}-${monthMap[dateMatch[1].toLowerCase()]}-${dateMatch[2].padStart(2, '0')}`;
+
+                // Extract transaction from full line (date is part of description)
+                const extracted = this.extractTransaction(trimmed, isoDate, line);
                 if (extracted && extracted.amount) {
                     if (pendingDescription) {
                         extracted.description = pendingDescription + ' ' + extracted.description;

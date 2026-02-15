@@ -893,7 +893,7 @@ const columns = [
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
-                    {displayValue ? `$${displayValue.toFixed(2)}` : '-'}
+                    {displayValue ? `$${(displayValue / 100).toFixed(2)}` : '-'}
                 </span>
             );
         }
