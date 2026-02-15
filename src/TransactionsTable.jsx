@@ -1323,15 +1323,15 @@ export function TransactionsTable({
                                                     flex: cell.column.id === 'description' ? '1 1 0' : undefined,
                                                     minWidth: cell.column.id === 'description' ? '250px' : undefined,
                                                     flexShrink: 0,
-                                                    // Custom padding per column
+                                                    // Custom padding per column - flush left
                                                     padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
                                                         cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                                            `0 ${GRID_TOKENS.rowPaddingX}`,                  // Others: default
+                                                            '0 8px 0 2px',                               // Others: minimal left, standard right
                                                     borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
                                                     position: cell.column.id === 'category' ? 'relative' : undefined
                                                 }}
                                             >
-                                                <div className="w-full">
+                                                <div className="w-full text-left">
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </div>
                                             </div>
