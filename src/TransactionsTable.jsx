@@ -1374,26 +1374,19 @@ export function TransactionsTable({
                 />
             </div>
 
-            {/* RESIZABLE PANEL SYSTEM: One panel, swap content based on activePanel */}
+            {/* RESIZABLE PANEL SYSTEM: Live reports panel only */}
             <ResizablePanel
-                isOpen={activePanel !== null}
+                isOpen={activePanel === 'report'}
                 onClose={() => setActivePanel(null)}
-                title={
-                    activePanel === 'utility' ? 'Dashboard & Stats' :
-                        activePanel === 'report' ? 'Live Trial Balance' :
-                            'Panel'
-                }
-                defaultWidth={activePanel === 'utility' ? 350 : 600}
-                minWidth={300}
+                title="Live Trial Balance"
+                defaultWidth={600}
+                minWidth={400}
                 maxWidth={900}
             >
-                {activePanel === 'utility' && <UtilityBar transactions={data} />}
-                {activePanel === 'report' && (
-                    <LiveReportPanel
-                        reportType="trial-balance"
-                        transactions={data}
-                    />
-                )}
+                <LiveReportPanel
+                    reportType="trial-balance"
+                    transactions={data}
+                />
             </ResizablePanel>
         </div>
     );

@@ -15,7 +15,6 @@ export function FilterToolbar({
     onToggleFilters,
     onToggleSettings,
     onToggleReportPanel,
-    onToggleUtilityBar,
     onExport
 }) {
     const [showExportMenu, setShowExportMenu] = useState(false);
@@ -139,15 +138,6 @@ export function FilterToolbar({
                     title="Toggle Live Report Panel"
                 >
                     <i className="ph ph-chart-bar text-base text-[#64748b]"></i>
-                </button>
-
-                {/* Utility Bar (Dashboard/Stats) */}
-                <button
-                    onClick={onToggleUtilityBar}
-                    className="px-2.5 py-2 border border-[#e2e8f0] bg-white rounded-md cursor-pointer flex items-center gap-1 transition-colors hover:bg-[#f1f5f9]"
-                    title="Utility Bar (Dashboard & Stats)"
-                >
-                    <i className="ph ph-sidebar text-base text-[#64748b]"></i>
                 </button>
 
                 {/* Settings Gear */}
