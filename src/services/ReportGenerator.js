@@ -20,28 +20,38 @@ class ReportGenerator {
         const accountBalances = {};
 
         transactions.forEach(tx => {
-            if (!tx.category) return;
+            // Use category if set, otherwise use "UNCAT" for uncategorized
+            const category = tx.category || 'UNCAT';
 
-            if (!accountBalances[tx.category]) {
-                const account = this.coa.get(tx.category);
-                accountBalances[tx.category] = {
-                    code: tx.category,
-                    name: account?.name || 'Unknown',
+            if (!accountBalances[category]) {
+                const account = this.coa.get(category);
+                accountBalances[category] = {
+                    code: category,
+                    name: category === 'UNCAT' ? 'Uncategorized' : (account?.name || 'Unknown'),
                     debit: 0,
                     credit: 0,
                     balance: 0
                 };
             }
 
-            accountBalances[tx.category].debit += tx.debit || 0;
-            accountBalances[tx.category].credit += tx.credit || 0;
+            // Use amount_cents field (convert cents to dollars)
+            const debitAmount = (tx.debit_cents || tx.debit || 0) / 100;
+            const creditAmount = (tx.credit_cents || tx.credit || 0) / 100;
+
+            accountBalances[category].debit += debitAmount;
+            accountBalances[category].credit += creditAmount;
         });
 
         // Calculate balances
         const accounts = Object.values(accountBalances).map(acc => {
             acc.balance = acc.debit - acc.credit;
             return acc;
-        }).sort((a, b) => parseInt(a.code) - parseInt(b.code));
+        }).sort((a, b) => {
+            // Sort: Uncategorized last, others by code
+            if (a.code === 'UNCAT') return 1;
+            if (b.code === 'UNCAT') return -1;
+            return parseInt(a.code) - parseInt(b.code);
+        });
 
         // Calculate totals
         const totalDebit = accounts.reduce((sum, acc) => sum + acc.debit, 0);
