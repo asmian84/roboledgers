@@ -970,6 +970,36 @@ export function TransactionsTable({
         setGlobalFilter(initialGlobalFilter || '');
     }, [initialGlobalFilter]);
 
+    // DETAIL MODE: Listen for sidebar collapse and auto-open utility bar
+    useEffect(() => {
+        const handleSidebarCollapse = (event) => {
+            const { collapsed } = event.detail;
+
+            if (collapsed) {
+                // DETAIL MODE ON: Auto-open utility bar
+                setActivePanel('utility');
+
+                // Auto-scroll to FilterToolbar
+                if (parentRef.current) {
+                    setTimeout(() => {
+                        const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
+                        let scrollAmount = 0;
+                        headerCards.forEach(card => {
+                            scrollAmount += card.offsetHeight;
+                        });
+                        parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
+                    }, 100);
+                }
+            } else {
+                // DETAIL MODE OFF: Close all panels
+                setActivePanel(null);
+            }
+        };
+
+        window.addEventListener('sidebarCollapsed', handleSidebarCollapse);
+        return () => window.removeEventListener('sidebarCollapsed', handleSidebarCollapse);
+    }, []);
+
     // ═══════════════════════════════════════════════════════════════════════════
     // BATCH ACTION HANDLERS
     // ═══════════════════════════════════════════════════════════════════════════

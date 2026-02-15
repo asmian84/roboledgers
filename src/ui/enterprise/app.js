@@ -567,15 +567,21 @@
       sidebar.classList.toggle('collapsed');
 
       // Toggle body class for global layout changes (grid expansion, utility bar)
-      document.body.classList.toggle('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+      const isCollapsed = sidebar.classList.contains('collapsed');
+      document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+
+      // Dispatch event for React components to listen to
+      window.dispatchEvent(new CustomEvent('sidebarCollapsed', {
+        detail: { collapsed: isCollapsed }
+      }));
 
       // Update utility bar content when collapsed
-      if (sidebar.classList.contains('collapsed')) {
+      if (isCollapsed) {
         setTimeout(() => window.updateUtilityBar(), 100);
       }
 
       // Update button icon
-      if (sidebar.classList.contains('collapsed')) {
+      if (isCollapsed) {
         toggleBtn.innerHTML = '<i class="ph ph-caret-right"></i>';
         toggleBtn.title = 'Expand';
       } else {
