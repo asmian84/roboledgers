@@ -4115,10 +4115,11 @@ body.sidebar-collapsed .v5-switcher-bar {
     overflow-y: auto;
 }
 
-/* Show utility bar when sidebar is collapsed */
+/* OLD: Auto-show when sidebar collapsed - DISABLED (replaced by React UtilityBar)
 body.sidebar-collapsed .utility-bar {
     display: flex;
 }
+*/
 
 /* Utility bar header */
 .utility-bar-header {
