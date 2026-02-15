@@ -4096,7 +4096,7 @@ body.sidebar-collapsed .v5-switcher-bar {
     transition: width 0.3s ease, margin-right 0.3s ease;
 }
 
-/* === OLD VANILLA JS UTILITY BAR CSS - DISABLED (replaced by React UtilityBar) ===
+/* Utility Bar (Phase 3) - Hidden by default */
 .utility-bar {
     position: fixed;
     top: 0;
@@ -4109,15 +4109,18 @@ body.sidebar-collapsed .v5-switcher-bar {
     box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
     z-index: 90;
     display: none;
+    /* Hidden by default */
     flex-direction: column;
     gap: 16px;
     overflow-y: auto;
 }
 
+/* Show utility bar when sidebar is collapsed */
 body.sidebar-collapsed .utility-bar {
     display: flex;
 }
 
+/* Utility bar header */
 .utility-bar-header {
     font-size: 11px;
     font-weight: 800;
@@ -4127,6 +4130,7 @@ body.sidebar-collapsed .utility-bar {
     margin-bottom: 8px;
 }
 
+/* Quick stats card */
 .utility-card {
     background: white;
     border: 1px solid #e2e8f0;
@@ -4150,6 +4154,7 @@ body.sidebar-collapsed .utility-bar {
     font-family: 'JetBrains Mono', monospace;
 }
 
+/* Account badges in utility bar */
 .utility-badges {
     display: flex;
     flex-direction: column;
@@ -4173,4 +4178,3 @@ body.sidebar-collapsed .utility-bar {
     background: #2563eb;
     transform: translateX(-2px);
 }
-*/
