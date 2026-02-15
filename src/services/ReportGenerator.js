@@ -24,7 +24,8 @@ class ReportGenerator {
             const category = tx.category || 'UNCAT';
 
             if (!accountBalances[category]) {
-                const account = this.coa.get(category);
+                // Ensure category is string for COA lookup
+                const account = this.coa.get(String(category));
                 accountBalances[category] = {
                     code: category,
                     name: category === 'UNCAT' ? 'Uncategorized' : (account?.name || 'Unknown'),
@@ -34,12 +35,14 @@ class ReportGenerator {
                 };
             }
 
-            // Use amount_cents field (convert cents to dollars)
-            const debitAmount = (tx.debit_cents || tx.debit || 0) / 100;
-            const creditAmount = (tx.credit_cents || tx.credit || 0) / 100;
+            // Use amount_cents + polarity (the actual transaction schema)
+            const amount = (tx.amount_cents || 0) / 100;
 
-            accountBalances[category].debit += debitAmount;
-            accountBalances[category].credit += creditAmount;
+            if (tx.polarity === 'DEBIT') {
+                accountBalances[category].debit += amount;
+            } else if (tx.polarity === 'CREDIT') {
+                accountBalances[category].credit += amount;
+            }
         });
 
         // Calculate balances
