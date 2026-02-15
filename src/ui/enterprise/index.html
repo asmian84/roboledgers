@@ -161,18 +161,16 @@
             </main>
         </div>
 
-        <!-- Utility Bar (Shows when sidebar collapsed) -->
+        <!-- OLD UTILITY BAR - DISABLED (replaced by React UtilityBar in ResizablePanel)
         <aside id="utility-bar" class="utility-bar">
             <div class="utility-bar-header">DASHBOARD</div>
 
-            <!-- Transaction Stats -->
             <div class="utility-card">
                 <div class="utility-card-title">Transactions</div>
                 <div class="utility-stat" id="util-total-txns">0</div>
                 <div style="font-size: 11px; color: #64748b; margin-top: 4px;" id="util-date-range">No data</div>
             </div>
 
-            <!-- Pending Work -->
             <div class="utility-card">
                 <div class="utility-card-title">Pending</div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
@@ -185,7 +183,6 @@
                 </div>
             </div>
 
-            <!-- Total Balance Card -->
             <div class="utility-card">
                 <div class="utility-card-title">Net Position</div>
                 <div class="utility-stat" id="util-total-balance">$0.00</div>
@@ -203,7 +200,6 @@
                 </div>
             </div>
 
-            <!-- Quick P&L -->
             <div class="utility-card">
                 <div class="utility-card-title">Quick P&L</div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
@@ -225,29 +221,24 @@
                 </div>
             </div>
 
-            <!-- Category Allocation -->
             <div class="utility-card">
                 <div class="utility-card-title">Top Categories</div>
                 <div id="util-category-chart" style="margin-top: 8px;">
-                    <!-- Populated by JavaScript -->
                     <div style="text-align: center; padding: 12px; color: #94a3b8; font-size: 11px;">
                         No categories
                     </div>
                 </div>
             </div>
 
-            <!-- Active Accounts -->
             <div class="utility-card">
                 <div class="utility-card-title">Active Accounts</div>
                 <div id="util-account-badges" class="utility-badges">
-                    <!-- Populated by JavaScript -->
                     <div style="text-align: center; padding: 12px; color: #94a3b8; font-size: 11px;">
                         No accounts loaded
                     </div>
                 </div>
             </div>
 
-            <!-- Quick Actions -->
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <button class="btn-primary" style="width: 100%; padding: 10px; border-radius: 6px; font-size: 12px;"
                     onclick="window.openFilePicker()">
@@ -260,6 +251,7 @@
                 </button>
             </div>
         </aside>
+        -->
     </div>
 
     <div id="settings-drawer" class="settings-drawer">
@@ -330,7 +322,7 @@
     <!-- Magic Hub removed -->
 
     <script src="ledger.core.js"></script>
-    <script src="utility-bar.js"></script>
+    <!-- OLD utility-bar.js REMOVED - replaced by React UtilityBar -->
     <script src="app.js?v=20260212-1621"></script> <!-- Cache bust: Flush @ 350px + highlight coords -->
 </body>
 
