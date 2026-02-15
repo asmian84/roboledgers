@@ -3068,7 +3068,7 @@
           '<span style="color: #1e293b; font-weight: 600;">Consolidated View</span> • ' + accounts.length + ' accounts' +
           '</div>' +
 
-          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #1e293b; margin-bottom: 6px;">Period: <span style="font-weight: 600;">' + periodText + '</span></div>' +
+          '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #1e293b; margin-bottom: 6px;">Transactions: <span style="font-weight: 600;">' + totalTxnCount + '</span> (<span style="color: #ef4444;">' + debitCount + ' debits</span>, <span style="color: #10b981;">' + creditCount + ' credits</span>)</div>' +
           '</div>';
       } else if (acc) {
         // SINGLE MODE: ACCOUNT METADATA heading + breadcrumb + transaction counts + icon (48px) + text
