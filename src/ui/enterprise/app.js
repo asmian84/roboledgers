@@ -4028,6 +4028,13 @@ window.handleMainUpload = function (input) {
     fileType === 'csv' ? 'CSV/Excel file' :
       'file';
 
+  console.log('[UPLOAD] File count differentiation:', {
+    totalCount,
+    filteredCount,
+    fileTypeName,
+    showingDifferentiation: filteredCount !== totalCount
+  });
+
   let confirmMessage;
   if (filteredCount === totalCount) {
     // All files match the filter
@@ -4036,6 +4043,8 @@ window.handleMainUpload = function (input) {
     // Show filtered vs total count
     confirmMessage = `Upload ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} (out of ${totalCount} total files)?\n\nThis will upload all ${fileTypeName}s from "${isFolderMode ? 'selected folders' : 'selection'}". Only do this if you trust the site.`;
   }
+
+  console.log('[UPLOAD] Confirmation message:', confirmMessage);
 
   if (!confirm(confirmMessage)) {
     input.value = '';
