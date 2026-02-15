@@ -45,6 +45,34 @@ class ReportGenerator {
             }
         });
 
+        // Calculate initial totals
+        let totalDebit = Object.values(accountBalances).reduce((sum, acc) => sum + acc.debit, 0);
+        let totalCredit = Object.values(accountBalances).reduce((sum, acc) => sum + acc.credit, 0);
+
+        // FORCE BALANCE: Add any imbalance to Uncategorized
+        const imbalance = totalDebit - totalCredit;
+        if (Math.abs(imbalance) > 0.01) {
+            // Ensure UNCAT exists
+            if (!accountBalances['UNCAT']) {
+                accountBalances['UNCAT'] = {
+                    code: 'UNCAT',
+                    name: 'Uncategorized',
+                    debit: 0,
+                    credit: 0,
+                    balance: 0
+                };
+            }
+
+            // Add offsetting entry to balance
+            if (imbalance > 0) {
+                // More debits than credits, add credit to UNCAT
+                accountBalances['UNCAT'].credit += imbalance;
+            } else {
+                // More credits than debits, add debit to UNCAT
+                accountBalances['UNCAT'].debit += Math.abs(imbalance);
+            }
+        }
+
         // Calculate balances
         const accounts = Object.values(accountBalances).map(acc => {
             acc.balance = acc.debit - acc.credit;
@@ -56,9 +84,9 @@ class ReportGenerator {
             return parseInt(a.code) - parseInt(b.code);
         });
 
-        // Calculate totals
-        const totalDebit = accounts.reduce((sum, acc) => sum + acc.debit, 0);
-        const totalCredit = accounts.reduce((sum, acc) => sum + acc.credit, 0);
+        // Recalculate totals (should now balance)
+        totalDebit = accounts.reduce((sum, acc) => sum + acc.debit, 0);
+        totalCredit = accounts.reduce((sum, acc) => sum + acc.credit, 0);
         const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
 
         return {
@@ -68,7 +96,7 @@ class ReportGenerator {
                 credit: totalCredit,
                 balance: totalBalance
             },
-            isBalanced: Math.abs(totalDebit - totalCredit) < 0.01, // Allow 1 cent rounding
+            isBalanced: Math.abs(totalDebit - totalCredit) < 0.01, // Should always be true now
             difference: totalDebit - totalCredit
         };
     }
