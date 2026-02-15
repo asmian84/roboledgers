@@ -1194,6 +1194,17 @@ export function TransactionsTable({
                             }
                         }
                     }}
+                    onToggleUtilityBar={() => {
+                        const newPanel = activePanel === 'utility' ? null : 'utility';
+                        setActivePanel(newPanel);
+
+                        // Auto-scroll when opening
+                        if (newPanel === 'utility' && parentRef.current) {
+                            setTimeout(() => {
+                                parentRef.current.scrollTo({ top: 200, behavior: 'smooth' });
+                            }, 100);
+                        }
+                    }}
                     onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
                 />
 
