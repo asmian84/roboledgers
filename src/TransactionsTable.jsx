@@ -497,7 +497,9 @@ function DescriptionCell({ row }) {
 // Number formatting helper
 function formatCurrency(value) {
     if (!value && value !== 0) return '-';
-    return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Fix negative zero: -0.00 should display as 0.00
+    const displayValue = Object.is(value, -0) || value === 0 ? 0 : value;
+    return `$${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
