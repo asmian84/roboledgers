@@ -1383,8 +1383,8 @@ export function TransactionsTable({
                         activePanel === 'report' ? 'Live Trial Balance' :
                             'Panel'
                 }
-                defaultWidth={activePanel === 'utility' ? 450 : 600}
-                minWidth={400}
+                defaultWidth={activePanel === 'utility' ? 350 : 600}
+                minWidth={300}
                 maxWidth={900}
             >
                 {activePanel === 'utility' && <UtilityBar transactions={data} />}
