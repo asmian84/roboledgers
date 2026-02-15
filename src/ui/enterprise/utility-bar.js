@@ -143,12 +143,7 @@ window.updateUtilityBar = function () {
 window.filterByCategory = function (category) {
     console.log('[UTILITY BAR] Filtering by category:', category);
 
-    // If there's a React table instance, use its filtering API
-    if (window.reactTableInstance) {
-        window.reactTableInstance.setGlobalFilter(category);
-    } else {
-        // Fallback: set a global filter state that the grid can read
-        window.FILTER_STATE = { category };
-        window.updateWorkspace(); // Refresh the grid
-    }
+    // Update the global filter in main.jsx
+    window.setTxGridFilter(category);
+    console.log('[UTILITY BAR] Grid filter set to:', category);
 };

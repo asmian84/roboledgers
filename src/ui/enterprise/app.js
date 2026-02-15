@@ -1214,6 +1214,7 @@
       // Accounts are part of ledger state - will auto-save
       console.log('[RECON] Opening balance updated:', numericValue);
       window.updateWorkspace(); // Refresh UI
+      if (window.updateUtilityBar) window.updateUtilityBar(); // Update dashboard stats
       render(); // Force grid re-render with new balance calculations
     }
   };
@@ -1253,6 +1254,7 @@
     if (!isNaN(numericValue)) {
       inputElement.value = '$' + numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       window.updateWorkspace(); // Update summary after formatting
+      if (window.updateUtilityBar) window.updateUtilityBar(); // Update dashboard stats
     }
   };
 
@@ -1622,6 +1624,7 @@
     // Render
     if (route === 'home') {
       window.updateWorkspace(); // Enhanced homepage
+      if (window.updateUtilityBar) window.updateUtilityBar(); // Update dashboard stats
     } else {
       render(); // Standard page rendering
     }

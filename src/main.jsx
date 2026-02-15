@@ -201,4 +201,23 @@ window.unmountDocumentViewer = (containerId) => {
     }
 };
 
+/**
+ * Global Bridge: Set grid filter (called from utility bar category chart)
+ */
+window.setTxGridFilter = (filterValue) => {
+    if (!window._txGridRoot || !window._txGridProps) {
+        console.warn('[MAIN.JSX] Grid not mounted, cannot set filter.');
+        return;
+    }
+
+    console.log(`[MAIN.JSX] Setting grid filter to: ${filterValue}`);
+    window._txGridProps.globalFilter = filterValue;
+
+    window._txGridRoot.render(
+        <React.StrictMode>
+            <TransactionsTable {...window._txGridProps} />
+        </React.StrictMode>
+    );
+};
+
 console.log('[VITE] React bridge established.');
