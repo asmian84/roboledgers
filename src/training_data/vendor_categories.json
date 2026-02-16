@@ -1,0 +1,446 @@
+{
+    "metadata": {
+        "source": "scan_results_ai_processed (1).csv + (2).csv",
+        "total_transactions": 783124,
+        "total_categorized": 612847,
+        "confidence_threshold": 0.1,
+        "generated_date": "2026-02-15"
+    },
+    "category_mappings": {
+        "5330": {
+            "name": "Fuel and oil",
+            "keywords": [
+                "shell",
+                "petro",
+                "esso",
+                "gas bar",
+                "costco gas",
+                "husky",
+                "mobil",
+                "sunoco",
+                "chevron",
+                "7-eleven gas",
+                "co-op gas"
+            ],
+            "examples": [
+                {
+                    "vendor": "Shell",
+                    "occurrences": 1158
+                },
+                {
+                    "vendor": "Petro-canada",
+                    "occurrences": 552
+                },
+                {
+                    "vendor": "Esso",
+                    "occurrences": 562
+                },
+                {
+                    "vendor": "GAS BAR #3809",
+                    "occurrences": 150
+                }
+            ]
+        },
+        "6415": {
+            "name": "Client meals and entertainment",
+            "keywords": [
+                "tim hortons",
+                "starbucks",
+                "mcdonald",
+                "subway",
+                "safeway",
+                "save on foods",
+                "sobeys",
+                "restaurant",
+                "coffee",
+                "skipthedishes"
+            ],
+            "examples": [
+                {
+                    "vendor": "TIM Hortons",
+                    "occurrences": 2140
+                },
+                {
+                    "vendor": "Mcdonald's",
+                    "occurrences": 1111
+                },
+                {
+                    "vendor": "Starbucks",
+                    "occurrences": 711
+                },
+                {
+                    "vendor": "Skipthedishes",
+                    "occurrences": 394
+                }
+            ]
+        },
+        "9200": {
+            "name": "Travel and accomodations",
+            "keywords": [
+                "uber",
+                "lyft",
+                "westjet",
+                "air canada",
+                "hotel",
+                "airbnb",
+                "taxi",
+                "flight",
+                "airline",
+                "avis",
+                "budget rent"
+            ],
+            "examples": [
+                {
+                    "vendor": "Uber Canada/ubertrip Toronto ON",
+                    "occurrences": 675
+                },
+                {
+                    "vendor": "Skipthedishes",
+                    "occurrences": 3183
+                },
+                {
+                    "vendor": "Westjet",
+                    "occurrences": 580
+                },
+                {
+                    "vendor": "Uber",
+                    "occurrences": 961
+                }
+            ]
+        },
+        "6600": {
+            "name": "Credit card charges",
+            "keywords": [
+                "plan fee",
+                "monthly",
+                "service charge",
+                "annual fee",
+                "overlimit",
+                "e-transfer",
+                "abm network",
+                "send",
+                "cash adv"
+            ],
+            "examples": [
+                {
+                    "vendor": "Monthly",
+                    "occurrences": 2733
+                },
+                {
+                    "vendor": "Plan Fee",
+                    "occurrences": 1459
+                },
+                {
+                    "vendor": "Send",
+                    "occurrences": 6063
+                },
+                {
+                    "vendor": "Annual FEE",
+                    "occurrences": 723
+                }
+            ]
+        },
+        "7700": {
+            "name": "Interest and bank charges",
+            "keywords": [
+                "interest",
+                "purchase interest",
+                "cash advance interest",
+                "overdraft",
+                "abm withdrawal"
+            ],
+            "examples": [
+                {
+                    "vendor": "Purchase Interest",
+                    "occurrences": 2823
+                },
+                {
+                    "vendor": "Cash Advance Interest",
+                    "occurrences": 909
+                },
+                {
+                    "vendor": "Interest",
+                    "occurrences": 670
+                },
+                {
+                    "vendor": "Other Bank ABM Withdrawal",
+                    "occurrences": 534
+                }
+            ]
+        },
+        "1290": {
+            "name": "Deposit",
+            "keywords": [
+                "deposit",
+                "mobile deposit",
+                "direct deposit",
+                "payroll",
+                "transfer in"
+            ],
+            "examples": [
+                {
+                    "vendor": "Deposit",
+                    "occurrences": 1457
+                },
+                {
+                    "vendor": "Mobile Deposit",
+                    "occurrences": 832
+                },
+                {
+                    "vendor": "Mobile",
+                    "occurrences": 613
+                }
+            ]
+        },
+        "2149": {
+            "name": "GST payments to Revenue Canada",
+            "keywords": [
+                "payment - thank you",
+                "payment thank you",
+                "gst payment",
+                "revenue canada",
+                "cra"
+            ],
+            "examples": [
+                {
+                    "vendor": "Payment - Thank YOU / Paiement - Merci",
+                    "occurrences": 11195
+                },
+                {
+                    "vendor": "Payment Thank You/paiement Merci",
+                    "occurrences": 1517
+                }
+            ]
+        },
+        "1760": {
+            "name": "Office Furniture and equipment",
+            "keywords": [
+                "home depot",
+                "ikea",
+                "staples",
+                "office depot",
+                "desk",
+                "chair"
+            ],
+            "examples": [
+                {
+                    "vendor": "THE Home Depot",
+                    "occurrences": 3016
+                },
+                {
+                    "vendor": "THE Home Depot #7067 Calgary AB",
+                    "occurrences": 722
+                },
+                {
+                    "vendor": "THE Home Depot #7250 Calgary",
+                    "occurrences": 562
+                }
+            ]
+        },
+        "1857": {
+            "name": "Computer software",
+            "keywords": [
+                "adobe",
+                "microsoft",
+                "software",
+                "apple.com/bill",
+                "netflix",
+                "spotify",
+                "quickbooks"
+            ],
+            "examples": [
+                {
+                    "vendor": "Apple.com/bill",
+                    "occurrences": 3667
+                },
+                {
+                    "vendor": "Netflix.com",
+                    "occurrences": 716
+                },
+                {
+                    "vendor": "Intuit *qbooks Online",
+                    "occurrences": 366
+                }
+            ]
+        },
+        "1260": {
+            "name": "Agreement of sale",
+            "keywords": [
+                "point of sale",
+                "pos",
+                "purchase"
+            ],
+            "examples": [
+                {
+                    "vendor": "Point Of Sale Purch",
+                    "occurrences": 13627
+                }
+            ]
+        },
+        "2652": {
+            "name": "Shareholder loan #2 -withdrawals/transfers",
+            "keywords": [
+                "transfer to",
+                "withdrawal",
+                "shareholder"
+            ],
+            "examples": [
+                {
+                    "vendor": "Transfer TO",
+                    "occurrences": 2972
+                }
+            ]
+        },
+        "5355": {
+            "name": "Closing inventory",
+            "keywords": [
+                "closing totals",
+                "inventory"
+            ],
+            "examples": [
+                {
+                    "vendor": "Closing Totals",
+                    "occurrences": 2597
+                }
+            ]
+        },
+        "3640": {
+            "name": "Dividends paid-taxable",
+            "keywords": [
+                "dividend"
+            ],
+            "examples": [
+                {
+                    "vendor": "Dividends",
+                    "occurrences": 557
+                }
+            ]
+        },
+        "8720": {
+            "name": "Rent",
+            "keywords": [
+                "rent",
+                "lease",
+                "rental"
+            ],
+            "examples": [
+                {
+                    "vendor": "Rent",
+                    "occurrences": 78
+                }
+            ]
+        },
+        "1500": {
+            "name": "Land",
+            "keywords": [
+                "alberta land titles",
+                "land registry",
+                "property"
+            ],
+            "examples": [
+                {
+                    "vendor": "Alberta Land Titles Spatiedmonton",
+                    "occurrences": 446
+                }
+            ]
+        }
+    },
+    "fuzzy_matching_rules": {
+        "shell_variants": [
+            "shell c",
+            "shell #",
+            "shell gas"
+        ],
+        "tim_hortons_variants": [
+            "tim hortons #",
+            "tims",
+            "tim horton"
+        ],
+        "uber_variants": [
+            "uber trip",
+            "uber canada",
+            "uber *"
+        ],
+        "home_depot_variants": [
+            "home depot #",
+            "homedepot",
+            "the home depot"
+        ],
+        "mcdonald_variants": [
+            "mcdonald's #",
+            "mcdonalds",
+            "mcdonald"
+        ],
+        "starbucks_variants": [
+            "starbucks #",
+            "sbux"
+        ],
+        "gas_bar_variants": [
+            "gas bar #",
+            "gasbar",
+            "petro",
+            "esso"
+        ],
+        "skip_variants": [
+            "skipthedishes",
+            "skip the dishes",
+            "skip"
+        ],
+        "apple_variants": [
+            "apple.com/bill",
+            "apl* itunes",
+            "apple pay",
+            "apple #"
+        ],
+        "netflix_variants": [
+            "netflix.com",
+            "netflix inc"
+        ]
+    },
+    "confidence_thresholds": {
+        "exact_match": 1.0,
+        "high_confidence": 0.8,
+        "medium_confidence": 0.5,
+        "low_confidence": 0.1
+    },
+    "uncategorized_patterns": {
+        "high_volume_uncategorized": [
+            {
+                "vendor": "Unknown",
+                "occurrences": 26630
+            },
+            {
+                "vendor": "Brwsr",
+                "occurrences": 15205
+            },
+            {
+                "vendor": "E-transfer",
+                "occurrences": 2815
+            },
+            {
+                "vendor": "Calgparkauth",
+                "occurrences": 1033
+            },
+            {
+                "vendor": "Rogers",
+                "occurrences": 366
+            },
+            {
+                "vendor": "Shaw Cablesystems",
+                "occurrences": 490
+            },
+            {
+                "vendor": "Calgary Transit",
+                "occurrences": 354
+            },
+            {
+                "vendor": "Amzn",
+                "occurrences": 450
+            },
+            {
+                "vendor": "Stripe",
+                "occurrences": 446
+            }
+        ]
+    }
+}
