@@ -16,7 +16,8 @@ export function FilterToolbar({
     onToggleSettings,
     onToggleReportPanel,
     onToggleUtilityBar,
-    onExport
+    onExport,
+    isDetailMode = false  // NEW: Controls visibility of panel toggles
 }) {
     const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -132,23 +133,27 @@ export function FilterToolbar({
                     <i className="ph ph-funnel text-base text-[#64748b]"></i>
                 </button>
 
-                {/* Report Panel Toggle Button */}
-                <button
-                    onClick={onToggleReportPanel}
-                    className="relative px-2.5 py-2 border border-[#e2e8f0] bg-white rounded-md cursor-pointer flex items-center gap-1.5 transition-colors hover:bg-[#f1f5f9]"
-                    title="Toggle Live Report Panel"
-                >
-                    <i className="ph ph-chart-bar text-base text-[#64748b]"></i>
-                </button>
+                {/* Report Panel Toggle - DETAIL MODE ONLY */}
+                {isDetailMode && (
+                    <button
+                        onClick={onToggleReportPanel}
+                        className="relative px-2.5 py-2 border border-[#e2e8f0] bg-white rounded-md cursor-pointer flex items-center gap-1.5 transition-colors hover:bg-[#f1f5f9]"
+                        title="Toggle Live Report Panel"
+                    >
+                        <i className="ph ph-chart-bar text-base text-[#64748b]"></i>
+                    </button>
+                )}
 
-                {/* Utility Bar (Dashboard/Stats) */}
-                <button
-                    onClick={onToggleUtilityBar}
-                    className="px-2.5 py-2 border border-[#e2e8f0] bg-white rounded-md cursor-pointer flex items-center gap-1 transition-colors hover:bg-[#f1f5f9]"
-                    title="Utility Bar (Dashboard & Stats)"
-                >
-                    <i className="ph ph-sidebar text-base text-[#64748b]"></i>
-                </button>
+                {/* Utility Bar - DETAIL MODE ONLY */}
+                {isDetailMode && (
+                    <button
+                        onClick={onToggleUtilityBar}
+                        className="px-2.5 py-2 border border-[#e2e8f0] bg-white rounded-md cursor-pointer flex items-center gap-1 transition-colors hover:bg-[#f1f5f9]"
+                        title="Utility Bar (Dashboard & Stats)"
+                    >
+                        <i className="ph ph-sidebar text-base text-[#64748b]"></i>
+                    </button>
+                )}
 
                 {/* Settings Gear */}
                 <button

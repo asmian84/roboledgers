@@ -1165,6 +1165,43 @@ export function TransactionsTable({
 
     const parentRef = useRef(null);
 
+    // DETAIL MODE DETECTION: Nav collapsed = Detail mode ON
+    const [isDetailMode, setIsDetailMode] = useState(
+        () => window.UI_STATE?.panelState === 'collapsed'
+    );
+
+    // Track mode changes by polling UI_STATE.panelState
+    useEffect(() => {
+        const checkModeChange = () => {
+            const newDetailMode = window.UI_STATE?.panelState === 'collapsed';
+            if (newDetailMode !== isDetailMode) {
+                setIsDetailMode(newDetailMode);
+            }
+        };
+
+        const interval = setInterval(checkModeChange, 200);
+        return () => clearInterval(interval);
+    }, [isDetailMode]);
+
+    // Reset panel when exiting detail mode
+    useEffect(() => {
+        if (!isDetailMode && activePanel) {
+            setActivePanel(null); // Close panel when leaving detail mode
+        }
+    }, [isDetailMode]);
+
+    // Auto-scroll to FilterToolbar when entering detail mode
+    useEffect(() => {
+        if (isDetailMode && parentRef.current) {
+            setTimeout(() => {
+                const stickyToolbar = parentRef.current?.querySelector('[style*="sticky"]');
+                if (stickyToolbar) {
+                    stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        }
+    }, [isDetailMode]);
+
     const rowVirtualizer = useVirtualizer({
         count: table.getRowModel().rows.length,
         getScrollElement: () => parentRef.current,
@@ -1194,14 +1231,14 @@ export function TransactionsTable({
             {/* 77% GRID SECTION */}
             <div
                 style={{
-                    width: activePanel ? '77%' : '100%',
+                    width: isDetailMode && activePanel ? '77%' : '100%',  // Detail mode: 77% if panel open, else 100%
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
                     transition: 'width 0.3s ease',
                     backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'  // ← FIX: Prevent width bleeding
+                    boxSizing: 'border-box'  // FIX: Prevent width bleeding
                 }}
             >
                 {/* Batch Action Bar */}
@@ -1250,276 +1287,259 @@ export function TransactionsTable({
                     )}
 
                     {/* Filter Toolbar - STICKY within scroll container */}
-                    <div style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#ffffff' }}>
-                        <FilterToolbar
-                            refPrefix={window.UI_STATE?.refPrefix || 'CHQ1'}
-                            searchQuery={window.UI_STATE?.searchQuery || ''}
-                            selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
-                            accounts={window.RoboLedger?.Accounts?.getAll() || []}
-                            onRefPrefixChange={(value) => window.updateRefPrefix?.(value)}
-                            onSearchChange={(value) => window.handleSearch?.(value)}
-                            onAccountChange={(value) => window.switchAccount?.(value)}
-                            onToggleFilters={() => window.toggleGridFilters?.()}
-                            onToggleSettings={() => window.toggleSettings?.(true)}
-                            onToggleReportPanel={() => {
-                                const newPanel = activePanel === 'report' ? null : 'report';
-                                setActivePanel(newPanel);
+                                setTimeout(() => {
+                                    const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
+                    if (stickyToolbar) {
+                        stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    }
+                                }, 350); // Wait for transition
+                            }
+                        }}
+                    onToggleUtilityBar={() => {
+                        const newPanel = activePanel === 'utility' ? null : 'utility';
+                        setActivePanel(newPanel);
 
-                                // Auto-scroll to FilterToolbar (hide pink box)
-                                if (newPanel && parentRef.current) {
-                                    setTimeout(() => {
-                                        const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
-                                        if (stickyToolbar) {
-                                            stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                        }
-                                    }, 350); // Wait for transition
+                        // Auto-scroll to FilterToolbar (hide pink box)
+                        if (newPanel && parentRef.current) {
+                            setTimeout(() => {
+                                const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
+                                if (stickyToolbar) {
+                                    stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                 }
-                            }}
-                            onToggleUtilityBar={() => {
-                                const newPanel = activePanel === 'utility' ? null : 'utility';
-                                setActivePanel(newPanel);
+                            }, 350); // Wait for transition
+                        }
+                    }}
+                    onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
+                    />
+                </div>
 
-                                // Auto-scroll to FilterToolbar (hide pink box)
-                                if (newPanel && parentRef.current) {
-                                    setTimeout(() => {
-                                        const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
-                                        if (stickyToolbar) {
-                                            stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                        }
-                                    }, 350); // Wait for transition
-                                }
+                {/* Grid Header */}
+                <div className="flex bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-[44px] z-20">
+                    {table.getFlatHeaders().map(header => (
+                        <div
+                            key={header.id}
+                            className={`relative flex items-center group select-none ${getStickyClass(header.id)} ${header.column.getCanSort() ? 'cursor-pointer' : ''}`}
+                            style={{
+                                width: header.id === 'description' ? undefined : header.getSize(),
+                                flex: header.id === 'description' ? '1 1 0' : undefined,
+                                minWidth: header.id === 'description' ? '250px' : undefined,
+                                flexShrink: 0,
+                                height: GRID_TOKENS.headerHeight,
+                                // Custom padding per column (match cell padding)
+                                padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
+                                    header.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
+                                        `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
+                                fontSize: GRID_TOKENS.headerFontSize,
+                                fontWeight: GRID_TOKENS.headerFontWeight,
+                                letterSpacing: GRID_TOKENS.headerLetterSpacing,
+                                color: GRID_TOKENS.headerColor,
+                                textTransform: 'uppercase',
+                                borderRight: `1px solid ${GRID_TOKENS.borderColor}`  // Vertical dividers
                             }}
-                            onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
-                        />
-                    </div>
+                            onClick={header.column.getToggleSortingHandler()}
+                        >
+                            <div className="flex items-center gap-2 truncate">
+                                {flexRender(header.column.columnDef.header, header.getContext())}
+                                {{
+                                    asc: <i className="ph ph-caret-up text-[#3b82f6]"></i>,
+                                    desc: <i className="ph ph-caret-down text-[#3b82f6]"></i>,
+                                }[header.column.getIsSorted()] ?? null}
+                            </div>
+                            {header.column.getCanResize() && (
+                                <div
+                                    onMouseDown={header.getResizeHandler()}
+                                    onTouchStart={header.getResizeHandler()}
+                                    className={`absolute right-0 top-0 h-full w-1 bg-[#3b82f6] opacity-0 group-hover:opacity-100 cursor-col-resize z-30 transition-opacity ${header.column.getIsResizing() ? 'opacity-100' : ''}`}
+                                />
+                            )}
+                        </div>
+                    ))}
+                </div>
 
-                    {/* Grid Header */}
-                    <div className="flex bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-[44px] z-20">
+                {/* Inline Filters Row - Collapsible */}
+                {showFilters && (
+                    <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[88px] z-19" style={{ transition: 'all 0.2s ease' }}>
                         {table.getFlatHeaders().map(header => (
                             <div
-                                key={header.id}
-                                className={`relative flex items-center group select-none ${getStickyClass(header.id)} ${header.column.getCanSort() ? 'cursor-pointer' : ''}`}
+                                key={`filter-${header.id}`}
+                                className={`relative flex items-center ${getStickyClass(header.id)}`}
                                 style={{
                                     width: header.id === 'description' ? undefined : header.getSize(),
                                     flex: header.id === 'description' ? '1 1 0' : undefined,
                                     minWidth: header.id === 'description' ? '250px' : undefined,
                                     flexShrink: 0,
-                                    height: GRID_TOKENS.headerHeight,
-                                    // Custom padding per column (match cell padding)
-                                    padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
-                                        header.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                            `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
-                                    fontSize: GRID_TOKENS.headerFontSize,
-                                    fontWeight: GRID_TOKENS.headerFontWeight,
-                                    letterSpacing: GRID_TOKENS.headerLetterSpacing,
-                                    color: GRID_TOKENS.headerColor,
-                                    textTransform: 'uppercase',
-                                    borderRight: `1px solid ${GRID_TOKENS.borderColor}`  // Vertical dividers
+                                    height: '40px',
+                                    padding: header.id === 'select' ? '0 4px 0 6px' :
+                                        header.id === 'balance' ? '0 6px 0 2px' :
+                                            `0 ${GRID_TOKENS.rowPaddingX}`,
+                                    borderRight: `1px solid ${GRID_TOKENS.borderColor}`
                                 }}
-                                onClick={header.column.getToggleSortingHandler()}
                             >
-                                <div className="flex items-center gap-2 truncate">
-                                    {flexRender(header.column.columnDef.header, header.getContext())}
-                                    {{
-                                        asc: <i className="ph ph-caret-up text-[#3b82f6]"></i>,
-                                        desc: <i className="ph ph-caret-down text-[#3b82f6]"></i>,
-                                    }[header.column.getIsSorted()] ?? null}
-                                </div>
-                                {header.column.getCanResize() && (
-                                    <div
-                                        onMouseDown={header.getResizeHandler()}
-                                        onTouchStart={header.getResizeHandler()}
-                                        className={`absolute right-0 top-0 h-full w-1 bg-[#3b82f6] opacity-0 group-hover:opacity-100 cursor-col-resize z-30 transition-opacity ${header.column.getIsResizing() ? 'opacity-100' : ''}`}
-                                    />
-                                )}
+                                {/* Render appropriate filter input based on column */}
+                                {header.column.getCanFilter() && (() => {
+                                    const columnId = header.id;
+                                    if (columnId === 'description' || columnId === 'ref') {
+                                        return <TextFilter column={header.column} />;
+                                    } else if (columnId === 'category') {
+                                        return <CategoryFilter column={header.column} />;
+                                    } else if (columnId === 'debit' || columnId === 'credit' || columnId === 'balance') {
+                                        return <AmountFilter column={header.column} />;
+                                    } else if (columnId === 'date') {
+                                        return <TextFilter column={header.column} />;
+                                    }
+                                    return null;
+                                })()}
                             </div>
                         ))}
                     </div>
+                )}
 
-                    {/* Inline Filters Row - Collapsible */}
-                    {showFilters && (
-                        <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[88px] z-19" style={{ transition: 'all 0.2s ease' }}>
-                            {table.getFlatHeaders().map(header => (
-                                <div
-                                    key={`filter-${header.id}`}
-                                    className={`relative flex items-center ${getStickyClass(header.id)}`}
-                                    style={{
-                                        width: header.id === 'description' ? undefined : header.getSize(),
-                                        flex: header.id === 'description' ? '1 1 0' : undefined,
-                                        minWidth: header.id === 'description' ? '250px' : undefined,
-                                        flexShrink: 0,
-                                        height: '40px',
-                                        padding: header.id === 'select' ? '0 4px 0 6px' :
-                                            header.id === 'balance' ? '0 6px 0 2px' :
-                                                `0 ${GRID_TOKENS.rowPaddingX}`,
-                                        borderRight: `1px solid ${GRID_TOKENS.borderColor}`
-                                    }}
-                                >
-                                    {/* Render appropriate filter input based on column */}
-                                    {header.column.getCanFilter() && (() => {
-                                        const columnId = header.id;
-                                        if (columnId === 'description' || columnId === 'ref') {
-                                            return <TextFilter column={header.column} />;
-                                        } else if (columnId === 'category') {
-                                            return <CategoryFilter column={header.column} />;
-                                        } else if (columnId === 'debit' || columnId === 'credit' || columnId === 'balance') {
-                                            return <AmountFilter column={header.column} />;
-                                        } else if (columnId === 'date') {
-                                            return <TextFilter column={header.column} />;
-                                        }
-                                        return null;
-                                    })()}
-                                </div>
-                            ))}
+
+                {/* Virtualized Body */}
+                <div className="flex-1 bg-white">
+                    {data.length > 0 ? (
+                        <div
+                            className="relative w-full"
+                            style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                        >
+                            {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                                const row = table.getRowModel().rows[virtualRow.index];
+                                const isSelected = row.getIsSelected();
+
+                                // Determine row background color from theme
+                                const rowIndex = virtualRow.index;
+                                let rowBg;
+                                if (isSelected) {
+                                    rowBg = GRID_TOKENS.selectedRowBg || '#eff6ff';
+                                } else if (GRID_TOKENS.rowColors && Array.isArray(GRID_TOKENS.rowColors)) {
+                                    // Rainbow mode: cycle through color palette
+                                    rowBg = GRID_TOKENS.rowColors[rowIndex % GRID_TOKENS.rowColors.length];
+                                } else {
+                                    // Standard alternating (2 colors)
+                                    rowBg = rowIndex % 2 === 0 ? GRID_TOKENS.rowBg : GRID_TOKENS.rowBgAlt;
+                                }
+                                const hoverBg = GRID_TOKENS.hoverBg || '#f8fafc';
+
+                                return (
+                                    <div
+                                        key={row.id}
+                                        className="flex absolute top-0 left-0 w-full transition-colors group"
+                                        style={{
+                                            height: `${GRID_TOKENS.rowHeight}px`,
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                            borderBottom: `1px solid ${GRID_TOKENS.borderColor}`,
+                                            backgroundColor: rowBg
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = rowBg}
+                                    >
+                                        {row.getVisibleCells().map(cell => (
+                                            <div
+                                                key={cell.id}
+                                                className={`flex items-center ${cell.column.id === 'category' ? 'overflow-visible' : 'overflow-hidden'} ${getStickyClass(cell.column.id)}`}
+                                                style={{
+                                                    width: cell.column.id === 'description' ? undefined : cell.column.getSize(),
+                                                    flex: cell.column.id === 'description' ? '1 1 0' : undefined,
+                                                    minWidth: cell.column.id === 'description' ? '250px' : undefined,
+                                                    flexShrink: 0,
+                                                    // Custom padding per column - flush left
+                                                    padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
+                                                        cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
+                                                            '0 8px 0 2px',                               // Others: minimal left, standard right
+                                                    borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
+                                                    position: cell.column.id === 'category' ? 'relative' : undefined
+                                                }}
+                                            >
+                                                <div className="w-full text-left">
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full py-20">
+                            <i className="ph ph-database text-[#cbd5e1] text-[64px] mb-4"></i>
+                            <h3 className="text-[16px] font-semibold text-[#64748b] mb-2">No transactions found</h3>
+                            <p className="text-[13px] text-[#94a3b8]">Import a bank statement to get started</p>
                         </div>
                     )}
-
-
-                    {/* Virtualized Body */}
-                    <div className="flex-1 bg-white">
-                        {data.length > 0 ? (
-                            <div
-                                className="relative w-full"
-                                style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
-                            >
-                                {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                                    const row = table.getRowModel().rows[virtualRow.index];
-                                    const isSelected = row.getIsSelected();
-
-                                    // Determine row background color from theme
-                                    const rowIndex = virtualRow.index;
-                                    let rowBg;
-                                    if (isSelected) {
-                                        rowBg = GRID_TOKENS.selectedRowBg || '#eff6ff';
-                                    } else if (GRID_TOKENS.rowColors && Array.isArray(GRID_TOKENS.rowColors)) {
-                                        // Rainbow mode: cycle through color palette
-                                        rowBg = GRID_TOKENS.rowColors[rowIndex % GRID_TOKENS.rowColors.length];
-                                    } else {
-                                        // Standard alternating (2 colors)
-                                        rowBg = rowIndex % 2 === 0 ? GRID_TOKENS.rowBg : GRID_TOKENS.rowBgAlt;
-                                    }
-                                    const hoverBg = GRID_TOKENS.hoverBg || '#f8fafc';
-
-                                    return (
-                                        <div
-                                            key={row.id}
-                                            className="flex absolute top-0 left-0 w-full transition-colors group"
-                                            style={{
-                                                height: `${GRID_TOKENS.rowHeight}px`,
-                                                transform: `translateY(${virtualRow.start}px)`,
-                                                borderBottom: `1px solid ${GRID_TOKENS.borderColor}`,
-                                                backgroundColor: rowBg
-                                            }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = rowBg}
-                                        >
-                                            {row.getVisibleCells().map(cell => (
-                                                <div
-                                                    key={cell.id}
-                                                    className={`flex items-center ${cell.column.id === 'category' ? 'overflow-visible' : 'overflow-hidden'} ${getStickyClass(cell.column.id)}`}
-                                                    style={{
-                                                        width: cell.column.id === 'description' ? undefined : cell.column.getSize(),
-                                                        flex: cell.column.id === 'description' ? '1 1 0' : undefined,
-                                                        minWidth: cell.column.id === 'description' ? '250px' : undefined,
-                                                        flexShrink: 0,
-                                                        // Custom padding per column - flush left
-                                                        padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
-                                                            cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                                                '0 8px 0 2px',                               // Others: minimal left, standard right
-                                                        borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
-                                                        position: cell.column.id === 'category' ? 'relative' : undefined
-                                                    }}
-                                                >
-                                                    <div className="w-full text-left">
-                                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full py-20">
-                                <i className="ph ph-database text-[#cbd5e1] text-[64px] mb-4"></i>
-                                <h3 className="text-[16px] font-semibold text-[#64748b] mb-2">No transactions found</h3>
-                                <p className="text-[13px] text-[#94a3b8]">Import a bank statement to get started</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* EXPERIMENTAL: Audit Sidebar */}
-                    <AuditSidebar
-                        isOpen={auditSidebarOpen}
-                        onClose={() => {
-                            setAuditSidebarOpen(false);
-                            setSelectedAuditTransaction(null);
-                        }}
-                        transaction={selectedAuditTransaction}
-                    />
                 </div>
 
-                {/* 23% SIDE PANEL */}
-                {activePanel && (
-                    <div
-                        style={{
-                            width: '23%',
-                            height: '100%',
-                            borderLeft: '2px solid #e5e7eb',
-                            backgroundColor: '#ffffff',
-                            overflow: 'auto',
-                            padding: '16px',
-                            boxSizing: 'border-box',
-                            boxShadow: '-2px 0 8px rgba(0, 0, 0, 0.05)'
-                        }}
-                    >
-                        {/* Close Button */}
-                        <button
-                            onClick={() => setActivePanel(null)}
-                            style={{
-                                position: 'absolute',
-                                top: '16px',
-                                right: '16px',
-                                padding: '8px',
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: '#6b7280',
-                                borderRadius: '8px',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.target.style.backgroundColor = '#f3f4f6';
-                                e.target.style.color = '#374151';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.target.style.backgroundColor = 'transparent';
-                                e.target.style.color = '#6b7280';
-                            }}
-                            title="Close panel"
-                        >
-                            <i className="ph ph-x" style={{ fontSize: '20px' }}></i>
-                        </button>
-
-                        {/* Panel Content */}
-                        {activePanel === 'utility' && <UtilityBar transactions={data} />}
-                        {activePanel === 'report' && (
-                            <LiveReportPanel
-                                reportType="trial-balance"
-                                transactions={data}
-                                selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
-                                onAccountClick={(accountCode) => {
-                                    // Set category column filter
-                                    setColumnFilters([{ id: 'category', value: accountCode }]);
-                                }}
-                                onClearFilter={() => {
-                                    // Clear category column filter
-                                    setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
-                                }}
-                            />
-                        )}
-                    </div>
-                )}
+                {/* EXPERIMENTAL: Audit Sidebar */}
+                <AuditSidebar
+                    isOpen={auditSidebarOpen}
+                    onClose={() => {
+                        setAuditSidebarOpen(false);
+                        setSelectedAuditTransaction(null);
+                    }}
+                    transaction={selectedAuditTransaction}
+                />
             </div>
-            );
+
+            {/* 23% SIDE PANEL - DETAIL MODE ONLY */}
+            {isDetailMode && activePanel && (
+                <div
+                    style={{
+                        width: '23%',
+                        height: '100%',
+                        borderLeft: '2px solid #e5e7eb',
+                        backgroundColor: '#ffffff',
+                        overflow: 'auto',
+                        padding: '16px',
+                        boxSizing: 'border-box',
+                        boxShadow: '-2px 0 8px rgba(0, 0, 0, 0.05)'
+                    }}
+                >
+                    {/* Close Button */}
+                    <button
+                        onClick={() => setActivePanel(null)}
+                        style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            padding: '8px',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#6b7280',
+                            borderRadius: '8px',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = '#f3f4f6';
+                            e.target.style.color = '#374151';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.color = '#6b7280';
+                        }}
+                        title="Close panel"
+                    >
+                        <i className="ph ph-x" style={{ fontSize: '20px' }}></i>
+                    </button>
+
+                    {/* Panel Content */}
+                    {activePanel === 'utility' && <UtilityBar transactions={data} />}
+                    {activePanel === 'report' && (
+                        <LiveReportPanel
+                            reportType="trial-balance"
+                            transactions={data}
+                            selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
+                            onAccountClick={(accountCode) => {
+                                // Set category column filter
+                                setColumnFilters([{ id: 'category', value: accountCode }]);
+                            }}
+                            onClearFilter={() => {
+                                // Clear category column filter
+                                setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
+                            }}
+                        />
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
