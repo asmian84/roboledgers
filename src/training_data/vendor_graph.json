@@ -1,0 +1,421 @@
+{
+    "nodes": [
+        {
+            "id": "cat_5330",
+            "type": "category",
+            "label": "5330: Fuel and Oil",
+            "color": "#fbbf24"
+        },
+        {
+            "id": "cat_6415",
+            "type": "category",
+            "label": "6415: Client Meals",
+            "color": "#3b82f6"
+        },
+        {
+            "id": "cat_9200",
+            "type": "category",
+            "label": "9200: Travel",
+            "color": "#6366f1"
+        },
+        {
+            "id": "cat_6600",
+            "type": "category",
+            "label": "6600: Credit Card Charges",
+            "color": "#ef4444"
+        },
+        {
+            "id": "cat_7700",
+            "type": "category",
+            "label": "7700: Interest & Bank Charges",
+            "color": "#dc2626"
+        },
+        {
+            "id": "cat_1290",
+            "type": "category",
+            "label": "1290: Deposit",
+            "color": "#10b981"
+        },
+        {
+            "id": "cat_2149",
+            "type": "category",
+            "label": "2149: GST Payments",
+            "color": "#8b5cf6"
+        },
+        {
+            "id": "cat_1760",
+            "type": "category",
+            "label": "1760: Office Furniture",
+            "color": "#f59e0b"
+        },
+        {
+            "id": "cat_1857",
+            "type": "category",
+            "label": "1857: Computer Software",
+            "color": "#06b6d4"
+        },
+        {
+            "id": "cat_1260",
+            "type": "category",
+            "label": "1260: Agreement of Sale",
+            "color": "#ec4899"
+        },
+        {
+            "id": "cat_2652",
+            "type": "category",
+            "label": "2652: Shareholder Loan",
+            "color": "#a855f7"
+        },
+        {
+            "id": "cat_5355",
+            "type": "category",
+            "label": "5355: Closing Inventory",
+            "color": "#14b8a6"
+        },
+        {
+            "id": "v_shell",
+            "type": "vendor",
+            "label": "Shell",
+            "weight": 1158
+        },
+        {
+            "id": "v_petro",
+            "type": "vendor",
+            "label": "Petro-Canada",
+            "weight": 552
+        },
+        {
+            "id": "v_esso",
+            "type": "vendor",
+            "label": "Esso",
+            "weight": 562
+        },
+        {
+            "id": "v_gasbar",
+            "type": "vendor",
+            "label": "Gas Bar",
+            "weight": 150
+        },
+        {
+            "id": "v_timhortons",
+            "type": "vendor",
+            "label": "Tim Hortons",
+            "weight": 2140
+        },
+        {
+            "id": "v_starbucks",
+            "type": "vendor",
+            "label": "Starbucks",
+            "weight": 711
+        },
+        {
+            "id": "v_mcdonalds",
+            "type": "vendor",
+            "label": "McDonald's",
+            "weight": 1111
+        },
+        {
+            "id": "v_subway",
+            "type": "vendor",
+            "label": "Subway",
+            "weight": 374
+        },
+        {
+            "id": "v_skip",
+            "type": "vendor",
+            "label": "SkipTheDishes",
+            "weight": 3183
+        },
+        {
+            "id": "v_uber",
+            "type": "vendor",
+            "label": "Uber",
+            "weight": 1636
+        },
+        {
+            "id": "v_westjet",
+            "type": "vendor",
+            "label": "WestJet",
+            "weight": 580
+        },
+        {
+            "id": "v_monthly",
+            "type": "vendor",
+            "label": "Monthly Fee",
+            "weight": 2733
+        },
+        {
+            "id": "v_planfee",
+            "type": "vendor",
+            "label": "Plan Fee",
+            "weight": 1459
+        },
+        {
+            "id": "v_annualfee",
+            "type": "vendor",
+            "label": "Annual Fee",
+            "weight": 723
+        },
+        {
+            "id": "v_send",
+            "type": "vendor",
+            "label": "Send",
+            "weight": 6063
+        },
+        {
+            "id": "v_purchaseint",
+            "type": "vendor",
+            "label": "Purchase Interest",
+            "weight": 2823
+        },
+        {
+            "id": "v_cashadvint",
+            "type": "vendor",
+            "label": "Cash Advance Interest",
+            "weight": 909
+        },
+        {
+            "id": "v_interest",
+            "type": "vendor",
+            "label": "Interest",
+            "weight": 670
+        },
+        {
+            "id": "v_overdraft",
+            "type": "vendor",
+            "label": "Overdraft",
+            "weight": 534
+        },
+        {
+            "id": "v_deposit",
+            "type": "vendor",
+            "label": "Deposit",
+            "weight": 1457
+        },
+        {
+            "id": "v_mobiledeposit",
+            "type": "vendor",
+            "label": "Mobile Deposit",
+            "weight": 832
+        },
+        {
+            "id": "v_gstpay",
+            "type": "vendor",
+            "label": "Payment - Thank You",
+            "weight": 11195
+        },
+        {
+            "id": "v_homedepot",
+            "type": "vendor",
+            "label": "Home Depot",
+            "weight": 3016
+        },
+        {
+            "id": "v_apple",
+            "type": "vendor",
+            "label": "Apple.com/bill",
+            "weight": 3667
+        },
+        {
+            "id": "v_netflix",
+            "type": "vendor",
+            "label": "Netflix",
+            "weight": 716
+        },
+        {
+            "id": "v_quickbooks",
+            "type": "vendor",
+            "label": "QuickBooks",
+            "weight": 366
+        },
+        {
+            "id": "v_pos",
+            "type": "vendor",
+            "label": "Point of Sale",
+            "weight": 13627
+        },
+        {
+            "id": "v_transferto",
+            "type": "vendor",
+            "label": "Transfer To",
+            "weight": 2972
+        }
+    ],
+    "edges": [
+        {
+            "source": "v_shell",
+            "target": "cat_5330",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_petro",
+            "target": "cat_5330",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_esso",
+            "target": "cat_5330",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_gasbar",
+            "target": "cat_5330",
+            "type": "CATEGORIZED_AS",
+            "confidence": 0.9
+        },
+        {
+            "source": "v_timhortons",
+            "target": "cat_6415",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_starbucks",
+            "target": "cat_6415",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_mcdonalds",
+            "target": "cat_6415",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_subway",
+            "target": "cat_6415",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_skip",
+            "target": "cat_6415",
+            "type": "CATEGORIZED_AS",
+            "confidence": 0.8
+        },
+        {
+            "source": "v_uber",
+            "target": "cat_9200",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_westjet",
+            "target": "cat_9200",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_monthly",
+            "target": "cat_6600",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_planfee",
+            "target": "cat_6600",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_annualfee",
+            "target": "cat_6600",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_send",
+            "target": "cat_6600",
+            "type": "CATEGORIZED_AS",
+            "confidence": 0.7
+        },
+        {
+            "source": "v_purchaseint",
+            "target": "cat_7700",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_cashadvint",
+            "target": "cat_7700",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_interest",
+            "target": "cat_7700",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_overdraft",
+            "target": "cat_7700",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_deposit",
+            "target": "cat_1290",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_mobiledeposit",
+            "target": "cat_1290",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_gstpay",
+            "target": "cat_2149",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_homedepot",
+            "target": "cat_1760",
+            "type": "CATEGORIZED_AS",
+            "confidence": 0.9
+        },
+        {
+            "source": "v_apple",
+            "target": "cat_1857",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_netflix",
+            "target": "cat_1857",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_quickbooks",
+            "target": "cat_1857",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        },
+        {
+            "source": "v_pos",
+            "target": "cat_1260",
+            "type": "CATEGORIZED_AS",
+            "confidence": 0.8
+        },
+        {
+            "source": "v_transferto",
+            "target": "cat_2652",
+            "type": "CATEGORIZED_AS",
+            "confidence": 1.0
+        }
+    ],
+    "metadata": {
+        "total_nodes": 50,
+        "total_edges": 29,
+        "total_transactions": 783124,
+        "graph_type": "vendor_categorization",
+        "schema_version": "1.0"
+    }
+}
