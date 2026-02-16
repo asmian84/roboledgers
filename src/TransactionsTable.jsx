@@ -1181,19 +1181,27 @@ export function TransactionsTable({
 
 
     return (
-        <div className={`flex h-full w-full bg-white relative ${activePanel ? 'split-pane-active' : 'flex-col'}`} style={{ scrollbarGutter: 'stable' }}>
-            {/* Main Grid Container - CRITICAL: This is the scrolling container with parentRef */}
+        <div 
+            style={{
+                display: 'flex',
+                flexDirection: 'row',
+                height: '100%',
+                width: '100%',
+                overflow: 'hidden',
+                backgroundColor: '#f9fafb'
+            }}
+        >
+            {/* 77% GRID SECTION */}
             <div
-                className="flex flex-col"
                 style={{
-                    flex: activePanel ? '0 1 auto' : 1,  // Don't grow when panel is open
-                    minWidth: 0,  // Allow flexbox to shrink below content size
-                    maxWidth: activePanel ? '77%' : '100%',  // Constrain to 77% when panel open
-                    width: activePanel ? '77%' : '100%',  // Explicit width when panel open
-                    overflowX: 'hidden',
-                    overflowY: 'auto'
+                    width: activePanel ? '77%' : '100%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    transition: 'width 0.3s ease',
+                    backgroundColor: '#ffffff'
                 }}
-                ref={parentRef}
             >
                 {/* Batch Action Bar */}
                 {Object.keys(rowSelection).length > 0 && (
@@ -1265,6 +1273,16 @@ export function TransactionsTable({
                     onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
                 />
 
+                {/* SCROLL CONTAINER with parentRef for virtualizer */}
+                <div
+                    ref={parentRef}
+                    style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        position: 'relative'
+                    }}
+                >
                 {/* Grid Header */}
                 <div className="flex bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-[44px] z-20">
                     {table.getFlatHeaders().map(header => (
@@ -1431,36 +1449,67 @@ export function TransactionsTable({
                 />
             </div>
 
-            {/* RESIZABLE PANEL SYSTEM: One panel, swap content based on activePanel */}
-            <ResizablePanel
-                isOpen={activePanel !== null}
-                onClose={() => setActivePanel(null)}
-                title={
-                    activePanel === 'utility' ? 'Dashboard & Stats' :
-                        activePanel === 'report' ? 'Live Trial Balance' :
-                            'Panel'
-                }
-                defaultWidth={441}
-                minWidth={350}
-                maxWidth={450}
-            >
-                {activePanel === 'utility' && <UtilityBar transactions={data} />}
-                {activePanel === 'report' && (
-                    <LiveReportPanel
-                        reportType="trial-balance"
-                        transactions={data}
-                        selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
-                        onAccountClick={(accountCode) => {
-                            // Set category column filter
-                            setColumnFilters([{ id: 'category', value: accountCode }]);
+            {/* 23% SIDE PANEL */}
+            {activePanel && (
+                <div 
+                    style={{
+                        width: '23%',
+                        height: '100%',
+                        borderLeft: '2px solid #e5e7eb',
+                        backgroundColor: '#ffffff',
+                        overflow: 'auto',
+                        padding: '16px',
+                        boxSizing: 'border-box',
+                        boxShadow: '-2px 0 8px rgba(0, 0, 0, 0.05)'
+                    }}
+                >
+                    {/* Close Button */}
+                    <button
+                        onClick={() => setActivePanel(null)}
+                        style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            padding: '8px',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#6b7280',
+                            borderRadius: '8px',
+                            transition: 'all 0.2s'
                         }}
-                        onClearFilter={() => {
-                            // Clear category column filter
-                            setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
+                        onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = '#f3f4f6';
+                            e.target.style.color = '#374151';
                         }}
-                    />
-                )}
-            </ResizablePanel>
+                        onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.color = '#6b7280';
+                        }}
+                        title="Close panel"
+                    >
+                        <i className="ph ph-x" style={{ fontSize: '20px' }}></i>
+                    </button>
+
+                    {/* Panel Content */}
+                    {activePanel === 'utility' && <UtilityBar transactions={data} />}
+                    {activePanel === 'report' && (
+                        <LiveReportPanel
+                            reportType="trial-balance"
+                            transactions={data}
+                            selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
+                            onAccountClick={(accountCode) => {
+                                // Set category column filter
+                                setColumnFilters([{ id: 'category', value: accountCode }]);
+                            }}
+                            onClearFilter={() => {
+                                // Clear category column filter
+                                setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
+                            }}
+                        />
+                    )}
+                </div>
+            )}
         </div>
     );
 }
