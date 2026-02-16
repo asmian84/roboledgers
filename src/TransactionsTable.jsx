@@ -1231,14 +1231,14 @@ export function TransactionsTable({
             {/* 77% GRID SECTION */}
             <div
                 style={{
-                    width: isDetailMode && activePanel ? '77%' : '100%',  // Detail mode: 77% if panel open, else 100%
+                    width: isDetailMode && activePanel ? '77%' : '100%',  // 77% only in detail mode with panel
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
                     transition: 'width 0.3s ease',
                     backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'  // FIX: Prevent width bleeding
+                    boxSizing: 'border-box'  // Prevent width bleeding
                 }}
             >
                 {/* Batch Action Bar */}
@@ -1287,29 +1287,40 @@ export function TransactionsTable({
                     )}
 
                     {/* Filter Toolbar - STICKY within scroll container */}
+                    <FilterToolbar
+                        showFilters={showFilters}
+                        onToggleFilters={() => setShowFilters(prev => !prev)}
+                        onToggleSettings={() => window.toggleSettings?.(true)}
+                        isDetailMode={isDetailMode}  // Pass mode to control toggle visibility
+                        onToggleReportPanel={() => {
+                            const newPanel = activePanel === 'report' ? null : 'report';
+                            setActivePanel(newPanel);
+
+                            // Auto-scroll to FilterToolbar (hide pink box)
+                            if (newPanel && parentRef.current) {
                                 setTimeout(() => {
                                     const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
-                    if (stickyToolbar) {
-                        stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    if (stickyToolbar) {
+                                        stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                     }
                                 }, 350); // Wait for transition
                             }
                         }}
-                    onToggleUtilityBar={() => {
-                        const newPanel = activePanel === 'utility' ? null : 'utility';
-                        setActivePanel(newPanel);
+                        onToggleUtilityBar={() => {
+                            const newPanel = activePanel === 'utility' ? null : 'utility';
+                            setActivePanel(newPanel);
 
-                        // Auto-scroll to FilterToolbar (hide pink box)
-                        if (newPanel && parentRef.current) {
-                            setTimeout(() => {
-                                const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
-                                if (stickyToolbar) {
-                                    stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                }
-                            }, 350); // Wait for transition
-                        }
-                    }}
-                    onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
+                            // Auto-scroll to FilterToolbar (hide pink box)
+                            if (newPanel && parentRef.current) {
+                                setTimeout(() => {
+                                    const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
+                                    if (stickyToolbar) {
+                                        stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    }
+                                }, 350); // Wait for transition
+                            }
+                        }}
+                        onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
                     />
                 </div>
 
