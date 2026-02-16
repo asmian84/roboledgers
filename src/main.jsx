@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { TransactionsTable } from './TransactionsTable';
+import { TransactionsTable } from './TransactionsTable2.jsx';  // TESTING EXPERIMENTAL VERSION
 import { ReportsPage } from './reports/ReportsPage';
 
 /**
