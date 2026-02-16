@@ -1228,52 +1228,7 @@ export function TransactionsTable({
                     </div>
                 )}
 
-                {/* Filter Toolbar - Sticky at top */}
-                <FilterToolbar
-                    refPrefix={window.UI_STATE?.refPrefix || 'CHQ1'}
-                    searchQuery={window.UI_STATE?.searchQuery || ''}
-                    selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
-                    accounts={window.RoboLedger?.Accounts?.getAll() || []}
-                    onRefPrefixChange={(value) => window.updateRefPrefix?.(value)}
-                    onSearchChange={(value) => window.handleSearch?.(value)}
-                    onAccountChange={(value) => window.switchAccount?.(value)}
-                    onToggleFilters={() => window.toggleGridFilters?.()}
-                    onToggleSettings={() => window.toggleSettings?.(true)}
-                    onToggleReportPanel={() => {
-                        const newPanel = activePanel === 'report' ? null : 'report';
-                        setActivePanel(newPanel);
-
-                        // Auto-scroll to hide header containers (like audit drawer)
-                        if (newPanel === 'report' && parentRef.current) {
-                            const headerContainers = parentRef.current.querySelector('.batch-action-bar, .reconciliation-container, .metadata-container');
-                            if (headerContainers) {
-                                setTimeout(() => {
-                                    parentRef.current.scrollTo({ top: 200, behavior: 'smooth' });
-                                }, 100);
-                            }
-                        }
-                    }}
-                    onToggleUtilityBar={() => {
-                        const newPanel = activePanel === 'utility' ? null : 'utility';
-                        setActivePanel(newPanel);
-
-                        // Auto-scroll to hide top cards and show only filter toolbar
-                        if (newPanel === 'utility' && parentRef.current) {
-                            setTimeout(() => {
-                                // Scroll past all header cards to show FilterToolbar at top
-                                const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
-                                let scrollAmount = 0;
-                                headerCards.forEach(card => {
-                                    scrollAmount += card.offsetHeight;
-                                });
-                                parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
-                            }, 100);
-                        }
-                    }}
-                    onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
-                />
-
-                {/* SCROLL CONTAINER with parentRef for virtualizer */}
+                {/* SCROLL CONTAINER - wraps metadata + toolbar + grid */}
                 <div
                     ref={parentRef}
                     style={{
@@ -1283,6 +1238,40 @@ export function TransactionsTable({
                         position: 'relative'
                     }}
                 >
+                    {/* Metadata Cards - scrolls away */}
+                    {!isLoading && data.length > 0 && (
+                        <MetadataCards
+                            totalCount={data.length}
+                            totalAmount={data.reduce((sum, tx) => sum + Math.abs((tx.amount_cents || 0)), 0) / 100}
+                            dateRange={getDateRange(data)}
+                            categoryBreakdown={getCategoryBreakdown(data)}
+                        />
+                    )}
+
+                    {/* Filter Toolbar - STICKY within scroll container */}
+                    <div style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#ffffff' }}>
+                        <FilterToolbar
+                            refPrefix={window.UI_STATE?.refPrefix || 'CHQ1'}
+                            searchQuery={window.UI_STATE?.searchQuery || ''}
+                            selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
+                            accounts={window.RoboLedger?.Accounts?.getAll() || []}
+                            onRefPrefixChange={(value) => window.updateRefPrefix?.(value)}
+                            onSearchChange={(value) => window.handleSearch?.(value)}
+                            onAccountChange={(value) => window.switchAccount?.(value)}
+                            onToggleFilters={() => window.toggleGridFilters?.()}
+                            onToggleSettings={() => window.toggleSettings?.(true)}
+                            onToggleReportPanel={() => {
+                                const newPanel = activePanel === 'report' ? null : 'report';
+                                setActivePanel(newPanel);
+                            }}
+                            onToggleUtilityBar={() => {
+                                const newPanel = activePanel === 'utility' ? null : 'utility';
+                                setActivePanel(newPanel);
+                            }}
+                            onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
+                        />
+                    </div>
+
                 {/* Grid Header */}
                 <div className="flex bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-[44px] z-20">
                     {table.getFlatHeaders().map(header => (
