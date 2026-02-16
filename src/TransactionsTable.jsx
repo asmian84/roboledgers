@@ -1166,22 +1166,25 @@ export function TransactionsTable({
     const parentRef = useRef(null);
 
     // DETAIL MODE DETECTION: Nav collapsed = Detail mode ON
-    const [isDetailMode, setIsDetailMode] = useState(
-        () => window.UI_STATE?.panelState === 'collapsed'
-    );
+    // NOTE: Nav collapse state is in DOM class, NOT UI_STATE.panelState
+    const [isDetailMode, setIsDetailMode] = useState(() => {
+        const sidebar = document.getElementById('sidebar');
+        return sidebar?.classList.contains('collapsed') || false;
+    });
 
-    // Track mode changes by polling UI_STATE.panelState
+    // Listen for sidebar collapse events
     useEffect(() => {
-        const checkModeChange = () => {
-            const newDetailMode = window.UI_STATE?.panelState === 'collapsed';
-            if (newDetailMode !== isDetailMode) {
-                setIsDetailMode(newDetailMode);
+        const handleSidebarToggle = (event) => {
+            const isCollapsed = event.detail?.isCollapsed;
+            if (isCollapsed !== undefined) {
+                setIsDetailMode(isCollapsed);
+                console.log('[MODE] Detail mode:', isCollapsed ? 'ON' : 'OFF');
             }
         };
 
-        const interval = setInterval(checkModeChange, 200);
-        return () => clearInterval(interval);
-    }, [isDetailMode]);
+        window.addEventListener('sidebarCollapsed', handleSidebarToggle);
+        return () => window.removeEventListener('sidebarCollapsed', handleSidebarToggle);
+    }, []);
 
     // Reset panel when exiting detail mode
     useEffect(() => {
