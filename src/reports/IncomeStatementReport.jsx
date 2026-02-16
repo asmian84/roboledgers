@@ -41,13 +41,13 @@ export function IncomeStatementReport() {
             ['Income Statement'],
             ['Period', `${dateRange.start} to ${dateRange.end}`],
             [''],
-            ['REVENUES', reportData.revenue.toFixed(2)],
+            ['REVENUES', reportData.totals.revenue.toFixed(2)],
             [''],
             ['EXPENSES'],
             ...reportData.expenses.map(exp => [exp.name, exp.amount.toFixed(2)]),
-            ['Total Expenses', reportData.totalExpenses.toFixed(2)],
+            ['Total Expenses', reportData.totals.expenses.toFixed(2)],
             [''],
-            ['NET INCOME', reportData.netIncome.toFixed(2)]
+            ['NET INCOME', reportData.totals.netIncome.toFixed(2)]
         ].map(row => row.join(',')).join('\n');
 
         const blob = new Blob([csv], { type: 'text/csv' });
@@ -64,11 +64,29 @@ export function IncomeStatementReport() {
 
         const rows = [];
 
-        // REVENUES
+        // REVENUES section header
         rows.push({
             type: 'section',
             description: 'REVENUES',
-            values: [reportData.revenue, reportData.priorRevenue || 0]
+            values: ['', '']
+        });
+
+        // Revenue line items
+        if (reportData.revenue && reportData.revenue.length > 0) {
+            reportData.revenue.forEach(item => {
+                rows.push({
+                    description: item.name,
+                    values: [item.amount, 0],
+                    indent: 1
+                });
+            });
+        }
+
+        // Total revenue
+        rows.push({
+            type: 'subtotal',
+            description: 'Total Revenue',
+            values: [reportData.totals.revenue, 0]
         });
 
         // Blank line
@@ -81,12 +99,12 @@ export function IncomeStatementReport() {
             values: ['', '']
         });
 
-        // Cost of sales line items (if available)
-        if (reportData.costOfSales && reportData.costOfSales.length > 0) {
-            reportData.costOfSales.forEach(item => {
+        // Cost of sales line items
+        if (reportData.cogs && reportData.cogs.length > 0) {
+            reportData.cogs.forEach(item => {
                 rows.push({
                     description: item.name,
-                    values: [item.amount, item.priorAmount || 0],
+                    values: [item.amount, 0],
                     indent: 1
                 });
             });
@@ -95,17 +113,15 @@ export function IncomeStatementReport() {
         // Cost of sales subtotal
         rows.push({
             type: 'subtotal',
-            description: '',
-            values: [reportData.totalCostOfSales || 0, reportData.priorTotalCostOfSales || 0]
+            description: 'Total COGS',
+            values: [reportData.totals.cogs, 0]
         });
 
         // GROSS PROFIT
-        const grossProfit = reportData.revenue - (reportData.totalCostOfSales || 0);
-        const priorGrossProfit = (reportData.priorRevenue || 0) - (reportData.priorTotalCostOfSales || 0);
         rows.push({
             type: 'subtotal',
             description: 'GROSS PROFIT',
-            values: [grossProfit, priorGrossProfit]
+            values: [reportData.totals.grossProfit, 0]
         });
 
         // Blank line
@@ -123,7 +139,7 @@ export function IncomeStatementReport() {
             reportData.expenses.forEach(exp => {
                 rows.push({
                     description: exp.name,
-                    values: [exp.amount, exp.priorAmount || 0],
+                    values: [exp.amount, 0],
                     indent: 1
                 });
             });
@@ -132,15 +148,15 @@ export function IncomeStatementReport() {
         // Total expenses
         rows.push({
             type: 'subtotal',
-            description: '',
-            values: [reportData.totalExpenses, reportData.priorTotalExpenses || 0]
+            description: 'Total Expenses',
+            values: [reportData.totals.expenses, 0]
         });
 
         // NET INCOME
         rows.push({
             type: 'total',
             description: 'NET INCOME',
-            values: [reportData.netIncome, reportData.priorNetIncome || 0]
+            values: [reportData.totals.netIncome, 0]
         });
 
         return rows;
@@ -151,6 +167,12 @@ export function IncomeStatementReport() {
             {/* Top Section: Filters */}
             <div className="max-w-7xl mx-auto mb-6">
                 <div className="flex items-center gap-3 mb-4">
+                    <button
+                        onClick={() => window.location.hash = '#/reports'}
+                        className="text-gray-600 hover:text-gray-900 mr-2"
+                    >
+                        <i className="ph ph-arrow-left text-2xl"></i>
+                    </button>
                     <i className="ph ph-chart-line-up text-3xl text-green-600"></i>
                     <h1 className="text-3xl font-bold text-gray-900">Income Statement</h1>
                 </div>

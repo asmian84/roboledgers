@@ -198,11 +198,16 @@ class ReportGenerator {
 
             const amount = (tx.credit || 0) - (tx.debit || 0); // For income statement
 
-            if (account.root === 'INCOME') {
+            // REVENUE accounts (4000-4999)
+            if (account.root === 'REVENUE') {
                 this.addToCategory(revenue, tx.category, account.name, amount);
-            } else if (account.root === 'COGS') {
+            }
+            // COGS accounts (5000-5999) - Cost of Goods Sold
+            else if (account.class === 'COGS') {
                 this.addToCategory(cogs, tx.category, account.name, amount);
-            } else if (account.root === 'EXPENSE') {
+            }
+            // EXPENSE accounts (6000-9999)
+            else if (account.root === 'EXPENSE') {
                 this.addToCategory(expenses, tx.category, account.name, amount);
             }
         });
@@ -344,7 +349,8 @@ class ReportGenerator {
             // Check if transaction has tax amount
             const taxAmount = tx.tax_cents ? tx.tax_cents / 100 : 0;
 
-            if (account.root === 'INCOME') {
+            // REVENUE accounts (4000-4999)  
+            if (account.root === 'REVENUE') {
                 // GST collected on revenue
                 const amount = tx.credit || 0;
                 const gst = taxAmount || (amount * taxRate);
@@ -356,7 +362,9 @@ class ReportGenerator {
                     gst,
                     ref: tx.ref
                 });
-            } else if (account.root === 'EXPENSE' || account.root === 'COGS') {
+            }
+            // EXPENSE accounts (5000-9999) or COGS class
+            else if (account.root === 'EXPENSE' || account.class === 'COGS') {
                 // GST paid on expenses (ITC)
                 const amount = tx.debit || 0;
                 const gst = taxAmount || (amount * taxRate);

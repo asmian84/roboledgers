@@ -78,6 +78,12 @@ export function GSTReport() {
             {/* Header */}
             <div className="max-w-7xl mx-auto mb-6">
                 <div className="flex items-center gap-3 mb-2">
+                    <button
+                        onClick={() => window.location.hash = '#/reports'}
+                        className="text-gray-600 hover:text-gray-900 mr-2"
+                    >
+                        <i className="ph ph-arrow-left text-2xl"></i>
+                    </button>
                     <i className="ph ph-percent text-3xl text-red-600"></i>
                     <h1 className="text-3xl font-bold text-gray-900">GST/HST Report</h1>
                 </div>
@@ -96,8 +102,8 @@ export function GSTReport() {
                         <button
                             onClick={() => setTaxRate(0.05)}
                             className={`px-4 py-3 rounded-lg border-2 text-sm font-semibold transition-all ${taxRate === 0.05
-                                    ? 'border-red-500 bg-red-50 text-red-700'
-                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                ? 'border-red-500 bg-red-50 text-red-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                                 }`}
                         >
                             5% GST
@@ -105,8 +111,8 @@ export function GSTReport() {
                         <button
                             onClick={() => setTaxRate(0.13)}
                             className={`px-4 py-3 rounded-lg border-2 text-sm font-semibold transition-all ${taxRate === 0.13
-                                    ? 'border-red-500 bg-red-50 text-red-700'
-                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                ? 'border-red-500 bg-red-50 text-red-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                                 }`}
                         >
                             13% HST (ON)
@@ -114,8 +120,8 @@ export function GSTReport() {
                         <button
                             onClick={() => setTaxRate(0.15)}
                             className={`px-4 py-3 rounded-lg border-2 text-sm font-semibold transition-all ${taxRate === 0.15
-                                    ? 'border-red-500 bg-red-50 text-red-700'
-                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                ? 'border-red-500 bg-red-50 text-red-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                                 }`}
                         >
                             15% HST (NS/NB/NL)
@@ -123,8 +129,8 @@ export function GSTReport() {
                         <button
                             onClick={() => setTaxRate(0.12)}
                             className={`px-4 py-3 rounded-lg border-2 text-sm font-semibold transition-all ${taxRate === 0.12
-                                    ? 'border-red-500 bg-red-50 text-red-700'
-                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                ? 'border-red-500 bg-red-50 text-red-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                                 }`}
                         >
                             12% HST (BC)
@@ -181,8 +187,8 @@ export function GSTReport() {
 
                         {/* Net GST Payable */}
                         <div className={`bg-gradient-to-br ${reportData.netGSTPayable > 0
-                                ? 'from-red-50 to-red-100 border-red-200'
-                                : 'from-purple-50 to-purple-100 border-purple-200'
+                            ? 'from-red-50 to-red-100 border-red-200'
+                            : 'from-purple-50 to-purple-100 border-purple-200'
                             } border-2 rounded-lg p-6`}>
                             <div className="flex items-center gap-3 mb-2">
                                 <i className={`ph ph-coins text-2xl ${reportData.netGSTPayable > 0 ? 'text-red-600' : 'text-purple-600'}`}></i>
