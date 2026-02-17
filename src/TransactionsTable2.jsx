@@ -867,19 +867,24 @@ const columns = [
         }
     }),
 
-    // Optional: Sales Tax (GST/HST)
+    // Optional: Sales Tax (GST/HST) with toggle
     columnHelper.accessor('tax_cents', {
         header: 'GST/HST',
-        size: 75,
-        minSize: 70,
-        maxSize: 100,
+        size: 110,      // Increased to fit toggle + amount
+        minSize: 100,
+        maxSize: 130,
         cell: info => {
             const val = info.getValue();
             const row = info.row.original;
 
-            // Auto-calculate tax if column is visible and province set
+            // Initialize gst_enabled if not set (default to true)
+            if (row.gst_enabled === undefined) {
+                row.gst_enabled = true;
+            }
+
+            // Only calculate if enabled
             let displayValue = val;
-            if (!val || val === 0) {
+            if (row.gst_enabled && (!val || val === 0)) {
                 const province = window.UI_STATE?.province;
                 const amount = row.debit || row.credit || 0;
                 if (province && amount) {
@@ -888,18 +893,40 @@ const columns = [
                 }
             }
 
+            const handleToggle = (e) => {
+                e.stopPropagation();
+                row.gst_enabled = !row.gst_enabled;
+                if (!row.gst_enabled) {
+                    row.tax_cents = 0;  // Clear tax when disabled
+                }
+                // Force re-render
+                info.table.options.meta?.updateData?.(info.row.index, 'gst_enabled', row.gst_enabled);
+            };
+
             return (
-                <span
-                    className="text-right block font-mono"
-                    style={{
-                        fontSize: GRID_TOKENS.numberFontSize,
-                        fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: GRID_TOKENS.numberColor,
-                        fontVariantNumeric: 'tabular-nums'
-                    }}
-                >
-                    {displayValue ? `$${(displayValue / 100).toFixed(2)}` : '-'}
-                </span>
+                <div className="flex items-center justify-end gap-1">
+                    {/* Toggle button */}
+                    <button
+                        onClick={handleToggle}
+                        className="p-0.5 hover:bg-gray-100 rounded transition-colors"
+                        title={row.gst_enabled ? 'GST enabled (click to disable)' : 'GST disabled (click to enable)'}
+                    >
+                        <i className={`ph ${row.gst_enabled ? 'ph-check-circle text-green-600' : 'ph-circle text-gray-300'} text-sm`}></i>
+                    </button>
+
+                    {/* Amount with currency formatting */}
+                    <span
+                        className="text-right block font-mono"
+                        style={{
+                            fontSize: GRID_TOKENS.numberFontSize,
+                            fontWeight: GRID_TOKENS.numberFontWeight,
+                            color: GRID_TOKENS.numberColor,
+                            fontVariantNumeric: 'tabular-nums'
+                        }}
+                    >
+                        {row.gst_enabled && displayValue ? formatCurrency(displayValue / 100) : '-'}
+                    </span>
+                </div>
             );
         }
     }),
