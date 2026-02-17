@@ -34,10 +34,18 @@ export function LiveReportPanel({
                 const category = tx.category || '9970';
 
                 if (!accountBalances[category]) {
-                    const account = window.RoboLedger?.COA?.get(String(category));
+                    // Try multiple lookup strategies for COA
+                    let account = window.RoboLedger?.COA?.get(String(category));
+                    if (!account) {
+                        account = window.RoboLedger?.COA?.get(parseInt(category));
+                    }
+                    if (!account) {
+                        account = window.RoboLedger?.COA?.get(category);
+                    }
+
                     accountBalances[category] = {
                         code: category,
-                        name: category === '9970' ? 'Uncategorized' : (account?.name || 'Unknown'),
+                        name: category === '9970' ? 'Uncategorized' : (account?.name || `Account ${category}`),
                         debit: 0,
                         credit: 0,
                         balance: 0
