@@ -892,12 +892,23 @@ const columns = [
 
             const handleToggle = (e) => {
                 e.stopPropagation();
+
+                // Toggle the gst_enabled flag
                 row.gst_enabled = !row.gst_enabled;
                 if (!row.gst_enabled) {
                     row.tax_cents = 0;  // Clear tax when disabled
                 }
-                // Force re-render
-                info.table.options.meta?.updateData?.(info.row.index, 'gst_enabled', row.gst_enabled);
+
+                // Force re-render by updating table data
+                // Get the table instance and update data
+                const tableData = info.table.options.data;
+                const newData = [...tableData];
+                newData[info.row.index] = { ...row };
+
+                // Trigger state update (setData will be accessible from the component closure)
+                if (info.table.options.meta?.setData) {
+                    info.table.options.meta.setData(newData);
+                }
             };
 
             return (
