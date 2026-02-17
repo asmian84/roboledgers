@@ -435,12 +435,9 @@ function DescriptionCell({ row }) {
                         fontWeight: GRID_TOKENS.descLine1FontWeight,
                         color: GRID_TOKENS.descLine1Color,
                         lineHeight: GRID_TOKENS.cellLineHeight,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        wordBreak: 'break-word',
+                        whiteSpace: 'nowrap',
                         flex: 1,
                         minWidth: 0
                     }}
