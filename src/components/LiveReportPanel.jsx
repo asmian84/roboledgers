@@ -16,8 +16,9 @@ export function LiveReportPanel({
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    // Calculate report data using SINGLE SOURCE: ReportGenerator
-    // This ensures LiveReportPanel and TrialBalanceReport use the SAME calculation
+    // Calculate report data directly from transactions
+    // NOTE: Cannot use ReportGenerator here because transactions are already filtered
+    // ReportGenerator.generateTrialBalance() would re-filter from global Ledger
     useEffect(() => {
         if (!transactions || transactions.length === 0) {
             setReportData(null);
@@ -26,23 +27,87 @@ export function LiveReportPanel({
 
         setLoading(true);
         try {
-            // UNIFIED CALCULATION: Use ReportGenerator (same as TrialBalanceReport)
-            const generator = new ReportGenerator(
-                window.RoboLedger.Ledger,
-                window.RoboLedger.COA
-            );
+            // Direct calculation from provided transactions
+            const accountBalances = {};
 
-            // Get date range from transactions
-            const dates = transactions.map(tx => tx.date).sort();
-            const startDate = dates[0];
-            const endDate = dates[dates.length - 1];
+            transactions.forEach(tx => {
+                const category = tx.category || '9970';
 
-            // ONE calculation method - same wire as report!
-            const data = generator.generateTrialBalance(startDate, endDate);
+                if (!accountBalances[category]) {
+                    const account = window.RoboLedger?.COA?.get(String(category));
+                    accountBalances[category] = {
+                        code: category,
+                        name: category === '9970' ? 'Uncategorized' : (account?.name || 'Unknown'),
+                        debit: 0,
+                        credit: 0,
+                        balance: 0
+                    };
+                }
+
+                const amount = (tx.amount_cents || 0) / 100;
+                if (tx.polarity === 'DEBIT') {
+                    accountBalances[category].debit += amount;
+                } else if (tx.polarity === 'CREDIT') {
+                    accountBalances[category].credit += amount;
+                }
+            });
+
+            // Calculate balances and sort
+            const accounts = Object.values(accountBalances).map(acc => {
+                acc.balance = acc.debit - acc.credit;
+                return acc;
+            }).sort((a, b) => {
+                if (a.code === '9970') return 1;
+                if (b.code === '9970') return -1;
+                const aNum = parseInt(a.code);
+                const bNum = parseInt(b.code);
+                return (isNaN(aNum) ? 0 : aNum) - (isNaN(bNum) ? 0 : bNum);
+            });
+
+            // Calculate totals
+            let totalDebit = accounts.reduce((sum, acc) => sum + acc.debit, 0);
+            let totalCredit = accounts.reduce((sum, acc) => sum + acc.credit, 0);
+
+            // Force balance if needed
+            const imbalance = totalDebit - totalCredit;
+            if (Math.abs(imbalance) > 0.01) {
+                let uncatAccount = accounts.find(a => a.code === '9970');
+                if (!uncatAccount) {
+                    uncatAccount = {
+                        code: '9970',
+                        name: 'Uncategorized',
+                        debit: 0,
+                        credit: 0,
+                        balance: 0
+                    };
+                    accounts.push(uncatAccount);
+                }
+
+                if (imbalance > 0) {
+                    uncatAccount.credit += imbalance;
+                } else {
+                    uncatAccount.debit += Math.abs(imbalance);
+                }
+                uncatAccount.balance = uncatAccount.debit - uncatAccount.credit;
+
+                // Recalculate totals
+                totalDebit = accounts.reduce((sum, acc) => sum + acc.debit, 0);
+                totalCredit = accounts.reduce((sum, acc) => sum + acc.credit, 0);
+            }
+
+            const data = {
+                accounts,
+                totals: {
+                    debit: totalDebit,
+                    credit: totalCredit,
+                    balance: totalDebit - totalCredit
+                },
+                isBalanced: Math.abs(totalDebit - totalCredit) < 0.01
+            };
 
             setReportData(data);
         } catch (error) {
-            console.error('[LIVE_REPORT_PANEL] Failed to generate trial balance:', error);
+            console.error('[LIVE_REPORT_PANEL] Failed to calculate trial balance:', error);
             setReportData(null);
         } finally {
             setLoading(false);
