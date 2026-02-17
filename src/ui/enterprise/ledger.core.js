@@ -65,7 +65,8 @@ window.RoboLedger = (function () {
         { code: '2500', name: 'Corporate Income Tax Payable', class: 'TAX_INC', root: 'LIABILITY', balance: 0 },
         { code: '2600', name: 'Deferred Revenue', class: 'DEFERRED', root: 'LIABILITY', balance: 0 },
         { code: '2602', name: 'Federal Tax Installments', class: 'TAX_SALES', root: 'LIABILITY', balance: 0 },
-        { code: '2710', name: 'Bank Loan #1', class: 'DEBT_LT', root: 'LIABILITY', balance: 0 },
+        { code: '2650', name: 'Shareholder Loan', class: 'LTL', root: 'LIABILITY', balance: 0 },
+        { code: '2652', name: 'Shareholders Loan', class: 'LTL', root: 'LIABILITY', balance: 0 },
         { code: '2800', name: 'Loans from Shareholders', class: 'DEBT_ST', root: 'LIABILITY', balance: 0 },
         { code: '2900', name: 'Bank Loan - Long Term', class: 'DEBT_LT', root: 'LIABILITY', balance: 0 },
 
@@ -80,6 +81,7 @@ window.RoboLedger = (function () {
 
         // REVENUE (4000 - 4999)
         { code: '4000', name: 'Sales Revenue', class: 'REV_OP', root: 'REVENUE', balance: 0 },
+        { code: '4001', name: 'Sales Revenue', class: 'REV_OP', root: 'REVENUE', balance: 0 },
         { code: '4100', name: 'Consulting Income', class: 'REV_OP', root: 'REVENUE', balance: 0 },
         { code: '4200', name: 'Product Sales', class: 'REV_OP', root: 'REVENUE', balance: 0 },
         { code: '4300', name: 'Shipping Income', class: 'REV_OP_OTHER', root: 'REVENUE', balance: 0 },

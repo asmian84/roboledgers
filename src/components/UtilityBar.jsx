@@ -136,13 +136,22 @@ export function UtilityBar({ transactions = [], onFilterTransactions }) {
 
             const taxAmount = (t.tax_cents || 0) / 100;
 
-            // USE POLARITY (90% accurate, user controls via checkbox)
-            if (t.polarity === 'CREDIT') {
-                // CREDIT = incoming money = GST Collected
+            // USE ACCOUNT TYPE: Revenue accounts = GST Collected, Expense accounts = GST Paid/ITC
+            const account = window.RoboLedger?.COA?.get(t.category);
+
+            if (account?.root === 'REVENUE') {
+                // Revenue account = GST Collected (regardless of polarity)
                 gstCollected += taxAmount;
                 totalRevenue += (t.amount_cents || 0) / 100;
-            } else if (t.polarity === 'DEBIT') {
-                // DEBIT = outgoing money = GST ITC/Paid
+            } else if (account?.root === 'EXPENSE' || account?.class === 'COGS') {
+                // Expense account = GST Paid/ITC
+                gstPaid += taxAmount;
+            } else if (!account && t.polarity === 'CREDIT') {
+                // Fallback: Uncategorized credits default to GST Collected
+                gstCollected += taxAmount;
+                totalRevenue += (t.amount_cents || 0) / 100;
+            } else if (!account && t.polarity === 'DEBIT') {
+                // Fallback: Uncategorized debits default to GST Paid
                 gstPaid += taxAmount;
             }
         });
