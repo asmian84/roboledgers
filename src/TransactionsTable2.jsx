@@ -1212,7 +1212,8 @@ export function TransactionsTable({
                     height: '100%',
                     overflowY: 'auto',
                     overflowX: 'hidden',
-                    position: 'relative'
+                    position: 'relative',
+                    maxWidth: activePanel ? 'calc(100vw - 370px)' : '100%'  // Prevent bleeding into panel
                 }}
             >
                 {/* Batch Action Bar */}
@@ -1463,7 +1464,7 @@ export function TransactionsTable({
                         activePanel === 'report' ? 'Live Trial Balance' :
                             'Panel'
                 }
-                defaultWidth={441}
+                defaultWidth={360}
                 minWidth={350}
                 maxWidth={450}
             >
