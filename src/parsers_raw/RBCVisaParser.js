@@ -104,7 +104,7 @@ RBC VISA FORMAT:
                     pendingAuditLines = [];
                 } else {
                     // Start of multi-line
-                    pendingDescription = remainder;
+                    pendingDescription = trimmed;
                     pendingRawLines = [line];
                     pendingAuditLines = [this.getSpatialMetadata(line)];
                 }
