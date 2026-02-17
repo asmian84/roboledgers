@@ -971,18 +971,20 @@ export function TransactionsTable({
     }, [initialGlobalFilter]);
 
     // DETAIL MODE: Sidebar collapse detection
+    const [isDetailMode, setIsDetailMode] = useState(() => {
+        const sidebar = document.getElementById('sidebar');
+        return sidebar?.classList.contains('collapsed') || false;
+    });
+
     useEffect(() => {
         const handleSidebarCollapse = (e) => {
-            const isCollapsed = e.detail?.isCollapsed ?? false;
+            const isCollapsed = e.detail?.collapsed ?? false;  // FIX: Property is 'collapsed'
             console.log('[DETAIL_MODE] Sidebar collapsed event received:', isCollapsed);
+            setIsDetailMode(isCollapsed);
             console.log('[DETAIL_MODE] Current activePanel:', activePanel);
 
             if (isCollapsed) {
-                // DETAIL MODE ON: Open utility bar automatically
-                console.log('[DETAIL_MODE] Activating utility panel');
-                setActivePanel('utility');
-
-                // Auto-scroll to FilterToolbar (hide reconciliation/metadata)
+                // DETAIL MODE ON: Auto-scroll to FilterToolbar
                 console.log('[DETAIL_MODE] Auto-scrolling to FilterToolbar');
                 if (parentRef.current) {
                     setTimeout(() => {
