@@ -895,17 +895,38 @@ const columns = [
 
                 // Toggle the gst_enabled flag
                 row.gst_enabled = !row.gst_enabled;
-                if (!row.gst_enabled) {
-                    row.tax_cents = 0;  // Clear tax when disabled
+
+                if (row.gst_enabled) {
+                    // GST ENABLED: Set up proper accounting
+                    const province = window.UI_STATE?.province;
+                    const amount = row.debit || row.credit || 0;
+
+                    if (province && amount) {
+                        const calculatedTax = calculateTax(amount, province);
+                        row.tax_cents = calculatedTax;
+
+                        // Determine GST account based on transaction category
+                        // Revenue (4xxx) → 2160 GST Collected on Sales
+                        // Expenses (5xxx, 6xxx, etc.) → 2150 GST Paid on Purchases
+                        const category = row.category;
+                        const isRevenue = category && String(category).startsWith('4');
+
+                        row.gst_account = isRevenue ? '2160' : '2150';
+                        row.gst_type = isRevenue ? 'collected' : 'itc';
+                    }
+                } else {
+                    // GST DISABLED: Clear all GST data
+                    row.tax_cents = 0;
+                    row.gst_account = null;
+                    row.gst_type = null;
                 }
 
                 // Force re-render by updating table data
-                // Get the table instance and update data
                 const tableData = info.table.options.data;
                 const newData = [...tableData];
                 newData[info.row.index] = { ...row };
 
-                // Trigger state update (setData will be accessible from the component closure)
+                // Trigger state update
                 if (info.table.options.meta?.setData) {
                     info.table.options.meta.setData(newData);
                 }
@@ -1210,6 +1231,9 @@ export function TransactionsTable({
         enableRowSelection: true,
         enableMultiRowSelection: true,
         getRowId: (row) => row.id || String(row.ref),
+        meta: {
+            setData, // Enable GST toggle to update data
+        },
     });
 
     const parentRef = useRef(null);

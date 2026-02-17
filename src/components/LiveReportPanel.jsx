@@ -58,6 +58,28 @@ export function LiveReportPanel({
                 } else if (tx.polarity === 'CREDIT') {
                     accountBalances[category].credit += amount;
                 }
+
+                // GST ACCOUNTING: Add GST entry if enabled
+                if (tx.gst_enabled && tx.gst_account && tx.tax_cents) {
+                    const gstAccount = tx.gst_account;
+                    const gstAmount = (tx.tax_cents || 0) / 100;
+
+                    if (!accountBalances[gstAccount]) {
+                        let account = window.RoboLedger?.COA?.get(String(gstAccount));
+                        if (!account) account = window.RoboLedger?.COA?.get(parseInt(gstAccount));
+
+                        accountBalances[gstAccount] = {
+                            code: gstAccount,
+                            name: account?.name || `GST Account ${gstAccount}`,
+                            debit: 0,
+                            credit: 0,
+                            balance: 0
+                        };
+                    }
+
+                    // GST is always a credit to liability accounts (2150, 2160)
+                    accountBalances[gstAccount].credit += gstAmount;
+                }
             });
 
             // Calculate balances and sort
