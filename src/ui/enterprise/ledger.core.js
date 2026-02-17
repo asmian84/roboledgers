@@ -143,6 +143,14 @@ window.RoboLedger = (function () {
                 state.sigIndex = parsed.sigIndex || {};
                 state.accounts = parsed.accounts || [];
                 state.coa = parsed.coa || DEFAULT_COA_TEMPLATE;
+
+                console.log(`[LEDGER] Loaded ${Object.keys(state.transactions).length} transactions from storage`);
+
+                // Update SignalFusionEngine with transaction context for recurring detection
+                if (window.RuleEngine?.updateTransactionContext) {
+                    window.RuleEngine.updateTransactionContext(Object.values(state.transactions));
+                    console.log('[LEDGER] Updated SignalFusionEngine transaction context');
+                }
                 console.log(`[LEDGER] State loaded (v${LEDGER_VERSION})`);
             } catch (e) {
                 console.error('[LEDGER] Failed to load state', e);
@@ -513,7 +521,7 @@ window.RoboLedger = (function () {
             return false;
         },
 
-        updateCategory: function (tx_id, category_code) {
+        updateCategory: function (tx_id, category_code, metadata = {}) {
             const tx = state.transactions[tx_id];
             if (tx) {
                 // Check if this is a correction (category changed)
@@ -527,6 +535,12 @@ window.RoboLedger = (function () {
                 if (account) {
                     tx.category_name = account.name;
                 }
+
+                // Store signal-fusion metadata
+                if (metadata.confidence !== undefined) tx.confidence = metadata.confidence;
+                if (metadata.needsReview !== undefined) tx.needsReview = metadata.needsReview;
+                if (metadata.explanation) tx.explanation = metadata.explanation;
+
                 save();
 
                 // CONTINUOUS LEARNING: Capture user correction
