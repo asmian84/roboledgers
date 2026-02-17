@@ -34,7 +34,7 @@
     selectedTx: null,
     accountDropdownOpen: false,
     panelState: 'collapsed', // 'closed', 'collapsed', 'expanded'
-    version: '5.1.1',
+    version: '1.5.0', // Last stable before signal-fusion overhaul
     // Settings Persistence
     dexterity: 3,
     fontSize: 13,
@@ -54,7 +54,7 @@
     importSession: null,
 
     // Version
-    version: '5.1.1',
+    version: '1.5.0',
 
     // Transaction Filter State (for drill-down)
     activeFilter: null, // { type, label, filter: function }
