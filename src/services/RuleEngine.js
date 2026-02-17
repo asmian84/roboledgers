@@ -165,9 +165,35 @@ class RuleEngine {
     applyRules(transaction, rules = null) {
         const activeRules = rules || this.getEnabledRules();
 
+        // SMART GUARDS: Polarity-aware categorization
+        const amount = Math.abs((transaction.amount_cents || 0) / 100);
+        const isCredit = transaction.polarity === 'CREDIT';
+        const isDebit = transaction.polarity === 'DEBIT';
+
         // Try rule-based matching first
         for (const rule of activeRules) {
             if (this.matchesConditions(transaction, rule.conditions, rule.logic)) {
+                const coaCode = rule.action.coa_code;
+                const account = window.RoboLedger?.COA?.get(coaCode);
+
+                // GUARD: Credits should NEVER be categorized as expenses
+                if (isCredit && (account?.root === 'EXPENSE' || account?.class === 'COGS')) {
+                    console.log(`[RULE_ENGINE] ⚠️ Blocked CREDIT from expense category ${coaCode} (${account?.name})`);
+                    continue; // Skip this rule
+                }
+
+                // GUARD: Bank fees are never more than $30
+                if (isDebit && amount > 30 && (coaCode === '7700' || coaCode === '8700' || coaCode === '8800')) {
+                    console.log(`[RULE_ENGINE] ⚠️ Blocked bank fee categorization for $${amount} (too large)`);
+                    continue;
+                }
+
+                // GUARD: Interest charges rarely exceed $500 for small businesses
+                if (isDebit && amount > 500 && (coaCode === '7700' || coaCode === '7800')) {
+                    console.log(`[RULE_ENGINE] ⚠️ Blocked interest categorization for $${amount} (too large)`);
+                    continue;
+                }
+
                 // Update stats
                 rule.stats.matches_count++;
                 rule.stats.last_matched = new Date().toISOString();
@@ -189,15 +215,24 @@ class RuleEngine {
             // Pass full transaction for context-aware matching
             const match = this.vendorMatcher.findMatch(transaction, 0.6);
             if (match) {
-                // console.log(`[RULE_ENGINE] Vendor match for "${transaction.description}":`, match);
-                return {
-                    coa_code: match.coaCode,
-                    confidence: match.confidence,
-                    method: 'vendor_dictionary',
-                    vendor: match.vendor,
-                    industry: match.industry,
-                    appliedRule: match.appliedRule // Track which smart rule was applied
-                };
+                const account = window.RoboLedger?.COA?.get(match.coaCode);
+
+                // GUARD: Apply same polarity checks to vendor matches
+                if (isCredit && (account?.root === 'EXPENSE' || account?.class === 'COGS')) {
+                    console.log(`[RULE_ENGINE] ⚠️ Blocked vendor match for CREDIT to expense ${match.coaCode}`);
+                } else if (isDebit && amount > 30 && (match.coaCode === '7700' || match.coaCode === '8700' || match.coaCode === '8800')) {
+                    console.log(`[RULE_ENGINE] ⚠️ Blocked bank fee vendor match for $${amount}`);
+                } else {
+                    // console.log(`[RULE_ENGINE] Vendor match for "${transaction.description}":`, match);
+                    return {
+                        coa_code: match.coaCode,
+                        confidence: match.confidence,
+                        method: 'vendor_dictionary',
+                        vendor: match.vendor,
+                        industry: match.industry,
+                        appliedRule: match.appliedRule // Track which smart rule was applied
+                    };
+                }
             }
         }
 
@@ -205,21 +240,39 @@ class RuleEngine {
         if (this.fuzzyMatcher) {
             const match = this.fuzzyMatcher.match(transaction.description);
             if (match && match.coa && match.confidence > 0.7) {
-                // console.log(`[RULE_ENGINE] Fuzzy match for "${transaction.description}":`, match);
-                return {
-                    coa_code: match.coa,
-                    confidence: match.confidence,
-                    method: 'fuzzy_ml',
-                    match_type: match.matchType,
-                    matched_vendor: match.matchedVendor,
-                    similarity_score: match.similarityScore,
-                    training_count: match.count
-                };
+                const account = window.RoboLedger?.COA?.get(match.coa);
+
+                // GUARD: Apply polarity checks to fuzzy matches
+                if (isCredit && (account?.root === 'EXPENSE' || account?.class === 'COGS')) {
+                    console.log(`[RULE_ENGINE] ⚠️ Blocked fuzzy match for CREDIT to expense ${match.coa}`);
+                } else {
+                    // console.log(`[RULE_ENGINE] Fuzzy match for "${transaction.description}":`, match);
+                    return {
+                        coa_code: match.coa,
+                        confidence: match.confidence,
+                        method: 'fuzzy_ml',
+                        match_type: match.matchType,
+                        matched_vendor: match.matchedVendor,
+                        similarity_score: match.similarityScore,
+                        training_count: match.count
+                    };
+                }
             }
+        }
+
+        // LAST RESORT: Default all uncategorized credits to revenue
+        if (isCredit) {
+            console.log(`[RULE_ENGINE] 💰 Defaulting uncategorized CREDIT ($${amount}) to Sales Revenue (4001)`);
+            return {
+                coa_code: '4001', // Sales Revenue
+                confidence: 0.5,
+                method: 'default_revenue'
+            };
         }
 
         return null;
     }
+
 
 
     /**

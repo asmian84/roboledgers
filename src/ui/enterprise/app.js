@@ -5,14 +5,13 @@
 (function () {
   // --- UI STATE & ROUTING ---
   window.UI_STATE = {
-    currentRoute: 'import',
+    currentRoute: 'home',
     navItems: [
       { label: 'Home' },
       { label: 'Transactions' }
     ],
     breadcrumbs: [
-      { label: 'Home' },
-      { label: 'Transactions', active: true }
+      { label: 'Home', active: true }
     ],
     selectedAccount: 'ALL',
     isIngesting: false,
@@ -56,6 +55,9 @@
 
     // Version
     version: '5.1.1',
+
+    // Transaction Filter State (for drill-down)
+    activeFilter: null, // { type, label, filter: function }
   };
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
@@ -2710,146 +2712,22 @@
   };
 
   function renderHome() {
-    return `
-      <div style="max-width: 1200px; margin: 0 auto; padding: 40px 24px;">
-        <!-- Hero Section -->
-        <div style="text-align: center; margin-bottom: 48px;">
-          <i class="ph ph-robot" style="font-size: 64px; color: #3b82f6; margin-bottom: 16px;"></i>
-          <h1 style="font-size: 32px; font-weight: 700; color: #1e293b; margin: 0 0 12px 0;">
-            Welcome to RoboLedger V5
-          </h1>
-          <p style="font-size: 16px; color: #64748b; margin: 0;">
-            Upload your bank statements to get started
-          </p>
-        </div>
+    // Mount the React HomePage component
+    console.log('[RENDER_HOME] Scheduling HomePage mount...');
+    setTimeout(() => {
+      console.log('[RENDER_HOME] Attempting to mount HomePage, mountHomePage exists:', !!window.mountHomePage);
+      if (window.mountHomePage) {
+        console.log('[RENDER_HOME] Calling mountHomePage()');
+        window.mountHomePage();
+      } else {
+        console.error('[RENDER_HOME] window.mountHomePage not found! Check main.jsx loading');
+      }
+    }, 100); // Increased delay to ensure Vite module loads
 
-        <!-- Upload Options Grid -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 48px;">
-          
-          <!-- Single/Multiple Files -->
-          <div style="background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s;" 
-               onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.15)'" 
-               onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'"
-               onclick="document.getElementById('file-upload-single').click()">
-            <i class="ph ph-file-pdf" style="font-size: 48px; color: #3b82f6; margin-bottom: 16px;"></i>
-            <h3 style="font-size: 18px; font-weight: 700; color: #1e293b; margin: 0 0 8px 0;">
-              Upload PDF Statements
-            </h3>
-            <p style="font-size: 14px; color: #64748b; margin: 0 0 16px 0; line-height: 1.5;">
-              Select one or more PDF bank statements
-            </p>
-            <button style="background: #3b82f6; color: white; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
-              Choose Files
-            </button>
-            <input 
-              type="file" 
-              id="file-upload-single" 
-              accept=".pdf" 
-              multiple 
-              style="display: none;" 
-              onchange="window.handleFileInput(this, 'single')">
-          </div>
-
-          <!-- Bulk Folder Upload -->
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: 2px solid #667eea; border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; color: white;" 
-               onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 8px 24px rgba(102, 126, 234, 0.3)'" 
-               onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'"
-               onclick="document.getElementById('folder-upload-bulk').click()">
-            <i class="ph ph-folder-open" style="font-size: 48px; color: white; margin-bottom: 16px;"></i>
-            <h3 style="font-size: 18px; font-weight: 700; color: white; margin: 0 0 8px 0;">
-              Bulk Folder Upload 🚀
-            </h3>
-            <p style="font-size: 14px; color: rgba(255, 255, 255, 0.9); margin: 0 0 16px 0; line-height: 1.5;">
-              Upload entire folders of PDF statements at once
-            </p>
-            <button style="background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid rgba(255, 255, 255, 0.4); padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; backdrop-filter: blur(10px);">
-              Select Folder
-            </button>
-            <input 
-              type="file" 
-              id="folder-upload-bulk" 
-              webkitdirectory="" 
-              mozdirectory="" 
-              directory="" 
-              multiple 
-              style="display: none;" 
-              onchange="window.handleFileInput(this, 'bulk')">
-          </div>
-
-        </div>
-
-        <!-- Features Grid -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px;">
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-            <i class="ph ph-robot" style="font-size: 24px; color: #3b82f6; margin-bottom: 12px;"></i>
-            <h4 style="font-size: 14px; font-weight: 700; color: #1e293b; margin: 0 0 8px 0;">Surgical Parsing</h4>
-            <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">All statements parsed with bank-specific extractors</p>
-          </div>
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-            <i class="ph ph-lightning" style="font-size: 24px; color: #8b5cf6; margin-bottom: 12px;"></i>
-            <h4 style="font-size: 14px; font-weight: 700; color: #1e293b; margin: 0 0 8px 0;">Auto-Categorization</h4>
-            <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">Smart ML-based categorization from 16K training examples</p>
-          </div>
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-            <i class="ph ph-shield-check" style="font-size: 24px; color: #10b981; margin-bottom: 12px;"></i>
-            <h4 style="font-size: 14px; font-weight: 700; color: #1e293b; margin: 0 0 8px 0;">Duplicate Detection</h4>
-            <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">Automatically prevents duplicate transaction imports</p>
-          </div>
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-            <i class="ph ph-chart-pie-slice" style="font-size: 24px; color: #f59e0b; margin-bottom: 12px;"></i>
-            <h4 style="font-size: 14px; font-weight: 700; color: #1e293b; margin: 0 0 8px 0;">Financial Reports</h4>
-            <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">9 report types including Trial Balance, P&L, GST/HST</p>
-          </div>
-        </div>
-      </div>
-
-      <script>
-        // File input handler
-        window.handleFileInput = function(input, mode) {
-          const files = Array.from(input.files);
-          console.log('[UPLOAD] Mode:', mode, 'Total files:', files.length);
-          
-          // Filter for PDFs only (exclude CSV, XLSX, etc.)
-          const pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
-          
-          if (pdfFiles.length === 0) {
-            alert('No PDF files found. Please select PDF bank statements only.');
-            input.value = ''; // Reset input
-            return;
-          }
-          
-          // Detect subfolders (from file.webkitRelativePath)
-          if (mode === 'bulk' && pdfFiles.length > 0 && pdfFiles[0].webkitRelativePath) {
-            const folders = new Set();
-            pdfFiles.forEach(f => {
-              const pathParts = f.webkitRelativePath.split('/');
-              if (pathParts.length > 1) {
-                // Get first subfolder name (e.g., "AMEX Aeroplan", "RBC Checking 1167")
-                folders.add(pathParts[pathParts.length - 2] || pathParts[0]);
-              }
-            });
-            
-            if (folders.size > 1) {
-              console.log('[UPLOAD] Found PDFs across', folders.size, 'subfolders:', Array.from(folders));
-              const folderList = Array.from(folders).slice(0, 5).join(', ');
-              const moreText = folders.size > 5 ? ('... +' + (folders.size - 5) + ' more') : '';
-              // Removed modal alert - info logged to console instead
-              // alert('Found ' + pdfFiles.length + ' PDF files across ' + folders.size + ' subfolders:\\n\\n' + folderList + moreText + '\\n\\nReady to process all files.');
-            }
-          }
-          
-          if (pdfFiles.length < files.length) {
-            const skipped = files.length - pdfFiles.length;
-            console.log('[UPLOAD] Filtered out', skipped, 'non-PDF files');
-          }
-          
-          console.log('[UPLOAD] Processing', pdfFiles.length, 'PDF files through surgical parsers');
-          window.handleFilesSelected(pdfFiles);
-          input.value = ''; // Reset input for next use
-        };
-      </script>
-    `;
+    return `<div id="home-container" style="width: 100%; height: 100vh; overflow: auto;"></div>`;
   }
+
+
 
   function renderPlaceholder(title) {
     return `

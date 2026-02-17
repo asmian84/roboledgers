@@ -349,6 +349,56 @@ class ReportGenerator {
     }
 
     /**
+     * Check if a transaction is exempt from GST/HST
+     * Exemptions include: payments, payroll, equity draws, FX transactions, bank fees, insurance
+     */
+    isGSTExempt(tx, account) {
+        // Check description keywords for exempt transaction types
+        const desc = (tx.description || '').toLowerCase();
+        const exemptKeywords = [
+            // Credit card payments
+            'amex', 'visa', 'mastercard', 'm/c', 'mc', 'american express',
+            // Payroll
+            'payroll', 'salary', 'wages', 'wage', 'paycheque', 'paycheck',
+            // Equity/draws
+            'shareholder', 'draw', 'distribution', 'dividend',
+            // Banking
+            'bank fee', 'service charge', 'bank charge', 'monthly fee',
+            // Insurance
+            'insurance', 'premium',
+            // Other payments
+            'online payment', 'e-transfer', 'etransfer', 'debit memo', 'credit memo',
+            // Miscellaneous
+            'miscellaneous', 'misc'
+        ];
+
+        // Check if description contains exempt keywords
+        if (exemptKeywords.some(kw => desc.includes(kw))) {
+            return true;
+        }
+
+        // Check for foreign exchange transactions
+        if (tx.fx_rate && tx.fx_rate !== 1.0) {
+            return true;
+        }
+
+        // Check account class for equity draws and credit card liabilities
+        if (account.class === 'EQ_DRAW' ||
+            account.class === 'LIABILITY_CC' ||
+            account.class === 'EQ_CAPITAL') {
+            return true;
+        }
+
+        // Check if account is in exempt range (e.g., equity accounts)
+        const accountCode = account.code;
+        if (accountCode >= '3000' && accountCode < '4000') {  // Equity
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Generate GST/HST Report
      * Calculate GST collected, GST paid (ITC), and net GST payable
      */
@@ -366,6 +416,12 @@ class ReportGenerator {
 
             const account = this.coa.get(tx.category);
             if (!account) return;
+
+            // Check gst_enabled checkbox - user controls GST inclusion per transaction
+            if (!tx.gst_enabled) {
+                // Skip transactions where GST checkbox is unchecked
+                return;
+            }
 
             // Check if transaction has tax amount
             const taxAmount = tx.tax_cents ? tx.tax_cents / 100 : 0;

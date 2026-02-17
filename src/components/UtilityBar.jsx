@@ -111,7 +111,7 @@ function PieChart({ data, size = 200 }) {
  * UtilityBar - Side panel showing reconciliation stats, metadata, and dashboard
  * Replaces the old overlay utility bar with integrated split-pane design
  */
-export function UtilityBar({ transactions = [] }) {
+export function UtilityBar({ transactions = [], onFilterTransactions }) {
     // Calculate stats from transactions
     const stats = React.useMemo(() => {
         const categorized = transactions.filter(t => t.category && t.category !== 'UNCAT');
@@ -125,13 +125,41 @@ export function UtilityBar({ transactions = [] }) {
             return t.polarity === 'CREDIT' ? sum + (t.amount_cents || 0) : sum;
         }, 0) / 100;
 
+        // GST Calculations
+        let gstCollected = 0;
+        let gstPaid = 0;
+        let totalRevenue = 0;
+
+        transactions.forEach(t => {
+            // Only include if GST checkbox is checked
+            if (!t.gst_enabled) return;
+
+            const taxAmount = (t.tax_cents || 0) / 100;
+
+            // USE POLARITY (90% accurate, user controls via checkbox)
+            if (t.polarity === 'CREDIT') {
+                // CREDIT = incoming money = GST Collected
+                gstCollected += taxAmount;
+                totalRevenue += (t.amount_cents || 0) / 100;
+            } else if (t.polarity === 'DEBIT') {
+                // DEBIT = outgoing money = GST ITC/Paid
+                gstPaid += taxAmount;
+            }
+        });
+
+        const netGST = gstCollected - gstPaid;
+
         return {
             total: transactions.length,
             categorized: categorized.length,
             uncategorized: uncategorized.length,
             totalDebit,
             totalCredit,
-            netActivity: totalDebit - totalCredit
+            netActivity: totalDebit - totalCredit,
+            gstCollected,
+            gstPaid,
+            netGST,
+            totalRevenue
         };
     }, [transactions]);
 
@@ -174,6 +202,63 @@ export function UtilityBar({ transactions = [] }) {
                 </div>
             </div>
 
+            {/* GST Summary */}
+            <div className="p-4 bg-white border-b border-gray-200">
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">GST Summary</h3>
+                <div className="bg-green-50 border border-green-200 rounded-md p-3 space-y-2">
+                    <div
+                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
+                        onClick={() => onFilterTransactions?.({
+                            type: 'gst_collected',
+                            label: 'GST Collected',
+                            filter: tx => tx.gst_enabled && tx.polarity === 'CREDIT' && tx.tax_cents > 0
+                        })}
+                        title="Click to filter GST Collected transactions"
+                    >
+                        <span className="text-xs text-gray-600">GST Collected</span>
+                        <span className="text-sm font-bold font-mono text-green-700">
+                            ${stats.gstCollected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                    <div
+                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
+                        onClick={() => onFilterTransactions?.({
+                            type: 'gst_paid',
+                            label: 'GST ITC (Paid)',
+                            filter: tx => tx.gst_enabled && tx.polarity === 'DEBIT' && tx.tax_cents > 0
+                        })}
+                        title="Click to filter GST ITC/Paid transactions"
+                    >
+                        <span className="text-xs text-gray-600">GST ITC (Paid)</span>
+                        <span className="text-sm font-bold font-mono text-blue-700">
+                            ${stats.gstPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                    <div
+                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
+                        onClick={() => onFilterTransactions?.({
+                            type: 'revenue',
+                            label: 'Total Revenue',
+                            filter: tx => tx.polarity === 'CREDIT' && tx.gst_enabled
+                        })}
+                        title="Click to filter Revenue transactions"
+                    >
+                        <span className="text-xs text-gray-600">Total Revenue</span>
+                        <span className="text-sm font-bold font-mono text-gray-700">
+                            ${stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                    <div className="pt-2 border-t border-green-300 flex justify-between items-center">
+                        <span className="text-xs font-semibold text-gray-700">
+                            {stats.netGST < 0 ? 'GST Refund' : 'GST Payable'}
+                        </span>
+                        <span className={`text-sm font-bold font-mono ${stats.netGST < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            ${Math.abs(stats.netGST).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             {/* Account Reconciliation */}
             <div className="p-4 bg-white border-b border-gray-200">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Reconciliation</h3>
@@ -183,19 +268,19 @@ export function UtilityBar({ transactions = [] }) {
                     <div className="flex justify-between items-center">
                         <span className="text-xs text-gray-600">Total Debit</span>
                         <span className="text-sm font-bold font-mono text-red-600">
-                            ${stats.totalDebit.toFixed(2)}
+                            ${stats.totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                     </div>
                     <div className="flex justify-between items-center">
                         <span className="text-xs text-gray-600">Total Credit</span>
                         <span className="text-sm font-bold font-mono text-green-600">
-                            ${stats.totalCredit.toFixed(2)}
+                            ${stats.totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                     </div>
                     <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
                         <span className="text-xs font-semibold text-gray-700">Net Activity</span>
                         <span className={`text-sm font-bold font-mono ${stats.netActivity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ${stats.netActivity.toFixed(2)}
+                            ${Math.abs(stats.netActivity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                     </div>
                 </div>

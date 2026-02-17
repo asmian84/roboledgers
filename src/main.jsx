@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { TransactionsTable } from './TransactionsTable2.jsx';  // TESTING EXPERIMENTAL VERSION
 import { ReportsPage } from './reports/ReportsPage';
+import HomePage from './ui/pages/HomePage.jsx';
+
 
 /**
  * Global Bridge: Exposes the mounting function to the Vanilla JS shell (app.js)
@@ -265,3 +267,47 @@ window.unmountReportsPage = () => {
         window._reportsRootContainer = null;
     }
 };
+
+/**
+ * Mount HomePage component for feature showcase landing
+ */
+window.mountHomePage = () => {
+    const container = document.getElementById('home-container');
+    if (!container) {
+        console.error('[MAIN.JSX] Home container not found');
+        return;
+    }
+
+    console.log('[MAIN.JSX] Mounting HomePage');
+
+    if (window._homeRoot && window._homeRootContainer && !document.body.contains(window._homeRootContainer)) {
+        try { window._homeRoot.unmount(); } catch (e) { /* ignore */ }
+        window._homeRoot = null;
+        window._homeRootContainer = null;
+    }
+
+    if (!window._homeRoot) {
+        window._homeRoot = ReactDOM.createRoot(container);
+        window._homeRootContainer = container;
+    }
+
+    window._homeRoot.render(
+        <React.StrictMode>
+            <HomePage />
+        </React.StrictMode>
+    );
+};
+
+window.unmountHomePage = () => {
+    if (window._homeRoot) {
+        try {
+            window._homeRoot.unmount();
+            console.log('[MAIN.JSX] ✓ Home unmounted');
+        } catch (e) {
+            console.warn('[MAIN.JSX] ⚠ Home unmount error:', e);
+        }
+        window._homeRoot = null;
+        window._homeRootContainer = null;
+    }
+};
+

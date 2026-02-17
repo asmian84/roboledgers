@@ -64,8 +64,6 @@ window.RoboLedger = (function () {
         { code: '2410', name: 'WCB Payable', class: 'ACCRUED', root: 'LIABILITY', balance: 0 },
         { code: '2500', name: 'Corporate Income Tax Payable', class: 'TAX_INC', root: 'LIABILITY', balance: 0 },
         { code: '2600', name: 'Deferred Revenue', class: 'DEFERRED', root: 'LIABILITY', balance: 0 },
-        { code: '2602', name: 'Federal Tax Installments', class: 'TAX_SALES', root: 'LIABILITY', balance: 0 },
-        { code: '2710', name: 'Bank Loan #1', class: 'DEBT_LT', root: 'LIABILITY', balance: 0 },
         { code: '2800', name: 'Loans from Shareholders', class: 'DEBT_ST', root: 'LIABILITY', balance: 0 },
         { code: '2900', name: 'Bank Loan - Long Term', class: 'DEBT_LT', root: 'LIABILITY', balance: 0 },
 
@@ -98,13 +96,10 @@ window.RoboLedger = (function () {
         { code: '6400', name: 'Telephone & Internet', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '6500', name: 'Insurance', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '6600', name: 'Repair & Maintenance', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '6800', name: 'Dues & Memberships', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '7000', name: 'Advertising & Promotion', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '7100', name: 'Marketing', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '7200', name: 'Software & Subscriptions', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '7300', name: 'Computer & Internet', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '7600', name: 'Insurance', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '7700', name: 'Interest & Bank Charges', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '8100', name: 'Rent & Utilities', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '8200', name: 'Automobile Expenses', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '8300', name: 'Fuel', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
@@ -114,10 +109,8 @@ window.RoboLedger = (function () {
         { code: '8600', name: 'Office Supplies & Postage', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '8700', name: 'Bank Charges', class: 'EXP_OP_FIN', root: 'EXPENSE', balance: 0 },
         { code: '8800', name: 'Bank & Interest Charges', class: 'EXP_OP_FIN', root: 'EXPENSE', balance: 0 },
-        { code: '8900', name: 'Professional Fees', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
+        { code: '8900', name: 'Professional Fees (Accounting/Legal)', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '9000', name: 'Depreciation Expense', class: 'EXP_NON_CASH', root: 'EXPENSE', balance: 0 },
-        { code: '9200', name: 'Travel & Accommodation', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '9700', name: 'Vehicle', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
         { code: '9970', name: 'Uncategorized', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 }
     ];
 

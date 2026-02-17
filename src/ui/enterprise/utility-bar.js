@@ -78,9 +78,13 @@ window.updateUtilityBar = function () {
     // --- Category Allocation (Top 5 with interactive chart) ---
     const categoryTotals = {};
     allTxns.forEach(t => {
-        const category = t.category || 'Uncategorized';
+        const categoryCode = t.category || 'Uncategorized';
+        // Look up account name from COA
+        const account = window.RoboLedger?.COA?.get(categoryCode);
+        const categoryName = account?.name || categoryCode;
+
         const amount = Math.abs(parseFloat(t.debit_cents || t.credit_cents || t.amount || 0) / 100);
-        categoryTotals[category] = (categoryTotals[category] || 0) + amount;
+        categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + amount;
     });
 
     const topCategories = Object.entries(categoryTotals)
