@@ -1600,7 +1600,13 @@ window.RoboLedger = (function () {
 
 
                 // === PHASE 5: SALES TAX (GST/HST) CALCULATION ===
-                if (settings.gstEnabled) {
+                // Initialize gst_enabled if not set (default based on global setting)
+                if (canonical.gst_enabled === undefined) {
+                    canonical.gst_enabled = settings.gstEnabled || false;
+                }
+
+                // Only calculate tax if THIS transaction has GST enabled
+                if (canonical.gst_enabled) {
                     const province = settings.province || 'ON';
                     const taxRates = {
                         'ON': 0.13,
@@ -1617,6 +1623,7 @@ window.RoboLedger = (function () {
                     canonical.tax_cents = Math.round(taxAmount * 100);
                     // console.log(`[TAX] Calculated ${province} tax: $${taxAmount.toFixed(2)} on $${amount.toFixed(2)}`);
                 }
+
 
                 // === PHASE 6: PERSISTENT REF# ASSIGNMENT ===
                 // Assign permanent REF# based on account, BEFORE storing
