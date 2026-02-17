@@ -992,13 +992,21 @@ export function TransactionsTable({
                 console.log('[DETAIL_MODE] Auto-scrolling to FilterToolbar');
                 if (parentRef.current) {
                     setTimeout(() => {
-                        const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
-                        let scrollAmount = 0;
-                        headerCards.forEach(card => {
-                            scrollAmount += card.offsetHeight;
-                        });
-                        console.log('[DETAIL_MODE] Scroll amount calculated:', scrollAmount);
-                        parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
+                        // Find the FilterToolbar sticky element (the blue box)
+                        const filterToolbar = parentRef.current.querySelector('[style*="sticky"]');
+                        if (filterToolbar) {
+                            console.log('[DETAIL_MODE] Scrolling FilterToolbar into view');
+                            filterToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        } else {
+                            // Fallback: calculate scroll from header cards
+                            const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
+                            let scrollAmount = 0;
+                            headerCards.forEach(card => {
+                                scrollAmount += card.offsetHeight;
+                            });
+                            console.log('[DETAIL_MODE] Fallback: Scroll amount calculated:', scrollAmount);
+                            parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
+                        }
                     }, 100);
                 }
             } else {

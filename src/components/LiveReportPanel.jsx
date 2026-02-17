@@ -198,8 +198,8 @@ export function LiveReportPanel({
                                     key={account.code}
                                     onClick={() => onAccountClick?.(account.code)}
                                     className={`cursor-pointer transition-colors ${selectedAccount === account.code
-                                            ? 'bg-blue-50 border-l-4 border-l-blue-500'
-                                            : 'hover:bg-gray-50'
+                                        ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                                        : 'hover:bg-gray-50'
                                         }`}
                                     title="Click to filter grid by this account"
                                 >
@@ -208,10 +208,10 @@ export function LiveReportPanel({
                                     </td>
                                     <td className="py-2 text-gray-900">{account.name}</td>
                                     <td className="py-2 text-right font-mono tabular-nums text-gray-900">
-                                        {account.debit > 0 ? formatCurrency(account.debit) : '—'}
+                                        {account.debit > account.credit ? formatCurrency(account.debit - account.credit) : '—'}
                                     </td>
                                     <td className="py-2 text-right font-mono tabular-nums text-gray-900">
-                                        {account.credit > 0 ? formatCurrency(account.credit) : '—'}
+                                        {account.credit > account.debit ? formatCurrency(account.credit - account.debit) : '—'}
                                     </td>
                                 </tr>
                             ))}
