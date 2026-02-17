@@ -1611,13 +1611,11 @@ window.RoboLedger = (function () {
                     const rate = taxRates[province] || 0.13;
 
                     // Tax = Total / (1 + rate) * rate
-                    // We only calculate tax if it's a debit (expense)
-                    if (canonical.polarity === 'DEBIT') {
-                        const amount = canonical.amount_cents / 100;
-                        const taxAmount = (amount / (1 + rate)) * rate;
-                        canonical.tax_cents = Math.round(taxAmount * 100);
-                        // console.log(`[TAX] Calculated ${province} tax: $${taxAmount.toFixed(2)} on $${amount.toFixed(2)}`);
-                    }
+                    // Calculate tax for BOTH debits (expenses) AND credits (revenue)
+                    const amount = canonical.amount_cents / 100;
+                    const taxAmount = (amount / (1 + rate)) * rate;
+                    canonical.tax_cents = Math.round(taxAmount * 100);
+                    // console.log(`[TAX] Calculated ${province} tax: $${taxAmount.toFixed(2)} on $${amount.toFixed(2)}`);
                 }
 
                 // === PHASE 6: PERSISTENT REF# ASSIGNMENT ===
