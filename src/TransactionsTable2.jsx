@@ -932,7 +932,7 @@ const columns = [
                             fontVariantNumeric: 'tabular-nums'
                         }}
                     >
-                        {row.gst_enabled && displayValue ? formatCurrency(displayValue / 100) : '-'}
+                        {row.gst_enabled && displayValue ? formatCurrency(displayValue / 100) : ''}
                     </span>
                 </div>
             );
