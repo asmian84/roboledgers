@@ -1,0 +1,223 @@
+
+
+RoboLedger Auto-Categorization
+Code Audit & Improvement Report
+Reviewed by Claude · February 2026
+
+
+Files Reviewed
+RuleEngine.js, FuzzyMatcher.js, VendorMatcher.js, VendorNormalizer.js, UserCorrections.js
+Bugs Found
+6 confirmed bugs (2 critical, 4 medium severity)
+Improvements Made
+8 new features / enhancements
+Files Delivered
+4 improved files + this report
+
+
+
+1. Executive Summary
+RoboLedger has a solid 3-tier categorization architecture — Rule Engine → Vendor Dictionary → Fuzzy ML — but the implementation has several bugs that silently reduce accuracy in production, plus structural issues that compound over time. This report documents every issue found, explains the root cause, and delivers corrected code for the 4 most impactful files.
+
+The most impactful finding: your UserCorrections adaptive learning system is completely broken due to a one-line bug in the notification path. Every manual correction your users make is being saved to localStorage but never actually fed back into the FuzzyMatcher. The system thinks it's learning — it isn't.
+
+Severity Overview
+Severity
+Count
+Files Affected
+🔴 Critical
+2
+UserCorrections.js, RuleEngine.js
+🟠 Medium
+4
+RuleEngine.js, VendorMatcher.js, VendorNormalizer.js
+🟡 Low
+3
+RuleEngine.js, FuzzyMatcher.js
+🟢 Improvements
+8
+All files
+
+
+2. Critical Bugs (Fix Immediately)
+BUG #1 — Adaptive Learning is Silently Broken
+File: UserCorrections.js
+
+The addCorrection() method attempts to notify the FuzzyMatcher when a user manually corrects a categorization, so the model can hot-reload with updated training data. However, the notification path is wrong:
+
+Broken code:
+// ❌ BROKEN — window.RoboLedger.RuleEngine does not exist
+if (window.RoboLedger?.RuleEngine?.fuzzyMatcher) {
+    window.RoboLedger.RuleEngine.fuzzyMatcher.updateUserCorrections(...)
+}
+
+The RuleEngine singleton is exported as window.RuleEngine — not window.RoboLedger.RuleEngine. The optional chaining (?.) means this silently evaluates to undefined every time. No error is thrown, no correction is applied. The fuzzyMatcher.updateUserCorrections() method is never called.
+
+Fix applied:
+// ✅ FIXED — correct singleton path
+const fuzzyMatcher = window.RuleEngine?.fuzzyMatcher;
+if (fuzzyMatcher) fuzzyMatcher.updateUserCorrections(this.corrections);
+
+Impact: Every manual correction your users make is wasted until the page is refreshed (at which point initializeFuzzyMatcher() reloads from localStorage). The fuzzyMatcher never improves during a session.
+
+BUG #2 — FuzzyMatcher Race Condition
+File: RuleEngine.js
+
+initializeFuzzyMatcher() is async and awaits a fetch() call. However it is called in the constructor with no await and no readiness flag. This means that for the first few hundred milliseconds after page load, this.fuzzyMatcher is null. Any transaction categorized during that window silently skips Tier 3 entirely with no warning.
+
+On slow connections or when vendor_training.json is large, this window can be several seconds long. Early-load bulk categorizations (e.g. on CSV import) will consistently miss fuzzy matching.
+
+Fix applied:
+// ✅ FIXED — readiness flag prevents silent misses
+this._fuzzyReady = false;
+async initializeFuzzyMatcher() {
+    // ... await fetch(...)
+    this._fuzzyReady = true;  // set even on failure
+}
+// In applyRules():
+if (this._fuzzyReady && this.fuzzyMatcher) { ... }
+
+
+3. Medium Bugs
+BUG #3 — Overly Broad AIRBNB Revenue Rule
+File: RuleEngine.js
+
+The default AIRBNB rule uses this regex:
+'AIRBNB|PAYMENTS.*ACCOUNT PAYABLE'
+
+The second pattern — PAYMENTS.*ACCOUNT PAYABLE — will match almost any inter-account transfer, loan payment, or accounts payable transaction from any bank. This silently miscategorizes debt payments, owner draws, and inter-company transfers as Rental Revenue (4000). In a double-entry system this is catastrophic for the balance sheet.
+
+Fix applied: Removed the second alternative and added a polarity condition so the rule ONLY fires on CREDIT transactions explicitly:
+conditions: [
+    { field: 'description', operator: 'contains', value: 'AIRBNB' },
+    { field: 'polarity',    operator: 'equals',  value: 'CREDIT' }
+]
+
+BUG #4 — Excessive localStorage Writes in Bulk Operations
+File: RuleEngine.js
+
+Inside applyRules(), every rule match increments rule.stats and calls this.saveRules(). During bulkCategorize() this means one localStorage.setItem() call per matched transaction. For a 500-transaction CSV import this triggers 500+ sequential writes to localStorage, causing visible UI freezing (localStorage is synchronous) and risks a quota exceeded error.
+
+Fix applied: bulkCategorize() now passes a _skipSave flag to applyRules() and performs a single save() at the end of the entire batch.
+
+BUG #5 — VendorMatcher Doesn't Normalize Descriptions
+File: VendorMatcher.js
+
+VendorMatcher.findMatch() compares the raw bank description directly against clean dictionary keys. This means 'PAP TELUS MOBILITY 0001234 CALGARY AB' will have very low similarity to the dictionary entry 'TELUS' — even though they refer to the same vendor. The normalizer exists precisely to solve this, but VendorMatcher never calls it.
+
+Fix applied: findMatch() now normalizes the description using VendorNormalizer before comparing, then also tries the raw description as a fallback and takes the best score.
+
+BUG #6 — VendorMatcher Substring Match Score Too Generous
+File: VendorMatcher.js
+
+The similarity() function gives a base score of 0.8 to any substring match:
+if (s1.includes(s2) || s2.includes(s1)) {
+    return 0.8 + (0.2 * (min / max));
+}
+
+This means matching 'SHELL' (5 chars) anywhere in a 100-character description gives a score of 0.81 — above the 0.6 threshold — even if the description is about something completely different like 'ROYALSHELL FINANCIAL SERVICES'. The short substring match overwhelms the actual content.
+
+Fix applied: Score is now proportional and capped at 0.92, requiring meaningful overlap between the strings.
+
+
+4. Logic / Categorization Errors
+Canadian Tire → Wrong Category
+Canadian Tire is mapped to Vehicle Expenses (8400) at priority 8. In reality Canadian Tire sells kitchen appliances, camping gear, sporting goods, cleaning supplies, tools, and everything else. Mapping it broadly to Vehicle Expenses will consistently miscategorize purchases.
+
+Fix applied: Moved to Office Supplies (8600) as a low-priority (4) last-resort fallback so other tiers can override it when better context is available.
+
+Travel Expenses Mapped to Meals & Entertainment
+WestJet, Hotels, Parks Canada, Alpine Helicopters, and WiFiOnBoard were all mapped to COA 8100 (Meals & Entertainment). These are clearly travel expenses and should map to a Travel category (8500). Incorrectly mixing travel with meals creates reporting errors and affects T2/T1 tax schedule breakdowns.
+
+Fix applied: All airlines, hotels, and travel-related vendors now correctly map to 8500 (Travel).
+
+Missing Debit → Revenue Guard
+The polarity guards correctly block CREDIT transactions from being categorized as expenses. However, there is no corresponding guard to prevent DEBIT transactions from being categorized as revenue. A debit transaction will never be revenue — yet the fuzzy matcher could theoretically suggest a revenue account if training data is sparse.
+
+Fix applied: Added isDebit && account.root === 'REVENUE' guard at all three matching tiers.
+
+
+5. New Features Added
+Tier 3: Keyword Heuristic Layer
+Added a new intermediate tier between the Vendor Dictionary and FuzzyMatcher. This uses a polarity-aware keyword map that covers 10 expense categories and common revenue patterns. It acts as a reliable middle ground when the vendor dictionary has no entry and the fuzzy matcher's confidence is too low.
+
+This tier is especially valuable when you have sparse training data for new businesses. It reliably catches common patterns like 'insurance', 'fuel', 'restaurant', and 'e-transfer' even for vendors not in any dictionary.
+
+not_contains and not_equals Operators
+Added two new condition operators that were missing from evaluateCondition(). These unlock negative matching rules — for example:
+	•	A rule that fires on any description containing 'PAYMENT' but not_contains 'AIRBNB' (to catch generic payments without hitting the revenue rule)
+	•	A rule that matches all DEBIT transactions not_equals 'CREDIT' without needing to hardcode DEBIT
+
+These operators are immediately usable from the rule builder UI without any frontend changes.
+
+Canadian Bank Statement Prefixes in VendorNormalizer
+Canadian banks prefix transaction descriptions with payment type codes that obscure the actual vendor name. These are now stripped before matching:
+Prefix
+Meaning
+Example
+PAP
+Pre-Authorized Payment
+PAP TELUS MOBILITY 0001234 → TELUS
+POS
+Point of Sale
+POS SHELL #4521 CALGARY → SHELL
+INTERAC
+Interac e-Transfer
+INTERAC FROM JOHN SMITH → JOHN SMITH
+PREAUTH
+Pre-Authorized
+PREAUTH NETFLIX.COM → NETFLIX
+SP
+Stripe payment prefix
+SP PRICELABS.COM → PRICELABS
+SQ*
+Square payment prefix
+SQ*COFFEE SHOP → COFFEE SHOP
+
+Conflict Detection in UserCorrections
+Added getConflicts() which identifies vendors where your manual corrections are inconsistent — e.g. Amazon transactions that have been categorized as both Office Supplies and Software in roughly equal proportions. This surfaces genuinely ambiguous transactions that may need clearer rules to disambiguate (e.g. by amount, by description keywords).
+
+One-Click Corrections Backup
+Added exportJSON() to UserCorrections which triggers a browser download of all learned corrections as a dated JSON file. Call this from a 'Backup My Learning' button in the settings UI. Protects against localStorage being cleared (browser cache clear, private mode, etc.) which would otherwise silently erase all adaptive learning.
+
+
+6. Architecture Recommendations
+These are not bugs but structural improvements that will significantly increase long-term accuracy and maintainability.
+Priority 1 — Expand COA from 40 to 212 Accounts
+Your architecture doc notes the code has 40 accounts but your Excel has 212. This is the single biggest accuracy blocker. Transactions can only be categorized into accounts the system knows about. Add a 'Reload COA Defaults' button or auto-migration check on app load:
+if (RoboLedger.COA.size < 200) { await RoboLedger.reloadDefaultCOA(); }
+
+Priority 2 — Confidence Score UI
+Every categorization already returns a confidence score and method. Surface this in the transaction row:
+	•	Green: confidence ≥ 0.9 (rule or exact match)
+	•	Yellow: confidence 0.7–0.9 (fuzzy or keyword match)
+	•	Red: confidence < 0.7 or method = 'default_revenue' (needs manual review)
+
+This makes it immediately obvious which transactions need human attention without requiring users to scan every row.
+
+Priority 3 — 'Apply to All Similar' After Correction
+When a user manually corrects a category, offer 'Apply this to all 14 similar transactions?' This converts a single user action into a bulk re-categorization, dramatically reducing the manual review burden and building training data faster.
+
+Priority 4 — Build Vendor Dictionary from Transaction History
+The vendor dictionary (vendor_dictionary.json) is currently manually curated. Add a one-time utility that processes all historical transactions, normalizes them, groups by vendor, and asks the user to confirm the most common category for each. This would produce a dense, business-specific dictionary far more effective than a generic one.
+
+
+7. Delivered Files Summary
+File
+Changes
+Bugs Fixed
+RuleEngine.js
+Race condition fix, bulk save fix, AIRBNB rule fix, debit guard, not_contains/not_equals, Tier 3 keyword layer, travel COA correction, Canadian Tire priority fix
+#2, #3, #4
+VendorNormalizer.js
+Canadian bank prefixes, payment gateway prefixes, date prefix stripping, reference number removal
+#5 (partial)
+VendorMatcher.js
+Normalization applied before matching, readiness guard, fixed substring scoring, raw+normalized dual matching
+#5, #6
+UserCorrections.js
+Fixed notification path, added exportJSON(), added getConflicts()
+#1
+
+
+End of Report
