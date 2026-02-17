@@ -28,11 +28,6 @@ SMART PARSING RULES:
     const lines = text.split('\n');
     const transactions = [];
 
-    // LOUD DIAGNOSTIC
-    console.warn('⚡ [EXTREME-SCOTIA] Starting metadata extraction for Scotiabank...');
-    console.error('📄 [DEBUG-SCOTIA] First 1000 characters (RED for visibility):');
-    console.log(text.substring(0, 1000));
-
     // EXTRACT METADATA (Institution, Transit, Account)
     // Scotia format: Account Number: 02469 01458 15
     const combinedMatch = text.match(/Account Number:?\s*(\d{5})\s+([\d\s-]{7,})/i);
@@ -50,8 +45,6 @@ SMART PARSING RULES:
       _bank: inputMetadata?.fullBrandName || 'Scotiabank',
       _tag: inputMetadata?.tag || 'Chequing'
     };
-    console.warn('🏁 [SCOTIA] Extraction Phase Complete. Transit:', metadata.transit, 'Acct:', metadata.accountNumber);
-
     // Date patterns
     const dateRegex1 = /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)[a-z]*\s+\d{1,2}/i;
     const dateRegex2 = /^(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/;
@@ -64,7 +57,6 @@ SMART PARSING RULES:
     // Single amount pattern (for fallback or BALANCE FORWARD detection)
     const singleAmountPattern = /([\d,]+\.\d{2}-?)(?:\s|$)/;
 
-    console.log(`[SCOTIA] Starting parse with ${lines.length} lines`);
 
     let openingBalance = 0;
     const openingBalanceMatch = text.match(/BALANCE\s+FORWARD\s+.*?([\d,]+\.\d{2}-?)/i);
@@ -72,7 +64,6 @@ SMART PARSING RULES:
       let rawBal = openingBalanceMatch[1].replace(/,/g, '');
       openingBalance = parseFloat(rawBal.replace(/-$/, ''));
       if (rawBal.endsWith('-')) openingBalance = -openingBalance;
-      console.log(`[SCOTIA] Extracted opening balance: ${openingBalance}`);
     }
 
     for (let i = 0; i < lines.length; i++) {
@@ -92,20 +83,17 @@ SMART PARSING RULES:
 
         // Skip BALANCE FORWARD lines (they only show balance, not a transaction)
         if (line.match(/BALANCE\s+FORWARD/i)) {
-          console.log(`[SCOTIA] Skipping BALANCE FORWARD: "${line}"`);
           continue;
         }
 
         // Check if this line already has TWO amounts (complete transaction on one line)
         // Check for summary lines to skip
         if (line.match(/No\. of (?:Debits|Credits)|Total Amount|Service Charge Summary/i)) {
-          console.log(`[SCOTIA] ℹ️ Skipping summary line: "${line.substring(0, 50)}..."`);
           continue;
         }
 
         const amountMatch = line.match(twoAmountPattern);
         if (amountMatch) {
-          console.log(`[SCOTIA] ✓ Single-line match: "${line}"`);
           this.processTransaction(dateStr, line, amountMatch, transactions, metadata, meta);
           continue;
         }
@@ -162,19 +150,13 @@ SMART PARSING RULES:
           // Fallback: Try single amount on the same line (if not a balance forward)
           const singleMatch = line.match(singleAmountPattern);
           if (singleMatch && !line.includes("BALANCE FORWARD")) {
-            console.log(`[SCOTIA] ✓ Single-amount fallback: "${line}"`);
             this.processTransaction(dateStr, line, [singleMatch[0], singleMatch[1], null], transactions, metadata, meta);
             foundAmount = true;
           }
         }
 
-        if (!foundAmount) {
-          console.log(`[SCOTIA] ✗ No amount found for date line: "${line}"`);
-        }
       }
     }
-
-    console.log(`[SCOTIA] Parsing complete. Found ${transactions.length} transactions.`);
 
     return {
       transactions: transactions,
@@ -272,14 +254,6 @@ SMART PARSING RULES:
     };
 
     transactions.push(tx);
-
-    console.log('✅ Parsed:', {
-      date: isoDate,
-      desc: description.substring(0, 40) + (description.length > 40 ? '...' : ''),
-      debit: tx.debit,
-      credit: tx.credit,
-      balance: balance
-    });
   }
 }
 

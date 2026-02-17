@@ -341,8 +341,6 @@
   };
 
   window.handleFilesSelected = async (files) => {
-    console.log('[UPLOAD] Processing', files.length, 'file(s)');
-
     // SMART UX: Only show full overlay for FIRST upload (no existing transactions)
     // Subsequent uploads show inline progress bar while grid stays visible
     const existingTxns = window.RoboLedger.Ledger.getAll();
@@ -394,13 +392,7 @@
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Process the file (PDF.js has its own 15s timeout at extraction level)
-        console.log(`[UPLOAD-DEBUG] ⏰ Starting processUpload for statement ${statementNum}/${totalStatements}: ${file.name}`);
-        const processingStartTime = Date.now();
-
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
-
-        const elapsed = ((Date.now() - processingStartTime) / 1000).toFixed(1);
-        console.log(`[UPLOAD-DEBUG] ✅ processUpload completed in ${elapsed}s for statement ${statementNum}/${totalStatements}`);
         totalImported += imported;
 
         // Stage 3: Categorizing (70-85% of file progress)
@@ -432,7 +424,6 @@
           totalImported
         );
 
-        console.log(`[UPLOAD] ${statementNum}/${totalStatements} - ${file.name}: ${imported} transactions imported`);
       } catch (err) {
         // Special handling for PDF_TIMEOUT errors (incompatible PDF format)
         if (err.message && err.message.startsWith('PDF_TIMEOUT:')) {
@@ -485,8 +476,6 @@
     // Hide progress bar after brief delay, then refresh grid
     setTimeout(() => {
       try {
-        console.log('[UPLOAD] Hiding progress bar and rendering grid...');
-
         // CRITICAL: Clean up any empty accounts before rendering
         // (prevents hangover accounts from failed uploads or zero-transaction files)
         cleanupEmptyAccounts();
@@ -497,7 +486,6 @@
           const lastAccount = accounts[accounts.length - 1];
           UI_STATE.refPrefix = lastAccount.ref || 'TXN';
           UI_STATE.selectedAccount = lastAccount.id;
-          console.log('[UPLOAD] Auto-set account:', lastAccount.id, 'prefix:', UI_STATE.refPrefix);
         }
 
         // Reset ingesting state so render() excludes progress bar HTML
@@ -512,7 +500,6 @@
           toggleBtn.style.display = 'flex';
         }
 
-        console.log('[UPLOAD] Upload workflow complete - grid should be visible');
       } catch (err) {
         console.error('[UPLOAD] Error in completion flow:', err);
         // Force render anyway
@@ -521,7 +508,6 @@
       }
     }, 500);
 
-    console.log(`[UPLOAD] Complete. Total imported: ${totalImported}`);
   };
 
   // Keep inline COA dropdowns opening downward by centering the row
@@ -687,7 +673,7 @@
         clearInterval(monitor);
         UI_STATE.isPoppedOut = false;
         UI_STATE.popoutWindow = null;
-        window.window.updateWorkspace();
+        window.updateWorkspace();
       }
     }, 500);
   };
@@ -1812,7 +1798,7 @@
       if (e.target.closest('.btn-add-row')) {
         const accId = UI_STATE.selectedAccount === 'ALL' ? 'ACC-001' : UI_STATE.selectedAccount;
         window.RoboLedger.Ledger.createManual(accId);
-        window.window.updateWorkspace();
+        window.updateWorkspace();
       }
     });
 
@@ -1824,7 +1810,7 @@
     document.addEventListener('click', (e) => {
       if (UI_STATE.bulkMenuOpen && !e.target.closest('.bulk-actions-container')) {
         UI_STATE.bulkMenuOpen = false;
-        window.window.updateWorkspace();
+        window.updateWorkspace();
       }
     });
   }
@@ -3610,7 +3596,7 @@
     const targets = []; // Get from React selection
     if (confirm(`Delete ${ targets.length } transactions ? `)) {
       targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
-      window.window.updateWorkspace();
+      window.updateWorkspace();
     }
     */
   };
@@ -3839,7 +3825,6 @@ window.updateFileType = function () {
     buttonText.textContent = 'Import Files';
   }
 
-  console.log('[UPLOAD] File type set to:', fileType);
 };
 
 window.updateBrowseMode = function () {
@@ -3855,14 +3840,12 @@ window.updateBrowseMode = function () {
     input.setAttribute('mozdirectory', '');
     input.setAttribute('directory', '');
     if (helpText) helpText.style.display = 'block';
-    console.log('[UPLOAD] Folder browsing enabled');
   } else {
     // Disable folder browsing (single files)
     input.removeAttribute('webkitdirectory');
     input.removeAttribute('mozdirectory');
     input.removeAttribute('directory');
     if (helpText) helpText.style.display = 'none';
-    console.log('[UPLOAD] Single file mode enabled');
   }
 };
 
@@ -3881,8 +3864,6 @@ window.handleMainUpload = function (input) {
   const fileType = select.value;
   const isFolderMode = checkbox && checkbox.checked;
 
-  console.log('[UPLOAD] Processing:', files.length, 'files, Type:', fileType, 'Folder mode:', isFolderMode);
-
   let filteredFiles = files;
 
   // Apply filter based on selected type
@@ -3895,8 +3876,6 @@ window.handleMainUpload = function (input) {
     });
   }
   // 'all' means no filtering
-
-  console.log('[UPLOAD] Filtered:', filteredFiles.length, 'files');
 
   if (filteredFiles.length === 0) {
     alert(`No ${fileType === 'pdf' ? 'PDF' : 'CSV/Excel'} files found in selection.`);
@@ -3911,13 +3890,6 @@ window.handleMainUpload = function (input) {
     fileType === 'csv' ? 'CSV/Excel file' :
       'file';
 
-  console.log('[UPLOAD] File count differentiation:', {
-    totalCount,
-    filteredCount,
-    fileTypeName,
-    showingDifferentiation: filteredCount !== totalCount
-  });
-
   let confirmMessage;
   if (filteredCount === totalCount) {
     // All files match the filter
@@ -3926,8 +3898,6 @@ window.handleMainUpload = function (input) {
     // Show filtered vs total count
     confirmMessage = `Upload ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} (out of ${totalCount} total files)?\n\nThis will upload all ${fileTypeName}s from "${isFolderMode ? 'selected folders' : 'selection'}". Only do this if you trust the site.`;
   }
-
-  console.log('[UPLOAD] Confirmation message:', confirmMessage);
 
   if (!confirm(confirmMessage)) {
     input.value = '';
@@ -3951,10 +3921,6 @@ window.handleMainUpload = function (input) {
       // Removed modal alert - info logged to console instead
       // alert('Found ' + filteredFiles.length + ' ' + typeName + ' files across ' + folders.size + ' subfolders:\n\n' + folderList + moreText + '\n\nReady to process.');
     }
-  }
-
-  if (filteredFiles.length < files.length) {
-    console.log('[UPLOAD] Filtered out', files.length - filteredFiles.length, 'files');
   }
 
   window.handleFilesSelected(filteredFiles);

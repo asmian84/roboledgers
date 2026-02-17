@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { TransactionsTable } from './TransactionsTable2.jsx';  // TESTING EXPERIMENTAL VERSION
 import { ReportsPage } from './reports/ReportsPage';
 import HomePage from './ui/pages/HomePage.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 
 /**
@@ -17,10 +18,6 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     const theme = window.UI_STATE?.gridTheme || 'default';
     const fontSize = window.UI_STATE?.gridFontSize || 13.5;
     const uniqueKey = `table-${theme}-${fontSize}`;
-
-    console.log('[MAIN.JSX] Mounting grid with key:', uniqueKey);
-    console.log('[MAIN.JSX] Theme from UI_STATE:', theme);
-    console.log('[MAIN.JSX] FontSize from UI_STATE:', fontSize);
 
     // If the old root's container was detached from the DOM (e.g. by render() replacing innerHTML),
     // we must create a fresh root on the new container node.
@@ -60,22 +57,23 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     // Filter out opening balance rows (reference points, not transactions)
     const pureTransactions = canonicalData.filter(tx => tx.ref && !tx.ref.includes('opening-balance'));
 
-    console.log(`[MAIN.JSX] Canonical data count:`, pureTransactions.length);
-
     // Get density setting
     const density = window.UI_STATE?.density || 'comfortable';
-    console.log(`[MAIN.JSX] Grid density:`, density);
 
-    // Load saved column preferences from localStorage
-    const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+    // Load saved column preferences from localStorage (with corruption recovery)
+    let savedPrefs = {};
+    try {
+        const stored = localStorage.getItem('roboledger_column_prefs');
+        if (stored) savedPrefs = JSON.parse(stored);
+    } catch (e) {
+        localStorage.removeItem('roboledger_column_prefs');
+    }
     const columnVisibility = {
         // TanStack Grid uses INVERTED logic in state: false = visible, true = hidden
         // If user enabled tax (savedPrefs.tax_cents === true), pass false to TanStack (visible)
         // If user disabled tax (savedPrefs.tax_cents === false/undefined), pass true to TanStack (hidden)
         tax_cents: savedPrefs.tax_cents !== true
     };
-    console.log('[MAIN.JSX] Initial column visibility from localStorage:', columnVisibility);
-
     // Create props object and save for updateGridDensity
     const gridProps = {
         data: pureTransactions,
@@ -87,10 +85,12 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     };
     window._txGridProps = gridProps;
 
-    // Render
+    // Render with error boundary to prevent white screen crashes
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable {...gridProps} />
+            <ErrorBoundary fallbackMessage="Failed to render transactions grid">
+                <TransactionsTable {...gridProps} />
+            </ErrorBoundary>
         </React.StrictMode>
     );
 };
@@ -107,14 +107,15 @@ window.updateGridDensity = (newDensity) => {
         return;
     }
 
-    console.log(`[MAIN.JSX] Updating grid density to: ${newDensity}`);
     window._txGridProps.gridDensity = newDensity;
 
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable
-                {...window._txGridProps}
-            />
+            <ErrorBoundary fallbackMessage="Failed to render transactions grid">
+                <TransactionsTable
+                    {...window._txGridProps}
+                />
+            </ErrorBoundary>
         </React.StrictMode>
     );
 };
@@ -144,8 +145,6 @@ window.mountPDFSnippet = (containerId, pdfUrl, page, linePosition) => {
         </React.StrictMode>
     );
 
-    console.log(`[PDF SNIPPET] Mounted in #${containerId}`);
-
     // Store root for cleanup
     container._pdfSnippetRoot = root;
 };
@@ -158,8 +157,7 @@ window.unmountPDFSnippet = (containerId) => {
     if (container && container._pdfSnippetRoot) {
         container._pdfSnippetRoot.unmount();
         delete container._pdfSnippetRoot;
-        console.log(`[PDF SNIPPET] Unmounted from #${containerId}`);
-    }
+        }
 };
 
 /**
@@ -186,7 +184,6 @@ window.mountDocumentViewer = (containerId, document) => {
         </React.StrictMode>
     );
 
-    console.log(`[DOC VIEWER] Mounted in #${containerId}`);
 
     // Store root for cleanup
     container._documentViewerRoot = root;
@@ -200,7 +197,6 @@ window.unmountDocumentViewer = (containerId) => {
     if (container && container._documentViewerRoot) {
         container._documentViewerRoot.unmount();
         delete container._documentViewerRoot;
-        console.log(`[DOC VIEWER] Unmounted from #${containerId}`);
     }
 };
 
@@ -213,17 +209,17 @@ window.setTxGridFilter = (filterValue) => {
         return;
     }
 
-    console.log(`[MAIN.JSX] Setting grid filter to: ${filterValue}`);
     window._txGridProps.globalFilter = filterValue;
 
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable {...window._txGridProps} />
+            <ErrorBoundary fallbackMessage="Failed to render transactions grid">
+                <TransactionsTable {...window._txGridProps} />
+            </ErrorBoundary>
         </React.StrictMode>
     );
 };
 
-console.log('[VITE] React bridge established.');
 
 /**
  * Mount ReportsPage React component
@@ -234,8 +230,6 @@ window.mountReportsPage = () => {
         console.error('[MAIN.JSX] Reports container not found');
         return;
     }
-
-    console.log('[MAIN.JSX] Mounting ReportsPage');
 
     if (window._reportsRoot && window._reportsRootContainer && !document.body.contains(window._reportsRootContainer)) {
         try { window._reportsRoot.unmount(); } catch (e) { /* ignore */ }
@@ -250,7 +244,9 @@ window.mountReportsPage = () => {
 
     window._reportsRoot.render(
         <React.StrictMode>
-            <ReportsPage />
+            <ErrorBoundary fallbackMessage="Failed to render reports">
+                <ReportsPage />
+            </ErrorBoundary>
         </React.StrictMode>
     );
 };
@@ -259,7 +255,6 @@ window.unmountReportsPage = () => {
     if (window._reportsRoot) {
         try {
             window._reportsRoot.unmount();
-            console.log('[MAIN.JSX] ✓ Reports unmounted');
         } catch (e) {
             console.warn('[MAIN.JSX] ⚠ Reports unmount error:', e);
         }
@@ -278,7 +273,6 @@ window.mountHomePage = () => {
         return;
     }
 
-    console.log('[MAIN.JSX] Mounting HomePage');
 
     if (window._homeRoot && window._homeRootContainer && !document.body.contains(window._homeRootContainer)) {
         try { window._homeRoot.unmount(); } catch (e) { /* ignore */ }
@@ -302,7 +296,6 @@ window.unmountHomePage = () => {
     if (window._homeRoot) {
         try {
             window._homeRoot.unmount();
-            console.log('[MAIN.JSX] ✓ Home unmounted');
         } catch (e) {
             console.warn('[MAIN.JSX] ⚠ Home unmount error:', e);
         }

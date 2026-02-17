@@ -56,15 +56,6 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
 
     if (!isOpen || !transaction) return null;
 
-    // DEBUG: Log transaction structure for source PDF investigation
-    console.log('[AUDIT_SIDEBAR] Transaction object:', transaction);
-    console.log('[AUDIT_SIDEBAR] Has source_pdf?', !!transaction.source_pdf);
-    console.log('[AUDIT_SIDEBAR] source_pdf:', transaction.source_pdf);
-    console.log('[AUDIT_SIDEBAR] Has pdfLocation?', !!transaction.pdfLocation);
-    console.log('[AUDIT_SIDEBAR] pdfLocation:', transaction.pdfLocation);
-    console.log('[AUDIT_SIDEBAR] Has audit?', !!transaction.audit);
-    console.log('[AUDIT_SIDEBAR] audit:', transaction.audit);
-
     const handleViewSourceDocument = () => {
         // NO FALLBACK - show error if no PDF
         if (!transaction.source_pdf?.url) {
@@ -101,7 +92,6 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
         const files = e.target.files;
         if (files && files.length > 0) {
             // TODO: Handle file upload
-            console.log('Upload receipt:', files[0]);
         }
     };
 
@@ -287,13 +277,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                 </div>
                             )}
 
-                            {(() => {
-                                const shouldShow = !!(transaction.pdfLocation || transaction.source_pdf);
-                                console.log('[AUDIT_SIDEBAR] Should show Transaction Identity section?', shouldShow);
-                                console.log('[AUDIT_SIDEBAR] pdfLocation:', transaction.pdfLocation);
-                                console.log('[AUDIT_SIDEBAR] source_pdf:', transaction.source_pdf);
-                                return shouldShow;
-                            })() && (
+                            {!!(transaction.pdfLocation || transaction.source_pdf) && (
                                     <>
                                         <div style={{ marginBottom: '12px' }}>
                                             <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>PDF Location:</div>

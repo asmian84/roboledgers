@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
+import { UNCATEGORIZED_CODE, UNCATEGORIZED_NAME } from '../constants/accounts.js';
 
 /**
  * LiveReportPanel - Real-time updating report panel for split-pane view
@@ -31,7 +32,7 @@ export function LiveReportPanel({
             const accountBalances = {};
 
             transactions.forEach(tx => {
-                const category = tx.category || '9970';
+                const category = tx.category || UNCATEGORIZED_CODE;
 
                 if (!accountBalances[category]) {
                     // Try multiple lookup strategies for COA
@@ -45,7 +46,7 @@ export function LiveReportPanel({
 
                     accountBalances[category] = {
                         code: category,
-                        name: category === '9970' ? 'Uncategorized' : (account?.name || `Account ${category}`),
+                        name: category === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name || `Account ${category}`),
                         debit: 0,
                         credit: 0,
                         balance: 0
@@ -87,8 +88,8 @@ export function LiveReportPanel({
                 acc.balance = acc.debit - acc.credit;
                 return acc;
             }).sort((a, b) => {
-                if (a.code === '9970') return 1;
-                if (b.code === '9970') return -1;
+                if (a.code === UNCATEGORIZED_CODE) return 1;
+                if (b.code === UNCATEGORIZED_CODE) return -1;
                 const aNum = parseInt(a.code);
                 const bNum = parseInt(b.code);
                 return (isNaN(aNum) ? 0 : aNum) - (isNaN(bNum) ? 0 : bNum);
@@ -101,11 +102,11 @@ export function LiveReportPanel({
             // Force balance if needed
             const imbalance = totalDebit - totalCredit;
             if (Math.abs(imbalance) > 0.01) {
-                let uncatAccount = accounts.find(a => a.code === '9970');
+                let uncatAccount = accounts.find(a => a.code === UNCATEGORIZED_CODE);
                 if (!uncatAccount) {
                     uncatAccount = {
-                        code: '9970',
-                        name: 'Uncategorized',
+                        code: UNCATEGORIZED_CODE,
+                        name: UNCATEGORIZED_NAME,
                         debit: 0,
                         credit: 0,
                         balance: 0

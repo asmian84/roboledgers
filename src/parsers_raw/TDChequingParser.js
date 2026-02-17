@@ -22,20 +22,12 @@ SMART PARSING RULES:
      * Parse TD Chequing statement using regex
      */
     async parse(statementText, metadata = null, lineMetadata = []) {
-        console.log('⚡ TD Chequing: Starting regex-based parsing...');
-        console.log('[TD-DEBUG] First 500 chars of text:', statementText.substring(0, 500));
-
         // [PHASE 4] Store metadata for audit
         this.lastLineMetadata = lineMetadata;
         const pageCounts = {};
 
         const lines = statementText.split('\n');
         const transactions = [];
-
-        // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-TD] Starting metadata extraction for TD...');
-        console.error('📄 [DEBUG-TD] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         // EXTRACT METADATA (Institution, Transit, Account)
         // TD format: Branch No. 9083, Account No. 0928-5217856
@@ -53,12 +45,9 @@ SMART PARSING RULES:
             _bank: 'TD',
             _tag: 'Chequing'
         };
-        console.warn('🏁 [TD] Extraction Phase Complete. Transit:', metaObj.transit, 'Acct:', metaObj.accountNumber);
-
         // Extract year from statement (usually at top)
         const yearMatch = statementText.match(/20\d{2}/);
         this.currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
-        console.log(`[TD] Extracted year: ${this.currentYear}`);
 
         let currentDate = null;
         let pendingDescription = '';
@@ -70,8 +59,6 @@ SMART PARSING RULES:
         // Date regex: "JAN 15", "FEB02" (flexible spacing, no start anchor)
         const dateRegex = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})/i;
 
-        console.log(`[TD] Starting parse with ${lines.length} lines, year: ${this.currentYear}`);
-
         for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed || trimmed.length < 5) continue;
@@ -82,8 +69,6 @@ SMART PARSING RULES:
             if (trimmed.match(/CAD\s*EVERY\s*DAY|CAD\s*BASIC|BUSINESS\s*CHEQUING/i)) continue;
             if (trimmed.match(/Description\s*Cheque|Date\s*Balance/i)) continue; // Table headers
             if (trimmed.match(/^(Debits|Credits)\s+\d/i)) continue; // Counts like "Debits 5"
-
-            console.log('[TD-DEBUG] Line:', trimmed);
 
             // Find valid audit metadata for this line
             const currentAudit = this.findAuditMetadata(trimmed, this.lastLineMetadata);
@@ -100,11 +85,10 @@ SMART PARSING RULES:
                 // Determine Format: Personal (Date First) vs Business (Date Middle/Fourth Column)
                 const isDateFirst = matchIndex === 0;
 
-                // Year rollover detection
+                // Year rollover detection: if month goes backwards (e.g., DEC→JAN, NOV→MAR)
                 const monthIndex = this.getMonthIndex(monthName);
-                if (lastMonth !== null && monthIndex < lastMonth && monthIndex <= 1) {
+                if (lastMonth !== null && monthIndex < lastMonth) {
                     this.currentYear++;
-                    console.log(`[TD] Year rollover detected: ${this.currentYear}`);
                 }
                 lastMonth = monthIndex;
 
@@ -194,7 +178,6 @@ SMART PARSING RULES:
             }
         }
 
-        console.log(`[TD] Parsing complete. Found ${transactions.length} transactions.`);
         return { transactions, metadata: metaObj };
     }
 
@@ -223,8 +206,6 @@ SMART PARSING RULES:
         const preAmounts = preDate.match(/([\d,]+\.\d{2})/g);
 
         if (!preAmounts || preAmounts.length === 0) {
-            // No amount found?
-            console.log('[TD-DEBUG] No amounts found in pre-date section:', preDate);
             return null;
         }
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { UNCATEGORIZED_CODE } from './constants/accounts.js';
 import {
     useReactTable,
     getCoreRowModel,
@@ -284,7 +285,6 @@ let GRID_TOKENS = getActiveGridTokens();
 window.recalculateGridTokens = function () {
     GRID_TOKENS = getActiveGridTokens();
     window.GRID_TOKENS = GRID_TOKENS; // Expose for debugging
-    console.log('[GRID_TOKENS] Recalculated for theme:', window.UI_STATE?.gridTheme);
     return GRID_TOKENS;
 };
 
@@ -363,7 +363,6 @@ function DescriptionCell({ row }) {
 
                     if (secondPart) {
                         cleanedValue = `${firstPart}, ${secondPart}`;
-                        console.log('[SMART COMMA] Injected:', cleanedValue);
                     }
                 }
             }
@@ -564,7 +563,7 @@ function CategoryFilter({ column }) {
         >
             <option value="">All</option>
             <option value="UNCATEGORIZED">Uncategorized</option>
-            {categories.filter(cat => cat.code !== '9970').map(cat => (
+            {categories.filter(cat => cat.code !== UNCATEGORIZED_CODE).map(cat => (
                 <option key={cat.code} value={cat.code}>{cat.name}</option>
             ))}
         </select>
@@ -939,9 +938,6 @@ export function TransactionsTable({
         GRID_TOKENS.rowHeight = rowHeights[gridDensity];
     }
 
-    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize, 'density:', gridDensity, 'rowHeight:', GRID_TOKENS.rowHeight);
-
-
     const [data, setData] = useState(initialData || []);
     const [sorting, setSorting] = useState([{ id: 'date', desc: true }]);
     const [columnVisibility, setColumnVisibility] = useState(initialColumnVisibility); // Use prop or default
@@ -974,16 +970,12 @@ export function TransactionsTable({
     useEffect(() => {
         const handleSidebarCollapse = (e) => {
             const isCollapsed = e.detail?.isCollapsed ?? false;
-            console.log('[DETAIL_MODE] Sidebar collapsed event received:', isCollapsed);
-            console.log('[DETAIL_MODE] Current activePanel:', activePanel);
 
             if (isCollapsed) {
                 // DETAIL MODE ON: Open utility bar automatically
-                console.log('[DETAIL_MODE] Activating utility panel');
                 setActivePanel('utility');
 
                 // Auto-scroll to FilterToolbar (hide reconciliation/metadata)
-                console.log('[DETAIL_MODE] Auto-scrolling to FilterToolbar');
                 if (parentRef.current) {
                     setTimeout(() => {
                         const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
@@ -991,13 +983,11 @@ export function TransactionsTable({
                         headerCards.forEach(card => {
                             scrollAmount += card.offsetHeight;
                         });
-                        console.log('[DETAIL_MODE] Scroll amount calculated:', scrollAmount);
                         parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
                     }, 100);
                 }
             } else {
                 // DETAIL MODE OFF: Close all panels
-                console.log('[DETAIL_MODE] Deactivating all panels');
                 setActivePanel(null);
             }
         };
@@ -1033,7 +1023,6 @@ export function TransactionsTable({
         if (results) {
             // Show results
             const message = `✅ Categorized ${results.categorized}/${selectedTxs.length} transactions`;
-            console.log('[BULK_CATEGORIZE]', message, results);
 
             // Show toast if available
             if (window.showToast) {
@@ -1070,8 +1059,6 @@ export function TransactionsTable({
                 deleted++;
             }
         });
-
-        console.log(`[BULK_DELETE] Deleted ${deleted}/${selectedTxIds.length} transactions`);
 
         // Clear selection
         setRowSelection({});
@@ -1176,9 +1163,8 @@ export function TransactionsTable({
     useEffect(() => {
         const handleSidebarToggle = (event) => {
             const collapsed = event.detail?.isCollapsed;
-            if (isCollapsed !== undefined) {
-                setIsDetailMode(isCollapsed);
-                console.log('[MODE] Detail mode:', isCollapsed ? 'ON' : 'OFF');
+            if (collapsed !== undefined) {
+                setIsDetailMode(collapsed);
             }
         };
 
@@ -1279,14 +1265,17 @@ export function TransactionsTable({
                         position: 'relative'
                     }}
                 >
-                    {/* Metadata Cards - scrolls away */}
-                    {!isLoading && data.length > 0 && (
-                        <MetadataCards
-                            totalCount={data.length}
-                            totalAmount={data.reduce((sum, tx) => sum + Math.abs((tx.amount_cents || 0)), 0) / 100}
-                            dateRange={getDateRange(data)}
-                            categoryBreakdown={getCategoryBreakdown(data)}
-                        />
+                    {/* Metadata summary - inline stats */}
+                    {data.length > 0 && (
+                        <div style={{
+                            display: 'flex', gap: '16px', padding: '8px 12px',
+                            fontSize: '12px', color: '#64748b', borderBottom: '1px solid #e2e8f0'
+                        }}>
+                            <span><strong>{data.length.toLocaleString()}</strong> transactions</span>
+                            <span>Total: <strong>{new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(
+                                data.reduce((sum, tx) => sum + Math.abs((tx.amount_cents || 0)), 0) / 100
+                            )}</strong></span>
+                        </div>
                     )}
 
                     {/* Filter Toolbar - STICKY within scroll container */}

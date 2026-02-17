@@ -42,9 +42,6 @@ SMART PARSING RULES:
 
     if (openingMatch) {
       openingBalance = parseFloat(openingMatch[1].replace(/,/g, ''));
-      console.log(`✅ [RBC] Robustly extracted opening balance: ${openingBalance}`);
-    } else {
-      console.warn('⚠️ [RBC] Opening balance not found in text header.');
     }
 
     // 1.1 EXTRACT ACCOUNT INFO
@@ -92,7 +89,6 @@ SMART PARSING RULES:
     if (acctInfoMatch) {
       transit = acctInfoMatch[1];
       acctFromText = acctInfoMatch[2].replace(/[-\s]/g, '');
-      console.log(`✅ [RBC] Found Transit/Account: ${transit} / ${acctFromText}`);
 
       // Store in metadata for processing engine
       if (metadata) {
@@ -102,7 +98,6 @@ SMART PARSING RULES:
     } else if (anyTransitAcctMatch) {
       transit = anyTransitAcctMatch[1];
       acctFromText = anyTransitAcctMatch[2].replace(/[-\s]/g, '');
-      console.log(`✅ [RBC] Found via Scorched Earth: ${transit} / ${acctFromText}`);
       if (metadata) {
         metadata.transit = transit;
         metadata.accountNumber = acctFromText;
@@ -142,7 +137,6 @@ SMART PARSING RULES:
     const yearMatch = text.match(/,\s+(20\d{2})/);
     if (yearMatch) currentYear = parseInt(yearMatch[1]);
 
-    console.log(`[RBC] Starting Grid Parse.Initial Balance: ${currentCalculatedBalance} `);
 
     let pendingDescription = '';
     let pendingDate = null;
@@ -183,7 +177,6 @@ SMART PARSING RULES:
         }
 
         if (startMarkers.some(m => line.match(m))) {
-          console.log(`[RBC] ✅ Started parsing transactions`);
           insideTransactionBlock = true;
           continue; // Skip the marker line itself
         }
@@ -192,7 +185,6 @@ SMART PARSING RULES:
       // Stop Trigger: Summary lines  
       if (insideTransactionBlock) {
         if (endMarkers.some(m => line.match(m))) {
-          console.log(`[RBC] ✅ Finished parsing at closing balance`);
           insideTransactionBlock = false;
           break;
         }
@@ -390,9 +382,13 @@ SMART PARSING RULES:
         if (isCredit) runningBalance += row.amount;
         else runningBalance -= row.amount;
 
-        // Sync to anchor balance if there's drift
-        if (Math.abs(runningBalance - row.balance) > 0.05) {
-          console.warn(`⚠️[RBC] Balance drift: calc=${runningBalance.toFixed(2)}, anchor=${row.balance.toFixed(2)}. Syncing to anchor.`);
+        // Flag balance drift instead of silently hiding it
+        const drift = Math.abs(runningBalance - row.balance);
+        if (drift > 0.05) {
+          const warning = `Balance drift $${drift.toFixed(2)} at "${row.description}" (calc=${runningBalance.toFixed(2)}, anchor=${row.balance.toFixed(2)})`;
+          if (!this._balanceDriftWarnings) this._balanceDriftWarnings = [];
+          this._balanceDriftWarnings.push(warning);
+          // Still sync to anchor to prevent cascading errors, but track the issue
           runningBalance = row.balance;
         }
 
@@ -438,7 +434,6 @@ SMART PARSING RULES:
       });
     }
 
-    console.log(`[RBC] Grid Parse Complete via GapSolver.${transactions.length} rows.`);
     return {
       transactions,
       metadata: this.metadata,
@@ -499,10 +494,6 @@ SMART PARSING RULES:
         // Check if the search line is contained in (or contains) the metadata line
         // This handles cases where lines might be split differently
         if (normalizedMeta.includes(normalizedSearch) || normalizedSearch.includes(normalizedMeta)) {
-          console.log(`🎯[RBC - AUDIT] Exact match found for "${description.substring(0, 30)}...": `);
-          console.log(`   Search: "${normalizedSearch.substring(0, 50)}"`);
-          console.log(`   Found: "${normalizedMeta.substring(0, 50)}"`);
-          console.log(`   Y: ${lineMeta.y}, Page: ${lineMeta.page} `);
           auditData = {
             page: lineMeta.page,
             y: lineMeta.y,
@@ -607,9 +598,6 @@ SMART PARSING RULES:
       })(),
       audit: auditData
     };
-
-    // DEBUG: Log audit data for inspection
-    console.log(`[RBC - AUDIT] Final Audit for "${description.substring(0, 15)}...": `, auditData);
 
     return finalTxn;
   }

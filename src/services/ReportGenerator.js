@@ -1,3 +1,5 @@
+import { UNCATEGORIZED_CODE, UNCATEGORIZED_NAME } from '../constants/accounts.js';
+
 /**
  * ReportGenerator - Core service for generating financial reports
  * Handles data aggregation, calculations, and report formatting
@@ -20,15 +22,15 @@ class ReportGenerator {
         const accountBalances = {};
 
         transactions.forEach(tx => {
-            // Use category if set, otherwise use "9970" for uncategorized
-            const category = tx.category || '9970';
+            // Use category if set, otherwise use uncategorized code
+            const category = tx.category || UNCATEGORIZED_CODE;
 
             if (!accountBalances[category]) {
                 // Ensure category is string for COA lookup
                 const account = this.coa.get(String(category));
                 accountBalances[category] = {
                     code: category,
-                    name: category === '9970' ? 'Uncategorized' : (account?.name || 'Unknown'),
+                    name: category === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name || 'Unknown'),
                     debit: 0,
                     credit: 0,
                     balance: 0
@@ -73,11 +75,10 @@ class ReportGenerator {
         // FORCE BALANCE: Add any imbalance to Uncategorized
         const imbalance = totalDebit - totalCredit;
         if (Math.abs(imbalance) > 0.01) {
-            // Ensure 9970 (Uncategorized) exists
-            if (!accountBalances['9970']) {
-                accountBalances['9970'] = {
-                    code: '9970',
-                    name: 'Uncategorized',
+            if (!accountBalances[UNCATEGORIZED_CODE]) {
+                accountBalances[UNCATEGORIZED_CODE] = {
+                    code: UNCATEGORIZED_CODE,
+                    name: UNCATEGORIZED_NAME,
                     debit: 0,
                     credit: 0,
                     balance: 0
@@ -86,11 +87,9 @@ class ReportGenerator {
 
             // Add offsetting entry to balance
             if (imbalance > 0) {
-                // More debits than credits, add credit to 9970
-                accountBalances['9970'].credit += imbalance;
+                accountBalances[UNCATEGORIZED_CODE].credit += imbalance;
             } else {
-                // More credits than debits, add debit to 9970
-                accountBalances['9970'].debit += Math.abs(imbalance);
+                accountBalances[UNCATEGORIZED_CODE].debit += Math.abs(imbalance);
             }
         }
 
@@ -99,9 +98,9 @@ class ReportGenerator {
             acc.balance = acc.debit - acc.credit;
             return acc;
         }).sort((a, b) => {
-            // Sort: Uncategorized (9970) last, others by code
-            if (a.code === '9970') return 1;
-            if (b.code === '9970') return -1;
+            // Sort: Uncategorized last, others by code
+            if (a.code === UNCATEGORIZED_CODE) return 1;
+            if (b.code === UNCATEGORIZED_CODE) return -1;
             return parseInt(a.code) - parseInt(b.code);
         });
 
@@ -168,18 +167,27 @@ class ReportGenerator {
 
         const account = this.coa.get(coaCode);
 
-        // Calculate running balance
+        // Calculate running balance using amount_cents + polarity (the actual transaction schema)
         let runningBalance = 0;
         const enriched = filtered.map(tx => {
-            runningBalance += (tx.debit || 0) - (tx.credit || 0);
+            const amount = (tx.amount_cents || 0) / 100;
+            if (tx.polarity === 'DEBIT') {
+                runningBalance += amount;
+            } else if (tx.polarity === 'CREDIT') {
+                runningBalance -= amount;
+            }
             return {
                 ...tx,
                 balance: runningBalance
             };
         });
 
-        const totalDebit = filtered.reduce((sum, tx) => sum + (tx.debit || 0), 0);
-        const totalCredit = filtered.reduce((sum, tx) => sum + (tx.credit || 0), 0);
+        const totalDebit = filtered.reduce((sum, tx) => {
+            return tx.polarity === 'DEBIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
+        }, 0);
+        const totalCredit = filtered.reduce((sum, tx) => {
+            return tx.polarity === 'CREDIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
+        }, 0);
 
         return {
             account: {
