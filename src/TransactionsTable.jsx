@@ -1175,7 +1175,7 @@ export function TransactionsTable({
     // Listen for sidebar collapse events
     useEffect(() => {
         const handleSidebarToggle = (event) => {
-            const isCollapsed = event.detail?.isCollapsed;
+            const collapsed = event.detail?.isCollapsed;
             if (isCollapsed !== undefined) {
                 setIsDetailMode(isCollapsed);
                 console.log('[MODE] Detail mode:', isCollapsed ? 'ON' : 'OFF');
