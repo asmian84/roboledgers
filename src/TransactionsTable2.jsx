@@ -984,7 +984,11 @@ export function TransactionsTable({
             console.log('[DETAIL_MODE] Current activePanel:', activePanel);
 
             if (isCollapsed) {
-                // DETAIL MODE ON: Auto-scroll to FilterToolbar
+                // DETAIL MODE ON: Open utility bar automatically
+                console.log('[DETAIL_MODE] Opening utility bar');
+                setActivePanel('utility');
+
+                // Auto-scroll to FilterToolbar
                 console.log('[DETAIL_MODE] Auto-scrolling to FilterToolbar');
                 if (parentRef.current) {
                     setTimeout(() => {
@@ -1240,6 +1244,7 @@ export function TransactionsTable({
                         onAccountChange={(value) => window.switchAccount?.(value)}
                         onToggleFilters={() => window.toggleGridFilters?.()}
                         onToggleSettings={() => window.toggleSettings?.(true)}
+                        isDetailMode={isDetailMode}  // Pass mode to show/hide panel toggles
                         onToggleReportPanel={() => {
                             const newPanel = activePanel === 'report' ? null : 'report';
                             setActivePanel(newPanel);

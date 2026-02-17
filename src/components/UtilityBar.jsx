@@ -141,45 +141,37 @@ export function UtilityBar({ transactions = [] }) {
 
     return (
         <div className="h-full overflow-y-auto bg-gray-50">
-            {/* Dashboard Section */}
-            <div className="p-4 bg-white border-b border-gray-200">
-                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Dashboard</h3>
+            {/* Dashboard Section - 3 Column Stats */}
+            <div className="p-3 bg-white border-b border-gray-200">
+                <div className="bg-pink-50 border border-pink-200 rounded-md overflow-hidden">
+                    <div className="grid grid-cols-3 divide-x divide-pink-200">
 
-                {/* Transaction Count */}
-                <div className="mb-4">
-                    <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-                    <div className="text-xs text-gray-500">Transactions</div>
-                </div>
+                        {/* Column 1: Total */}
+                        <div className="p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+                            <div className="text-xs text-gray-600 mt-1">Total</div>
+                        </div>
 
-                {/* Categorization Progress */}
-                <div className="mb-4">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-gray-700">Categorized</span>
-                        <span className="text-xs font-bold text-blue-600">{categorizationProgress}%</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-blue-600 transition-all duration-300"
-                            style={{ width: `${categorizationProgress}%` }}
-                        />
-                    </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                        {stats.categorized} of {stats.total}
-                    </div>
-                </div>
-
-                {/* Needs Review */}
-                {stats.uncategorized > 0 && (
-                    <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-md">
-                        <div className="flex items-center gap-2">
-                            <i className="ph ph-warning text-amber-600"></i>
-                            <div className="flex-1">
-                                <div className="text-xs font-semibold text-amber-900">Needs Review</div>
-                                <div className="text-xs text-amber-700">{stats.uncategorized} uncategorized</div>
+                        {/* Column 2: Categorized */}
+                        <div className="p-3 text-center">
+                            <div className="text-2xl font-bold text-blue-600">
+                                {stats.categorized}
+                            </div>
+                            <div className="text-xs text-gray-600 mt-1">
+                                Categorized ({categorizationProgress}%)
                             </div>
                         </div>
+
+                        {/* Column 3: Uncategorized */}
+                        <div className="p-3 text-center">
+                            <div className="text-2xl font-bold text-amber-600">
+                                {stats.uncategorized}
+                            </div>
+                            <div className="text-xs text-gray-600 mt-1">Uncategorized</div>
+                        </div>
+
                     </div>
-                )}
+                </div>
             </div>
 
             {/* Account Reconciliation */}
