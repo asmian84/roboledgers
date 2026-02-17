@@ -285,11 +285,11 @@ function getTopCategories(transactions) {
     return Object.entries(categoryCounts)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
-        .map(([name, count]) => {
-            // Try to get friendly name from COA
-            const account = window.RoboLedger?.COA?.get(String(name));
+        .map(([code, count]) => {
+            // Try to get friendly name from COA (code is the account code like "2710")
+            const account = window.RoboLedger?.COA?.get(String(code));
             return {
-                name: account?.name || name,
+                name: code === 'Uncategorized' ? 'Uncategorized' : (account?.name || code),
                 count
             };
         });
