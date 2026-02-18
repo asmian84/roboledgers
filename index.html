@@ -30,6 +30,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <!-- fflate: in-browser ZIP library for Caseware per-account export -->
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+    <script>if(typeof fflate !== 'undefined') window.fflate = fflate;</script>
     <!-- React & TanStack Bridge (Restoration Layer) -->
     <!-- React & TanStack Bridge (Vite Modernization) -->
     <script type="module" src="/src/main.jsx"></script>
@@ -405,7 +408,7 @@
     <script type="module" src="src/services/CategoryService.js"></script>
     <script type="module" src="src/services/VendorMatcher.js"></script>
     <script type="module" src="src/services/RuleEngine.js"></script>
-    <script src="src/services/TransactionExporter.js"></script>
+    <!-- TransactionExporter is now bundled via main.jsx (ES module with xlsx dependency) -->
 
 
     <script src="src/ui/enterprise/ledger.core.js"></script>

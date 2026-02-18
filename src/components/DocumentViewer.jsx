@@ -116,16 +116,18 @@ export function DocumentViewer({ document, onBack }) {
         if (document.highlightLine) {
             const { top, left, width, height } = document.highlightLine;
 
-            // PDF.js renders correctly - coordinates should work as-is
-            // PDF coordinates: origin at BOTTOM-LEFT, Y increases UPWARD
-            // Viewport transforms this to canvas coordinates automatically
-            // We just need to invert Y because our 'top' is from top of page
-            const pdfPageHeight = viewport.height / viewport.scale;
+            // PDF coordinates: origin at BOTTOM-LEFT, Y increases UPWARD.
+            // Parsers store `top` as the Y value from PDF.js lineMetadata (bottom-origin points).
+            // We need the true unscaled page height (in PDF points) for correct Y inversion.
+            // Use getViewport({ scale: 1.0 }) rather than dividing scaled viewport height,
+            // which avoids floating-point drift from integer canvas dimensions.
+            const unscaledViewport = page.getViewport({ scale: 1.0 });
+            const pdfPageHeight = unscaledViewport.height; // True page height in PDF points
 
             const canvasX = left * viewport.scale;
             const canvasY = (pdfPageHeight - top - height) * viewport.scale;
-            const canvasWidth = width * viewport.scale;
-            const canvasHeight = height * viewport.scale;
+            const canvasWidth = (width || 500) * viewport.scale;
+            const canvasHeight = (height || 12) * viewport.scale;
 
             // Draw yellow highlight
             context.fillStyle = 'rgba(255, 235, 59, 0.3)';

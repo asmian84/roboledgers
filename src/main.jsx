@@ -4,6 +4,8 @@ import { TransactionsTable } from './TransactionsTable2.jsx';  // TESTING EXPERI
 import { ReportsPage } from './reports/ReportsPage';
 import HomePage from './ui/pages/HomePage.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+// Import TransactionExporter so it bundles with xlsx and registers window.TransactionExporter
+import './services/TransactionExporter.js';
 
 
 /**
@@ -201,7 +203,12 @@ window.unmountDocumentViewer = (containerId) => {
 };
 
 /**
- * Global Bridge: Set grid filter (called from utility bar category chart)
+ * Global Bridge: Set grid filter (called from utility bar category chart and drill-down)
+ *
+ * Accepts:
+ *   - string/number: passed as globalFilter (TanStack column filter — searches all columns)
+ *   - function (tx) => bool: applied as a pre-filter on the data array before rendering
+ *   - null/undefined: clears all filters and restores full dataset
  */
 window.setTxGridFilter = (filterValue) => {
     if (!window._txGridRoot || !window._txGridProps) {
@@ -209,7 +216,29 @@ window.setTxGridFilter = (filterValue) => {
         return;
     }
 
-    window._txGridProps.globalFilter = filterValue;
+    if (typeof filterValue === 'function') {
+        // Predicate filter: filter the full dataset and render filtered subset
+        // Store the predicate so we can restore it
+        window._txGridFilterPredicate = filterValue;
+        const allData = window._txGridAllData || window._txGridProps.data;
+        window._txGridAllData = allData; // Remember full dataset
+        window._txGridProps.data = allData.filter(filterValue);
+        window._txGridProps.globalFilter = ''; // Clear text filter when using predicate
+    } else if (filterValue === null || filterValue === undefined) {
+        // Clear filter — restore full dataset
+        window._txGridFilterPredicate = null;
+        if (window._txGridAllData) {
+            window._txGridProps.data = window._txGridAllData;
+        }
+        window._txGridProps.globalFilter = '';
+    } else {
+        // String/number: use as TanStack globalFilter (searches across columns)
+        window._txGridFilterPredicate = null;
+        if (window._txGridAllData) {
+            window._txGridProps.data = window._txGridAllData;
+        }
+        window._txGridProps.globalFilter = filterValue;
+    }
 
     window._txGridRoot.render(
         <React.StrictMode>

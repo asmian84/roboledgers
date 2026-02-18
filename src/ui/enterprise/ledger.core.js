@@ -34,93 +34,276 @@ window.RoboLedger = (function () {
     };
 
     // --- COA DATA (V5 PRE-SEED) ---
+    // Caseware Leadsheet Names (standard Canadian accounting leadsheet codes)
+    const LEADSHEET_NAMES = {
+        'A': 'Cash & Bank', 'B': 'Investments - Marketable Securities', 'C': 'Receivables',
+        'D': 'Inventories', 'E': 'Loans Receivable - Current', 'L': 'Deposits & Prepaids',
+        'M': 'Loans Receivable - Long Term', 'N': 'Long-term Investments', 'U': 'Capital Assets',
+        'W': 'Intangibles', 'PP': 'Future Income Taxes', 'AA': 'Demand Loans',
+        'BB': 'Accounts Payable & Accrued Liabilities', 'CC': 'GST/HST',
+        'DD': 'Shareholder Loans (Short-term)', 'EE': 'Related Companies',
+        'FF': 'Income Taxes Payable', 'HH': 'Deferred Revenue & Current Portion LTD',
+        'KK': 'Long-term Debt', 'MM': 'Long-term Shareholder & Related',
+        'SS': 'Share Capital', 'TT': 'Retained Earnings & Dividends',
+        '20': 'Revenue', '30': 'Cost of Sales', '40': 'General & Administrative',
+        '70': 'Other Income & Gains', '80': 'Income Taxes'
+    };
+
+    // Leadsheet display order (Balance Sheet first, then Income Statement)
+    const LEADSHEET_ORDER = [
+        'A','B','C','D','E','L','M','N','U','W',
+        'PP','AA','BB','CC','DD','EE','FF','HH','KK','MM','SS','TT',
+        '20','30','40','70','80'
+    ];
+
+    // Helper: infer root type from account code range
+    function inferRoot(code) {
+        const n = parseInt(code);
+        if (n >= 1000 && n <= 1999) return 'ASSET';
+        if (n >= 2000 && n <= 2999) return 'LIABILITY';
+        if (n >= 3000 && n <= 3999) return 'EQUITY';
+        if (n >= 4000 && n <= 4999) return 'REVENUE';
+        if (n >= 5000 && n <= 9999) return 'EXPENSE';
+        return 'EXPENSE';
+    }
+
+    // Full Chart of Accounts — Caseware standard (from coa full.xlsx)
     const COA_DEFAULTS = [
-        // ASSETS (1000 - 1999)
-        { code: '1000', name: 'Bank - chequing', class: 'CASH_LIQ', root: 'ASSET', balance: 0 },
-        { code: '1030', name: 'Bank - US account', class: 'CASH_LIQ', root: 'ASSET', balance: 0 },
-        { code: '1035', name: 'Savings account', class: 'CASH_LIQ', root: 'ASSET', balance: 0 },
-        { code: '1040', name: 'Savings account #2', class: 'CASH_LIQ', root: 'ASSET', balance: 0 },
-        { code: '1100', name: 'Investments - Marketable securities', class: 'INVEST_ST', root: 'ASSET', balance: 0 },
-        { code: '1210', name: 'Accounts receivable', class: 'AR_TRADE', root: 'ASSET', balance: 0 },
-        { code: '1220', name: 'Accounts receivable-employee loan', class: 'AR_OTHER', root: 'ASSET', balance: 0 },
-        { code: '1221', name: 'Advances', class: 'AR_OTHER', root: 'ASSET', balance: 0 },
-        { code: '1240', name: 'Interest receivable', class: 'AR_OTHER', root: 'ASSET', balance: 0 },
-        { code: '1245', name: 'Loans receivable - current', class: 'AR_OTHER', root: 'ASSET', balance: 0 },
-        { code: '1250', name: 'NSF cheques', class: 'AR_OTHER', root: 'ASSET', balance: 0 },
-        { code: '1255', name: 'Allowance for doubtful accounts', class: 'AR_CONTRA', root: 'ASSET', balance: 0 },
-        { code: '1260', name: 'Agreement of sale', class: 'AR_OTHER', root: 'ASSET', balance: 0 },
-        { code: '1270', name: 'Prepaid Expenses', class: 'PREPAID', root: 'ASSET', balance: 0 },
-        { code: '1500', name: 'Furniture & Equipment', class: 'PPE', root: 'ASSET', balance: 0 },
-        { code: '1550', name: 'Accumulated Depreciation', class: 'PPE_CONTRA', root: 'ASSET', balance: 0 },
+        // ASSETS (1000-1999)
+        { code: '1000', name: 'Bank - chequing', root: 'ASSET', leadsheet: 'A', balance: 0 },
+        { code: '1030', name: 'Bank - US account', root: 'ASSET', leadsheet: 'A', balance: 0 },
+        { code: '1035', name: 'Savings account', root: 'ASSET', leadsheet: 'A', balance: 0 },
+        { code: '1040', name: 'Savings account #2', root: 'ASSET', leadsheet: 'A', balance: 0 },
+        { code: '1100', name: 'Investments - Marketable securities', root: 'ASSET', leadsheet: 'B', balance: 0 },
+        { code: '1210', name: 'Accounts receivable', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1220', name: 'Accounts receivable-employee loan', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1221', name: 'Advances', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1240', name: 'Interest receivable', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1245', name: 'Loans receivable - current', root: 'ASSET', leadsheet: 'E', balance: 0 },
+        { code: '1250', name: 'NSF cheques', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1255', name: 'Allowance for doubtful accounts', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1260', name: 'Agreement of sale', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1270', name: 'Agreement of sale', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1280', name: 'Agreement of sale', root: 'ASSET', leadsheet: 'C', balance: 0 },
+        { code: '1290', name: 'Deposit', root: 'ASSET', leadsheet: 'L', balance: 0 },
+        { code: '1300', name: 'Inventories-merchandise', root: 'ASSET', leadsheet: 'D', balance: 0 },
+        { code: '1310', name: 'Inventories-supplies', root: 'ASSET', leadsheet: 'D', balance: 0 },
+        { code: '1320', name: 'Inventories-other', root: 'ASSET', leadsheet: 'D', balance: 0 },
+        { code: '1350', name: 'Prepaid expenses', root: 'ASSET', leadsheet: 'L', balance: 0 },
+        { code: '1400', name: 'Investments', root: 'ASSET', leadsheet: 'N', balance: 0 },
+        { code: '1500', name: 'Land', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1600', name: 'Buildings', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1650', name: 'Accum amort - buildings', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1760', name: 'Office equipment', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1761', name: 'Accum amort - office equipment', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1762', name: 'Office furnishings', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1763', name: 'Accum amort - office furnishings', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1765', name: 'Heavy equipment', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1766', name: 'Accum amort - heavy equipment', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1768', name: 'Equipment', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1769', name: 'Accum amort - equipment', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1800', name: 'Vehicles', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1820', name: 'Accum amort - vehicles', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1840', name: 'Leasehold improvements', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1845', name: 'Accum amort - leaseholds', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1855', name: 'Computer equipment', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1856', name: 'Accum amort - computer equipment', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1857', name: 'Computer software', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1858', name: 'Accum amort - software', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1860', name: 'Capital assets - other', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1865', name: 'Accum amort - other', root: 'ASSET', leadsheet: 'U', balance: 0 },
+        { code: '1900', name: 'Deposits', root: 'ASSET', leadsheet: 'L', balance: 0 },
+        { code: '1945', name: 'Loans receivable - long term', root: 'ASSET', leadsheet: 'M', balance: 0 },
+        { code: '1950', name: 'Goodwill', root: 'ASSET', leadsheet: 'W', balance: 0 },
+        { code: '1951', name: 'Accum amort - Goodwill', root: 'ASSET', leadsheet: 'W', balance: 0 },
+        { code: '1960', name: 'Incorporation costs', root: 'ASSET', leadsheet: 'W', balance: 0 },
+        { code: '1961', name: 'Accum amort - Incorporation', root: 'ASSET', leadsheet: 'W', balance: 0 },
 
-        // LIABILITIES (2000 - 2999)
-        { code: '2100', name: 'Accounts Payable', class: 'AP_TRADE', root: 'LIABILITY', balance: 0 },
-        { code: '2120', name: 'Credit Card - Primary', class: 'DEBT_ST', root: 'LIABILITY', balance: 0 },
-        { code: '2125', name: 'Credit Card - Secondary', class: 'DEBT_ST', root: 'LIABILITY', balance: 0 },
-        { code: '2150', name: 'GST/HST Payable', class: 'TAX_SALES', root: 'LIABILITY', balance: 0 },
-        { code: '2160', name: 'PST Payable', class: 'TAX_SALES', root: 'LIABILITY', balance: 0 },
-        { code: '2200', name: 'Accrued Liabilities', class: 'ACCRUED', root: 'LIABILITY', balance: 0 },
-        { code: '2400', name: 'Payroll Liabilities', class: 'ACCRUED', root: 'LIABILITY', balance: 0 },
-        { code: '2410', name: 'WCB Payable', class: 'ACCRUED', root: 'LIABILITY', balance: 0 },
-        { code: '2500', name: 'Corporate Income Tax Payable', class: 'TAX_INC', root: 'LIABILITY', balance: 0 },
-        { code: '2600', name: 'Deferred Revenue', class: 'DEFERRED', root: 'LIABILITY', balance: 0 },
-        { code: '2602', name: 'Federal Tax Installments', class: 'TAX_SALES', root: 'LIABILITY', balance: 0 },
-        { code: '2650', name: 'Shareholder Loan', class: 'LTL', root: 'LIABILITY', balance: 0 },
-        { code: '2652', name: 'Shareholders Loan', class: 'LTL', root: 'LIABILITY', balance: 0 },
-        { code: '2800', name: 'Loans from Shareholders', class: 'DEBT_ST', root: 'LIABILITY', balance: 0 },
-        { code: '2900', name: 'Bank Loan - Long Term', class: 'DEBT_LT', root: 'LIABILITY', balance: 0 },
+        // LIABILITIES (2000-2999)
+        { code: '2000', name: 'Future income taxes-long-term', root: 'LIABILITY', leadsheet: 'PP', balance: 0 },
+        { code: '2010', name: 'Demand loan', root: 'LIABILITY', leadsheet: 'AA', balance: 0 },
+        { code: '2020', name: 'Demand loan', root: 'LIABILITY', leadsheet: 'AA', balance: 0 },
+        { code: '2030', name: 'Demand loan', root: 'LIABILITY', leadsheet: 'AA', balance: 0 },
+        { code: '2100', name: 'Accounts payable', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2101', name: 'Visa payable', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2103', name: 'Bonus Payable', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2120', name: 'Unearned revenue', root: 'LIABILITY', leadsheet: 'HH', balance: 0 },
+        { code: '2140', name: 'Accrued liabilities', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2148', name: 'GST balance from prior year', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2149', name: 'GST payments to Revenue Canada', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2150', name: 'GST paid on purchases', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2160', name: 'GST collected on sales', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2170', name: 'GST Installments', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2171', name: 'GST Q1 - FILED', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2172', name: 'GST Q2 - FILED', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2173', name: 'GST Q3 - FILED', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2174', name: 'GST Q4 - FILED', root: 'LIABILITY', leadsheet: 'CC', balance: 0 },
+        { code: '2180', name: 'Accrued wages', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2300', name: 'Income tax deductions', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2330', name: 'CPP deductions', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2340', name: 'EI deductions', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2600', name: 'Income taxes payable-Federal-current year', root: 'LIABILITY', leadsheet: 'FF', balance: 0 },
+        { code: '2601', name: 'Income taxes payable - Federal - PY', root: 'LIABILITY', leadsheet: 'FF', balance: 0 },
+        { code: '2602', name: 'Income tax installments - Federal', root: 'LIABILITY', leadsheet: 'FF', balance: 0 },
+        { code: '2620', name: 'Income taxes payable-Prov.-current year', root: 'LIABILITY', leadsheet: 'FF', balance: 0 },
+        { code: '2621', name: 'Income taxes payable - Provincial - PY', root: 'LIABILITY', leadsheet: 'FF', balance: 0 },
+        { code: '2622', name: 'Income taxes payable - Provincial - Installments', root: 'LIABILITY', leadsheet: 'FF', balance: 0 },
+        { code: '2650', name: 'Shareholder loan #1 - short term', root: 'LIABILITY', leadsheet: 'DD', balance: 0 },
+        { code: '2652', name: 'Shareholder loan #2 - short term', root: 'LIABILITY', leadsheet: 'DD', balance: 0 },
+        { code: '2654', name: 'Shareholder loan #3 - short term', root: 'LIABILITY', leadsheet: 'DD', balance: 0 },
+        { code: '2656', name: 'Shareholder loan #4 - short term', root: 'LIABILITY', leadsheet: 'DD', balance: 0 },
+        { code: '2658', name: 'Shareholder loan #5 - short term', root: 'LIABILITY', leadsheet: 'DD', balance: 0 },
+        { code: '2660', name: 'Shareholder loan #6 - short term', root: 'LIABILITY', leadsheet: 'DD', balance: 0 },
+        { code: '2662', name: 'Shareholder loan #7 - short term', root: 'LIABILITY', leadsheet: 'DD', balance: 0 },
+        { code: '2664', name: 'Shareholder loan #8 - short term', root: 'LIABILITY', leadsheet: 'DD', balance: 0 },
+        { code: '2670', name: 'Due from (to) related company #A - short term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2672', name: 'Due from (to) related company #B - short term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2674', name: 'Due from (to) related company #C - short term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2676', name: 'Due from (to) related company #D - short term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2678', name: 'Due from (to) related company #E - short term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2680', name: 'Due from (to) related company #F - short term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2682', name: 'Due from (to) related company #G - short term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2684', name: 'Due from (to) related company #H - short term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2685', name: 'Contingent liabilities', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+        { code: '2690', name: 'Current portion of long-term debt', root: 'LIABILITY', leadsheet: 'HH', balance: 0 },
+        { code: '2700', name: 'Future income taxes-current portion', root: 'LIABILITY', leadsheet: 'PP', balance: 0 },
+        { code: '2710', name: 'Bank loan #1', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2712', name: 'Bank loan #2', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2714', name: 'Bank loan #3', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2716', name: 'Bank loan #4', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2718', name: 'Bank loan #5', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2720', name: 'Bank loan #6', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2722', name: 'Bank loan #7', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2724', name: 'Bank loan #8', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2800', name: 'Mortgage #1', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2810', name: 'Mortgage #2', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2820', name: 'Mortgage #3', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2850', name: 'Finance contract #1', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2860', name: 'Finance contract #2', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2870', name: 'Finance contract #3', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2880', name: 'Finance contract #4', root: 'LIABILITY', leadsheet: 'KK', balance: 0 },
+        { code: '2950', name: 'Shareholder loan #1 - Long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2952', name: 'Shareholder loan #2 - Long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2954', name: 'Shareholder loan #3 - Long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2956', name: 'Shareholder loan #4 - Long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2958', name: 'Shareholder loan #5 - Long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2960', name: 'Shareholder loan #6 - Long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2962', name: 'Shareholder loan #7 - Long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2964', name: 'Shareholder loan #8 - Long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2970', name: 'Due from (to) related company #A - long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2972', name: 'Due from (to) related company #B - long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2974', name: 'Due from (to) related company #C - long term', root: 'LIABILITY', leadsheet: 'EE', balance: 0 },
+        { code: '2976', name: 'Due from (to) related company #D - long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2978', name: 'Due from (to) related company #E - long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2980', name: 'Due from (to) related company #F - long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2982', name: 'Due from (to) related company #G - long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2984', name: 'Due from (to) related company #H - long term', root: 'LIABILITY', leadsheet: 'MM', balance: 0 },
+        { code: '2995', name: 'Current portion of long term debt (OFFSET)', root: 'LIABILITY', leadsheet: 'HH', balance: 0 },
 
-        // EQUITY (3000 - 3999)
-        { code: '3000', name: 'Common Shares', class: 'EQUITY_CAP', root: 'EQUITY', balance: 0 },
-        { code: '3100', name: 'Preferred Shares', class: 'EQUITY_CAP', root: 'EQUITY', balance: 0 },
-        { code: '3200', name: 'Owner Contributions', class: 'EQUITY_CONTRIB', root: 'EQUITY', balance: 0 },
-        { code: '3300', name: 'Owner Draws', class: 'EQUITY_DRAW', root: 'EQUITY', balance: 0 },
-        { code: '3400', name: 'Opening Balance Equity', class: 'EQUITY_RE', root: 'EQUITY', balance: 0 },
-        { code: '3500', name: 'Retained Earnings', class: 'EQUITY_RE', root: 'EQUITY', balance: 0 },
-        { code: '3600', name: 'Dividends Paid', class: 'EQUITY_DRAW', root: 'EQUITY', balance: 0 },
+        // EQUITY (3000-3999)
+        { code: '3000', name: 'Share capital - common', root: 'EQUITY', leadsheet: 'SS', balance: 0 },
+        { code: '3100', name: 'Share capital - preferred', root: 'EQUITY', leadsheet: 'SS', balance: 0 },
+        { code: '3200', name: 'Contributed surplus', root: 'EQUITY', leadsheet: 'TT', balance: 0 },
+        { code: '3640', name: 'Dividends paid-taxable', root: 'EQUITY', leadsheet: 'TT', balance: 0 },
+        { code: '3650', name: 'Dividends paid-capital', root: 'EQUITY', leadsheet: 'TT', balance: 0 },
+        { code: '3999', name: 'Retained earnings', root: 'EQUITY', leadsheet: 'TT', balance: 0 },
 
-        // REVENUE (4000 - 4999)
-        { code: '4000', name: 'Sales Revenue', class: 'REV_OP', root: 'REVENUE', balance: 0 },
-        { code: '4001', name: 'Sales Revenue', class: 'REV_OP', root: 'REVENUE', balance: 0 },
-        { code: '4100', name: 'Consulting Income', class: 'REV_OP', root: 'REVENUE', balance: 0 },
-        { code: '4200', name: 'Product Sales', class: 'REV_OP', root: 'REVENUE', balance: 0 },
-        { code: '4300', name: 'Shipping Income', class: 'REV_OP_OTHER', root: 'REVENUE', balance: 0 },
-        { code: '4400', name: 'Refunds and Allowances', class: 'REV_CONTRA', root: 'REVENUE', balance: 0 },
-        { code: '4500', name: 'Interest Income', class: 'REV_NON_OP', root: 'REVENUE', balance: 0 },
-        { code: '4600', name: 'Dividend Income', class: 'REV_NON_OP', root: 'REVENUE', balance: 0 },
+        // REVENUE (4000-4999)
+        { code: '4001', name: 'Sales', root: 'REVENUE', leadsheet: '20', balance: 0 },
+        { code: '4002', name: 'Consulting fees', root: 'REVENUE', leadsheet: '20', balance: 0 },
+        { code: '4003', name: 'Contracting fees', root: 'REVENUE', leadsheet: '20', balance: 0 },
+        { code: '4004', name: 'Management fees', root: 'REVENUE', leadsheet: '20', balance: 0 },
+        { code: '4010', name: 'GST Government assistance', root: 'REVENUE', leadsheet: '20', balance: 0 },
+        { code: '4700', name: 'Commissions', root: 'REVENUE', leadsheet: '20', balance: 0 },
+        { code: '4840', name: 'Expenses recovered', root: 'REVENUE', leadsheet: '70', balance: 0 },
+        { code: '4860', name: 'Interest income', root: 'REVENUE', leadsheet: '70', balance: 0 },
+        { code: '4880', name: 'Intercompany dividends', root: 'REVENUE', leadsheet: '70', balance: 0 },
+        { code: '4900', name: 'Rental revenue', root: 'REVENUE', leadsheet: '20', balance: 0 },
+        { code: '4950', name: 'Loss (gain) on sale of assets', root: 'REVENUE', leadsheet: '70', balance: 0 },
+        { code: '4970', name: 'Other gains', root: 'REVENUE', leadsheet: '70', balance: 0 },
+        { code: '4971', name: 'Portfolio investment dividends', root: 'REVENUE', leadsheet: '70', balance: 0 },
+        { code: '4972', name: 'Portfolio capital gains dividends', root: 'REVENUE', leadsheet: '70', balance: 0 },
+        { code: '4973', name: 'Gain (loss) on sale of investments', root: 'REVENUE', leadsheet: '70', balance: 0 },
 
-        // EXPENSES (5000 - 9999)
-        { code: '5000', name: 'Cost of Goods Sold', class: 'COGS', root: 'EXPENSE', balance: 0 },
-        { code: '5100', name: 'Direct Labor', class: 'COGS', root: 'EXPENSE', balance: 0 },
-        { code: '5200', name: 'Materials & Supplies', class: 'COGS', root: 'EXPENSE', balance: 0 },
-        { code: '6000', name: 'Salaries & Wages', class: 'EXP_OP_SAL', root: 'EXPENSE', balance: 0 },
-        { code: '6100', name: 'Employee Benefits', class: 'EXP_OP_SAL', root: 'EXPENSE', balance: 0 },
-        { code: '6200', name: 'Rent or Lease', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '6300', name: 'Utilities', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '6400', name: 'Telephone & Internet', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '6500', name: 'Insurance', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '6600', name: 'Repair & Maintenance', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '6800', name: 'Dues & Memberships', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '7000', name: 'Advertising & Promotion', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '7100', name: 'Marketing', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '7200', name: 'Software & Subscriptions', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '7300', name: 'Computer & Internet', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '7600', name: 'Insurance', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '7700', name: 'Interest & Bank Charges', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8100', name: 'Rent & Utilities', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8200', name: 'Automobile Expenses', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8300', name: 'Fuel', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8400', name: 'Office Supplies', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8500', name: 'Travel & Local Transportation', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8550', name: 'Meals & Entertainment', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8600', name: 'Office Supplies & Postage', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '8700', name: 'Bank Charges', class: 'EXP_OP_FIN', root: 'EXPENSE', balance: 0 },
-        { code: '8800', name: 'Bank & Interest Charges', class: 'EXP_OP_FIN', root: 'EXPENSE', balance: 0 },
-        { code: '8900', name: 'Professional Fees', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '9000', name: 'Depreciation Expense', class: 'EXP_NON_CASH', root: 'EXPENSE', balance: 0 },
-        { code: '9200', name: 'Travel & Accommodation', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '9700', name: 'Vehicle', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 },
-        { code: '9970', name: 'Uncategorized', class: 'EXP_OP_G_A', root: 'EXPENSE', balance: 0 }
+        // COST OF SALES (5000-5999)
+        { code: '5305', name: 'Consultants', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5310', name: 'Equipment rental', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5320', name: 'Equipment repairs', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5330', name: 'Fuel and oil', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5335', name: 'Materials and supplies', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5340', name: 'Insurance', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5345', name: 'Opening inventory', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5350', name: 'Purchases', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5351', name: 'Direct cost #1', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5352', name: 'Direct cost #2', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5353', name: 'Direct cost #3', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5355', name: 'Closing inventory', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5360', name: 'Subcontractors', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5377', name: 'Direct wages', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5380', name: 'Vehicle', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5700', name: 'Freight', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+
+        // GENERAL & ADMINISTRATIVE (6000-9499)
+        { code: '6000', name: 'Advertising', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6100', name: 'Amortization on tangible assets', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6300', name: 'Bad debts', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6400', name: 'Building repairs', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6410', name: 'Business taxes', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6415', name: 'Client meals and entertainment', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6420', name: 'Conferences', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6450', name: 'Consulting fees', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6500', name: 'Contract wages', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6550', name: 'Courier', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6600', name: 'Credit card charges', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6750', name: 'Donations', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6800', name: 'Dues, memberships and subscriptions', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '6900', name: 'Employee benefits', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7000', name: 'Equipment rentals', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7100', name: 'Equipment repairs', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7400', name: 'Fuel and oil', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7600', name: 'Insurance', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7700', name: 'Interest and bank charges', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7750', name: 'Interest on income taxes', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7751', name: 'CRA penalties and interest', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7752', name: 'Loss (gain) on foreign exchange', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7800', name: 'Interest on long-term debt', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '7890', name: 'Legal fees', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8400', name: 'Management remuneration', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8450', name: 'Materials and supplies', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8500', name: 'Miscellaneous', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8600', name: 'Office supplies and postage', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8700', name: 'Professional fees', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8710', name: 'Property taxes', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8720', name: 'Rent', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8800', name: 'Repairs and maintenance', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8850', name: 'Security', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8900', name: 'Shop supplies', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8950', name: 'Subcontracting', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '9100', name: 'Telephone', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '9200', name: 'Travel and accommodations', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '9250', name: 'Training - Courses', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '9500', name: 'Utilities', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '9550', name: 'Uniforms', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '9700', name: 'Vehicle', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '9750', name: 'Workers compensation', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '9800', name: 'Wages and benefits', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+
+        // INCOME TAXES (9950-9970)
+        { code: '9950', name: 'Income taxes - current', root: 'EXPENSE', leadsheet: '80', balance: 0 },
+        { code: '9955', name: 'Income taxes - recovery', root: 'EXPENSE', leadsheet: '80', balance: 0 },
+        { code: '9960', name: 'Income taxes - future', root: 'EXPENSE', leadsheet: '80', balance: 0 },
+        { code: '9970', name: 'Unusual item', root: 'EXPENSE', leadsheet: '70', balance: 0 },
+        { code: '9971', name: 'Credit card payment', root: 'LIABILITY', leadsheet: 'BB', balance: 0 },
+
+        // ── SUPPLEMENTAL CODES (used in real data, not in default Caseware set) ────────────
+        // These appear in imported statements and need proper names/roots.
+        { code: '4000', name: 'Revenue - general', root: 'REVENUE', leadsheet: '20', balance: 0 },
+        { code: '5325', name: 'Cleaning and janitorial', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5336', name: 'Supplies - building and property', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '5365', name: 'Property management fees', root: 'EXPENSE', leadsheet: '30', balance: 0 },
+        { code: '7300', name: 'Repairs and maintenance - property', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8100', name: 'Meals and entertainment', root: 'EXPENSE', leadsheet: '40', balance: 0 },
+        { code: '8650', name: 'Software and subscriptions', root: 'EXPENSE', leadsheet: '40', balance: 0 }
     ];
 
     // --- STORAGE ENGINE ---
@@ -258,9 +441,9 @@ window.RoboLedger = (function () {
         {
             pattern: /e-transfer|interac|e-trf/i,
             test: (tx) => tx.polarity === 'CREDIT',
-            category: '4000', // Revenue
-            confidence: 0.7,
-            status: 'needs_review'
+            category: '4900', // Rental Revenue (Airbnb e-transfers)
+            confidence: 0.85,
+            status: 'auto_categorized'
         },
         {
             pattern: /e-transfer|interac|e-trf/i,
@@ -272,7 +455,7 @@ window.RoboLedger = (function () {
         // High-confidence rules (auto_categorized)
         {
             pattern: /^e-transfer.*autodeposit$/i,
-            category: '4100', // Revenue
+            category: '4900', // Rental Revenue (Airbnb autodeposit)
             confidence: 0.95,
             status: 'auto_categorized'
         },
@@ -455,7 +638,7 @@ window.RoboLedger = (function () {
 
             return Object.values(state.transactions).filter(tx => {
                 const txDate = new Date(tx.date);
-                const inRange = txDate >= start && txDate <= endDate;
+                const inRange = txDate >= start && txDate <= end;
                 const matchAccount = !accountIds || (Array.isArray(accountIds) ? accountIds.includes(tx.account_id) : tx.account_id === accountIds);
                 return inRange && matchAccount;
             });
@@ -789,6 +972,15 @@ window.RoboLedger = (function () {
             const id = 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
             state.fileStorage.set(id, blob);
             return id;
+        },
+        remove: function (id) {
+            const idx = state.accounts.findIndex(a => a.id === id);
+            if (idx !== -1) {
+                state.accounts.splice(idx, 1);
+                save();
+                return true;
+            }
+            return false;
         }
     };
 
@@ -1443,6 +1635,21 @@ window.RoboLedger = (function () {
                 const date = row.date || row.transaction_date;
                 const raw_description = row.description || row.memo || row.payee || ''; // FIX: Fallback to empty string to prevent undefined
 
+                // ── SKIP OPENING BALANCE ROWS ────────────────────────────────────
+                // Opening balance lines are statement reference points, not real transactions.
+                // They must not be ingested — they corrupt balances, totals, and categorization.
+                // Parsers should exclude these, but we enforce it here as a safety net.
+                const descLower = raw_description.toLowerCase().trim();
+                if (
+                    descLower === 'opening balance' ||
+                    descLower.startsWith('opening balance ') ||
+                    descLower === 'solde d\'ouverture' ||
+                    descLower.startsWith('balance forward')
+                ) {
+                    console.log(`[INGEST] ⏭ Skipped opening balance row: "${raw_description}" (${date})`);
+                    continue;
+                }
+
                 // Check if parser already provided debit/credit breakdown
                 let amount, amount_cents, polarity;
 
@@ -1558,6 +1765,7 @@ window.RoboLedger = (function () {
                         transit: metadata.transit,
                         sub_detail: row.sub_detail || null
                     },
+                    category: predicted_code || null,       // Grid reads .category for COA dropdown
                     category_code: predicted_code || null,
                     category_name: category ? category.name : 'UNCATEGORIZED',
                     status: predicted_code ? TransactionStatus.PREDICTED : TransactionStatus.RAW,
@@ -1577,6 +1785,9 @@ window.RoboLedger = (function () {
                         if (autoCat.confidence >= minConfidence) {
                             canonical.gl_account_code = autoCat.gl_account_code;
                             canonical.gl_account_name = autoCat.gl_account_name;
+                            canonical.category = autoCat.gl_account_code;       // Grid reads .category
+                            canonical.category_code = autoCat.gl_account_code;  // Ensure category_code set
+                            canonical.category_name = autoCat.gl_account_name;
                             canonical.category_confidence = autoCat.confidence;
                             canonical.status = autoCat.status;
                         } else {
@@ -1588,11 +1799,14 @@ window.RoboLedger = (function () {
                 }
 
                 // === FALLBACK: Ensure all transactions have a COA code ===
-                if (!canonical.gl_account_code && !canonical.category_code) {
+                if (!canonical.gl_account_code && !canonical.category_code && !canonical.category) {
                     // No category assigned - use 9970 (Uncategorized) as fallback
                     const fallbackCOA = COA.get('9970');
                     canonical.gl_account_code = '9970';
                     canonical.gl_account_name = fallbackCOA ? fallbackCOA.name : 'Uncategorized';
+                    canonical.category = '9970';          // Grid reads .category
+                    canonical.category_code = '9970';
+                    canonical.category_name = fallbackCOA ? fallbackCOA.name : 'Uncategorized';
                     canonical.category_confidence = 0;
                     canonical.category_source = 'fallback';
                     canonical.status = 'needs_review';
@@ -1683,14 +1897,64 @@ window.RoboLedger = (function () {
     // --- COA SERVICE ---
     const COA = {
         init: function () {
-            COA_DEFAULTS.forEach(entry => state.coa[entry.code] = entry);
+            COA_DEFAULTS.forEach(entry => {
+                // Preserve existing data but fill in missing fields from defaults
+                if (!state.coa[entry.code]) {
+                    state.coa[entry.code] = entry;
+                } else {
+                    // Backfill leadsheet/root if missing
+                    if (!state.coa[entry.code].leadsheet) state.coa[entry.code].leadsheet = entry.leadsheet;
+                    if (!state.coa[entry.code].root) state.coa[entry.code].root = entry.root;
+                }
+            });
         },
         getAll: function () {
             return Object.values(state.coa);
         },
         get: function (code) {
-            return state.coa[code];
-        }
+            return state.coa[code] || state.coa[String(code)];
+        },
+        getLeadsheet: function (code) {
+            const acct = this.get(code);
+            if (acct?.leadsheet) return acct.leadsheet;
+            // Infer leadsheet from code range for accounts not in COA
+            const n = parseInt(code);
+            if (n >= 1000 && n <= 1099) return 'A';
+            if (n >= 1100 && n <= 1199) return 'B';
+            if (n >= 1200 && n <= 1289) return 'C';
+            if (n >= 1290 && n <= 1399) return 'L';
+            if (n >= 1400 && n <= 1499) return 'N';
+            if (n >= 1500 && n <= 1899) return 'U';
+            if (n >= 1900 && n <= 1949) return 'L';
+            if (n >= 1950 && n <= 1999) return 'W';
+            if (n >= 2000 && n <= 2009) return 'PP';
+            if (n >= 2010 && n <= 2099) return 'AA';
+            if (n >= 2100 && n <= 2147) return 'BB';
+            if (n >= 2148 && n <= 2179) return 'CC';
+            if (n >= 2180 && n <= 2599) return 'BB';
+            if (n >= 2600 && n <= 2649) return 'FF';
+            if (n >= 2650 && n <= 2669) return 'DD';
+            if (n >= 2670 && n <= 2699) return 'EE';
+            if (n >= 2700 && n <= 2709) return 'PP';
+            if (n >= 2710 && n <= 2899) return 'KK';
+            if (n >= 2900 && n <= 2999) return 'MM';
+            if (n >= 3000 && n <= 3199) return 'SS';
+            if (n >= 3200 && n <= 3999) return 'TT';
+            if (n >= 4000 && n <= 4799) return '20';
+            if (n >= 4800 && n <= 4999) return '70';
+            if (n >= 5000 && n <= 5999) return '30';
+            if (n >= 6000 && n <= 9899) return '40';
+            if (n >= 9900 && n <= 9969) return '80';
+            if (n >= 9970) return '70';
+            return '40'; // default fallback
+        },
+        getLeadsheetName: function (lsCode) {
+            return LEADSHEET_NAMES[lsCode] || lsCode;
+        },
+        getLeadsheetOrder: function () {
+            return LEADSHEET_ORDER;
+        },
+        inferRoot: inferRoot
     };
 
     // --- CATEGORIZATION BRAIN ---

@@ -18,10 +18,14 @@ import { PDFSnippet } from './PDFSnippet';
 
 export function AuditSidebar({ isOpen, onClose, transaction }) {
     const [showDocViewer, setShowDocViewer] = useState(false);
-    const [showLeftPanel, setShowLeftPanel] = useState(false); // NEW: Left slide-out panel
-    const [viewerDocument, setViewerDocument] = useState(null); // {type, url, name}
+    const [showLeftPanel, setShowLeftPanel] = useState(false);
+    const [viewerDocument, setViewerDocument] = useState(null);
     const [receipts, setReceipts] = useState([]);
+    const [gstDrill, setGstDrill] = useState(null); // null = summary, 'collected'|'paid' = drilled
     const sidebarRef = React.useRef(null);
+
+    // Reset GST drill when transaction changes
+    useEffect(() => { setGstDrill(null); }, [transaction?.tx_id]);
 
     // Auto-scroll to sidebar when opened
     useEffect(() => {
@@ -369,6 +373,121 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                 )}
                         </div>
                     )}
+
+                    {/* ── Account Metadata ─────────────────────────────────────────── */}
+                    {(() => {
+                        const acct = window.RoboLedger?.Accounts?.get?.(transaction.account_id);
+                        if (!acct) return null;
+                        const maskNum = (n) => n ? '••••' + String(n).slice(-4) : '—';
+                        const rows = [
+                            { label: 'Account', value: acct.ref || acct.id },
+                            { label: 'Bank', value: acct.bank || acct.name || '—' },
+                            { label: 'Type', value: acct.type || acct.accountType || '—' },
+                            { label: 'Number', value: maskNum(acct.accountNumber) },
+                            acct.statementPeriod ? { label: 'Period', value: acct.statementPeriod } : null,
+                            acct.openingBalance != null ? { label: 'Opening Bal', value: `$${Number(acct.openingBalance).toFixed(2)}` } : null,
+                        ].filter(Boolean);
+                        return (
+                            <div style={{ marginBottom: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                    Account
+                                </div>
+                                <div style={{ padding: '8px 12px' }}>
+                                    {rows.map(({ label, value }) => (
+                                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', fontSize: '11px' }}>
+                                            <span style={{ color: '#94a3b8', minWidth: '70px' }}>{label}</span>
+                                            <span style={{ color: '#1e293b', fontWeight: 500, textAlign: 'right' }}>{value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* ── GST Summary (drillable) ───────────────────────────────────── */}
+                    {(() => {
+                        const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+                        const COA = window.RoboLedger?.COA;
+                        const acctId = transaction.account_id;
+
+                        // Aggregate GST for this account
+                        const gstTxns = allTxns.filter(t => t.account_id === acctId && t.gst_enabled && t.tax_cents);
+                        if (!gstTxns.length && !transaction.gst_enabled) return null;
+
+                        const fmt = (n) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(n);
+                        const collected = gstTxns.filter(t => {
+                            const root = COA?.get(String(t.category))?.root;
+                            return root === 'REVENUE';
+                        });
+                        const paid = gstTxns.filter(t => {
+                            const root = COA?.get(String(t.category))?.root;
+                            return root === 'EXPENSE' || !root;
+                        });
+                        const totalCollected = collected.reduce((s, t) => s + (t.tax_cents || 0), 0) / 100;
+                        const totalPaid      = paid.reduce((s, t) => s + (t.tax_cents || 0), 0) / 100;
+                        const netGST         = totalCollected - totalPaid;
+
+                        const drillTxns = gstDrill === 'collected' ? collected : gstDrill === 'paid' ? paid : [];
+
+                        return (
+                            <div style={{ marginBottom: '16px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', overflow: 'hidden' }}>
+                                {/* GST Header with breadcrumb */}
+                                <div style={{ padding: '8px 12px', borderBottom: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 700, color: '#15803d', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                    {gstDrill ? (
+                                        <>
+                                            <span style={{ cursor: 'pointer', color: '#059669' }} onClick={() => setGstDrill(null)}>GST Summary</span>
+                                            <span style={{ color: '#86efac' }}>›</span>
+                                            <span>{gstDrill === 'collected' ? 'GST Collected' : 'GST ITC Paid'}</span>
+                                        </>
+                                    ) : 'GST Summary'}
+                                </div>
+
+                                {gstDrill ? (
+                                    /* Drill view: list transactions */
+                                    <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                                        {drillTxns.length === 0 && (
+                                            <div style={{ padding: '12px', textAlign: 'center', fontSize: '11px', color: '#94a3b8' }}>No transactions</div>
+                                        )}
+                                        {drillTxns.map((t, i) => {
+                                            const gst = (t.tax_cents || 0) / 100;
+                                            return (
+                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 12px', fontSize: '10px', borderBottom: '1px solid #f0fdf4', cursor: 'pointer' }}
+                                                     onClick={() => window.openAuditSidebar?.(t)}
+                                                     onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
+                                                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                    <span style={{ color: '#6b7280', marginRight: '6px', flexShrink: 0 }}>{t.date?.substring(0, 10)}</span>
+                                                    <span style={{ color: '#374151', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(t.description || '').substring(0, 26)}</span>
+                                                    <span style={{ color: '#059669', fontWeight: 600, fontFamily: 'monospace', flexShrink: 0, marginLeft: '6px' }}>{fmt(gst)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    /* Summary view */
+                                    <div style={{ padding: '8px 12px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: '11px', cursor: 'pointer', borderRadius: '4px' }}
+                                             onClick={() => { setGstDrill('collected'); window.setTxGridFilter && window.setTxGridFilter(t => t.account_id === acctId && t.gst_enabled && window.RoboLedger?.COA?.get(String(t.category))?.root === 'REVENUE'); }}
+                                             onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
+                                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            <span style={{ color: '#15803d' }}>GST Collected <span style={{ fontSize: '10px', color: '#86efac' }}>({collected.length})</span></span>
+                                            <span style={{ color: '#15803d', fontWeight: 700, fontFamily: 'monospace' }}>{fmt(totalCollected)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: '11px', cursor: 'pointer', borderRadius: '4px' }}
+                                             onClick={() => { setGstDrill('paid'); window.setTxGridFilter && window.setTxGridFilter(t => t.account_id === acctId && t.gst_enabled && window.RoboLedger?.COA?.get(String(t.category))?.root !== 'REVENUE'); }}
+                                             onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
+                                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            <span style={{ color: '#0369a1' }}>GST ITC Paid <span style={{ fontSize: '10px', color: '#7dd3fc' }}>({paid.length})</span></span>
+                                            <span style={{ color: '#0369a1', fontWeight: 700, fontFamily: 'monospace' }}>{fmt(totalPaid)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0 2px', fontSize: '11px', borderTop: '1px solid #bbf7d0', marginTop: '4px' }}>
+                                            <span style={{ color: '#374151', fontWeight: 700 }}>Net GST {netGST >= 0 ? 'Payable' : 'Refund'}</span>
+                                            <span style={{ color: netGST >= 0 ? '#dc2626' : '#059669', fontWeight: 700, fontFamily: 'monospace' }}>{fmt(Math.abs(netGST))}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {/* PDF Visual Snippet - Shows actual transaction line from PDF */}
                     {transaction.source_pdf?.url && (
