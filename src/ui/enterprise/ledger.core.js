@@ -375,64 +375,243 @@ window.RoboLedger = (function () {
 
     // --- DESCRIPTION PARSER ---
     function toTitleCase(str) {
-        return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
+        if (!str) return '';
+        // Words to keep lowercase unless first word
+        const LOWER_WORDS = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','in','of','up','as']);
+        // Tokens to keep exact case (brands, abbreviations)
+        const PRESERVE = { 'A&W': 'A&W', 'TD': 'TD', 'RBC': 'RBC', 'BMO': 'BMO', 'CIBC': 'CIBC', 'HSBC': 'HSBC' };
+        return str.toLowerCase()
+            .replace(/[^\s]+/g, (word, offset) => {
+                const up = word.toUpperCase();
+                if (PRESERVE[up]) return PRESERVE[up];           // preserve known brands
+                if (offset > 0 && LOWER_WORDS.has(word)) return word; // keep articles lowercase mid-string
+                return word.charAt(0).toUpperCase() + word.slice(1);
+            });
     }
 
+    // ─── Smart Description Splitter ───────────────────────────────────────────
+    // Splits a raw bank description into:
+    //   payee               → Line 1: clean merchant/person name (title case)
+    //   transaction_type_label → Line 2: transaction context (lowercase, descriptive)
+    //
+    // Design rules (from actual statement data):
+    //  • Strip known suffix tokens (Purchase, Refund, Payment, etc.) → type label
+    //  • Strip noise (store numbers, branch codes, city/province, masked card #s)
+    //  • E-transfers: name is the person/business, type = "e-transfer · received/sent"
+    //  • CC payments: "Payment - Thank You" → payee = "Payment", type = "credit card payment"
+    //  • Keep the merchant name recognizable — "Costco Wholesale" not "COSTCO 00412 AB"
+    //  • Type label always lowercase, uses · as visual separator
+    //
     function parseTransactionDescription(rawDesc) {
         if (!rawDesc) return { payee: null, transaction_type_label: null };
 
-        const upper = rawDesc.toUpperCase();
+        // If already contains \n (parser pre-split, e.g. RBCMastercardParser), honour it
+        if (rawDesc.includes('\n')) {
+            const parts = rawDesc.split('\n');
+            const name = toTitleCase(parts[0].trim());
+            const type = parts.slice(1).join(' ').trim().toLowerCase() || null;
+            return { payee: name, transaction_type_label: type };
+        }
 
-        // E-Transfer patterns
-        if (upper.includes('INTERAC') || upper.includes('E-TRANSFER') || upper.includes('E-TRF')) {
-            const cleaned = rawDesc
-                .replace(/INTERAC/gi, '')
-                .replace(/e-Transfer/gi, '')
+        // Strip phone/online order prefix "IN *" up front (e.g. "IN *18751508 LTD 403-6880197")
+        const raw  = rawDesc.trim().replace(/^IN\s*\*\s*/i, '');
+        const upper = raw.toUpperCase();
+
+        // ── 1. Credit card payments ────────────────────────────────────────────
+        if (/PAYMENT\s*[-–]?\s*THANK\s*YOU|THANK\s*YOU.*PAYMENT|PAIEMENT.*MERCI|MERCI.*PAIEMENT/i.test(raw)) {
+            return { payee: 'Payment', transaction_type_label: 'credit card payment' };
+        }
+        if (/^PAYMENT\s*[-–]\s*THANK\s*YOU/i.test(raw)) {
+            return { payee: 'Payment', transaction_type_label: 'credit card payment' };
+        }
+
+        // ── 2. Cash back / rewards ─────────────────────────────────────────────
+        if (/CASH\s*BACK\s*REWARD|MY\s*REWARDS\s*CASH\s*REDEMPTION|CASHBACK/i.test(raw)) {
+            return { payee: 'Cash Back', transaction_type_label: 'rewards · bank credit' };
+        }
+
+        // ── 3. Interest charges / fees ─────────────────────────────────────────
+        if (/PURCHASE\s*INTEREST|RETAIL\s*INTEREST|INTEREST\s*CHARGE|INTEREST\s*PURCHASES|INTEREST\s*CHARGES/i.test(raw)) {
+            return { payee: 'Interest Charge', transaction_type_label: 'bank fee · interest' };
+        }
+        if (/ANNUAL\s*FEE|ADDITIONAL\s*CARD\s*FEE|CASH\s*ADVANCE\s*FEE/i.test(raw)) {
+            const feeType = /ANNUAL/i.test(raw) ? 'annual fee' : /ADDITIONAL/i.test(raw) ? 'additional card fee' : 'cash advance fee';
+            return { payee: 'Card Fee', transaction_type_label: `bank fee · ${feeType}` };
+        }
+        if (/MONTHLY\s*FEE|REGULAR\s*TRANSACTION\s*FEE|SERVICE\s*CHARGE|BANKING\s*FEE|ACTIVITY\s*FEE/i.test(raw)) {
+            return { payee: 'Bank Fee', transaction_type_label: 'bank fee · account charge' };
+        }
+
+        // ── 4. E-Transfers ─────────────────────────────────────────────────────
+        if (/INTERAC|E-TRANSFER|E-TRF|E\s*TRANSFER/i.test(raw)) {
+            const isSent     = /\bSENT\b/i.test(raw);
+            const isReceived = /\bRECEIVED\b|AUTODEPOSIT/i.test(raw);
+            const direction  = isSent ? 'sent' : isReceived ? 'received' : 'transfer';
+
+            // Extract the person/business name — strip all banking noise
+            let name = raw
+                .replace(/INTERAC\s*(E-TRANSFER|E-TRF)?/gi, '')
                 .replace(/E-TRANSFER/gi, '')
                 .replace(/E-TRF/gi, '')
+                .replace(/E\s+TRANSFER/gi, '')
+                .replace(/AUTODEPOSIT/gi, '')
+                .replace(/\bSENT\s+TO\b|\bRECEIVED\s+FROM\b|\bSENT\b|\bRECEIVED\b/gi, '')
+                .replace(/[-–]/g, ' ')
+                .replace(/\s+/g, ' ')
                 .trim();
 
+            // Sub-type from known patterns
+            let subtype = '';
+            if (/PAYROLL|SALARY|WAGES/i.test(raw))        subtype = ' · payroll';
+            else if (/DIVIDEND/i.test(raw))               subtype = ' · dividend';
+            else if (/RENT|LEASE/i.test(raw))             subtype = ' · rent';
+            else if (/SUBCONTRACT|CONTRACTOR/i.test(raw)) subtype = ' · contractor';
+            else if (/REFUND/i.test(raw))                 subtype = ' · refund';
+
             return {
-                payee: toTitleCase(cleaned) || 'E-Transfer',
-                transaction_type_label: 'e-transfer • direct deposit'
+                payee: toTitleCase(name) || 'E-Transfer',
+                transaction_type_label: `e-transfer · ${direction}${subtype}`
             };
         }
 
-        // Direct Deposit / Payroll
-        if (upper.includes('DD') || upper.includes('DIRECT DEP') || upper.includes('PAYROLL')) {
+        // ── 5. Direct deposit / Payroll ────────────────────────────────────────
+        if (/DIRECT\s*DEP(?:OSIT)?|DD\s+|PAYROLL|PAY\s+STUB/i.test(raw)) {
+            let name = raw
+                .replace(/DIRECT\s*DEP(?:OSIT)?/gi, '')
+                .replace(/PAYROLL/gi, '')
+                .replace(/\s+/g, ' ').trim();
             return {
-                payee: 'Payroll Deposit',
-                transaction_type_label: 'direct deposit • payroll'
+                payee: toTitleCase(name) || 'Direct Deposit',
+                transaction_type_label: 'direct deposit · payroll'
             };
         }
 
-        // Subcontractor
-        if (upper.includes('SUBCONTRACTOR') || upper.includes('SUB-CONTRACT')) {
+        // ── 6. Mobile cheque deposit ───────────────────────────────────────────
+        if (/MOBILE\s*CHEQUE\s*DEPOSIT|MOBILE\s*CHECK/i.test(raw)) {
+            let name = raw.replace(/MOBILE\s*CHEQUE?\s*DEPOSIT/gi, '').replace(/[-–]/g, '').trim();
             return {
-                payee: 'Contractor Payment',
-                transaction_type_label: 'e-transfer • sub-contract'
+                payee: toTitleCase(name) || 'Cheque Deposit',
+                transaction_type_label: 'cheque · mobile deposit'
             };
         }
 
-        // VISA/MC Purchase
-        if (upper.includes('VISA') || upper.includes('MASTERCARD') || upper.includes('MC')) {
-            const cleaned = rawDesc
-                .replace(/VISA/gi, '')
-                .replace(/MASTERCARD/gi, '')
-                .replace(/MC/gi, '')
-                .replace(/PURCHASE/gi, '')
-                .trim();
-
+        // ── 7. Bank transfers (online banking, inter-account) ──────────────────
+        if (/ONLINE\s*(BANKING\s*)?TRANSFER|ONLINE\s*TRANSFER\s*TO|TRSF\s*(FROM|TO)/i.test(raw)) {
+            const dir = /TO\b/i.test(raw) ? 'sent' : /FROM\b/i.test(raw) ? 'received' : 'transfer';
+            let name = raw
+                .replace(/ONLINE\s*(BANKING\s*)?TRANSFER\s*[-–]?/gi, '')
+                .replace(/TRSF\s*(FROM|TO)\s*/gi, '')
+                .replace(/DEPOSIT\s*ACCOUNT\s*/gi, '')
+                .replace(/[-–]/g, ' ')
+                .replace(/\d{4,}/g, '') // strip account numbers
+                .replace(/\s+/g, ' ').trim();
             return {
-                payee: toTitleCase(cleaned) || 'Purchase',
-                transaction_type_label: 'card purchase'
+                payee: toTitleCase(name) || 'Bank Transfer',
+                transaction_type_label: `bank transfer · ${dir}`
             };
         }
 
-        // Default: return cleaned up version
+        // ── 8. Loan / mortgage payments ────────────────────────────────────────
+        if (/LOAN\s*PAYMENT|LOAN\s*CREDIT|MORTGAGE\s*PAYMENT/i.test(raw)) {
+            return { payee: 'Loan Payment', transaction_type_label: 'loan · payment' };
+        }
+        if (/LOAN\s*INTEREST/i.test(raw)) {
+            return { payee: 'Loan Interest', transaction_type_label: 'loan · interest charge' };
+        }
+
+        // ── 9. Preauthorized / PAD ─────────────────────────────────────────────
+        if (/PREAUTHORIZED|PRE-AUTH(?:ORIZED)?|PAD\s+/i.test(raw)) {
+            let name = raw
+                .replace(/PREAUTHORIZED\s*(DEBIT|PAYMENT|CREDIT)?/gi, '')
+                .replace(/PRE-AUTH(?:ORIZED)?\s*/gi, '')
+                .replace(/PAD\s+/gi, '')
+                .replace(/\s+/g, ' ').trim();
+            return {
+                payee: toTitleCase(name) || 'Pre-Auth',
+                transaction_type_label: 'pre-authorized · automatic'
+            };
+        }
+
+        // ── 10. CC suffix stripping — core purchase/refund logic ───────────────
+        // Trailing tokens: Purchase, Refund, Credit, Debit, Cash Advance, etc.
+        // These become the type label; what remains is the merchant name.
+        const SUFFIX_MAP = [
+            { re: /\bPURCHASE\b/gi,       label: 'purchase' },
+            { re: /\bREFUND\b/gi,          label: 'refund' },
+            { re: /\bCREDIT\b/gi,          label: 'credit' },
+            { re: /\bCASH\s*ADVANCE\b/gi,  label: 'cash advance' },
+            { re: /\bWITHDRAWAL\b/gi,      label: 'withdrawal' },
+            { re: /\bDEPOSIT\b/gi,         label: 'deposit' },
+            { re: /\bPAYMENT\b/gi,         label: 'payment' },
+        ];
+
+        let merchant = raw;
+        let typeLabel = null;
+
+        for (const { re, label } of SUFFIX_MAP) {
+            if (re.test(merchant)) {
+                merchant = merchant.replace(re, '').trim();
+                typeLabel = label;
+                break; // only peel one suffix token
+            }
+        }
+
+        // ── 11. Strip common noise from merchant name ──────────────────────────
+        merchant = merchant
+            // Strip store numbers / branch codes: "#1234", "00469", "5726"
+            .replace(/#\d+/g, '')
+            .replace(/\b0{2,}\d+\b/g, '')       // leading-zero codes like 00469
+            .replace(/\b\d{4,}\b/g, '')         // 4+ digit codes
+            // Strip masked card numbers
+            .replace(/\d{4}\s?\d{2}\*+\s?\*+\s?\d{4}/g, '')
+            // Strip province + city noise: "CANMORE AB", "NICOSIA CYP"
+            .replace(/\b(?:AB|BC|MB|NB|NL|NS|ON|PE|QC|SK|NT|NU|YT)\b/gi, '')
+            // Strip known noise tokens
+            .replace(/\bLTD\b|\bINC\b|\bCORP\b|\bCO\b\./gi, '')
+            // Strip trailing junk punctuation and spaces
+            .replace(/[-–*•|]+$/, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        // ── 12. Recognisable brand shortcuts (from your data) ─────────────────
+        // If after stripping the merchant matches a known brand, normalise it
+        const BRAND_MAP = {
+            'COSTCO WHOLESALE': 'Costco Wholesale',
+            'COSTCO':           'Costco Wholesale',
+            'WWW COSTCO':       'Costco Online',
+            'WAL-MART':         'Walmart',
+            'WAL MART':         'Walmart',
+            'CDN TIRE STORE':   'Canadian Tire',
+            'CDN TIRE':         'Canadian Tire',
+            'CHARLESGLEN TOYOTA': 'Charlesglen Toyota',
+            'SKIPTHEDISHES':    'SkipTheDishes',
+            'SKIP THE DISHES':  'SkipTheDishes',
+            'DAIRY QUEEN':      'Dairy Queen',
+            'TIM HORTONS':      'Tim Hortons',
+            'FIVERREU':         'Fiverr',
+            'AMZN MKTP CA':     'Amazon.ca',
+            'AMZN MKTP':        'Amazon',
+            'AMAZON.CA':        'Amazon.ca',
+            'PETRO-CANADA':     'Petro-Canada',
+            'A&W':              'A&W',
+            'CANMORE PIZZAHUT': 'Pizza Hut Canmore',
+            'IN *':             '',   // strip IN * prefix (phone order prefixes)
+        };
+
+        const merchantUpper = merchant.toUpperCase().trim();
+        for (const [key, val] of Object.entries(BRAND_MAP)) {
+            if (merchantUpper === key || merchantUpper.startsWith(key)) {
+                merchant = val || merchantUpper;
+                break;
+            }
+        }
+
+        // Final title-case if not already a known brand string
+        const finalPayee = merchant ? toTitleCase(merchant) : toTitleCase(raw);
+
         return {
-            payee: toTitleCase(rawDesc),
-            transaction_type_label: null
+            payee: finalPayee,
+            transaction_type_label: typeLabel
         };
     }
 
