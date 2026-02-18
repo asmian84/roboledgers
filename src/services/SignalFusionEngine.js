@@ -166,7 +166,25 @@ class SignalFusionEngine {
         // Remove signals that violate polarity rules
         const safe = fired.filter(sig => this._polarityAllowed(sig.coa, enriched));
 
-        return this._fuse(safe, enriched);
+        const result = this._fuse(safe, enriched);
+
+        // === POST-FUSE CC CREDIT GUARD ===
+        // Final safety net: even after filtering, a revenue code must never be the outcome
+        // for a CC refund or cash-back. If it slipped through, force needs_review.
+        if (result.coa_code && enriched._isCCAcct && enriched._isCredit && !enriched._isCCPayment) {
+            const winnerAcct = window.RoboLedger?.COA?.get(result.coa_code);
+            if (winnerAcct?.root === 'REVENUE') {
+                return {
+                    ...result,
+                    coa_code:    null,
+                    confidence:  0,
+                    needsReview: true,
+                    explanation: `[CC Guard] Revenue code ${result.coa_code} blocked on CC ${enriched._isCCRefund ? 'refund' : 'credit'} — reassign to contra-expense`,
+                };
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -178,6 +196,16 @@ class SignalFusionEngine {
         const isCredit   = tx.polarity === 'CREDIT';
         const normalized = VendorNormalizer.normalize(tx.description || '');
 
+        // Detect credit card account type from metadata
+        const meta = tx.metadata || {};
+        const isCCAcct = !!(meta.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(meta.name || ''));
+
+        // Classify CC credit sub-types — critical for correct contra-expense routing
+        const rawDesc = (tx.raw_description || tx.description || '').toUpperCase();
+        const isCCRefund  = isCCAcct && isCredit && /\bREFUND\b/.test(rawDesc);
+        const isCashBack  = isCCAcct && isCredit && /CASH\s*BACK|CASHBACK|REWARD/i.test(rawDesc);
+        const isCCPayment = isCCAcct && isCredit && !isCCRefund && !isCashBack;
+
         return {
             ...tx,
             _amount:      amount,
@@ -186,6 +214,10 @@ class SignalFusionEngine {
             _normalized:  normalized,
             _isRecurring: this._detectRecurring(tx, normalized, amount),
             _isRound:     (tx.amount_cents || 0) % 100 === 0,
+            _isCCAcct:    isCCAcct,
+            _isCCRefund:  isCCRefund,   // Vendor refund → contra-expense (same COA as original purchase)
+            _isCashBack:  isCashBack,   // Cash back / reward → 9971
+            _isCCPayment: isCCPayment,  // Actual card payment → 9971
         };
     }
 
@@ -788,7 +820,17 @@ class SignalFusionEngine {
         const account = window.RoboLedger?.COA?.get(coa);
         if (!account) return true;
 
-        if (tx._isCredit && (account.root === 'EXPENSE' || account.class === 'COGS')) return false;
+        // CC refunds are CREDIT polarity but legitimately hit EXPENSE accounts (contra-expense).
+        // Allow CREDIT → EXPENSE only for refunds; block for everything else.
+        if (tx._isCredit && (account.root === 'EXPENSE' || account.class === 'COGS')) {
+            if (tx._isCCRefund) return true; // Contra-expense: Costco refund → 8600, CDN Tire refund → 5350, etc.
+            return false;
+        }
+
+        // Revenue codes on CC accounts: only allowed for actual CC payments (9971 handled separately).
+        // Refunds and cash back must NOT go to revenue accounts.
+        if (tx._isCredit && account.root === 'REVENUE' && tx._isCCAcct && !tx._isCCPayment) return false;
+
         if (tx._isDebit  && account.root === 'REVENUE') return false;
         if (tx._isDebit  && tx._amount > 30 && ['7700', '8700', '8800'].includes(coa)) return false;
 

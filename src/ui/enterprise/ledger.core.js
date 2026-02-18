@@ -1731,15 +1731,45 @@ window.RoboLedger = (function () {
                 // === ACCOUNT-TYPE CATEGORY GUARD ===
                 // The brain was trained mostly on chequing accounts where REVENUE codes are valid.
                 // For liability accounts (credit cards, lines of credit) and loan receivables,
-                // brain predictions must be validated against account type:
+                // brain predictions must be validated against account type.
+                //
+                // CC CREDIT taxonomy:
+                //   PAYMENT   → 9971 (Credit card payment clearing)
+                //   REFUND    → contra-expense (same COA as the original purchase, NOT revenue)
+                //   CASH BACK → 9971 (treat same as payment / card credit)
+                //
+                // We detect refunds via the raw_description / transaction_type_label from the parser.
+                // RBCMastercardParser appends "\nRefund" as the type; other parsers include "Refund" in text.
+                const upperDescForGuard = (raw_description || clean_description || '').toUpperCase();
+                const isCCRefund = isLiabilityAcct
+                    && polarity === Polarity.CREDIT
+                    && /\bREFUND\b/.test(upperDescForGuard);
+                const isCashBack = isLiabilityAcct
+                    && polarity === Polarity.CREDIT
+                    && /CASH\s*BACK|CASHBACK|REWARD/i.test(upperDescForGuard);
+                const isCCPayment = isLiabilityAcct
+                    && polarity === Polarity.CREDIT
+                    && !isCCRefund
+                    && !isCashBack;
+
                 if (predicted_code) {
                     const predictedRoot = COA.get(predicted_code)?.root;
 
                     if (isLiabilityAcct) {
-                        if (polarity === Polarity.CREDIT) {
+                        if (isCCPayment) {
                             // CREDIT on a credit card = payment received (chequing → card)
                             // This is a clearing entry, not revenue. Force 9971.
                             predicted_code = '9971'; // Credit card payment
+                        } else if (isCashBack) {
+                            // Cash back / rewards credit — treat as card payment clearing, not revenue
+                            predicted_code = '9971';
+                        } else if (isCCRefund) {
+                            // Vendor refund — brain may have predicted the vendor's expense code (correct!)
+                            // Only block if it predicted a REVENUE account; expense codes are correct here.
+                            if (predictedRoot === 'REVENUE') {
+                                predicted_code = null; // Will fall to needs_review; user must assign expense code
+                            }
+                            // EXPENSE prediction for a refund = correct contra-expense, keep it
                         } else if (predictedRoot === 'REVENUE') {
                             // DEBIT on a credit card = a charge/purchase — never revenue
                             // Clear the brain prediction; let it fall to needs_review/9970
@@ -1755,11 +1785,16 @@ window.RoboLedger = (function () {
                         }
                     }
                 } else if (isLiabilityAcct && polarity === Polarity.CREDIT) {
-                    // No brain prediction, but it's a card payment — still force 9971
-                    const upperDesc2 = (raw_description || '').toUpperCase();
-                    if (/PAYMENT|THANK YOU|MERCI|PAIEMENT/i.test(upperDesc2)) {
+                    if (isCCPayment) {
+                        // No brain prediction, but it's a card payment — force 9971
+                        const upperDesc2 = (raw_description || '').toUpperCase();
+                        if (/PAYMENT|THANK YOU|MERCI|PAIEMENT/i.test(upperDesc2)) {
+                            predicted_code = '9971';
+                        }
+                    } else if (isCashBack) {
                         predicted_code = '9971';
                     }
+                    // isCCRefund with no brain prediction → leave null → needs_review (user picks expense code)
                 }
 
                 const category = predicted_code ? COA.get(predicted_code) : null;
