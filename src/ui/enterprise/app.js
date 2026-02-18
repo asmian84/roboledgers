@@ -534,26 +534,8 @@
     }
   };
 
-  // Update utility bar with current account data
-  window.updateUtilityBar = function () {
-    if (!window.RoboLedger) return;
-
-    const accounts = window.RoboLedger.Accounts.getAll();
-    const totalBalance = accounts.reduce((sum, a) => sum + (a.actualEndingBalance || a.calculatedBalance || 0), 0);
-
-    const balanceEl = document.getElementById('util-total-balance');
-    if (balanceEl) {
-      balanceEl.textContent = `$${(totalBalance / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-      balanceEl.style.color = totalBalance >= 0 ? '#0f766e' : '#ef4444';
-    }
-
-    const badgesEl = document.getElementById('util-account-badges');
-    if (badgesEl) {
-      badgesEl.innerHTML = accounts.map(a => `
-        <div class="utility-badge" onclick="window.switchAccount('${a.id}')">${a.ref || 'N/A'}</div>
-      `).join('');
-    }
-  };
+  // NOTE: window.updateUtilityBar is defined in utility-bar.js with full drill-down support.
+  // Do NOT redefine it here — the utility-bar.js version handles balance, badges, AND all onclick drill wiring.
 
   // Desktop sidebar collapse toggle
   window.toggleSidebar = () => {

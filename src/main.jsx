@@ -90,6 +90,8 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
         initialCategoryFilter: activeDrillFilter,   // Persists drill-down across re-renders
     };
     window._txGridProps = gridProps;
+    // Always update the "source of truth" for predicate filters so they operate on fresh data
+    window._txGridAllData = pureTransactions;
 
     // Render with error boundary to prevent white screen crashes
     window._txGridRoot.render(
@@ -216,7 +218,7 @@ window.unmountDocumentViewer = (containerId) => {
  */
 window.setTxGridFilter = (filterValue) => {
     if (!window._txGridRoot || !window._txGridProps) {
-        console.warn('[MAIN.JSX] Grid not mounted, cannot set filter.');
+        console.warn('[setTxGridFilter] ❌ Grid not mounted (_txGridRoot=' + !!window._txGridRoot + ', _txGridProps=' + !!window._txGridProps + ')');
         return;
     }
 
@@ -226,8 +228,10 @@ window.setTxGridFilter = (filterValue) => {
         window._txGridFilterPredicate = filterValue;
         const allData = window._txGridAllData || window._txGridProps.data;
         window._txGridAllData = allData; // Remember full dataset
+        const before = allData.length;
         window._txGridProps.data = allData.filter(filterValue);
         window._txGridProps.globalFilter = ''; // Clear text filter when using predicate
+        console.log(`[setTxGridFilter] predicate filter applied: ${before} → ${window._txGridProps.data.length} rows`);
     } else if (filterValue === null || filterValue === undefined) {
         // Clear filter — restore full dataset
         window._txGridFilterPredicate = null;
@@ -235,6 +239,7 @@ window.setTxGridFilter = (filterValue) => {
             window._txGridProps.data = window._txGridAllData;
         }
         window._txGridProps.globalFilter = '';
+        console.log(`[setTxGridFilter] filter cleared — restored ${window._txGridProps.data.length} rows`);
     } else {
         // String/number: use as TanStack globalFilter (searches across columns)
         window._txGridFilterPredicate = null;
@@ -242,8 +247,10 @@ window.setTxGridFilter = (filterValue) => {
             window._txGridProps.data = window._txGridAllData;
         }
         window._txGridProps.globalFilter = filterValue;
+        console.log(`[setTxGridFilter] globalFilter set to: "${filterValue}"`);
     }
 
+    console.log('[setTxGridFilter] Re-rendering grid...');
     window._txGridRoot.render(
         <React.StrictMode>
             <ErrorBoundary fallbackMessage="Failed to render transactions grid">

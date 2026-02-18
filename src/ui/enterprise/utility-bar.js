@@ -191,7 +191,9 @@ function ubRenderCategoryChart(txns, drillState) {
  * ubDrillType — called by stat row clicks (uncategorized, in, out, revenue, expenses)
  */
 window.ubDrillType = function(type) {
+    console.log(`[UB DRILL] ubDrillType("${type}") called`);
     const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    console.log(`[UB DRILL] Total transactions available: ${allTxns.length}`);
     let filterFn, label;
 
     switch(type) {
@@ -230,8 +232,15 @@ window.ubDrillType = function(type) {
     }
 
     const filtered = allTxns.filter(filterFn);
+    console.log(`[UB DRILL] ubDrillType("${type}") → "${label}" → ${filtered.length} transactions match`);
     window._ubDrill = { level: 1, type1: type, label1: label, label1Escaped: label.replace(/'/g, "\\'"), filterFn };
-    window.setTxGridFilter && window.setTxGridFilter(filterFn);
+    if (window.setTxGridFilter) {
+        console.log(`[UB DRILL] Calling setTxGridFilter with predicate for "${label}"`);
+        window.setTxGridFilter(filterFn);
+        console.log(`[UB DRILL] setTxGridFilter done. Grid data now has ${window._txGridProps?.data?.length ?? '?'} rows`);
+    } else {
+        console.error('[UB DRILL] ❌ window.setTxGridFilter is NOT defined — grid filter cannot be applied');
+    }
     ubRenderPayeeChart(filtered, window._ubDrill);
 };
 
@@ -239,12 +248,20 @@ window.ubDrillType = function(type) {
  * ubDrillCategory — category chart row click → L1 category drill
  */
 window.ubDrillCategory = function(code) {
+    console.log(`[UB DRILL] ubDrillCategory("${code}") called`);
     const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
     const name = resolveCOAName(code);
     const filterFn = t => String(t.category || '9970') === String(code);
     const filtered = allTxns.filter(filterFn);
+    console.log(`[UB DRILL] ubDrillCategory("${code}") → "${name}" → ${filtered.length} transactions match`);
     window._ubDrill = { level: 1, type1: 'category', codeKey: code, label1: name, label1Escaped: name.replace(/'/g, "\\'"), filterFn };
-    window.setTxGridFilter && window.setTxGridFilter(filterFn);
+    if (window.setTxGridFilter) {
+        console.log(`[UB DRILL] Calling setTxGridFilter with predicate for category "${name}" (${code})`);
+        window.setTxGridFilter(filterFn);
+        console.log(`[UB DRILL] setTxGridFilter done. Grid data now has ${window._txGridProps?.data?.length ?? '?'} rows`);
+    } else {
+        console.error('[UB DRILL] ❌ window.setTxGridFilter is NOT defined');
+    }
     ubRenderPayeeChart(filtered, window._ubDrill);
 };
 
@@ -328,7 +345,8 @@ window.updateUtilityBar = function () {
     const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
     const accounts = window.RoboLedger?.Accounts?.getAll() || [];
 
-    if (allTxns.length === 0) return;
+    console.log(`[UB] updateUtilityBar() called — ${allTxns.length} txns, ${accounts.length} accounts`);
+    if (allTxns.length === 0) { console.log('[UB] No transactions — skipping render'); return; }
 
     // ── Transaction Stats ─────────────────────────────────────────────────────
     const txnEl = document.getElementById('util-total-txns');
@@ -358,7 +376,8 @@ window.updateUtilityBar = function () {
         uncatEl.style.cursor = 'pointer';
         uncatEl.title = 'Click to drill into uncategorized transactions';
         uncatEl.onclick = () => window.ubDrillType('uncategorized');
-    }
+        console.log(`[UB] ✓ Wired onclick on #util-uncategorized (${uncategorized} txns)`);
+    } else { console.warn('[UB] ⚠ #util-uncategorized not found in DOM'); }
 
     const reviewEl = document.getElementById('util-needs-review');
     if (reviewEl) {
@@ -366,7 +385,8 @@ window.updateUtilityBar = function () {
         reviewEl.style.cursor = 'pointer';
         reviewEl.title = 'Click to drill into needs-review transactions';
         reviewEl.onclick = () => window.ubDrillType('needs-review');
-    }
+        console.log(`[UB] ✓ Wired onclick on #util-needs-review (${needsReview} txns)`);
+    } else { console.warn('[UB] ⚠ #util-needs-review not found in DOM'); }
 
     // ── Net Position ──────────────────────────────────────────────────────────
     let totalIn = 0, totalOut = 0;
@@ -386,7 +406,8 @@ window.updateUtilityBar = function () {
         inEl.style.cursor = 'pointer';
         inEl.title = 'Click to drill into money in (credits)';
         inEl.onclick = () => window.ubDrillType('in');
-    }
+        console.log(`[UB] ✓ Wired onclick on #util-total-in (${ubFmt(totalIn)})`);
+    } else { console.warn('[UB] ⚠ #util-total-in not found in DOM'); }
 
     const outEl = document.getElementById('util-total-out');
     if (outEl) {
@@ -394,7 +415,8 @@ window.updateUtilityBar = function () {
         outEl.style.cursor = 'pointer';
         outEl.title = 'Click to drill into money out (debits)';
         outEl.onclick = () => window.ubDrillType('out');
-    }
+        console.log(`[UB] ✓ Wired onclick on #util-total-out (${ubFmt(totalOut)})`);
+    } else { console.warn('[UB] ⚠ #util-total-out not found in DOM'); }
 
     // ── Quick P&L (COA root-based, accurate) ─────────────────────────────────
     let revenue = 0, expenses = 0;
@@ -412,7 +434,8 @@ window.updateUtilityBar = function () {
         revEl.style.cursor = 'pointer';
         revEl.title = 'Click to drill into revenue transactions';
         revEl.onclick = () => window.ubDrillType('revenue');
-    }
+        console.log(`[UB] ✓ Wired onclick on #util-revenue (${ubFmt(revenue)})`);
+    } else { console.warn('[UB] ⚠ #util-revenue not found in DOM'); }
 
     const expEl = document.getElementById('util-expenses');
     if (expEl) {
@@ -420,7 +443,8 @@ window.updateUtilityBar = function () {
         expEl.style.cursor = 'pointer';
         expEl.title = 'Click to drill into expense transactions';
         expEl.onclick = () => window.ubDrillType('expenses');
-    }
+        console.log(`[UB] ✓ Wired onclick on #util-expenses (${ubFmt(expenses)})`);
+    } else { console.warn('[UB] ⚠ #util-expenses not found in DOM'); }
 
     const netEl = document.getElementById('util-net-income');
     if (netEl) {
