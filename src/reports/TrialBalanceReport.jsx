@@ -240,9 +240,9 @@ export function TrialBalanceReport() {
                                     {viewMode === 'type' && (
                                         <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[80px]">Type</th>
                                     )}
-                                    <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[130px]">Debit</th>
-                                    <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[130px]">Credit</th>
-                                    <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[130px]">Balance</th>
+                                    <th className="px-8 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[160px]">Debit</th>
+                                    <th className="px-8 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[160px]">Credit</th>
+                                    <th className="px-8 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[160px]">Balance</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -289,13 +289,13 @@ export function TrialBalanceReport() {
                                                     {viewMode === 'type' && (
                                                         <td className="px-4 py-2 text-[10px] text-gray-400 uppercase font-medium">{(acc.root || '').slice(0, 5)}</td>
                                                     )}
-                                                    <td className="px-4 py-2 text-[12px] text-right tabular-nums font-mono text-gray-700">
+                                                    <td className="px-8 py-2.5 text-[12px] text-right tabular-nums font-mono text-gray-700">
                                                         {acc.debit > 0 ? fmt(acc.debit) : ''}
                                                     </td>
-                                                    <td className="px-4 py-2 text-[12px] text-right tabular-nums font-mono text-gray-700">
+                                                    <td className="px-8 py-2.5 text-[12px] text-right tabular-nums font-mono text-gray-700">
                                                         {acc.credit > 0 ? fmt(acc.credit) : ''}
                                                     </td>
-                                                    <td className={`px-4 py-2 text-[12px] text-right tabular-nums font-mono font-semibold ${acc.balance > 0 ? 'text-blue-700' : acc.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                                    <td className={`px-8 py-2.5 text-[12px] text-right tabular-nums font-mono font-semibold ${acc.balance > 0 ? 'text-blue-700' : acc.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                                                         {acc.balance !== 0 ? fmt(acc.balance) : '—'}
                                                     </td>
                                                 </tr>
@@ -309,13 +309,13 @@ export function TrialBalanceReport() {
                                                             Subtotal — {group.code}
                                                         </span>
                                                     </td>
-                                                    <td className="px-4 py-1.5 text-[12px] text-right tabular-nums font-mono font-bold text-gray-800">
+                                                    <td className="px-8 py-2 text-[12px] text-right tabular-nums font-mono font-bold text-gray-800">
                                                         {group.totalDebit > 0 ? fmt(group.totalDebit) : ''}
                                                     </td>
-                                                    <td className="px-4 py-1.5 text-[12px] text-right tabular-nums font-mono font-bold text-gray-800">
+                                                    <td className="px-8 py-2 text-[12px] text-right tabular-nums font-mono font-bold text-gray-800">
                                                         {group.totalCredit > 0 ? fmt(group.totalCredit) : ''}
                                                     </td>
-                                                    <td className={`px-4 py-1.5 text-[12px] text-right tabular-nums font-mono font-bold ${(group.totalDebit - group.totalCredit) > 0 ? 'text-blue-700' : (group.totalDebit - group.totalCredit) < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                                    <td className={`px-8 py-2 text-[12px] text-right tabular-nums font-mono font-bold ${(group.totalDebit - group.totalCredit) > 0 ? 'text-blue-700' : (group.totalDebit - group.totalCredit) < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                                                         {fmt(group.totalDebit - group.totalCredit)}
                                                     </td>
                                                 </tr>
@@ -326,12 +326,12 @@ export function TrialBalanceReport() {
                             </tbody>
                             <tfoot className="bg-gray-800 text-white">
                                 <tr>
-                                    <td colSpan={viewMode === 'leadsheet' ? 4 : viewMode === 'type' ? 4 : 3} className="px-4 py-3 text-[12px] font-bold uppercase tracking-wide">
+                                    <td colSpan={viewMode === 'leadsheet' ? 4 : viewMode === 'type' ? 4 : 3} className="px-4 py-3.5 text-[12px] font-bold uppercase tracking-wide">
                                         Grand Total
                                     </td>
-                                    <td className="px-4 py-3 text-[12px] text-right tabular-nums font-mono font-bold">{fmt(reportData.totals.debit)}</td>
-                                    <td className="px-4 py-3 text-[12px] text-right tabular-nums font-mono font-bold">{fmt(reportData.totals.credit)}</td>
-                                    <td className={`px-4 py-3 text-[12px] text-right tabular-nums font-mono font-bold ${reportData.isBalanced ? 'text-green-400' : 'text-red-400'}`}>
+                                    <td className="px-8 py-3.5 text-[12px] text-right tabular-nums font-mono font-bold">{fmt(reportData.totals.debit)}</td>
+                                    <td className="px-8 py-3.5 text-[12px] text-right tabular-nums font-mono font-bold">{fmt(reportData.totals.credit)}</td>
+                                    <td className={`px-8 py-3.5 text-[12px] text-right tabular-nums font-mono font-bold ${reportData.isBalanced ? 'text-green-400' : 'text-red-400'}`}>
                                         {fmt(reportData.totals.balance)}
                                     </td>
                                 </tr>
