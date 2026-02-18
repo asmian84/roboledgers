@@ -227,6 +227,20 @@ window.ubDrillType = function(type) {
             };
             label = 'Expenses';
             break;
+        case 'gst-collected':
+            filterFn = t => t.gst_enabled && t.tax_cents > 0 &&
+                (t.gst_type === 'collected' || t.gst_account === '2160');
+            label = 'GST Collected (2160)';
+            break;
+        case 'gst-itc':
+            filterFn = t => t.gst_enabled && t.tax_cents > 0 &&
+                (t.gst_type === 'itc' || t.gst_account === '2150');
+            label = 'ITC / GST Paid (2150)';
+            break;
+        case 'gst-all':
+            filterFn = t => t.gst_enabled && t.tax_cents > 0;
+            label = 'All GST/HST Transactions';
+            break;
         default:
             return;
     }
@@ -450,6 +464,63 @@ window.updateUtilityBar = function () {
     if (netEl) {
         netEl.textContent = ubFmt2(netIncome);
         netEl.style.color = netIncome >= 0 ? '#10b981' : '#ef4444';
+    }
+
+    // ── GST / ITC Summary ─────────────────────────────────────────────────────
+    const gstCard = document.getElementById('util-gst-card');
+    const gstWithTax = allTxns.filter(t => t.gst_enabled && t.tax_cents > 0);
+
+    if (gstCard) {
+        if (gstWithTax.length > 0) {
+            gstCard.style.display = '';    // show card
+
+            // Province badge
+            const province = window.UI_STATE?.province || 'AB';
+            const TAX_RATE_LABELS = {
+                'ON':'13% HST','BC':'12% GST+PST','AB':'5% GST','QC':'14.975% GST+QST',
+                'NS':'15% HST','NB':'15% HST','MB':'12% GST+PST','SK':'11% GST+PST',
+                'PE':'15% HST','NL':'15% HST','YT':'5% GST','NT':'5% GST','NU':'5% GST',
+            };
+            const provinceBadge = document.getElementById('util-gst-province-badge');
+            if (provinceBadge) provinceBadge.textContent = TAX_RATE_LABELS[province] || province;
+
+            // GST Collected = tax_cents on CREDIT / revenue transactions (account 2160)
+            let gstCollected = 0, gstITC = 0;
+            gstWithTax.forEach(t => {
+                const taxAmt = Math.abs(t.tax_cents || 0) / 100;
+                if (t.gst_type === 'collected' || t.gst_account === '2160') {
+                    gstCollected += taxAmt;
+                } else {
+                    gstITC += taxAmt;
+                }
+            });
+            const gstNet = gstCollected - gstITC;
+
+            const collectedEl = document.getElementById('util-gst-collected');
+            const itcEl       = document.getElementById('util-gst-itc');
+            const netEl2      = document.getElementById('util-gst-net');
+
+            if (collectedEl) collectedEl.textContent = ubFmt(gstCollected);
+            if (itcEl)       itcEl.textContent       = ubFmt(gstITC);
+            if (netEl2) {
+                netEl2.textContent = ubFmt2(Math.abs(gstNet));
+                netEl2.style.color = gstNet <= 0 ? '#10b981' : '#ef4444';
+                netEl2.title       = gstNet <= 0
+                    ? `GST Refund: CRA owes you ${ubFmt2(Math.abs(gstNet))}`
+                    : `GST Payable to CRA: ${ubFmt2(gstNet)}`;
+            }
+
+            // Update card label with refund/payable indicator
+            const gstLabel = document.getElementById('util-gst-label');
+            if (gstLabel) {
+                gstLabel.textContent = gstNet <= 0 ? 'GST/HST — Refund' : 'GST/HST';
+                gstLabel.style.color = gstNet <= 0 ? '#10b981' : '';
+            }
+
+            console.log(`[UB] GST: Collected=${ubFmt(gstCollected)}, ITC=${ubFmt(gstITC)}, Net=${ubFmt2(gstNet)} (${gstWithTax.length} taxable txns)`);
+        } else {
+            gstCard.style.display = 'none';  // hide if no GST data yet
+        }
     }
 
     // ── Category Chart — top-level (if no drill active) ───────────────────────

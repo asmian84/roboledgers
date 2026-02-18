@@ -772,20 +772,27 @@ const columns = [
         enableColumnFilter: true,
         filterFn: (row, columnId, filterValue) => {
             const categoryValue = row.getValue(columnId);
+            const tx = row.original;
 
-            // Special case: "UNCATEGORIZED" should match what COADropdown displays as "Uncategorized"
-            // COADropdown shows "Uncategorized" when: !currentAccount (code not found in COA list OR empty/null)
+            // Special case: "UNCATEGORIZED" matches empty/null category or codes not in COA
             if (filterValue === 'UNCATEGORIZED') {
                 if (!categoryValue || categoryValue === '' || categoryValue === 'Uncategorized') {
-                    return true; // Empty/null category
+                    return true;
                 }
-                // Also check if the code exists in COA - if not, it shows as "Uncategorized"
                 const coaAccounts = window.RoboLedger?.COA?.getAll() || [];
                 const accountExists = coaAccounts.some(acc => acc.code === categoryValue);
-                return !accountExists; // If code doesn't exist in COA, it displays as "Uncategorized"
+                return !accountExists;
             }
 
-            // Otherwise exact match by code
+            // GST sub-account codes (2148–2174) — match by gst_account field, not category
+            // These codes never appear as a transaction's category, but appear in the trial
+            // balance as GST sub-ledger entries seeded from tax_cents.
+            const GST_CODES = new Set(['2148','2149','2150','2151','2160','2170','2171','2172','2173','2174']);
+            if (GST_CODES.has(String(filterValue))) {
+                return tx.gst_enabled && String(tx.gst_account) === String(filterValue);
+            }
+
+            // Standard exact match by category code
             return categoryValue === filterValue;
         },
         cell: ({ row }) => {
@@ -874,12 +881,52 @@ const columns = [
             const val = info.getValue();
             const row = info.row.original;
 
-            // Initialize gst_enabled if not set (default to true)
+            // ── Financial / non-taxable guard ────────────────────────────────
+            // These transaction types are never subject to GST — no toggle shown
+            const NON_TAXABLE_CATEGORIES = new Set([
+                '9971', // CC Payment
+                '9970', // Uncategorized (no GST assumption)
+                '7700', // Cash back / rebates / contra
+                '7000', // Interest expense
+                '2149', // GST payments to CRA
+                '2150', // GST paid (the GST account itself)
+                '2160', // GST collected (the GST account itself)
+            ]);
+            const NON_TAXABLE_PATTERN = /\b(PAYMENT|INTEREST|TRANSFER|CASH\s*BACK|REBATE|DIVIDEND|INSURANCE|PAYROLL|SALARY|WAGES?|T4|E-TRANSFER|INTERAC)\b/i;
+
+            const desc = (row.description || row.payee || '').toUpperCase();
+            const catStr = String(row.category || '');
+
+            const isFinancialTx =
+                NON_TAXABLE_CATEGORIES.has(catStr) ||
+                NON_TAXABLE_PATTERN.test(desc) ||
+                row._isCCPayment ||
+                row._isCashBack ||
+                row._isBankRebate ||
+                // CC-to-CC or bank-to-bank transfers: both sides of same amount, opposite polarity
+                (row.transaction_type === 'transfer');
+
+            // For non-taxable rows: show a muted dash, no toggle
+            if (isFinancialTx) {
+                // Ensure disabled state is stored
+                if (row.gst_enabled !== false) {
+                    row.gst_enabled = false;
+                    row.tax_cents = 0;
+                    row.gst_account = null;
+                    row.gst_type = null;
+                }
+                return (
+                    <span className="text-right block" style={{ color: '#cbd5e1', fontSize: GRID_TOKENS.numberFontSize }}>—</span>
+                );
+            }
+
+            // ── Taxable rows ─────────────────────────────────────────────────
+            // Initialize gst_enabled if not set — default ON for expense/revenue transactions
             if (row.gst_enabled === undefined) {
                 row.gst_enabled = true;
             }
 
-            // Only calculate if enabled
+            // Auto-calculate tax_cents if enabled but not yet stored
             let displayValue = val;
             if (row.gst_enabled && (!val || val === 0)) {
                 const province = window.UI_STATE?.province;
@@ -887,73 +934,84 @@ const columns = [
                 if (province && amount) {
                     const calculatedTax = calculateTax(amount, province);
                     displayValue = calculatedTax;
+                    // Write back so LiveReportPanel can use it
+                    row.tax_cents = calculatedTax;
+                    // Set GST account routing
+                    const isRevenue = catStr.startsWith('4');
+                    row.gst_account = isRevenue ? '2160' : '2150';
+                    row.gst_type    = isRevenue ? 'collected' : 'itc';
                 }
             }
 
             const handleToggle = (e) => {
                 e.stopPropagation();
 
-                // Toggle the gst_enabled flag
                 row.gst_enabled = !row.gst_enabled;
 
                 if (row.gst_enabled) {
-                    // GST ENABLED: Set up proper accounting
+                    // GST ENABLED: compute and store
                     const province = window.UI_STATE?.province;
                     const amount = row.debit || row.credit || 0;
-
                     if (province && amount) {
                         const calculatedTax = calculateTax(amount, province);
                         row.tax_cents = calculatedTax;
-
-                        // Determine GST account based on transaction category
-                        // Revenue (4xxx) → 2160 GST Collected on Sales
-                        // Expenses (5xxx, 6xxx, etc.) → 2150 GST Paid on Purchases
-                        const category = row.category;
-                        const isRevenue = category && String(category).startsWith('4');
-
+                        const isRevenue = catStr.startsWith('4');
                         row.gst_account = isRevenue ? '2160' : '2150';
-                        row.gst_type = isRevenue ? 'collected' : 'itc';
+                        row.gst_type    = isRevenue ? 'collected' : 'itc';
                     }
                 } else {
-                    // GST DISABLED: Clear all GST data
-                    row.tax_cents = 0;
+                    // GST DISABLED: clear
+                    row.tax_cents   = 0;
                     row.gst_account = null;
-                    row.gst_type = null;
+                    row.gst_type    = null;
                 }
 
-                // Force re-render by updating table data
+                // Persist to ledger store
+                try {
+                    window.RoboLedger?.Ledger?.updateMetadata(row.tx_id, {
+                        gst_enabled: row.gst_enabled,
+                        tax_cents:   row.tax_cents   || 0,
+                        gst_account: row.gst_account || null,
+                        gst_type:    row.gst_type    || null,
+                    });
+                } catch(e) { /* non-critical */ }
+
+                // Force re-render
                 const tableData = info.table.options.data;
                 const newData = [...tableData];
                 newData[info.row.index] = { ...row };
-
-                // Trigger state update
                 if (info.table.options.meta?.setData) {
                     info.table.options.meta.setData(newData);
                 }
+
+                // Refresh UB so GST totals update
+                setTimeout(() => window.updateUtilityBar?.(), 50);
             };
 
             return (
-                <div className="flex items-center justify-end gap-1">
+                <div className="flex items-center justify-end gap-1.5">
                     {/* Toggle button */}
                     <button
                         onClick={handleToggle}
-                        className="p-0.5 hover:bg-gray-100 rounded transition-colors"
-                        title={row.gst_enabled ? 'GST enabled (click to disable)' : 'GST disabled (click to enable)'}
+                        className="p-0.5 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+                        title={row.gst_enabled ? 'GST/ITC enabled (click to disable)' : 'GST/ITC disabled (click to enable)'}
                     >
-                        <i className={`ph ${row.gst_enabled ? 'ph-check-circle text-green-600' : 'ph-circle text-gray-300'} text-sm`}></i>
+                        <i className={`ph ${row.gst_enabled ? 'ph-check-circle' : 'ph-circle'} text-sm`}
+                           style={{ color: row.gst_enabled ? '#16a34a' : '#d1d5db' }}></i>
                     </button>
 
-                    {/* Amount with currency formatting */}
+                    {/* Amount */}
                     <span
                         className="text-right block font-mono"
                         style={{
                             fontSize: GRID_TOKENS.numberFontSize,
                             fontWeight: GRID_TOKENS.numberFontWeight,
-                            color: GRID_TOKENS.numberColor,
-                            fontVariantNumeric: 'tabular-nums'
+                            color: row.gst_enabled ? GRID_TOKENS.numberColor : '#cbd5e1',
+                            fontVariantNumeric: 'tabular-nums',
+                            minWidth: '52px',
                         }}
                     >
-                        {row.gst_enabled && displayValue ? formatCurrency(displayValue / 100) : ''}
+                        {row.gst_enabled && displayValue ? formatCurrency(displayValue / 100) : <span style={{ color: '#cbd5e1' }}>—</span>}
                     </span>
                 </div>
             );

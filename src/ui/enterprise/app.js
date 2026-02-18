@@ -494,6 +494,9 @@
         // Retroactively fix any CC refunds/cashback mis-categorized as revenue
         window.fixCCRefunds?.();
 
+        // Seed GST data for all newly imported transactions
+        window.initGSTOnTransactions?.();
+
         // Render - this will naturally exclude progress bar since isIngesting is false
         render();
 
@@ -998,6 +1001,84 @@
       if (window.showToast) window.showToast(`Fixed ${fixed} CC credit mis-categorization${fixed !== 1 ? 's' : ''}`, 'success');
     }
     return fixed;
+  };
+
+  /**
+   * Retroactive GST initializer.
+   * Scans all stored transactions and seeds gst_enabled / tax_cents / gst_account
+   * for any transaction that hasn't been GST-initialized yet.
+   *
+   * Non-taxable categories are explicitly disabled (gst_enabled = false).
+   * All other expense/revenue transactions get gst_enabled = true + computed tax_cents.
+   *
+   * Called automatically after every import via updateWorkspace.
+   */
+  window.initGSTOnTransactions = function () {
+    const TAX_RATES = {
+      'ON': 13, 'BC': 12, 'AB': 5,  'QC': 14.975, 'NS': 15,
+      'NB': 15, 'MB': 12, 'SK': 11, 'PE': 15,     'NL': 15,
+      'YT': 5,  'NT': 5,  'NU': 5,
+    };
+    const province = window.UI_STATE?.province || 'AB';
+    const taxRate  = TAX_RATES[province] || 5;
+
+    // These categories are never subject to GST
+    const NON_TAXABLE = new Set([
+      '9971', // CC Payment
+      '9970', // Uncategorized
+      '7700', // Cash back / contra
+      '7000', // Interest expense
+      '2149', '2150', '2160', // GST accounts themselves
+    ]);
+    const NON_TAXABLE_RE = /\b(PAYMENT|INTEREST|TRANSFER|CASH\s*BACK|REBATE|DIVIDEND|INSURANCE|PAYROLL|SALARY|WAGES?|T4|E-TRANSFER|INTERAC)\b/i;
+
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    let seeded = 0;
+
+    allTxns.forEach(tx => {
+      // Only touch transactions that haven't been GST-initialized yet
+      if (tx.gst_enabled !== undefined) return;
+
+      const catStr  = String(tx.category || '');
+      const desc    = (tx.raw_description || tx.description || '');
+      const amount  = Math.abs(tx.amount_cents || 0);
+
+      const isNonTaxable =
+        NON_TAXABLE.has(catStr) ||
+        NON_TAXABLE_RE.test(desc) ||
+        tx._isCCPayment || tx._isCashBack || tx._isBankRebate ||
+        tx.transaction_type === 'transfer';
+
+      if (isNonTaxable) {
+        try {
+          window.RoboLedger.Ledger.updateMetadata(tx.tx_id, {
+            gst_enabled: false,
+            tax_cents:   0,
+            gst_account: null,
+            gst_type:    null,
+          });
+        } catch(e) { /* ignore individual failures */ }
+        return;
+      }
+
+      // Taxable transaction — compute GST and set account routing
+      const taxCents  = Math.round((amount * taxRate) / 100);
+      const isRevenue = catStr.startsWith('4');
+      try {
+        window.RoboLedger.Ledger.updateMetadata(tx.tx_id, {
+          gst_enabled: true,
+          tax_cents:   taxCents,
+          gst_account: isRevenue ? '2160' : '2150',
+          gst_type:    isRevenue ? 'collected' : 'itc',
+        });
+      } catch(e) { /* ignore individual failures */ }
+      seeded++;
+    });
+
+    if (seeded > 0) {
+      console.log(`[GST] Initialized ${seeded} transactions with GST data (province: ${province}, rate: ${taxRate}%)`);
+    }
+    return seeded;
   };
 
   /**
