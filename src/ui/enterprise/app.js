@@ -2095,8 +2095,32 @@
   function toggleSettings(open) {
     UI_STATE.isSettingsOpen = open;
     const drawer = document.getElementById('settings-drawer');
+
+    if (open) {
+        // Position drawer to start at the top edge of the grid (FilterToolbar top),
+        // not the top of the viewport — keeps it contained within the grid boundary.
+        // Use the React mount point or the grid-container-wall as the reference element.
+        const gridEl = document.getElementById('tx-grid-root')
+                    || document.querySelector('.grid-container-wall')
+                    || document.querySelector('.stage');
+        if (gridEl) {
+            const rect = gridEl.getBoundingClientRect();
+            // Top of the FilterToolbar (sticky at top of grid area)
+            drawer.style.top    = Math.max(0, rect.top) + 'px';
+            drawer.style.height = (window.innerHeight - Math.max(0, rect.top)) + 'px';
+        } else {
+            // Fallback: FilterToolbar is 42px; assume app shell above is ~42px
+            drawer.style.top    = '42px';
+            drawer.style.height = 'calc(100vh - 42px)';
+        }
+        renderSettingsDrawer();
+    } else {
+        // Reset so CSS class controls position on close
+        drawer.style.top    = '';
+        drawer.style.height = '';
+    }
+
     drawer.classList.toggle('open', open);
-    if (open) renderSettingsDrawer();
   }
 
   function renderSettingsDrawer() {

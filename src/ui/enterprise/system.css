@@ -2171,6 +2171,7 @@ body.sidebar-collapsed .stage {
 .settings-drawer {
     position: fixed;
     right: -420px;
+    /* top/height set dynamically by toggleSettings() to match grid top boundary */
     top: 0;
     width: 420px;
     height: 100vh;
@@ -2180,6 +2181,8 @@ body.sidebar-collapsed .stage {
     transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     flex-direction: column;
+    border-top-left-radius: 8px;
+    overflow: hidden;
 }
 
 .settings-drawer.open {
