@@ -697,6 +697,87 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         </div>
                     </div>
 
+                    {/* Edit History — maps every description change back to original parsed text */}
+                    {transaction.edit_history?.length > 0 && (
+                        <div style={{ marginBottom: '20px' }}>
+                            <div style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: '#64748b',
+                                letterSpacing: '0.5px',
+                                marginBottom: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                            }}>
+                                EDIT HISTORY
+                                <span style={{
+                                    fontSize: '10px',
+                                    fontWeight: 600,
+                                    color: '#f59e0b',
+                                    background: '#fef3c7',
+                                    border: '1px solid #fde68a',
+                                    borderRadius: '10px',
+                                    padding: '1px 6px',
+                                }}>
+                                    {transaction.edit_history.length} edit{transaction.edit_history.length !== 1 ? 's' : ''}
+                                </span>
+                            </div>
+
+                            {/* Original parsed value at top */}
+                            <div style={{
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                borderRadius: '6px',
+                                padding: '8px 10px',
+                                marginBottom: '8px',
+                                fontSize: '11px',
+                            }}>
+                                <div style={{ color: '#15803d', fontWeight: 600, marginBottom: '3px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    Original (parser)
+                                </div>
+                                <div style={{ color: '#166534', fontFamily: 'monospace', fontSize: '12px', wordBreak: 'break-all' }}>
+                                    {transaction.edit_history[0].old_value || '—'}
+                                </div>
+                                {transaction.audit?.rawText && transaction.audit.rawText !== transaction.edit_history[0].old_value && (
+                                    <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '10px' }}>
+                                        Raw line: <span style={{ fontFamily: 'monospace', color: '#374151' }}>{transaction.audit.rawText}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Each edit in chronological order */}
+                            {transaction.edit_history.map((edit, i) => (
+                                <div key={i} style={{
+                                    borderLeft: '2px solid #e2e8f0',
+                                    paddingLeft: '10px',
+                                    marginBottom: '8px',
+                                    position: 'relative',
+                                }}>
+                                    {/* Timeline dot */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: '-5px',
+                                        top: '4px',
+                                        width: '8px',
+                                        height: '8px',
+                                        borderRadius: '50%',
+                                        background: '#6366f1',
+                                        border: '2px solid white',
+                                    }} />
+                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '3px' }}>
+                                        {new Date(edit.timestamp).toLocaleString('en-CA', {
+                                            dateStyle: 'short', timeStyle: 'short'
+                                        })} · {edit.edited_by === 'user' ? 'User edit' : edit.edited_by}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#374151', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                        {edit.new_value}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
                         <button style={{

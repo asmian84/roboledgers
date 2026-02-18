@@ -1604,7 +1604,7 @@ export function TransactionsTable({
                 onClose={() => setActivePanel(null)}
                 title={
                     activePanel === 'utility' ? 'Dashboard & Stats' :
-                        activePanel === 'report' ? 'Live Trial Balance' :
+                        activePanel === 'report' ? 'Trial Balance' :
                             'Panel'
                 }
                 defaultWidth={360}

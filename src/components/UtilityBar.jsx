@@ -113,68 +113,73 @@ function PieChart({ data, size = 200, onSliceClick }) {
     );
 }
 
+/** Shared row style for drillable stat rows */
+const DRILL_ROW = "flex justify-between items-center cursor-pointer rounded px-2 py-1.5 -mx-2 hover:bg-opacity-80 transition-colors group";
+
 /**
  * UtilityBar - Side panel showing reconciliation stats, metadata, and dashboard
- * Replaces the old overlay utility bar with integrated split-pane design
+ * Every stat row is drillable — clicking filters the main transaction grid.
  */
 export function UtilityBar({ transactions = [], onFilterTransactions, activeFilter, onClearFilter }) {
     // Calculate stats from transactions
     const stats = React.useMemo(() => {
-        const categorized = transactions.filter(t => t.category && t.category !== 'UNCAT');
+        const categorized   = transactions.filter(t => t.category && t.category !== 'UNCAT');
         const uncategorized = transactions.filter(t => !t.category || t.category === 'UNCAT');
+        const needsReview   = transactions.filter(t => t.confidence != null && t.confidence < 0.7);
 
-        const totalDebit = transactions.reduce((sum, t) => {
-            return t.polarity === 'DEBIT' ? sum + (t.amount_cents || 0) : sum;
-        }, 0) / 100;
+        const totalDebit = transactions.reduce((sum, t) =>
+            t.polarity === 'DEBIT'  ? sum + (t.amount_cents || 0) : sum, 0) / 100;
+        const totalCredit = transactions.reduce((sum, t) =>
+            t.polarity === 'CREDIT' ? sum + (t.amount_cents || 0) : sum, 0) / 100;
 
-        const totalCredit = transactions.reduce((sum, t) => {
-            return t.polarity === 'CREDIT' ? sum + (t.amount_cents || 0) : sum;
-        }, 0) / 100;
-
-        // GST Calculations
+        // GST Calculations — only count gst_enabled transactions
         let gstCollected = 0;
-        let gstPaid = 0;
+        let gstPaid      = 0;
         let totalRevenue = 0;
+        let totalExpense = 0;
 
         transactions.forEach(t => {
-            // Only include if GST checkbox is checked
-            if (!t.gst_enabled) return;
+            const amtDollars = (t.amount_cents || 0) / 100;
+            const account    = window.RoboLedger?.COA?.get(t.category);
 
+            // Revenue / Expense totals (all transactions, not just GST-enabled)
+            if (account?.root === 'REVENUE') {
+                totalRevenue += amtDollars;
+            } else if (account?.root === 'EXPENSE' || account?.class === 'COGS') {
+                totalExpense += amtDollars;
+            }
+
+            if (!t.gst_enabled) return;
             const taxAmount = (t.tax_cents || 0) / 100;
 
-            // USE ACCOUNT TYPE: Revenue accounts = GST Collected, Expense accounts = GST Paid/ITC
-            const account = window.RoboLedger?.COA?.get(t.category);
-
             if (account?.root === 'REVENUE') {
-                // Revenue account = GST Collected (regardless of polarity)
                 gstCollected += taxAmount;
-                totalRevenue += (t.amount_cents || 0) / 100;
             } else if (account?.root === 'EXPENSE' || account?.class === 'COGS') {
-                // Expense account = GST Paid/ITC
                 gstPaid += taxAmount;
             } else if (!account && t.polarity === 'CREDIT') {
-                // Fallback: Uncategorized credits default to GST Collected
                 gstCollected += taxAmount;
-                totalRevenue += (t.amount_cents || 0) / 100;
+                totalRevenue += amtDollars;
             } else if (!account && t.polarity === 'DEBIT') {
-                // Fallback: Uncategorized debits default to GST Paid
                 gstPaid += taxAmount;
             }
         });
 
-        const netGST = gstCollected - gstPaid;
+        const netGST      = gstCollected - gstPaid;
+        const netActivity = totalDebit - totalCredit;
 
         return {
-            total: transactions.length,
-            categorized: categorized.length,
+            total:        transactions.length,
+            categorized:  categorized.length,
             uncategorized: uncategorized.length,
+            needsReview:  needsReview.length,
             totalDebit,
             totalCredit,
-            netActivity: totalDebit - totalCredit,
+            netActivity,
             gstCollected,
             gstPaid,
             netGST,
-            totalRevenue
+            totalRevenue,
+            totalExpense,
         };
     }, [transactions]);
 
@@ -182,123 +187,177 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
         ? Math.round((stats.categorized / stats.total) * 100)
         : 0;
 
+    const fmt = (n) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    /** Fire a filter event — every drillable row calls this */
+    const drill = (label, filterFn) => onFilterTransactions?.({ label, filter: filterFn });
+
     return (
         <div className="h-full overflow-y-auto bg-gray-50">
-            {/* Dashboard Section - 3 Column Stats */}
+
+            {/* ── OVERVIEW: 3-column count grid ───────────────────────────── */}
             <div className="p-3 bg-white border-b border-gray-200">
                 <div className="bg-pink-50 border border-pink-200 rounded-md overflow-hidden">
                     <div className="grid grid-cols-3 divide-x divide-pink-200">
 
-                        {/* Column 1: Total */}
-                        <div className="p-3 text-center">
+                        {/* Total — clears all filters */}
+                        <div
+                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            onClick={() => onClearFilter?.()}
+                        >
                             <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-                            <div className="text-xs text-gray-600 mt-1">Total</div>
+                            <div className="text-xs text-gray-500 mt-1">Total</div>
                         </div>
 
-                        {/* Column 2: Categorized */}
-                        <div className="p-3 text-center">
-                            <div className="text-2xl font-bold text-blue-600">
-                                {stats.categorized}
-                            </div>
-                            <div className="text-xs text-gray-600 mt-1">
-                                Categorized ({categorizationProgress}%)
-                            </div>
+                        {/* Categorized */}
+                        <div
+                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            onClick={() => drill('Categorized',
+                                t => !!(t.category && t.category !== 'UNCAT'))}
+                        >
+                            <div className="text-2xl font-bold text-blue-600">{stats.categorized}</div>
+                            <div className="text-xs text-gray-500 mt-1">Categorized ({categorizationProgress}%)</div>
                         </div>
 
-                        {/* Column 3: Uncategorized */}
-                        <div className="p-3 text-center">
-                            <div className="text-2xl font-bold text-amber-600">
-                                {stats.uncategorized}
-                            </div>
-                            <div className="text-xs text-gray-600 mt-1">Uncategorized</div>
+                        {/* Uncategorized */}
+                        <div
+                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            onClick={() => drill('Uncategorized',
+                                t => !t.category || t.category === 'UNCAT')}
+                        >
+                            <div className="text-2xl font-bold text-amber-600">{stats.uncategorized}</div>
+                            <div className="text-xs text-gray-500 mt-1">Uncategorized</div>
                         </div>
 
                     </div>
+
+                    {/* Needs Review — below the grid */}
+                    {stats.needsReview > 0 && (
+                        <div
+                            className="border-t border-pink-200 px-3 py-2 flex justify-between items-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            onClick={() => drill('Needs Review',
+                                t => t.confidence != null && t.confidence < 0.7)}
+                        >
+                            <span className="text-xs text-orange-700 font-medium">⚠ Needs Review</span>
+                            <span className="text-xs font-bold text-orange-700">{stats.needsReview}</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* GST Summary */}
+            {/* ── GST SUMMARY ─────────────────────────────────────────────── */}
             <div className="p-4 bg-white border-b border-gray-200">
-                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">GST Summary</h3>
-                <div className="bg-green-50 border border-green-200 rounded-md p-3 space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">GST / HST Summary</h3>
+                <div className="bg-green-50 border border-green-200 rounded-md p-3 space-y-1">
+
+                    {/* GST Collected */}
                     <div
-                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
-                        onClick={() => onFilterTransactions?.({
-                            type: 'gst_collected',
-                            label: 'GST Collected',
-                            filter: tx => tx.gst_enabled && tx.polarity === 'CREDIT' && tx.tax_cents > 0
-                        })}
+                        className={`${DRILL_ROW} hover:bg-green-100`}
+                        onClick={() => drill('GST Collected (2160)',
+                            tx => tx.gst_enabled && tx.tax_cents > 0 &&
+                                  (tx.gst_type === 'collected' || tx.gst_account === '2160'))}
                     >
-                        <span className="text-xs text-gray-600">GST Collected</span>
-                        <span className="text-sm font-bold font-mono text-green-700">
-                            ${stats.gstCollected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        <span className="text-xs text-gray-600 group-hover:text-green-800">GST Collected</span>
+                        <span className="text-sm font-bold font-mono text-green-700">{fmt(stats.gstCollected)}</span>
                     </div>
+
+                    {/* GST ITC Paid */}
                     <div
-                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
-                        onClick={() => onFilterTransactions?.({
-                            type: 'gst_paid',
-                            label: 'GST ITC (Paid)',
-                            filter: tx => tx.gst_enabled && tx.polarity === 'DEBIT' && tx.tax_cents > 0
-                        })}
+                        className={`${DRILL_ROW} hover:bg-blue-50`}
+                        onClick={() => drill('GST ITC / Paid (2150)',
+                            tx => tx.gst_enabled && tx.tax_cents > 0 &&
+                                  (tx.gst_type === 'itc' || tx.gst_account === '2150'))}
                     >
-                        <span className="text-xs text-gray-600">GST ITC (Paid)</span>
-                        <span className="text-sm font-bold font-mono text-blue-700">
-                            ${stats.gstPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        <span className="text-xs text-gray-600 group-hover:text-blue-800">GST ITC (Paid)</span>
+                        <span className="text-sm font-bold font-mono text-blue-700">{fmt(stats.gstPaid)}</span>
                     </div>
+
+                    {/* Total Revenue */}
                     <div
-                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
-                        onClick={() => onFilterTransactions?.({
-                            type: 'revenue',
-                            label: 'Total Revenue',
-                            filter: tx => tx.polarity === 'CREDIT' && tx.gst_enabled
-                        })}
+                        className={`${DRILL_ROW} hover:bg-green-100`}
+                        onClick={() => drill('Revenue',
+                            tx => {
+                                const acct = window.RoboLedger?.COA?.get(tx.category);
+                                return acct?.root === 'REVENUE';
+                            })}
                     >
-                        <span className="text-xs text-gray-600">Total Revenue</span>
-                        <span className="text-sm font-bold font-mono text-gray-700">
-                            ${stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        <span className="text-xs text-gray-600 group-hover:text-green-800">Total Revenue</span>
+                        <span className="text-sm font-bold font-mono text-gray-700">{fmt(stats.totalRevenue)}</span>
                     </div>
-                    <div className="pt-2 border-t border-green-300 flex justify-between items-center">
+
+                    {/* Total Expenses */}
+                    <div
+                        className={`${DRILL_ROW} hover:bg-amber-50`}
+                        onClick={() => drill('Expenses',
+                            tx => {
+                                const acct = window.RoboLedger?.COA?.get(tx.category);
+                                return acct?.root === 'EXPENSE' || acct?.class === 'COGS';
+                            })}
+                    >
+                        <span className="text-xs text-gray-600 group-hover:text-amber-800">Total Expenses</span>
+                        <span className="text-sm font-bold font-mono text-amber-700">{fmt(stats.totalExpense)}</span>
+                    </div>
+
+                    {/* Net GST Payable / Refund */}
+                    <div
+                        className={`pt-2 border-t border-green-300 ${DRILL_ROW} hover:bg-green-100`}
+                        onClick={() => drill('All GST Transactions',
+                            tx => tx.gst_enabled && tx.tax_cents > 0)}
+                    >
                         <span className="text-xs font-semibold text-gray-700">
-                            {stats.netGST < 0 ? 'GST Refund' : 'GST Payable'}
+                            {stats.netGST < 0 ? 'GST Refund' : 'Net GST Payable'}
                         </span>
                         <span className={`text-sm font-bold font-mono ${stats.netGST < 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ${Math.abs(stats.netGST).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {fmt(Math.abs(stats.netGST))}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* Account Reconciliation */}
+            {/* ── RECONCILIATION ──────────────────────────────────────────── */}
             <div className="p-4 bg-white border-b border-gray-200">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Reconciliation</h3>
+                <div className="space-y-1">
 
-                {/* Account Balances */}
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-600">Total Debit</span>
-                        <span className="text-sm font-bold font-mono text-red-600">
-                            ${stats.totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                    {/* Total Debit (Money Out) */}
+                    <div
+                        className={`${DRILL_ROW} hover:bg-red-50`}
+                        onClick={() => drill('Money Out (Debits)', t => t.polarity === 'DEBIT')}
+                    >
+                        <span className="text-xs text-gray-600 group-hover:text-red-800">Total Debit</span>
+                        <span className="text-sm font-bold font-mono text-red-600">{fmt(stats.totalDebit)}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-600">Total Credit</span>
-                        <span className="text-sm font-bold font-mono text-green-600">
-                            ${stats.totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+
+                    {/* Total Credit (Money In) */}
+                    <div
+                        className={`${DRILL_ROW} hover:bg-green-50`}
+                        onClick={() => drill('Money In (Credits)', t => t.polarity === 'CREDIT')}
+                    >
+                        <span className="text-xs text-gray-600 group-hover:text-green-800">Total Credit</span>
+                        <span className="text-sm font-bold font-mono text-green-600">{fmt(stats.totalCredit)}</span>
                     </div>
-                    <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
+
+                    {/* Net Activity */}
+                    <div
+                        className={`pt-2 border-t border-gray-200 ${DRILL_ROW} hover:bg-gray-100`}
+                        onClick={() => {
+                            // Net = debits - credits; if positive show debits, if negative show credits
+                            if (stats.netActivity >= 0) {
+                                drill('Net Activity (Debit-heavy)', t => t.polarity === 'DEBIT');
+                            } else {
+                                drill('Net Activity (Credit-heavy)', t => t.polarity === 'CREDIT');
+                            }
+                        }}
+                    >
                         <span className="text-xs font-semibold text-gray-700">Net Activity</span>
                         <span className={`text-sm font-bold font-mono ${stats.netActivity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ${Math.abs(stats.netActivity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {fmt(Math.abs(stats.netActivity))}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* Category Distribution Pie Chart */}
+            {/* ── CATEGORY DISTRIBUTION PIE CHART ────────────────────────── */}
             <div className="p-4 bg-white border-b border-gray-200">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">Category Distribution</h3>
 
@@ -309,7 +368,6 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                             <button
                                 className="text-amber-600 hover:text-amber-900 font-medium shrink-0 underline underline-offset-2"
                                 onClick={() => onClearFilter?.()}
-                                title="Show all transactions"
                             >
                                 All
                             </button>
@@ -319,7 +377,6 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                         <button
                             className="ml-2 shrink-0 w-4 h-4 flex items-center justify-center rounded-full bg-amber-200 hover:bg-amber-300 text-amber-700 transition-colors"
                             onClick={() => onClearFilter?.()}
-                            title="Clear filter"
                         >
                             <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
                                 <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -327,7 +384,7 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                         </button>
                     </div>
                 ) : (
-                    <p className="text-[10px] text-gray-400 mb-2">Click a slice or row to filter the grid</p>
+                    <p className="text-[10px] text-gray-400 mb-2">Click any slice or row to filter the grid</p>
                 )}
                 <PieChart
                     data={getCategoryDistribution(transactions)}
@@ -340,10 +397,36 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                 />
             </div>
 
-            {/* Metadata */}
+            {/* ── TOP CATEGORIES ─────────────────────────────────────────── */}
+            <div className="p-4 bg-white border-b border-gray-200">
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Top Categories</h3>
+                <div className="space-y-1">
+                    {getTopCategories(transactions).map((cat, idx) => (
+                        <div
+                            key={idx}
+                            className={`${DRILL_ROW} hover:bg-indigo-50`}
+                            onClick={() => drill(cat.name,
+                                t => (t.category || 'Uncategorized') === cat.code)}
+                        >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span
+                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
+                                />
+                                <span className="text-xs text-gray-700 truncate group-hover:text-indigo-900">{cat.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                <span className="text-xs font-mono font-semibold text-gray-900">{fmt(cat.total)}</span>
+                                <span className="text-[10px] text-gray-400">({cat.count})</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── METADATA ────────────────────────────────────────────────── */}
             <div className="p-4 bg-white">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Metadata</h3>
-
                 <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
                         <span className="text-gray-600">Date Range</span>
@@ -351,7 +434,7 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                             {transactions.length > 0 ? (
                                 <>
                                     {new Date(Math.min(...transactions.map(t => new Date(t.date)))).toLocaleDateString('en-CA')}
-                                    {' - '}
+                                    {' — '}
                                     {new Date(Math.max(...transactions.map(t => new Date(t.date)))).toLocaleDateString('en-CA')}
                                 </>
                             ) : '—'}
@@ -364,66 +447,57 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                 </div>
             </div>
 
-            {/* Top Categories */}
-            <div className="p-4 bg-white border-t border-gray-200">
-                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Top Categories</h3>
-
-                <div className="space-y-2">
-                    {getTopCategories(transactions).map((cat, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-xs">
-                            <span className="text-gray-700 truncate">{cat.name}</span>
-                            <span className="font-mono font-semibold text-gray-900">{cat.count}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
         </div>
     );
 }
 
-// Helper to get category distribution for pie chart
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Category distribution for pie chart — by spend amount, not count */
 function getCategoryDistribution(transactions) {
-    const categoryCounts = {};
+    const categoryTotals = {};
 
     transactions.forEach(tx => {
         const cat = tx.category || 'Uncategorized';
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+        if (!categoryTotals[cat]) categoryTotals[cat] = 0;
+        categoryTotals[cat] += (tx.amount_cents || 0) / 100;
     });
 
-    return Object.entries(categoryCounts)
+    return Object.entries(categoryTotals)
         .sort((a, b) => b[1] - a[1])
-        .map(([code, count]) => {
-            // Try to get friendly name from COA
+        .slice(0, 12)
+        .map(([code, total]) => {
             const account = window.RoboLedger?.COA?.get(String(code));
-            const label = account?.name || (code === 'Uncategorized' ? 'Uncategorized' : code);
+            const label   = account?.name || (code === 'Uncategorized' ? 'Uncategorized' : code);
             return {
                 label,
-                value: count,
-                // filterFn used by PieChart onSliceClick to filter the grid
+                value: Math.round(total),
                 filterFn: (tx) => (tx.category || 'Uncategorized') === code,
             };
         });
 }
 
-// Helper to get top 5 categories by transaction count
+/** Top 8 categories by spend total — each row is drillable */
 function getTopCategories(transactions) {
-    const categoryCounts = {};
+    const catMap = {};
 
     transactions.forEach(tx => {
         const cat = tx.category || 'Uncategorized';
-        if (cat === 'UNCAT') return; // Skip uncategorized
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+        if (!catMap[cat]) catMap[cat] = { count: 0, total: 0 };
+        catMap[cat].count++;
+        catMap[cat].total += (tx.amount_cents || 0) / 100;
     });
 
-    return Object.entries(categoryCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([code, count]) => {
-            // Try to get friendly name from COA (code is the account code like "2710")
+    return Object.entries(catMap)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 8)
+        .map(([code, data]) => {
             const account = window.RoboLedger?.COA?.get(String(code));
             return {
-                name: code === 'Uncategorized' ? 'Uncategorized' : (account?.name || code),
-                count
+                code,
+                name:  account?.name || (code === 'Uncategorized' ? 'Uncategorized' : code),
+                count: data.count,
+                total: data.total,
             };
         });
 }

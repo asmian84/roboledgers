@@ -209,7 +209,7 @@ export function FilterToolbar({
                         <button
                             onClick={onToggleReportPanel}
                             className={`${btnClass} ${activePanel === 'report' ? activeBtnClass : ''}`}
-                            title={activePanel === 'report' ? 'Close Trial Balance' : 'Open Live Trial Balance'}
+                            title={activePanel === 'report' ? 'Close Trial Balance' : 'Open Trial Balance'}
                         >
                             <i className={`ph ph-scales text-[14px] ${activePanel === 'report' ? 'text-[#4f46e5]' : 'text-[#6b7280]'}`}></i>
                         </button>
