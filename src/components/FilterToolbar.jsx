@@ -49,7 +49,7 @@ export function FilterToolbar({
                 minHeight: '42px',
             }}
         >
-            {/* LEFT: Ref Prefix + Search + Account Filter */}
+            {/* LEFT: Ref Prefix + Search (account switcher lives in UB dashboard card) */}
             <div className="flex items-center gap-2">
                 {/* Ref# Prefix Input */}
                 <div className="flex items-center gap-1.5">
@@ -78,21 +78,6 @@ export function FilterToolbar({
                         className="pl-7 pr-3 py-1 border border-[#e5e7eb] rounded-md text-[12px] w-[200px] bg-[#fafbfc] placeholder-[#c0c4cc] focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]/20 focus:bg-white transition-colors"
                     />
                 </div>
-
-                {/* Account Filter */}
-                <select
-                    value={selectedAccount}
-                    onChange={(e) => onAccountChange?.(e.target.value)}
-                    className="px-2.5 py-1 border border-[#e5e7eb] rounded-md text-[12px] text-[#6b7280] bg-[#fafbfc] cursor-pointer hover:border-[#d1d5db] focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]/20 transition-colors"
-                    style={{ appearance: 'none', paddingRight: '24px' }}
-                >
-                    <option value="ALL">All Accounts</option>
-                    {accounts.map(a => (
-                        <option key={a.id} value={a.id}>
-                            {a.ref || a.name || a.id}
-                        </option>
-                    ))}
-                </select>
 
                 {/* Active Filter Pill — visible when a predicate filter is active */}
                 {activeFilter && (

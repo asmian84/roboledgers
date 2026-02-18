@@ -1615,6 +1615,9 @@ export function TransactionsTable({
                     <UtilityBar
                         transactions={data}
                         activeFilter={activeFilterLabel}
+                        accounts={window.RoboLedger?.Accounts?.getAll() || []}
+                        selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
+                        onAccountChange={(value) => window.switchAccount?.(value)}
                         onClearFilter={() => {
                             const source = window._txGridAllData || data;
                             window.__txGridSetData?.(source);

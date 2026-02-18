@@ -116,11 +116,195 @@ function PieChart({ data, size = 200, onSliceClick }) {
 /** Shared row style for drillable stat rows */
 const DRILL_ROW = "flex justify-between items-center cursor-pointer rounded px-2 py-1.5 -mx-2 hover:bg-opacity-80 transition-colors group";
 
+// ── Account type badge colours ─────────────────────────────────────────────
+const ACCOUNT_TYPE_COLORS = {
+    CHEQUING:   { bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },
+    SAVINGS:    { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
+    VISA:       { bg: '#faf5ff', border: '#e9d5ff', text: '#7c3aed' },
+    MASTERCARD: { bg: '#fff1f2', border: '#fecdd3', text: '#be123c' },
+    AMEX:       { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af' },
+    DEFAULT:    { bg: '#f8fafc', border: '#e2e8f0', text: '#475569' },
+};
+
+function accountTypeColor(account) {
+    const t = (account?.accountType || account?.brand || account?.cardNetwork || '').toUpperCase();
+    return ACCOUNT_TYPE_COLORS[t] || ACCOUNT_TYPE_COLORS.DEFAULT;
+}
+
+function accountTypeLabel(account) {
+    if (account?.brand || account?.cardNetwork) {
+        return (account.brand || account.cardNetwork).toUpperCase();
+    }
+    if (account?.accountType) return account.accountType;
+    return 'ACCOUNT';
+}
+
+/** Masked last-4 of account number */
+function maskNumber(num) {
+    if (!num) return null;
+    const s = String(num).replace(/\D/g, '');
+    return s.length >= 4 ? '···· ' + s.slice(-4) : s;
+}
+
+/**
+ * AccountCard — compact card showing current account metadata.
+ * Click the chevron to expand and pick a different account.
+ */
+function AccountCard({ accounts = [], selectedAccount = 'ALL', onAccountChange }) {
+    const [expanded, setExpanded] = React.useState(false);
+
+    const current = selectedAccount === 'ALL'
+        ? null
+        : accounts.find(a => a.id === selectedAccount);
+
+    const col = current ? accountTypeColor(current) : ACCOUNT_TYPE_COLORS.DEFAULT;
+
+    return (
+        <div className="bg-white border-b border-gray-200">
+            {/* ── Current account summary row ── */}
+            <button
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                onClick={() => setExpanded(v => !v)}
+            >
+                {/* Bank icon / initial */}
+                <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
+                    style={{ background: col.bg, border: `1px solid ${col.border}`, color: col.text }}
+                >
+                    {current
+                        ? (current.ref || current.name || '?').slice(0, 3).toUpperCase()
+                        : 'ALL'
+                    }
+                </div>
+
+                {/* Name + sub-line */}
+                <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold text-gray-900 truncate leading-tight">
+                        {current ? (current.name || current.ref || current.id) : 'All Accounts'}
+                    </div>
+                    <div className="text-[10px] text-gray-400 leading-tight mt-0.5 truncate">
+                        {current
+                            ? [
+                                accountTypeLabel(current),
+                                current.bankName,
+                                maskNumber(current.accountNumber),
+                              ].filter(Boolean).join(' · ')
+                            : `${accounts.length} accounts`
+                        }
+                    </div>
+                </div>
+
+                {/* Type badge */}
+                {current && (
+                    <span
+                        className="flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: col.bg, border: `1px solid ${col.border}`, color: col.text }}
+                    >
+                        {accountTypeLabel(current)}
+                    </span>
+                )}
+
+                {/* Chevron */}
+                <i className={`ph ph-caret-${expanded ? 'up' : 'down'} text-gray-400 text-[12px] flex-shrink-0`}></i>
+            </button>
+
+            {/* ── Expanded account switcher list ── */}
+            {expanded && (
+                <div className="border-t border-gray-100 max-h-64 overflow-y-auto">
+                    {/* All Accounts option */}
+                    <button
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 transition-colors text-left ${selectedAccount === 'ALL' ? 'bg-indigo-50' : ''}`}
+                        onClick={() => { onAccountChange?.('ALL'); setExpanded(false); }}
+                    >
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-gray-100 border border-gray-200 flex-shrink-0">
+                            <i className="ph ph-stack text-gray-500 text-[12px]"></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-semibold text-gray-800">All Accounts</div>
+                            <div className="text-[10px] text-gray-400">{accounts.length} accounts · combined view</div>
+                        </div>
+                        {selectedAccount === 'ALL' && (
+                            <i className="ph ph-check-circle text-indigo-500 text-[14px]"></i>
+                        )}
+                    </button>
+
+                    {/* Individual accounts */}
+                    {accounts.map(acct => {
+                        const c   = accountTypeColor(acct);
+                        const sel = selectedAccount === acct.id;
+                        return (
+                            <button
+                                key={acct.id}
+                                className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 transition-colors text-left ${sel ? 'bg-indigo-50' : ''}`}
+                                onClick={() => { onAccountChange?.(acct.id); setExpanded(false); }}
+                            >
+                                <div
+                                    className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 text-[9px] font-bold"
+                                    style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}
+                                >
+                                    {(acct.ref || acct.name || '?').slice(0, 3).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-[12px] font-semibold text-gray-800 truncate">
+                                        {acct.name || acct.ref || acct.id}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 truncate">
+                                        {[accountTypeLabel(acct), acct.bankName, maskNumber(acct.accountNumber)]
+                                            .filter(Boolean).join(' · ')}
+                                    </div>
+                                </div>
+                                {acct.period && (
+                                    <span className="text-[9px] text-gray-400 flex-shrink-0">{acct.period}</span>
+                                )}
+                                {sel && <i className="ph ph-check-circle text-indigo-500 text-[14px]"></i>}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* ── Metadata strip (visible when a single account is selected) ── */}
+            {current && !expanded && (
+                <div className="px-4 pb-3 flex items-center gap-3 flex-wrap">
+                    {current.period && (
+                        <span className="text-[10px] text-gray-400">
+                            <span className="font-medium text-gray-600">Period</span> {current.period}
+                        </span>
+                    )}
+                    {current.transit && (
+                        <span className="text-[10px] text-gray-400">
+                            <span className="font-medium text-gray-600">Transit</span> {current.transit}
+                        </span>
+                    )}
+                    {current.inst && (
+                        <span className="text-[10px] text-gray-400">
+                            <span className="font-medium text-gray-600">Inst</span> {current.inst}
+                        </span>
+                    )}
+                    {current.currency && (
+                        <span className="text-[10px] text-gray-400">
+                            <span className="font-medium text-gray-600">CCY</span> {current.currency}
+                        </span>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 /**
  * UtilityBar - Side panel showing reconciliation stats, metadata, and dashboard
  * Every stat row is drillable — clicking filters the main transaction grid.
  */
-export function UtilityBar({ transactions = [], onFilterTransactions, activeFilter, onClearFilter }) {
+export function UtilityBar({
+    transactions = [],
+    onFilterTransactions,
+    activeFilter,
+    onClearFilter,
+    accounts = [],
+    selectedAccount = 'ALL',
+    onAccountChange,
+}) {
     // Calculate stats from transactions
     const stats = React.useMemo(() => {
         const categorized   = transactions.filter(t => t.category && t.category !== 'UNCAT');
@@ -194,6 +378,13 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
 
     return (
         <div className="h-full overflow-y-auto bg-gray-50">
+
+            {/* ── ACCOUNT CARD + SWITCHER ──────────────────────────────────── */}
+            <AccountCard
+                accounts={accounts}
+                selectedAccount={selectedAccount}
+                onAccountChange={onAccountChange}
+            />
 
             {/* ── OVERVIEW: 3-column count grid ───────────────────────────── */}
             <div className="p-3 bg-white border-b border-gray-200">
