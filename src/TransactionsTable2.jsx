@@ -883,49 +883,19 @@ const columns = [
             const val = info.getValue();
             const row = info.row.original;
 
-            // ── Financial / non-taxable guard ────────────────────────────────
-            // These transaction types are never subject to GST — no toggle shown
-            const NON_TAXABLE_CATEGORIES = new Set([
-                '9971', // CC Payment
-                '9970', // Uncategorized (no GST assumption)
-                '7700', // Cash back / rebates / contra
-                '7000', // Interest expense
-                '2149', // GST payments to CRA
-                '2150', // GST paid (the GST account itself)
-                '2160', // GST collected (the GST account itself)
-            ]);
-            const NON_TAXABLE_PATTERN = /\b(PAYMENT|INTEREST|TRANSFER|CASH\s*BACK|REBATE|DIVIDEND|INSURANCE|PAYROLL|SALARY|WAGES?|T4|E-TRANSFER|INTERAC)\b/i;
-
-            const desc = (row.description || row.payee || '').toUpperCase();
             const catStr = String(row.category || '');
 
-            const isFinancialTx =
-                NON_TAXABLE_CATEGORIES.has(catStr) ||
-                NON_TAXABLE_PATTERN.test(desc) ||
-                row._isCCPayment ||
-                row._isCashBack ||
-                row._isBankRebate ||
-                // CC-to-CC or bank-to-bank transfers: both sides of same amount, opposite polarity
-                (row.transaction_type === 'transfer');
-
-            // For non-taxable rows: show a muted dash, no toggle
-            if (isFinancialTx) {
-                // Ensure disabled state is stored
-                if (row.gst_enabled !== false) {
-                    row.gst_enabled = false;
-                    row.tax_cents = 0;
-                    row.gst_account = null;
-                    row.gst_type = null;
-                }
-                return (
-                    <span className="text-right block" style={{ color: '#cbd5e1', fontSize: GRID_TOKENS.numberFontSize }}>—</span>
-                );
-            }
-
-            // ── Taxable rows ─────────────────────────────────────────────────
-            // Initialize gst_enabled if not set — default ON for expense/revenue transactions
+            // ── Default gst_enabled for first render ──────────────────────────
+            // Structural transfers (CC payments, bank transfers, inter-account) default
+            // to OFF — all other transactions (including uncategorized) default to ON.
+            // The toggle is always shown — user can override for any row.
             if (row.gst_enabled === undefined) {
-                row.gst_enabled = true;
+                const isStructuralTransfer =
+                    catStr === '9971' ||  // CC Payment
+                    row._isCCPayment ||
+                    row._isBankRebate ||
+                    row.transaction_type === 'transfer';
+                row.gst_enabled = !isStructuralTransfer;
             }
 
             // Auto-calculate tax_cents if enabled but not yet stored
@@ -1004,7 +974,10 @@ const columns = [
                     <button
                         onClick={handleToggle}
                         className="p-0.5 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
-                        title={row.gst_enabled ? 'GST/ITC enabled (click to disable)' : 'GST/ITC disabled (click to enable)'}
+                        title={row.gst_enabled
+                            ? `GST enabled → ${row.gst_type === 'collected' ? 'Collected (2160)' : 'ITC/Paid (2150)'} — click to disable`
+                            : `GST disabled — click to enable (routes to ${catStr.startsWith('4') ? 'Collected 2160' : 'ITC/Paid 2150'})`
+                        }
                     >
                         <i className={`ph ${row.gst_enabled ? 'ph-check-circle' : 'ph-circle'} text-sm`}
                            style={{ color: row.gst_enabled ? '#16a34a' : '#d1d5db' }}></i>
@@ -1048,22 +1021,32 @@ export function TransactionsTable({
         window.UI_STATE.gridDensity = gridDensity;
     }
 
-    // Force GRID_TOKENS recalculation (module-level variable gets updated)
-    if (window.recalculateGridTokens) {
-        window.recalculateGridTokens();
-    }
+    // ── Derive a stable token snapshot from props — React tracks this properly ──
+    // Using useMemo means whenever gridTheme / gridFontSize / gridDensity props
+    // change, React re-derives TK and re-renders all consumers of it.
+    const rowHeights = { compact: 36, comfortable: 42, spacious: 56 };
+    const TK = useMemo(() => {
+        // Sync UI_STATE so getActiveTheme() reads the right value
+        if (window.UI_STATE) window.UI_STATE.gridTheme = gridTheme;
+        if (window.recalculateGridTokens) window.recalculateGridTokens();
+        const base = { ...GRID_TOKENS };
+        // Apply density override
+        base.rowHeight = rowHeights[gridDensity] ?? base.rowHeight;
+        // Apply font size
+        if (gridFontSize) {
+            base.cellFontSize       = `${gridFontSize}px`;
+            base.descLine1FontSize  = `${gridFontSize}px`;
+            base.descLine2FontSize  = `${Math.max(9, gridFontSize - 1.5)}px`;
+            base.numberFontSize     = `${gridFontSize}px`;
+        }
+        return base;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [gridTheme, gridFontSize, gridDensity]);
 
-    // Apply density-based rowHeight override
-    const rowHeights = {
-        compact: 36,      // 20% reduction
-        comfortable: 42,  // Sweet spot (Caseware-standard)
-        spacious: 56      // Balanced spacing
-    };
-    if (rowHeights[gridDensity]) {
-        GRID_TOKENS.rowHeight = rowHeights[gridDensity];
-    }
+    // Keep module-level GRID_TOKENS in sync for legacy callers
+    Object.assign(GRID_TOKENS, TK);
 
-    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize, 'density:', gridDensity, 'rowHeight:', GRID_TOKENS.rowHeight);
+    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize, 'density:', gridDensity, 'rowHeight:', TK.rowHeight);
 
 
     const [data, setData] = useState(initialData || []);
@@ -1103,6 +1086,12 @@ export function TransactionsTable({
     useEffect(() => {
         setData(initialData || []);
     }, [initialData]);
+
+    // SYNC: Update columnVisibility when prop changes (for settings drawer saves)
+    // This ensures mountTransactionsTable() with new savedPrefs updates the grid
+    useEffect(() => {
+        setColumnVisibility(prev => ({ ...prev, ...initialColumnVisibility }));
+    }, [initialColumnVisibility]);
 
     // SYNC: Update globalFilter when search query changes (for live search)
     useEffect(() => {
@@ -1354,7 +1343,7 @@ export function TransactionsTable({
     const rowVirtualizer = useVirtualizer({
         count: table.getRowModel().rows.length,
         getScrollElement: () => parentRef.current,
-        estimateSize: () => GRID_TOKENS.rowHeight,
+        estimateSize: () => TK.rowHeight,
         overscan: 15,
     });
 
@@ -1607,17 +1596,17 @@ export function TransactionsTable({
                                 flex: header.id === 'description' ? '1 1 0' : undefined,
                                 minWidth: header.id === 'description' ? '250px' : undefined,
                                 flexShrink: 0,
-                                height: GRID_TOKENS.headerHeight,
+                                height: TK.headerHeight,
                                 // Custom padding per column (match cell padding)
-                                padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
+                                padding: header.id === 'select' ? '0 4px 0 12px' :  // Checkbox: 12px left padding
                                     header.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                        `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
-                                fontSize: GRID_TOKENS.headerFontSize,
-                                fontWeight: GRID_TOKENS.headerFontWeight,
-                                letterSpacing: GRID_TOKENS.headerLetterSpacing,
-                                color: GRID_TOKENS.headerColor,
+                                        `0 ${TK.rowPaddingX}`,           // Others: default
+                                fontSize: TK.headerFontSize,
+                                fontWeight: TK.headerFontWeight,
+                                letterSpacing: TK.headerLetterSpacing,
+                                color: TK.headerColor,
                                 textTransform: 'uppercase',
-                                borderRight: `1px solid ${GRID_TOKENS.borderColor}`  // Vertical dividers
+                                borderRight: `1px solid ${TK.borderColor}`  // Vertical dividers
                             }}
                             onClick={header.column.getToggleSortingHandler()}
                         >
@@ -1652,10 +1641,10 @@ export function TransactionsTable({
                                     minWidth: header.id === 'description' ? '250px' : undefined,
                                     flexShrink: 0,
                                     height: '40px',
-                                    padding: header.id === 'select' ? '0 4px 0 6px' :
+                                    padding: header.id === 'select' ? '0 4px 0 12px' :
                                         header.id === 'balance' ? '0 6px 0 2px' :
-                                            `0 ${GRID_TOKENS.rowPaddingX}`,
-                                    borderRight: `1px solid ${GRID_TOKENS.borderColor}`
+                                            `0 ${TK.rowPaddingX}`,
+                                    borderRight: `1px solid ${TK.borderColor}`
                                 }}
                             >
                                 {/* Render appropriate filter input based on column */}
@@ -1693,24 +1682,24 @@ export function TransactionsTable({
                                 const rowIndex = virtualRow.index;
                                 let rowBg;
                                 if (isSelected) {
-                                    rowBg = GRID_TOKENS.selectedRowBg || '#eff6ff';
-                                } else if (GRID_TOKENS.rowColors && Array.isArray(GRID_TOKENS.rowColors)) {
+                                    rowBg = TK.selectedRowBg || '#eff6ff';
+                                } else if (TK.rowColors && Array.isArray(TK.rowColors)) {
                                     // Rainbow mode: cycle through color palette
-                                    rowBg = GRID_TOKENS.rowColors[rowIndex % GRID_TOKENS.rowColors.length];
+                                    rowBg = TK.rowColors[rowIndex % TK.rowColors.length];
                                 } else {
                                     // Standard alternating (2 colors)
-                                    rowBg = rowIndex % 2 === 0 ? GRID_TOKENS.rowBg : GRID_TOKENS.rowBgAlt;
+                                    rowBg = rowIndex % 2 === 0 ? TK.rowBg : TK.rowBgAlt;
                                 }
-                                const hoverBg = GRID_TOKENS.hoverBg || '#f8fafc';
+                                const hoverBg = TK.hoverBg || '#f8fafc';
 
                                 return (
                                     <div
                                         key={row.id}
                                         className="flex absolute top-0 left-0 w-full transition-colors group"
                                         style={{
-                                            height: `${GRID_TOKENS.rowHeight}px`,
+                                            height: `${TK.rowHeight}px`,
                                             transform: `translateY(${virtualRow.start}px)`,
-                                            borderBottom: `1px solid ${GRID_TOKENS.borderColor}`,
+                                            borderBottom: `1px solid ${TK.borderColor}`,
                                             backgroundColor: rowBg
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
@@ -1725,11 +1714,11 @@ export function TransactionsTable({
                                                     flex: cell.column.id === 'description' ? '1 1 0' : undefined,
                                                     minWidth: cell.column.id === 'description' ? '250px' : undefined,
                                                     flexShrink: 0,
-                                                    // Custom padding per column - flush left
-                                                    padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
+                                                    // Custom padding per column
+                                                    padding: cell.column.id === 'select' ? '0 4px 0 12px' :  // Checkbox: 12px left padding
                                                         cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
                                                             '0 8px 0 2px',                               // Others: minimal left, standard right
-                                                    borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
+                                                    borderRight: `1px solid ${TK.borderColor}`,
                                                     position: cell.column.id === 'category' ? 'relative' : undefined
                                                 }}
                                             >

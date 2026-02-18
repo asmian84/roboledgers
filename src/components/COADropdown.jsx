@@ -6,6 +6,9 @@ import { createPortal } from 'react-dom';
  * Groups accounts by: Assets, Liabilities, Equity, Revenue, Expenses
  */
 export function COADropdown({ value, onChange, txId }) {
+    // Get all COA accounts from ledger — must be first, used in useState initialisers below
+    const allAccounts = window.RoboLedger?.COA?.getAll() || [];
+
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [buttonRect, setButtonRect] = useState(null);
@@ -23,9 +26,6 @@ export function COADropdown({ value, onChange, txId }) {
     const buttonRef = useRef(null);
     const portalRef = useRef(null);
     const searchInputRef = useRef(null);
-
-    // Get all COA accounts from ledger
-    const allAccounts = window.RoboLedger?.COA?.getAll() || [];
 
     // Find current selection
     const currentAccount = allAccounts.find(acc => acc.code === value);
