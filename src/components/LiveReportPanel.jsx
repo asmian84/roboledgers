@@ -29,14 +29,18 @@ export function LiveReportPanel({
         try {
             // ── Step 1: Seed ALL COA accounts (zero-balance included) ──────────
             const accountBalances = {};
+            // GST account codes that get their own dedicated TB section
+            const GST_CODES = new Set(['2148','2149','2150','2151','2160','2170','2171','2172','2173','2174']);
 
             const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
             allCOA.forEach(account => {
+                const codeStr = String(account.code);
                 accountBalances[account.code] = {
                     code:      account.code,
                     name:      account.name,
                     root:      account.root || inferRoot(account.code),
                     leadsheet: account.leadsheet || null,
+                    isGST:     GST_CODES.has(codeStr),
                     debit:     0,
                     credit:    0,
                 };
@@ -65,21 +69,34 @@ export function LiveReportPanel({
                 if (tx.polarity === 'DEBIT')  accountBalances[code].debit  += amount;
                 if (tx.polarity === 'CREDIT') accountBalances[code].credit += amount;
 
-                // GST sub-account
+                // GST sub-account — correct accounting treatment:
+                //   2160 GST Collected on Sales   → LIABILITY  (credit — owed to CRA)
+                //   2150 GST Paid / ITC            → ASSET      (debit  — receivable from CRA)
                 if (tx.gst_enabled && tx.gst_account && tx.tax_cents) {
-                    const gstCode   = tx.gst_account;
-                    const gstAmount = (tx.tax_cents || 0) / 100;
+                    const gstCode   = String(tx.gst_account);
+                    const gstAmount = Math.abs(tx.tax_cents || 0) / 100;
                     if (!accountBalances[gstCode]) {
-                        const gstAcct = window.RoboLedger?.COA?.get(String(gstCode))
+                        const gstAcct = window.RoboLedger?.COA?.get(gstCode)
                                      || window.RoboLedger?.COA?.get(parseInt(gstCode));
+                        // 2150 = GST ITC/Paid (asset — debit-normal)
+                        // 2160 = GST Collected (liability — credit-normal)
+                        const isITC = gstCode === '2150' || tx.gst_type === 'itc';
                         accountBalances[gstCode] = {
-                            code:  gstCode,
-                            name:  gstAcct?.name || `GST ${gstCode}`,
-                            root:  gstAcct?.root || 'LIABILITY',
-                            debit: 0, credit: 0,
+                            code:    gstCode,
+                            name:    gstAcct?.name || (isITC ? 'GST Paid / ITC (2150)' : 'GST Collected (2160)'),
+                            root:    isITC ? 'ASSET' : 'LIABILITY',
+                            isGST:   true,
+                            debit:   0,
+                            credit:  0,
                         };
                     }
-                    accountBalances[gstCode].credit += gstAmount;
+                    // ITC is a debit (asset); Collected is a credit (liability)
+                    const isITC = gstCode === '2150' || tx.gst_type === 'itc';
+                    if (isITC) {
+                        accountBalances[gstCode].debit  += gstAmount;
+                    } else {
+                        accountBalances[gstCode].credit += gstAmount;
+                    }
                 }
             });
 
@@ -96,10 +113,15 @@ export function LiveReportPanel({
             const totalCredit = accounts.reduce((s, a) => s + a.credit, 0);
 
             // ── Step 5: Group by account root type (active accounts only) ────
-            const grouped = { ASSET: [], LIABILITY: [], EQUITY: [], REVENUE: [], EXPENSE: [] };
+            const grouped = { ASSET: [], LIABILITY: [], EQUITY: [], REVENUE: [], EXPENSE: [], GST: [] };
             accounts.forEach(acc => {
                 // Skip zero-balance accounts — only show accounts with actual activity
                 if (acc.debit === 0 && acc.credit === 0) return;
+                // GST accounts get their own dedicated section
+                if (acc.isGST) {
+                    grouped.GST.push(acc);
+                    return;
+                }
                 const root = acc.root || 'EXPENSE';
                 (grouped[root] || grouped.EXPENSE).push(acc);
             });
@@ -151,6 +173,7 @@ export function LiveReportPanel({
         EQUITY:    'Equity',
         REVENUE:   'Revenue',
         EXPENSE:   'Expenses',
+        GST:       'GST / HST',
     };
     const ROOT_COLORS = {
         ASSET:     '#3b82f6',
@@ -158,6 +181,7 @@ export function LiveReportPanel({
         EQUITY:    '#8b5cf6',
         REVENUE:   '#059669',
         EXPENSE:   '#d97706',
+        GST:       '#0891b2',
     };
 
     // ─── Trial Balance render ─────────────────────────────────────────────────
@@ -214,9 +238,22 @@ export function LiveReportPanel({
                             </tr>
                         </thead>
                         <tbody>
-                            {['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'].map(rootType => {
+                            {['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE', 'GST'].map(rootType => {
                                 const items = reportData.grouped[rootType];
                                 if (!items?.length) return null;
+
+                                // For GST section, compute net payable
+                                const isGSTSection = rootType === 'GST';
+                                const gstCollected = isGSTSection
+                                    ? items.find(a => String(a.code) === '2160' || a.gst_type === 'collected')
+                                    : null;
+                                const gstITC = isGSTSection
+                                    ? items.find(a => String(a.code) === '2150' || a.gst_type === 'itc')
+                                    : null;
+                                const netGST = isGSTSection
+                                    ? ((gstCollected?.credit || 0) - (gstITC?.debit || 0))
+                                    : 0;
+
                                 return (
                                     <React.Fragment key={rootType}>
                                         {/* Section header */}
@@ -225,6 +262,11 @@ export function LiveReportPanel({
                                                 <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: ROOT_COLORS[rootType] }}>
                                                     {ROOT_LABELS[rootType]}
                                                 </span>
+                                                {isGSTSection && (
+                                                    <span className="ml-2 text-[9px] font-normal text-gray-400">
+                                                        · Net payable: <span className={`font-semibold ${netGST >= 0 ? 'text-red-500' : 'text-green-600'}`}>{fmt(Math.abs(netGST))}{netGST < 0 ? ' refund' : ''}</span>
+                                                    </span>
+                                                )}
                                             </td>
                                         </tr>
 
@@ -235,13 +277,14 @@ export function LiveReportPanel({
                                                 onClick={() => onAccountClick?.(account.code)}
                                                 className={`transition-colors cursor-pointer ${
                                                     selectedAccount === account.code
-                                                        ? 'bg-indigo-50'
-                                                        : 'hover:bg-gray-50'
+                                                        ? 'bg-cyan-50'
+                                                        : isGSTSection
+                                                            ? 'hover:bg-cyan-50'
+                                                            : 'hover:bg-gray-50'
                                                 }`}
                                                 style={{ borderBottom: '1px solid #f9fafb' }}
-                                                title={`${account.code} — ${account.name}`}
                                             >
-                                                <td className="py-1.5 px-2 font-mono text-gray-400 text-[10px]" style={{ width: '44px' }}>
+                                                <td className="py-1.5 px-2 font-mono text-[10px]" style={{ width: '44px', color: ROOT_COLORS[rootType] }}>
                                                     {account.code}
                                                 </td>
                                                 <td className="py-1.5 px-1 text-gray-800" style={{
@@ -251,6 +294,11 @@ export function LiveReportPanel({
                                                     whiteSpace: 'nowrap'
                                                 }}>
                                                     {account.name}
+                                                    {isGSTSection && (
+                                                        <span className="ml-1 text-[9px] text-gray-400">
+                                                            {String(account.code) === '2150' ? '(ITC)' : '(Collected)'}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 {/* DEBIT column — actual debit total */}
                                                 <td className="py-1.5 px-2 text-right font-mono tabular-nums text-gray-700" style={{ width: '72px' }}>
@@ -262,6 +310,22 @@ export function LiveReportPanel({
                                                 </td>
                                             </tr>
                                         ))}
+
+                                        {/* GST Net row */}
+                                        {isGSTSection && items.length > 1 && (
+                                            <tr style={{ borderBottom: '2px solid #e0f2fe', background: '#f0f9ff' }}>
+                                                <td className="py-1.5 px-2 text-[10px]" style={{ color: ROOT_COLORS.GST }}></td>
+                                                <td className="py-1.5 px-1 text-[10px] font-semibold text-cyan-800">
+                                                    Net GST Payable
+                                                </td>
+                                                <td className="py-1.5 px-2 text-right font-mono tabular-nums text-[10px] font-semibold text-cyan-700" colSpan="2">
+                                                    {netGST >= 0
+                                                        ? <span className="text-red-600">{fmt(netGST)} owed</span>
+                                                        : <span className="text-green-600">{fmt(Math.abs(netGST))} refund</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        )}
                                     </React.Fragment>
                                 );
                             })}
