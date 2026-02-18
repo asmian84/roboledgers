@@ -9,6 +9,16 @@ export default defineConfig({
     },
     build: {
         outDir: 'dist',
-        sourcemap: true
+        sourcemap: true,
+        chunkSizeWarningLimit: 700,  // Brain JSON adds ~477KB
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    // Split brain data into separate cacheable chunks
+                    'categorization-brain': ['./src/data/categorization_brain.json'],
+                    'context-brain': ['./src/data/context_brain.json'],
+                }
+            }
+        }
     }
 });
