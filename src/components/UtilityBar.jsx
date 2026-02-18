@@ -147,6 +147,79 @@ function maskNumber(num) {
 }
 
 /**
+ * Returns a bank icon element for a given account.
+ * Uses known bank abbreviations with brand colors, falls back to generic card icon.
+ */
+function BankIcon({ account, size = 32, className = '' }) {
+    const bankName  = (account?.bankName || account?.name || '').toUpperCase();
+    const brand     = (account?.brand || account?.cardNetwork || '').toUpperCase();
+    const acctType  = (account?.accountType || '').toLowerCase();
+    const isCC      = acctType === 'creditcard' || !!account?.brand || !!account?.cardNetwork;
+
+    // Known bank → icon colour map
+    const BANK_STYLES = {
+        RBC:   { bg: '#003168', text: '#fff', abbr: 'RBC' },
+        'ROYAL BANK': { bg: '#003168', text: '#fff', abbr: 'RBC' },
+        TD:    { bg: '#00a850', text: '#fff', abbr: 'TD' },
+        'TORONTO DOMINION': { bg: '#00a850', text: '#fff', abbr: 'TD' },
+        BMO:   { bg: '#0079c1', text: '#fff', abbr: 'BMO' },
+        'BANK OF MONTREAL': { bg: '#0079c1', text: '#fff', abbr: 'BMO' },
+        CIBC:  { bg: '#c41f3e', text: '#fff', abbr: 'CIBC' },
+        SCOTIABANK: { bg: '#ec111a', text: '#fff', abbr: 'NS' },
+        SCOTIA: { bg: '#ec111a', text: '#fff', abbr: 'NS' },
+        ATB:   { bg: '#003057', text: '#fff', abbr: 'ATB' },
+        'ATB FINANCIAL': { bg: '#003057', text: '#fff', abbr: 'ATB' },
+        HSBC:  { bg: '#db0011', text: '#fff', abbr: 'HSBC' },
+        AMEX:  { bg: '#016fce', text: '#fff', abbr: 'AX' },
+        'AMERICAN EXPRESS': { bg: '#016fce', text: '#fff', abbr: 'AX' },
+        VISA:  { bg: '#1a1f71', text: '#fff', abbr: 'VISA' },
+        MASTERCARD: { bg: '#eb001b', text: '#fff', abbr: 'MC' },
+        MC:    { bg: '#eb001b', text: '#fff', abbr: 'MC' },
+    };
+
+    // Try matching on bank name first, then brand
+    let style = null;
+    for (const key of Object.keys(BANK_STYLES)) {
+        if (bankName.includes(key) || brand.includes(key)) {
+            style = BANK_STYLES[key];
+            break;
+        }
+    }
+
+    if (!style) {
+        // Generic fallback — use account type colour
+        const col = accountTypeColor(account);
+        const initials = (account?.ref || account?.name || '?').slice(0, 3).toUpperCase();
+        return (
+            <div
+                className={`flex items-center justify-center rounded-lg flex-shrink-0 text-[10px] font-bold ${className}`}
+                style={{ width: size, height: size, background: col.bg, border: `1px solid ${col.border}`, color: col.text }}
+            >
+                {isCC
+                    ? <i className="ph ph-credit-card" style={{ fontSize: size * 0.45 }}></i>
+                    : initials
+                }
+            </div>
+        );
+    }
+
+    return (
+        <div
+            className={`flex items-center justify-center rounded-lg flex-shrink-0 font-bold ${className}`}
+            style={{
+                width: size, height: size,
+                background: style.bg,
+                color: style.text,
+                fontSize: size <= 28 ? 8 : size <= 36 ? 10 : 12,
+                letterSpacing: '-0.02em',
+            }}
+        >
+            {style.abbr}
+        </div>
+    );
+}
+
+/**
  * AccountCard — compact card showing current account metadata.
  * Click the chevron to expand and pick a different account.
  */
@@ -166,16 +239,15 @@ function AccountCard({ accounts = [], selectedAccount = 'ALL', onAccountChange }
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
                 onClick={() => setExpanded(v => !v)}
             >
-                {/* Bank icon / initial */}
-                <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
-                    style={{ background: col.bg, border: `1px solid ${col.border}`, color: col.text }}
-                >
-                    {current
-                        ? (current.ref || current.name || '?').slice(0, 3).toUpperCase()
-                        : 'ALL'
-                    }
-                </div>
+                {/* Bank icon */}
+                {current
+                    ? <BankIcon account={current} size={32} />
+                    : (
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 border border-gray-200 flex-shrink-0">
+                            <i className="ph ph-buildings text-gray-500 text-[14px]"></i>
+                        </div>
+                    )
+                }
 
                 {/* Name + sub-line */}
                 <div className="flex-1 min-w-0">
@@ -238,12 +310,7 @@ function AccountCard({ accounts = [], selectedAccount = 'ALL', onAccountChange }
                                 className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 transition-colors text-left ${sel ? 'bg-indigo-50' : ''}`}
                                 onClick={() => { onAccountChange?.(acct.id); setExpanded(false); }}
                             >
-                                <div
-                                    className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 text-[9px] font-bold"
-                                    style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}
-                                >
-                                    {(acct.ref || acct.name || '?').slice(0, 3).toUpperCase()}
-                                </div>
+                                <BankIcon account={acct} size={28} />
                                 <div className="flex-1 min-w-0">
                                     <div className="text-[12px] font-semibold text-gray-800 truncate">
                                         {acct.name || acct.ref || acct.id}

@@ -238,8 +238,29 @@ class RuleEngine {
     evaluateCondition(transaction, condition) {
         let fieldValue = transaction[condition.field];
 
+        // ── Virtual field: account_type ───────────────────────────────────────
+        // Resolved from account registry so rules can distinguish CC vs CHQ/SAV.
+        // Value is lowercased accountType (e.g. 'creditcard', 'chequing', 'savings').
+        if (condition.field === 'account_type') {
+            const acct = window.RoboLedger?.Accounts?.get(transaction.account_id);
+            fieldValue = (acct?.accountType || acct?.type || '').toLowerCase();
+            // Also treat metadata.brand / cardNetwork presence as creditcard
+            if (!fieldValue && (transaction.metadata?.brand || transaction.metadata?.cardNetwork ||
+                                transaction._isCCAcct)) {
+                fieldValue = 'creditcard';
+            }
+        }
+
         if (condition.field.includes('.')) {
             fieldValue = condition.field.split('.').reduce((obj, key) => obj?.[key], transaction);
+        }
+
+        // Virtual field: is_cc — boolean shorthand for account_type === 'creditcard'
+        if (condition.field === 'is_cc') {
+            const acct = window.RoboLedger?.Accounts?.get(transaction.account_id);
+            const isCCByAcct = !!(acct?.brand || acct?.cardNetwork ||
+                                  (acct?.accountType || '').toLowerCase() === 'creditcard');
+            fieldValue = isCCByAcct || !!transaction._isCCAcct;
         }
 
         if (fieldValue === undefined || fieldValue === null) return false;
@@ -252,9 +273,10 @@ class RuleEngine {
             case 'not_contains':
                 return !String(fieldValue).toLowerCase().includes(String(val).toLowerCase());
             case 'equals':
-                return fieldValue === val;
-            case 'not_equals':
-                return fieldValue !== val;
+                return String(fieldValue).toLowerCase() === String(val).toLowerCase();
+            case 'not_equals':   // canonical snake_case
+            case 'notEquals':    // camelCase alias
+                return String(fieldValue).toLowerCase() !== String(val).toLowerCase();
             case 'starts_with':
                 return String(fieldValue).toLowerCase().startsWith(String(val).toLowerCase());
             case 'ends_with':
@@ -315,19 +337,23 @@ class RuleEngine {
               conditions: [{ field: 'description', operator: 'contains', value: 'MINUT' }],
               action: { coa_code: '6800' }, logic: 'AND', priority: 8 },
 
-            // REVENUE — AIRBNB only fires on CREDIT, both conditions required
+            // REVENUE — AIRBNB payouts on CHQ/SAV only (CREDIT polarity, non-CC account)
+            // AirbnbMENTS / Account Payable Payment = Airbnb remitting rental income
             { name: 'AIRBNB → Rental Revenue (4900)',
               conditions: [
-                  { field: 'description', operator: 'contains', value: 'AIRBNB' },
-                  { field: 'polarity',    operator: 'equals',   value: 'CREDIT' },
+                  { field: 'description', operator: 'regex',  value: 'AIRBNB' },
+                  { field: 'polarity',    operator: 'equals',  value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
               ],
               action: { coa_code: '4900' }, logic: 'AND', priority: 10 },
 
-            // REVENUE — E-Transfer Credits = Rental Revenue (Airbnb guests)
+            // REVENUE — E-Transfer Credits = Rental Revenue on CHQ/SAV accounts only
+            // IMPORTANT: This must NOT fire on CC accounts — CC credits are charges, not income
             { name: 'E-Transfer Credit → Rental Revenue (4900)',
               conditions: [
-                  { field: 'description', operator: 'regex', value: 'E-TRANSFER|INTERAC|E-TRF|AUTODEPOSIT' },
-                  { field: 'polarity',    operator: 'equals',   value: 'CREDIT' },
+                  { field: 'description',  operator: 'regex',     value: 'E-TRANSFER|INTERAC|E-TRF|AUTODEPOSIT' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
               ],
               action: { coa_code: '4900' }, logic: 'AND', priority: 9 },
 
@@ -385,6 +411,78 @@ class RuleEngine {
               action: { coa_code: '8600' }, logic: 'AND', priority: 9 },
             { name: 'AMAZON BUSINESS PRIME → Software (6800)',
               conditions: [{ field: 'description', operator: 'contains', value: 'BUSINESS PRIME AMAZON' }],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
+
+            // CC PAYMENTS FROM CHQ/SAV — "AMEX REGULAR", "VISA", "MC" Online Banking Payments
+            // Debit from chequing/savings going to pay a credit card = inter-account transfer → 9971
+            { name: 'AMEX Payment from CHQ → CC Payment (9971)',
+              conditions: [
+                  { field: 'description', operator: 'regex',     value: 'AMEX\\s*(REGULAR|GOLD|PLAT|PLATINUM|BUSINESS|CREDIT|CARD)?' },
+                  { field: 'polarity',    operator: 'equals',    value: 'DEBIT' },
+                  { field: 'account_type',operator: 'not_equals',value: 'creditcard' },
+              ],
+              action: { coa_code: '9971' }, logic: 'AND', priority: 10 },
+            { name: 'VISA Payment from CHQ → CC Payment (9971)',
+              conditions: [
+                  { field: 'description', operator: 'regex',     value: 'VISA\\s*(PAYMENT|PAYABLE|CARD|CREDIT)?' },
+                  { field: 'polarity',    operator: 'equals',    value: 'DEBIT' },
+                  { field: 'account_type',operator: 'not_equals',value: 'creditcard' },
+              ],
+              action: { coa_code: '9971' }, logic: 'AND', priority: 10 },
+            { name: 'MC/Mastercard Payment from CHQ → CC Payment (9971)',
+              conditions: [
+                  { field: 'description', operator: 'regex',     value: 'MASTERCARD|\\bM\\.?C\\.?\\s*(PAYMENT|PAYABLE)' },
+                  { field: 'polarity',    operator: 'equals',    value: 'DEBIT' },
+                  { field: 'account_type',operator: 'not_equals',value: 'creditcard' },
+              ],
+              action: { coa_code: '9971' }, logic: 'AND', priority: 10 },
+
+            // PAYROLL / EMPLOYEE EXPENSES
+            // PAY EMP-VENDOR and similar payroll lines on CHQ = salary/wages expense
+            { name: 'PAY EMP-VENDOR → Salaries & Wages (6000)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'PAY\\s*EMP[-\\s]?VENDOR|PAYROLL|EMPLOYEE\\s*PAY' },
+                  { field: 'polarity',    operator: 'equals', value: 'DEBIT' },
+              ],
+              action: { coa_code: '6000' }, logic: 'AND', priority: 10 },
+            { name: 'Direct Deposit Payroll → Salaries (6000)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: '\\bPAYROLL\\b|SALARY\\s*DEPOSIT|WAGES\\s*DEPOSIT' },
+                  { field: 'polarity',    operator: 'equals', value: 'DEBIT' },
+              ],
+              action: { coa_code: '6000' }, logic: 'AND', priority: 9 },
+
+            // BANK / SAVINGS INTEREST INCOME
+            // "Deposit interest", "Interest credited" on SAV/CHQ = interest income → 7100
+            { name: 'Deposit Interest → Interest Income (7100)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'DEPOSIT\\s*INTEREST|INTEREST\\s*CREDIT|INTEREST\\s*PAID|SAVINGS\\s*INTEREST' },
+                  { field: 'polarity',    operator: 'equals', value: 'CREDIT' },
+              ],
+              action: { coa_code: '7100' }, logic: 'AND', priority: 10 },
+
+            // AMAZON PURCHASES — expense not revenue (CC charges)
+            // Amazon.ca purchases on AMEX/VISA = supplies/office expense
+            { name: 'Amazon Purchase → Office Supplies (8600)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'AMAZON\\.CA|AMZN\\s*MKTP|AMZ\\*AMAZON' },
+                  { field: 'polarity',    operator: 'equals', value: 'CREDIT' },
+                  { field: 'account_type',operator: 'equals', value: 'creditcard' },
+              ],
+              action: { coa_code: '8600' }, logic: 'AND', priority: 9 },
+
+            // NETFLIX — streaming subscription on CC = software/subscription expense
+            { name: 'Netflix → Software Subscriptions (6800)',
+              conditions: [
+                  { field: 'description', operator: 'contains', value: 'NETFLIX' },
+              ],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
+
+            // GOOGLE — ads or workspace on CC = software/marketing expense
+            { name: 'Google → Software/Advertising (6800)',
+              conditions: [
+                  { field: 'description', operator: 'regex', value: 'GOOGLE\\*|GOOGLE\\s*(ADS?|WORKSPACE|PLAY|CC)' },
+              ],
               action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
         ];
 

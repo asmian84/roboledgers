@@ -1013,7 +1013,7 @@
    *
    * Called automatically after every import via updateWorkspace.
    */
-  window.initGSTOnTransactions = function () {
+  window.initGSTOnTransactions = function (forceReinit = false) {
     const TAX_RATES = {
       'ON': 13, 'BC': 12, 'AB': 5,  'QC': 14.975, 'NS': 15,
       'NB': 15, 'MB': 12, 'SK': 11, 'PE': 15,     'NL': 15,
@@ -1036,8 +1036,8 @@
     let seeded = 0;
 
     allTxns.forEach(tx => {
-      // Only touch transactions that haven't been GST-initialized yet
-      if (tx.gst_enabled !== undefined) return;
+      // Only touch transactions that haven't been GST-initialized yet (unless forceReinit)
+      if (!forceReinit && tx.gst_enabled !== undefined) return;
 
       const catStr  = String(tx.category || '');
       const desc    = (tx.raw_description || tx.description || '');
@@ -1063,7 +1063,13 @@
 
       // Taxable transaction — compute GST and set account routing
       const taxCents  = Math.round((amount * taxRate) / 100);
-      const isRevenue = catStr.startsWith('4');
+      // CC account detection — CC charges are EXPENSES regardless of COA code
+      const acctForGST = window.RoboLedger?.Accounts?.get(tx.account_id);
+      const isCCAcct   = !!(acctForGST?.brand || acctForGST?.cardNetwork ||
+                            (acctForGST?.accountType || '').toLowerCase() === 'creditcard');
+      // Revenue = category starts with 4 AND not a CC account
+      // CC accounts NEVER have revenue — charges go to GST ITC (2150)
+      const isRevenue = !isCCAcct && catStr.startsWith('4');
       try {
         window.RoboLedger.Ledger.updateMetadata(tx.tx_id, {
           gst_enabled: true,
@@ -1079,6 +1085,57 @@
       console.log(`[GST] Initialized ${seeded} transactions with GST data (province: ${province}, rate: ${taxRate}%)`);
     }
     return seeded;
+  };
+
+  /**
+   * Re-categorize ALL existing transactions using the current rule engine + signal fusion.
+   * This re-runs the full categorization brain on every transaction in the ledger.
+   * Called after rule engine fixes to correct historically mis-categorized data.
+   *
+   * @param {Object} options
+   * @param {boolean} options.skipUserCategorized  - If true, skip txns that were manually set by user (default: false)
+   * @param {boolean} options.skipHighConfidence   - If true, skip txns with confidence >= 0.90 (default: false)
+   * @param {function} options.onProgress          - Optional progress callback(done, total)
+   */
+  window.recategorizeAll = function ({ skipUserCategorized = false, skipHighConfidence = false, onProgress } = {}) {
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    if (!allTxns.length) return { done: 0, total: 0 };
+
+    const ruleEngine = window.RuleEngine;
+    if (!ruleEngine) {
+      console.warn('[RECATEGORIZE] RuleEngine not available');
+      return { done: 0, total: 0 };
+    }
+
+    let done = 0, skipped = 0;
+    const total = allTxns.length;
+
+    allTxns.forEach((tx, i) => {
+      if (skipUserCategorized && tx.category_source === 'user') { skipped++; return; }
+      if (skipHighConfidence && (tx.confidence || 0) >= 0.90) { skipped++; return; }
+
+      const result = ruleEngine.applyRules(tx, null, true);
+      if (result?.coa_code) {
+        window.RoboLedger.Ledger.updateCategory(tx.tx_id, result.coa_code, {
+          confidence:  result.confidence,
+          needsReview: result.needsReview,
+          explanation: result.explanation,
+        });
+        done++;
+      }
+
+      if (onProgress && i % 100 === 0) onProgress(i, total);
+    });
+
+    // Re-run GST routing with force-reinit now that categories are corrected
+    window.initGSTOnTransactions(true);
+
+    console.log(`[RECATEGORIZE] Done: ${done}/${total} recategorized, ${skipped} skipped`);
+    if (window.showToast) window.showToast(`Recategorized ${done} transactions`, 'success');
+
+    // Refresh the grid
+    if (window.updateWorkspace) window.updateWorkspace();
+    return { done, skipped, total };
   };
 
   /**

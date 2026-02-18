@@ -209,18 +209,37 @@ class SignalFusionEngine {
         const isCredit   = tx.polarity === 'CREDIT';
         const normalized = VendorNormalizer.normalize(tx.description || '');
 
-        // Detect credit card account type from metadata
+        // ── CC account detection ──────────────────────────────────────────────
+        // Layer 1: inline metadata (brand, name regex)
         const meta = tx.metadata || {};
-        const isCCAcct = !!(meta.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(meta.name || ''));
+        const isCCByMeta = !!(meta.brand || meta.cardNetwork ||
+                              /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(meta.name || '') ||
+                              (meta.accountType || '').toLowerCase() === 'creditcard');
+        // Layer 2: account registry lookup via account_id (most reliable path)
+        const acctReg   = window.RoboLedger?.Accounts?.get(tx.account_id);
+        const isCCByReg = !!(acctReg?.brand || acctReg?.cardNetwork ||
+                              (acctReg?.accountType || '').toLowerCase() === 'creditcard' ||
+                              /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(acctReg?.name || ''));
+        const isCCAcct  = isCCByMeta || isCCByReg;
 
-        // Classify CC/bank credit sub-types — critical for correct contra-expense routing
+        // ── CC transaction sub-type classification ────────────────────────────
+        // CREDIT CARD POLARITY RULE (permanent):
+        //   On a CC account: CREDIT = charge (liability increases, money owed to card)
+        //                    DEBIT  = payment (liability decreases, money paid to card)
+        // This is OPPOSITE of a chequing/savings account.
         const rawDesc = (tx.raw_description || tx.description || '').toUpperCase();
-        const isCCRefund   = isCCAcct && isCredit && /\bREFUND\b/.test(rawDesc);
-        // Cash back / rewards / annual fee rebates → contra bank charges (7700)
-        const isCashBack   = isCCAcct && isCredit && /CASH\s*BACK|CASHBACK|REWARD/i.test(rawDesc);
-        // Bank fee rebates (any account): "rebate", "fee rebate", "service charge rebate" → 7700
+
+        const isCCRefund = isCCAcct && isCredit && /\bREFUND\b/.test(rawDesc);
+        const isCashBack = isCCAcct && isCredit && /CASH\s*BACK|CASHBACK|REWARD/i.test(rawDesc);
         const isBankRebate = isCredit && /\bREBATE\b/i.test(rawDesc);
-        const isCCPayment  = isCCAcct && isCredit && !isCCRefund && !isCashBack && !isBankRebate;
+
+        // CC PAYMENT = a DEBIT on a CC account (reduces liability) OR description match
+        // NOT a credit — credits on CC are CHARGES (expenses), not payments
+        const isCCPaymentDesc = /PAYMENT[- ]THANK\s*YOU|PAIEMENT[- ]MERCI|PAYMENT\s*RECEIVED|AUTOPAY|ONLINE\s*BANKING\s*PAYMENT/i.test(rawDesc);
+        const isCCPayment = isCCAcct && (
+            (!isCredit) ||                           // DEBIT on CC = payment
+            (isCredit && isCCPaymentDesc)            // CREDIT with payment description (rare: error reversal)
+        ) && !isCCRefund && !isCashBack && !isBankRebate;
 
         return {
             ...tx,
@@ -234,7 +253,7 @@ class SignalFusionEngine {
             _isCCRefund:   isCCRefund,    // Vendor refund → contra-expense (same COA as original purchase)
             _isCashBack:   isCashBack,    // Cash back / reward → 7700
             _isBankRebate: isBankRebate,  // Fee rebate (any acct) → 7700
-            _isCCPayment:  isCCPayment,   // Actual card payment → 9971
+            _isCCPayment:  isCCPayment,   // DEBIT on CC = payment to card → 9971
         };
     }
 
@@ -519,12 +538,18 @@ class SignalFusionEngine {
 
     _signalPolarity(tx) {
         if (tx._isCredit) {
+            // CC ACCOUNTS: credits = charges (expenses/liabilities), NEVER revenue.
+            // Return null so these fall through to needsReview rather than being force-coded to 4001.
+            if (tx._isCCAcct) {
+                return null;
+            }
+            // CHQ/SAV accounts: credit = deposit/income → suggest Sales Revenue as fallback
             return {
                 type:       'polarity',
                 coa:        '4001',
                 confidence: 0.50,
                 weight:     WEIGHTS.polarity,
-                note:       'Credit polarity → Sales Revenue (fallback)',
+                note:       'Credit polarity → Sales Revenue (fallback, bank/savings account)',
             };
         }
         return null;
@@ -897,16 +922,29 @@ class SignalFusionEngine {
         const account = window.RoboLedger?.COA?.get(coa);
         if (!account) return true;
 
+        // ── CC ACCOUNT RULES ──────────────────────────────────────────────────
+        // CC CHARGES = CREDIT polarity → EXPENSE accounts (this is correct and expected)
+        // CC PAYMENTS = DEBIT polarity → 9971 or liability accounts
+        // CC REFUNDS  = CREDIT polarity → contra-EXPENSE (same COA as original charge)
+        if (tx._isCCAcct) {
+            // CC credits going to EXPENSE → ALWAYS allowed (charges ARE expenses)
+            if (tx._isCredit && (account.root === 'EXPENSE' || account.class === 'COGS')) {
+                return true;
+            }
+            // CC credits going to REVENUE → NEVER allowed (CC charges are not revenue)
+            if (tx._isCredit && account.root === 'REVENUE') return false;
+            // CC debits going to REVENUE → NEVER allowed
+            if (tx._isDebit && account.root === 'REVENUE') return false;
+            return true;
+        }
+
+        // ── BANK / SAVINGS ACCOUNT RULES ─────────────────────────────────────
         // CC refunds are CREDIT polarity but legitimately hit EXPENSE accounts (contra-expense).
         // Allow CREDIT → EXPENSE only for refunds; block for everything else.
         if (tx._isCredit && (account.root === 'EXPENSE' || account.class === 'COGS')) {
             if (tx._isCCRefund) return true; // Contra-expense: Costco refund → 8600, CDN Tire refund → 5350, etc.
             return false;
         }
-
-        // Revenue codes on CC accounts: only allowed for actual CC payments (9971 handled separately).
-        // Refunds and cash back must NOT go to revenue accounts.
-        if (tx._isCredit && account.root === 'REVENUE' && tx._isCCAcct && !tx._isCCPayment) return false;
 
         if (tx._isDebit  && account.root === 'REVENUE') return false;
         if (tx._isDebit  && tx._amount > 30 && ['7700', '8700', '8800'].includes(coa)) return false;
