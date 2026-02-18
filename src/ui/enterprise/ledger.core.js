@@ -1733,10 +1733,12 @@ window.RoboLedger = (function () {
                 // For liability accounts (credit cards, lines of credit) and loan receivables,
                 // brain predictions must be validated against account type.
                 //
-                // CC CREDIT taxonomy:
-                //   PAYMENT   → 9971 (Credit card payment clearing)
-                //   REFUND    → contra-expense (same COA as the original purchase, NOT revenue)
-                //   CASH BACK → 9971 (treat same as payment / card credit)
+                // CC / Bank CREDIT taxonomy:
+                //   PAYMENT    → 9971 (Credit card payment clearing)
+                //   REFUND     → contra-expense (same COA as the original purchase, NOT revenue)
+                //   CASH BACK  → 7700 (contra bank charges — reduces card fee cost)
+                //   REWARD     → 7700 (contra bank charges)
+                //   REBATE     → 7700 (bank fee rebate / loyalty rebate → contra bank charges)
                 //
                 // We detect refunds via the raw_description / transaction_type_label from the parser.
                 // RBCMastercardParser appends "\nRefund" as the type; other parsers include "Refund" in text.
@@ -1747,22 +1749,29 @@ window.RoboLedger = (function () {
                 const isCashBack = isLiabilityAcct
                     && polarity === Polarity.CREDIT
                     && /CASH\s*BACK|CASHBACK|REWARD/i.test(upperDescForGuard);
+                // Rebates apply on any account type (e.g. chequing bank fee rebate, CC annual fee rebate)
+                const isBankRebate = polarity === Polarity.CREDIT
+                    && /\bREBATE\b/i.test(upperDescForGuard);
                 const isCCPayment = isLiabilityAcct
                     && polarity === Polarity.CREDIT
                     && !isCCRefund
-                    && !isCashBack;
+                    && !isCashBack
+                    && !isBankRebate;
 
                 if (predicted_code) {
                     const predictedRoot = COA.get(predicted_code)?.root;
 
-                    if (isLiabilityAcct) {
+                    if (isBankRebate) {
+                        // Rebate on any account → contra bank charges, regardless of brain prediction
+                        predicted_code = '7700';
+                    } else if (isLiabilityAcct) {
                         if (isCCPayment) {
                             // CREDIT on a credit card = payment received (chequing → card)
                             // This is a clearing entry, not revenue. Force 9971.
                             predicted_code = '9971'; // Credit card payment
                         } else if (isCashBack) {
-                            // Cash back / rewards credit — treat as card payment clearing, not revenue
-                            predicted_code = '9971';
+                            // Cash back / rewards → contra bank charges, not revenue
+                            predicted_code = '7700';
                         } else if (isCCRefund) {
                             // Vendor refund — brain may have predicted the vendor's expense code (correct!)
                             // Only block if it predicted a REVENUE account; expense codes are correct here.
@@ -1784,17 +1793,22 @@ window.RoboLedger = (function () {
                             predicted_code = null; // Loan drawdown is not revenue
                         }
                     }
-                } else if (isLiabilityAcct && polarity === Polarity.CREDIT) {
-                    if (isCCPayment) {
-                        // No brain prediction, but it's a card payment — force 9971
-                        const upperDesc2 = (raw_description || '').toUpperCase();
-                        if (/PAYMENT|THANK YOU|MERCI|PAIEMENT/i.test(upperDesc2)) {
-                            predicted_code = '9971';
+                } else if (polarity === Polarity.CREDIT) {
+                    // No brain prediction path
+                    if (isBankRebate) {
+                        predicted_code = '7700'; // Rebate always → contra bank charges
+                    } else if (isLiabilityAcct) {
+                        if (isCCPayment) {
+                            const upperDesc2 = (raw_description || '').toUpperCase();
+                            if (/PAYMENT|THANK YOU|MERCI|PAIEMENT/i.test(upperDesc2)) {
+                                predicted_code = '9971';
+                            }
+                        } else if (isCashBack) {
+                            predicted_code = '7700'; // Cash back → contra bank charges
                         }
-                    } else if (isCashBack) {
-                        predicted_code = '9971';
+                        // isCCRefund with no brain prediction → null → needs_review (user picks expense code)
+                        // SignalFusion _signalRefundMirror will handle it if a matching debit exists
                     }
-                    // isCCRefund with no brain prediction → leave null → needs_review (user picks expense code)
                 }
 
                 const category = predicted_code ? COA.get(predicted_code) : null;

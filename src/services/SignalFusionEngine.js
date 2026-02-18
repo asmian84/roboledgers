@@ -62,6 +62,7 @@ const REVIEW_THRESHOLD = 0.60;  // >= this → auto-categorize, yellow dot
 
 const WEIGHTS = {
     userRule:      1.00,
+    refundMirror:  0.98,   // CC refund: mirrors same-vendor debit COA on same account (highest after userRule)
     contextBrain:  0.97,   // Human-verified SWIFT workpapers: (payee, account_type) → COA
     exactVendor:   0.95,
     firmVendor:    0.92,   // Firm's learned vendor mappings (4,317 vendors)
@@ -149,6 +150,7 @@ class SignalFusionEngine {
         // Fire all signals simultaneously
         const fired = [
             this._signalUserRule(enriched, userRules, ruleEngine),
+            this._signalRefundMirror(enriched),     // CC refunds: mirror same vendor's debit COA; cash back → 7700
             this._signalContextBrain(enriched),     // Context brain: human SWIFT workpapers (account-type-aware)
             this._signalExactVendor(enriched),
             this._signalFirmVendor(enriched),       // Brain: 4,317 learned vendor mappings
@@ -169,17 +171,28 @@ class SignalFusionEngine {
         const result = this._fuse(safe, enriched);
 
         // === POST-FUSE CC CREDIT GUARD ===
-        // Final safety net: even after filtering, a revenue code must never be the outcome
-        // for a CC refund or cash-back. If it slipped through, force needs_review.
-        if (result.coa_code && enriched._isCCAcct && enriched._isCredit && !enriched._isCCPayment) {
+        // Final safety net: even after all signal filtering and polarity guards, a revenue code
+        // must never be the outcome for a CC refund, cash-back, or rebate.
+        // - Refund   → should be contra-expense (same COA as original debit); leave null for user if uncertain
+        // - CashBack → should be 7700 (contra bank charges)
+        // - Rebate   → should be 7700 (contra bank charges)
+        const isNonPaymentCredit = enriched._isCredit && (
+            (enriched._isCCAcct && !enriched._isCCPayment) || enriched._isBankRebate
+        );
+        if (result.coa_code && isNonPaymentCredit) {
             const winnerAcct = window.RoboLedger?.COA?.get(result.coa_code);
             if (winnerAcct?.root === 'REVENUE') {
+                // If it's cash back or rebate, hard-route to 7700 instead of null
+                const fallback = (enriched._isCashBack || enriched._isBankRebate) ? '7700' : null;
+                const label = enriched._isCCRefund ? 'refund' : enriched._isCashBack ? 'cash back' : 'rebate';
                 return {
                     ...result,
-                    coa_code:    null,
-                    confidence:  0,
-                    needsReview: true,
-                    explanation: `[CC Guard] Revenue code ${result.coa_code} blocked on CC ${enriched._isCCRefund ? 'refund' : 'credit'} — reassign to contra-expense`,
+                    coa_code:    fallback,
+                    confidence:  fallback ? 0.97 : 0,
+                    needsReview: !fallback,
+                    explanation: fallback
+                        ? `[CC Guard] ${label} → 7700 (contra bank charges)`
+                        : `[CC Guard] Revenue code ${result.coa_code} blocked on CC ${label} — reassign to contra-expense`,
                 };
             }
         }
@@ -200,24 +213,28 @@ class SignalFusionEngine {
         const meta = tx.metadata || {};
         const isCCAcct = !!(meta.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(meta.name || ''));
 
-        // Classify CC credit sub-types — critical for correct contra-expense routing
+        // Classify CC/bank credit sub-types — critical for correct contra-expense routing
         const rawDesc = (tx.raw_description || tx.description || '').toUpperCase();
-        const isCCRefund  = isCCAcct && isCredit && /\bREFUND\b/.test(rawDesc);
-        const isCashBack  = isCCAcct && isCredit && /CASH\s*BACK|CASHBACK|REWARD/i.test(rawDesc);
-        const isCCPayment = isCCAcct && isCredit && !isCCRefund && !isCashBack;
+        const isCCRefund   = isCCAcct && isCredit && /\bREFUND\b/.test(rawDesc);
+        // Cash back / rewards / annual fee rebates → contra bank charges (7700)
+        const isCashBack   = isCCAcct && isCredit && /CASH\s*BACK|CASHBACK|REWARD/i.test(rawDesc);
+        // Bank fee rebates (any account): "rebate", "fee rebate", "service charge rebate" → 7700
+        const isBankRebate = isCredit && /\bREBATE\b/i.test(rawDesc);
+        const isCCPayment  = isCCAcct && isCredit && !isCCRefund && !isCashBack && !isBankRebate;
 
         return {
             ...tx,
-            _amount:      amount,
-            _isCredit:    isCredit,
-            _isDebit:     !isCredit,
-            _normalized:  normalized,
-            _isRecurring: this._detectRecurring(tx, normalized, amount),
-            _isRound:     (tx.amount_cents || 0) % 100 === 0,
-            _isCCAcct:    isCCAcct,
-            _isCCRefund:  isCCRefund,   // Vendor refund → contra-expense (same COA as original purchase)
-            _isCashBack:  isCashBack,   // Cash back / reward → 9971
-            _isCCPayment: isCCPayment,  // Actual card payment → 9971
+            _amount:       amount,
+            _isCredit:     isCredit,
+            _isDebit:      !isCredit,
+            _normalized:   normalized,
+            _isRecurring:  this._detectRecurring(tx, normalized, amount),
+            _isRound:      (tx.amount_cents || 0) % 100 === 0,
+            _isCCAcct:     isCCAcct,
+            _isCCRefund:   isCCRefund,    // Vendor refund → contra-expense (same COA as original purchase)
+            _isCashBack:   isCashBack,    // Cash back / reward → 7700
+            _isBankRebate: isBankRebate,  // Fee rebate (any acct) → 7700
+            _isCCPayment:  isCCPayment,   // Actual card payment → 9971
         };
     }
 
@@ -247,6 +264,66 @@ class SignalFusionEngine {
             }
         }
         return null;
+    }
+
+    // ─── Signal: Refund Mirror ────────────────────────────────────────────────
+    // For CC refunds: find the same vendor's most recent DEBIT on the same account
+    // that has a confirmed (non-needs_review) expense category, and mirror it.
+    // This implements the accounting rule: refund → contra-expense of original purchase.
+    // Cash back / rewards → 7700 (bank charges contra), not a revenue account.
+
+    _signalRefundMirror(tx) {
+        // Cash back / rewards / rebates: always 7700 (contra bank fees / card charges)
+        // Bank fee rebate, cash back reward, annual fee rebate → all reduce the cost of banking
+        if (tx._isCashBack || tx._isBankRebate) {
+            return {
+                type:       'refundMirror',
+                coa:        '7700',
+                confidence: 0.97,
+                weight:     WEIGHTS.refundMirror,
+                note:       'Cash back/reward/rebate → 7700 (contra bank charges)',
+            };
+        }
+
+        if (!tx._isCCRefund) return null;
+
+        // Vendor refund: look up same vendor's debit transactions on same account
+        const allTx = this.allTransactions;
+        if (!allTx?.length) return null;
+
+        const vendorNorm = tx._normalized;
+        if (!vendorNorm) return null;
+
+        // Find categorized DEBIT transactions from same vendor on same account
+        // A "confirmed" category = anything that isn't needs_review with no code, or 9970/9971
+        const matchingDebits = allTx.filter(other => {
+            if (other.tx_id === tx.tx_id) return false;
+            if (other.account_id !== tx.account_id) return false;
+            if (other.polarity !== 'DEBIT') return false;
+            if (!other.category) return false;
+            if (['9970', '9971'].includes(other.category)) return false;
+            const otherNorm = VendorNormalizer.normalize(other.description || '');
+            return otherNorm === vendorNorm;
+        });
+
+        if (!matchingDebits.length) return null;
+
+        // Sort by date descending — most recent match wins
+        matchingDebits.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const bestMatch = matchingDebits[0];
+
+        // Verify the mirrored code is an expense account (sanity check)
+        const mirrorAcct = window.RoboLedger?.COA?.get(bestMatch.category);
+        if (!mirrorAcct) return null;
+        if (mirrorAcct.root === 'REVENUE' || mirrorAcct.root === 'LIABILITY') return null;
+
+        return {
+            type:       'refundMirror',
+            coa:        bestMatch.category,
+            confidence: 0.96,
+            weight:     WEIGHTS.refundMirror,
+            note:       `Refund mirror: ${vendorNorm} debit on ${bestMatch.date} used ${bestMatch.category} (${mirrorAcct.name})`,
+        };
     }
 
     // ─── Signal: Context Brain (human-verified SWIFT workpapers) ─────────────
