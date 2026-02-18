@@ -725,6 +725,7 @@
   };
 
   window.toggleSettings = (open) => toggleSettings(open);
+  window.renderSettingsDrawer = () => renderSettingsDrawer();
   window.handleFiles = (files) => handleFiles(files);
 
   window.openSourceFile = function (fileId) {
@@ -1518,11 +1519,8 @@
 
   window.setDensity = function (density) {
     UI_STATE.density = density;
-    // Pass density to React component via bridge
-    if (window.updateGridDensity) {
-      window.updateGridDensity(density);
-    }
-    // Don't call render() - density is handled by React bridge
+    // Full re-render so density rowHeight takes effect via GRID_TOKENS
+    window.applyGridSettings();
   };
 
   function init() {
@@ -1984,6 +1982,50 @@
     drawer.classList.toggle('open', open);
   }
 
+  // ── Settings Drawer helpers exposed on window for inline onclick ──────────
+  // Must be defined BEFORE renderSettingsDrawer so they are available in HTML
+  window._settingsThemes = [
+    { val:'default',      label:'Default',    dot:'#e5e7eb' },
+    { val:'vanilla',      label:'Vanilla',    dot:'#fef9c3' },
+    { val:'classic',      label:'Classic',    dot:'#d0d0d0' },
+    { val:'ledger-pad',   label:'Ledger Pad', dot:'#ede9fe' },
+    { val:'post-it-note', label:'Post-it',    dot:'#fef08a' },
+    { val:'rainbow',      label:'Rainbow',    dot:'linear-gradient(90deg,#fee2e2,#fef3c7,#d9f99d,#bfdbfe,#ddd6fe)' },
+    { val:'social',       label:'Social',     dot:'#eff6ff' },
+    { val:'spectrum',     label:'Spectrum',   dot:'#f3e8ff' },
+    { val:'subliminal',   label:'Subliminal', dot:'#f5f5f4' },
+    { val:'subtle',       label:'Subtle',     dot:'#f1f5f9' },
+    { val:'tracker',      label:'Tracker',    dot:'#dcfce7' },
+    { val:'vintage',      label:'Vintage',    dot:'#fde8cc' },
+    { val:'wave',         label:'Wave',       dot:'#cffafe' },
+    { val:'webapp',       label:'WebApp',     dot:'#f5f5f5' },
+  ];
+  window._settingsProvinces = [
+    { val:'AB',label:'Alberta',             tax:'5% GST'              },
+    { val:'BC',label:'British Columbia',    tax:'5% GST + 7% PST'     },
+    { val:'MB',label:'Manitoba',            tax:'5% GST + 7% PST'     },
+    { val:'NB',label:'New Brunswick',       tax:'15% HST'             },
+    { val:'NL',label:'Newfoundland',        tax:'15% HST'             },
+    { val:'NT',label:'NW Territories',      tax:'5% GST'              },
+    { val:'NS',label:'Nova Scotia',         tax:'15% HST'             },
+    { val:'NU',label:'Nunavut',             tax:'5% GST'              },
+    { val:'ON',label:'Ontario',             tax:'13% HST'             },
+    { val:'PE',label:'Prince Edward Is.',   tax:'15% HST'             },
+    { val:'QC',label:'Quebec',              tax:'5% GST + 9.975% QST' },
+    { val:'SK',label:'Saskatchewan',        tax:'5% GST + 6% PST'     },
+    { val:'YT',label:'Yukon',               tax:'5% GST'              },
+  ];
+  window._settingsSetThemeDot = function(val) {
+    const t = window._settingsThemes.find(x => x.val === val);
+    const dot = document.getElementById('settings-theme-dot');
+    if (t && dot) dot.style.background = t.dot;
+  };
+  window._settingsSetProvinceTax = function(val) {
+    const p = window._settingsProvinces.find(x => x.val === val);
+    const el = document.getElementById('settings-province-tax');
+    if (el) el.textContent = p ? p.tax : '';
+  };
+
   function renderSettingsDrawer() {
     if (window.__settingsTab) { UI_STATE.settingsTab = window.__settingsTab; window.__settingsTab = null; }
 
@@ -1991,10 +2033,10 @@
     if (!drawer) return;
 
     const tabs = [
-      { id: 'appearance', icon: 'ph-paint-brush', label: 'Appearance' },
-      { id: 'columns',    icon: 'ph-columns',     label: 'Columns'    },
-      { id: 'tax',        icon: 'ph-percent',      label: 'Tax'        },
-      { id: 'data',       icon: 'ph-database',     label: 'Data'       },
+      { id:'appearance', icon:'ph-paint-brush', label:'Appearance' },
+      { id:'columns',    icon:'ph-columns',      label:'Columns'    },
+      { id:'tax',        icon:'ph-percent',       label:'Tax'        },
+      { id:'data',       icon:'ph-database',      label:'Data'       },
     ];
     if (!tabs.find(t => t.id === UI_STATE.settingsTab)) UI_STATE.settingsTab = 'appearance';
 
@@ -2004,15 +2046,15 @@
           <i class="ph ph-gear-six" style="font-size:17px;color:#94a3b8;"></i>
           <span style="font-size:13px;font-weight:700;color:#fff;letter-spacing:-0.01em;">Preferences</span>
         </div>
-        <button onclick="window.toggleSettings(false)" style="background:rgba(255,255,255,0.1);border:none;color:#94a3b8;cursor:pointer;padding:5px 7px;border-radius:6px;display:flex;align-items:center;line-height:1;" title="Close">
+        <button onclick="window.toggleSettings(false)" style="background:rgba(255,255,255,0.1);border:none;color:#94a3b8;cursor:pointer;padding:5px 7px;border-radius:6px;display:flex;align-items:center;line-height:1;">
           <i class="ph ph-x" style="font-size:15px;"></i>
         </button>
       </div>
 
       <div style="display:flex;border-bottom:1px solid #e2e8f0;background:#f8fafc;flex-shrink:0;">
         ${tabs.map(t => `
-          <button onclick="window.__settingsTab='${t.id}'; renderSettingsDrawer();"
-            style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid ${UI_STATE.settingsTab===t.id?'#3b82f6':'transparent'};background:transparent;color:${UI_STATE.settingsTab===t.id?'#3b82f6':'#64748b'};font-size:9.5px;font-weight:700;letter-spacing:0.05em;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all 0.15s;">
+          <button onclick="window.__settingsTab='${t.id}'; window.renderSettingsDrawer();"
+            style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid ${UI_STATE.settingsTab===t.id?'#3b82f6':'transparent'};background:transparent;color:${UI_STATE.settingsTab===t.id?'#3b82f6':'#64748b'};font-size:9.5px;font-weight:700;letter-spacing:0.05em;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;">
             <i class="ph ${t.icon}" style="font-size:15px;"></i>
             ${t.label.toUpperCase()}
           </button>
@@ -2024,8 +2066,8 @@
       </div>
 
       <div style="padding:12px 16px;border-top:1px solid #e2e8f0;display:flex;gap:8px;background:#f8fafc;flex-shrink:0;">
-        <button onclick="window.resetSettings()" style="flex:1;padding:8px;border:1px solid #e2e8f0;background:white;color:#64748b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">Reset</button>
-        <button onclick="window.saveSettings()" style="flex:2;padding:8px;border:none;background:#1e293b;color:white;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">Save & Apply</button>
+        <button onclick="window.resetSettings()" style="flex:1;padding:8px;border:1px solid #e2e8f0;background:white;color:#64748b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">Reset</button>
+        <button onclick="window.saveSettings()" style="flex:2;padding:8px;border:none;background:#1e293b;color:white;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Save &amp; Apply</button>
       </div>
     `;
   }
@@ -2034,33 +2076,19 @@
 
     // ── APPEARANCE ──────────────────────────────────────────────────────────
     if (UI_STATE.settingsTab === 'appearance') {
-      const themes = [
-        { val:'default',      label:'Default',    dot:'#e5e7eb' },
-        { val:'vanilla',      label:'Vanilla',    dot:'#fef9c3' },
-        { val:'classic',      label:'Classic',    dot:'#d0d0d0' },
-        { val:'ledger-pad',   label:'Ledger Pad', dot:'#ede9fe' },
-        { val:'post-it-note', label:'Post-it',    dot:'#fef08a' },
-        { val:'rainbow',      label:'Rainbow',    dot:'linear-gradient(90deg,#fee2e2,#fef3c7,#d9f99d,#bfdbfe,#ddd6fe)' },
-        { val:'social',       label:'Social',     dot:'#eff6ff' },
-        { val:'spectrum',     label:'Spectrum',   dot:'#f3e8ff' },
-        { val:'subliminal',   label:'Subliminal', dot:'#f5f5f4' },
-        { val:'subtle',       label:'Subtle',     dot:'#f1f5f9' },
-        { val:'tracker',      label:'Tracker',    dot:'#dcfce7' },
-        { val:'vintage',      label:'Vintage',    dot:'#fde8cc' },
-        { val:'wave',         label:'Wave',       dot:'#cffafe' },
-        { val:'webapp',       label:'WebApp',     dot:'#f5f5f5' },
-      ];
-      const activeThemeObj = themes.find(t => t.val === (UI_STATE.gridTheme || 'default')) || themes[0];
+      const themes   = window._settingsThemes;
+      const activeT  = themes.find(t => t.val === (UI_STATE.gridTheme || 'default')) || themes[0];
+      const density  = UI_STATE.density || 'comfortable';
+      const fontSize = UI_STATE.gridFontSize || 13.5;
 
       return `
         <div style="margin-bottom:22px;">
           <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">Grid Theme</div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <span id="settings-theme-dot" style="width:18px;height:18px;border-radius:4px;flex-shrink:0;background:${activeThemeObj.dot};border:1px solid rgba(0,0,0,0.12);display:inline-block;"></span>
+            <span id="settings-theme-dot" style="width:18px;height:18px;border-radius:4px;flex-shrink:0;background:${activeT.dot};border:1px solid rgba(0,0,0,0.12);display:inline-block;"></span>
             <select id="settings-grid-theme"
-              onchange="window.previewGridTheme(this.value); const t=${JSON.stringify(themes)}.find(x=>x.val===this.value); if(t){ document.getElementById('settings-theme-dot').style.background=t.dot; }"
-              style="flex:1;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;font-weight:500;color:#1e293b;cursor:pointer;appearance:auto;outline:none;"
-              onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+              onchange="window.previewGridTheme(this.value); window._settingsSetThemeDot(this.value);"
+              style="flex:1;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;font-weight:500;color:#1e293b;cursor:pointer;appearance:auto;outline:none;">
               ${themes.map(t => `<option value="${t.val}" ${(UI_STATE.gridTheme||'default')===t.val?'selected':''}>${t.label}</option>`).join('')}
             </select>
           </div>
@@ -2071,7 +2099,7 @@
           <div id="density-group" style="display:flex;gap:6px;">
             ${['compact','comfortable','spacious'].map(d => `
               <button onclick="window.setDensity('${d}'); document.querySelectorAll('#density-group button').forEach(b=>{ b.style.borderColor='#e2e8f0'; b.style.background='white'; b.style.color='#64748b'; b.style.fontWeight='500'; }); this.style.borderColor='#3b82f6'; this.style.background='#eff6ff'; this.style.color='#1e40af'; this.style.fontWeight='700';"
-                style="flex:1;padding:8px 6px;border:2px solid ${(UI_STATE.density||'comfortable')===d?'#3b82f6':'#e2e8f0'};border-radius:8px;background:${(UI_STATE.density||'comfortable')===d?'#eff6ff':'white'};cursor:pointer;font-size:11px;font-weight:${(UI_STATE.density||'comfortable')===d?'700':'500'};color:${(UI_STATE.density||'comfortable')===d?'#1e40af':'#64748b'};transition:all 0.1s;text-transform:capitalize;"
+                style="flex:1;padding:8px 6px;border:2px solid ${density===d?'#3b82f6':'#e2e8f0'};border-radius:8px;background:${density===d?'#eff6ff':'white'};cursor:pointer;font-size:11px;font-weight:${density===d?'700':'500'};color:${density===d?'#1e40af':'#64748b'};text-transform:capitalize;"
               >${d}</button>
             `).join('')}
           </div>
@@ -2080,9 +2108,9 @@
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;text-transform:uppercase;">Font Size</div>
-            <span id="grid-fontsize-display" style="font-size:11px;font-weight:700;color:#3b82f6;background:#eff6ff;padding:2px 8px;border-radius:10px;">${UI_STATE.gridFontSize||13.5}px</span>
+            <span id="grid-fontsize-display" style="font-size:11px;font-weight:700;color:#3b82f6;background:#eff6ff;padding:2px 8px;border-radius:10px;">${fontSize}px</span>
           </div>
-          <input type="range" id="settings-grid-fontsize" min="9" max="16" step="0.5" value="${UI_STATE.gridFontSize||13.5}"
+          <input type="range" id="settings-grid-fontsize" min="9" max="16" step="0.5" value="${fontSize}"
             style="width:100%;accent-color:#3b82f6;"
             oninput="window.previewGridFontSize(this.value)">
           <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:2px;"><span>9px</span><span>16px</span></div>
@@ -2107,7 +2135,7 @@
       return `
         <div style="font-size:11px;color:#94a3b8;margin-bottom:14px;line-height:1.5;">Toggle columns visible in the transaction grid.</div>
         ${columns.map(col => `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;margin-bottom:6px;background:${col.visible?'#f0f9ff':'#f8fafc'};border:1px solid ${col.visible?'#bae6fd':'#e2e8f0'};border-radius:8px;transition:all 0.15s;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;margin-bottom:6px;background:${col.visible?'#f0f9ff':'#f8fafc'};border:1px solid ${col.visible?'#bae6fd':'#e2e8f0'};border-radius:8px;">
             <div style="display:flex;align-items:center;gap:9px;">
               <i class="ph ${col.icon}" style="font-size:15px;color:${col.visible?'#0284c7':'#94a3b8'};"></i>
               <span style="font-size:12px;font-weight:${col.visible?'600':'400'};color:${col.visible?'#0c4a6e':'#64748b'};">${col.label}</span>
@@ -2123,30 +2151,15 @@
 
     // ── TAX ─────────────────────────────────────────────────────────────────
     if (UI_STATE.settingsTab === 'tax') {
-      const provinces = [
-        { val:'AB',label:'Alberta',             tax:'5% GST'              },
-        { val:'BC',label:'British Columbia',    tax:'5% GST + 7% PST'     },
-        { val:'MB',label:'Manitoba',            tax:'5% GST + 7% PST'     },
-        { val:'NB',label:'New Brunswick',       tax:'15% HST'             },
-        { val:'NL',label:'Newfoundland',        tax:'15% HST'             },
-        { val:'NT',label:'NW Territories',      tax:'5% GST'              },
-        { val:'NS',label:'Nova Scotia',         tax:'15% HST'             },
-        { val:'NU',label:'Nunavut',             tax:'5% GST'              },
-        { val:'ON',label:'Ontario',             tax:'13% HST'             },
-        { val:'PE',label:'Prince Edward Is.',   tax:'15% HST'             },
-        { val:'QC',label:'Quebec',              tax:'5% GST + 9.975% QST' },
-        { val:'SK',label:'Saskatchewan',        tax:'5% GST + 6% PST'     },
-        { val:'YT',label:'Yukon',               tax:'5% GST'              },
-      ];
+      const provinces    = window._settingsProvinces;
       const activeProvObj = provinces.find(p => p.val === (UI_STATE.province||'AB')) || provinces[0];
 
       return `
         <div style="margin-bottom:20px;">
           <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">Province / Territory</div>
           <select id="settings-province"
-            onchange="document.getElementById('settings-province-tax').textContent = ${JSON.stringify(provinces)}.find(p=>p.val===this.value)?.tax || '';"
-            style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;font-weight:500;color:#1e293b;cursor:pointer;appearance:auto;outline:none;margin-bottom:6px;"
-            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+            onchange="window._settingsSetProvinceTax(this.value);"
+            style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;font-weight:500;color:#1e293b;cursor:pointer;appearance:auto;outline:none;margin-bottom:6px;">
             ${provinces.map(p => `<option value="${p.val}" ${(UI_STATE.province||'AB')===p.val?'selected':''}>${p.label}</option>`).join('')}
           </select>
           <div id="settings-province-tax" style="font-size:11px;color:#64748b;padding:3px 2px;">${activeProvObj.tax}</div>
@@ -2190,10 +2203,10 @@
         <div style="margin-bottom:20px;">
           <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">Export</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <button onclick="window.exportData('csv')" style="padding:10px;border:1px solid #e2e8f0;background:white;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:#374151;transition:background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+            <button onclick="window.exportData('csv')" style="padding:10px;border:1px solid #e2e8f0;background:white;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:#374151;">
               <i class="ph ph-file-csv" style="font-size:16px;color:#10b981;"></i> CSV
             </button>
-            <button onclick="window.exportData('json')" style="padding:10px;border:1px solid #e2e8f0;background:white;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:#374151;transition:background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+            <button onclick="window.exportData('json')" style="padding:10px;border:1px solid #e2e8f0;background:white;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:#374151;">
               <i class="ph ph-file-code" style="font-size:16px;color:#3b82f6;"></i> JSON
             </button>
           </div>
@@ -2208,7 +2221,7 @@
           </div>
         </div>
 
-        <button onclick="window.devReset()" style="width:100%;padding:10px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background 0.15s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='#fef2f2'">
+        <button onclick="window.devReset()" style="width:100%;padding:10px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
           <i class="ph ph-trash"></i> Clear All Data
         </button>
         <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:6px;">Permanently deletes all transactions and accounts</div>
