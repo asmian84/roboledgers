@@ -1596,7 +1596,7 @@ export function TransactionsTable({
                         refPrefix={window.UI_STATE?.refPrefix || 'CHQ1'}
                         searchQuery={window.UI_STATE?.searchQuery || ''}
                         selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
-                        accounts={window.RoboLedger?.Accounts?.getAll() || []}
+                        accounts={window.RoboLedger?.Accounts?.getActive?.() || window.RoboLedger?.Accounts?.getAll() || []}
                         onRefPrefixChange={(value) => window.updateRefPrefix?.(value)}
                         onSearchChange={(value) => window.handleSearch?.(value)}
                         onAccountChange={(value) => window.switchAccount?.(value)}
@@ -1852,7 +1852,7 @@ export function TransactionsTable({
                     <UtilityBar
                         transactions={data}
                         activeFilter={activeFilterLabel}
-                        accounts={window.RoboLedger?.Accounts?.getAll() || []}
+                        accounts={window.RoboLedger?.Accounts?.getActive?.() || window.RoboLedger?.Accounts?.getAll() || []}
                         selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
                         onAccountChange={(value) => window.switchAccount?.(value)}
                         onClearFilter={() => {

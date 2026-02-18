@@ -129,18 +129,24 @@
   };
 
   /**
-   * Get all accounts that have at least 1 transaction
+   * Get all accounts that have at least 1 transaction.
+   * Delegates to Accounts.getActive() which also prunes GENERIC PARSER ghosts.
    * @returns {Array} Accounts with transaction data
    */
   function getAccountsWithTransactions() {
-    const accounts = window.RoboLedger?.Accounts?.getAll() || [];
-    const allTxns = window.RoboLedger?.Ledger?.transactions || [];
-
-    return accounts.filter(acc => {
-      const txns = allTxns.filter(t => t.account_id === acc.id);
-      return txns.length > 0;
-    });
+    return window.RoboLedger?.Accounts?.getActive?.()
+        || window.RoboLedger?.Accounts?.getAll()?.filter(acc => {
+            const allTxns = window.RoboLedger?.Ledger?.transactions || [];
+            return allTxns.some(t => t.account_id === acc.id);
+        })
+        || [];
   }
+
+  // Prune ghost accounts from localStorage on every page load
+  // (catches ghosts persisted before this fix was deployed)
+  try {
+    window.RoboLedger?.Accounts?.pruneGhosts?.();
+  } catch (_) { /* silent — runs before full init */ }
 
 
   // IMMEDIATE GLOBAL EXPOSURE (Fix ReferenceError)
@@ -490,6 +496,9 @@
 
         // Reset ingesting state so render() excludes progress bar HTML
         UI_STATE.isIngesting = false;
+
+        // Prune any ghost accounts created by this import (metadata stubs with 0 transactions)
+        window.RoboLedger?.Accounts?.pruneGhosts?.();
 
         // Retroactively fix any CC refunds/cashback mis-categorized as revenue
         window.fixCCRefunds?.();

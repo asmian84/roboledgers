@@ -1015,6 +1015,47 @@ window.RoboLedger = (function () {
         getAll: function () {
             return state.accounts;
         },
+        /**
+         * getActive — accounts that have ≥1 transaction AND are not GENERIC
+         * PARSER ghosts. Use this everywhere the UI renders an account list.
+         * "Ghost" accounts are created by updateMetadata() during a failed
+         * or duplicate import — they have an id/name but zero transactions.
+         */
+        getActive: function () {
+            const txnCounts = {};
+            (state.transactions || []).forEach(tx => {
+                if (tx.account_id) txnCounts[tx.account_id] = (txnCounts[tx.account_id] || 0) + 1;
+            });
+            return state.accounts.filter(acc => {
+                // Must have at least 1 transaction
+                if (!txnCounts[acc.id]) return false;
+                // Must not be a pure GENERIC PARSER ghost
+                if (acc.name === 'GENERIC PARSER' && acc.transit === 'UNKNOWN') return false;
+                return true;
+            });
+        },
+        /**
+         * pruneGhosts — remove account records with zero transactions.
+         * Called automatically after every import. Safe to call from console.
+         */
+        pruneGhosts: function () {
+            const txnCounts = {};
+            (state.transactions || []).forEach(tx => {
+                if (tx.account_id) txnCounts[tx.account_id] = (txnCounts[tx.account_id] || 0) + 1;
+            });
+            const before = state.accounts.length;
+            state.accounts = state.accounts.filter(acc => {
+                const hasTransactions = !!txnCounts[acc.id];
+                if (!hasTransactions) {
+                    console.log(`[ACCOUNTS] 🗑 Pruned ghost account: ${acc.id} — ${acc.name}`);
+                }
+                return hasTransactions;
+            });
+            const pruned = before - state.accounts.length;
+            if (pruned > 0) save();
+            console.log(`[ACCOUNTS] pruneGhosts: removed ${pruned} ghost(s), ${state.accounts.length} remain`);
+            return pruned;
+        },
         get: function (id) {
             return state.accounts.find(a => a.id === id);
         },
@@ -2177,6 +2218,8 @@ window.RoboLedger = (function () {
                 }
             }
 
+            // Prune any ghost accounts left behind by this import (zero-transaction metadata stubs)
+            Accounts.pruneGhosts();
 
             return importedCount;
         }
