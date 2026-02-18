@@ -1073,6 +1073,11 @@ export function TransactionsTable({
     const [rowSelection, setRowSelection] = useState({});
     const [density] = useState('comfortable'); // Fixed at comfortable for now
 
+    // BULK ACTION BAR STATE
+    const [bulkCOAOpen, setBulkCOAOpen]       = useState(false);  // COA picker open
+    const [bulkRenameOpen, setBulkRenameOpen] = useState(false);  // Rename input open
+    const [bulkRenameValue, setBulkRenameValue] = useState('');
+
     // INLINE FILTERS: State for column-specific filters
     const [columnFilters, setColumnFilters] = useState([]);
     const [showFilters, setShowFilters] = useState(false);
@@ -1167,57 +1172,71 @@ export function TransactionsTable({
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Auto-categorize selected transactions using RuleEngine
+     * BULK CATEGORIZE: Apply a COA code to all selected transactions
+     * Called when user picks an account from the inline COA picker in the bulk bar
      */
-    const handleBulkCategorize = () => {
+    const handleBulkSetCOA = (code) => {
+        if (!code) return;
         const selectedTxIds = Object.keys(rowSelection);
         if (selectedTxIds.length === 0) return;
 
-        // Get selected transactions
-        const selectedTxs = selectedTxIds
-            .map(id => window.RoboLedger?.Ledger?.transactions[id])
-            .filter(Boolean);
-
-        if (selectedTxs.length === 0) {
-            alert('No valid transactions selected');
-            return;
-        }
-
-        // Use RuleEngine to bulk categorize
-        const results = window.RoboLedger?.RuleEngine?.bulkCategorize(selectedTxs);
-
-        if (results) {
-            // Show results
-            const message = `✅ Categorized ${results.categorized}/${selectedTxs.length} transactions`;
-            console.log('[BULK_CATEGORIZE]', message, results);
-
-            // Show toast if available
-            if (window.showToast) {
-                window.showToast(message, 'success');
-            } else {
-                alert(message);
+        let updated = 0;
+        selectedTxIds.forEach(txId => {
+            try {
+                window.RoboLedger?.Ledger?.updateCategory?.(txId, code);
+                updated++;
+            } catch (e) {
+                console.warn('[BULK_COA] Failed for', txId, e);
             }
+        });
 
-            // Clear selection
-            setRowSelection({});
+        console.log(`[BULK_COA] Set ${code} on ${updated}/${selectedTxIds.length} transactions`);
+        if (window.showToast) window.showToast(`Categorized ${updated} transaction${updated !== 1 ? 's' : ''} → ${code}`, 'success');
 
-            // Force re-render
-            setData([...data]);
-        } else {
-            alert('Bulk categorization failed - RuleEngine not available');
-        }
+        // Close picker, clear selection, refresh
+        setBulkCOAOpen(false);
+        setRowSelection({});
+        if (window.updateWorkspace) window.updateWorkspace();
+        else setData([...data]);
     };
 
     /**
-     * Delete selected transactions
+     * BULK RENAME: Rename all selected transactions — each change is audit-trailed
+     */
+    const handleBulkRename = () => {
+        const newName = bulkRenameValue.trim();
+        if (!newName) return;
+        const selectedTxIds = Object.keys(rowSelection);
+        if (selectedTxIds.length === 0) return;
+
+        let renamed = 0;
+        selectedTxIds.forEach(txId => {
+            try {
+                // updateDescription writes to edit_history[] for audit trail
+                const ok = window.RoboLedger?.Ledger?.updateDescription?.(txId, newName);
+                if (ok !== false) renamed++;
+            } catch (e) {
+                console.warn('[BULK_RENAME] Failed for', txId, e);
+            }
+        });
+
+        console.log(`[BULK_RENAME] Renamed ${renamed}/${selectedTxIds.length} to "${newName}"`);
+        if (window.showToast) window.showToast(`Renamed ${renamed} transaction${renamed !== 1 ? 's' : ''}`, 'success');
+
+        // Close rename, clear, refresh
+        setBulkRenameOpen(false);
+        setBulkRenameValue('');
+        setRowSelection({});
+        if (window.updateWorkspace) window.updateWorkspace();
+        else setData([...data]);
+    };
+
+    /**
+     * BULK DELETE: Remove selected transactions from ledger
      */
     const handleBulkDelete = () => {
         const selectedTxIds = Object.keys(rowSelection);
         if (selectedTxIds.length === 0) return;
-
-        if (!confirm(`Delete ${selectedTxIds.length} selected transactions? This cannot be undone.`)) {
-            return;
-        }
 
         // Delete each transaction
         let deleted = 0;
@@ -1228,13 +1247,14 @@ export function TransactionsTable({
         });
 
         console.log(`[BULK_DELETE] Deleted ${deleted}/${selectedTxIds.length} transactions`);
+        if (window.showToast) window.showToast(`Deleted ${deleted} transaction${deleted !== 1 ? 's' : ''}`, 'success');
 
         // Clear selection
         setRowSelection({});
 
         // Force re-render by updating data
         if (window.RoboLedger?.Ledger) {
-            setData(window.RoboLedger.Ledger.getAllTransactions());
+            setData(window.RoboLedger.Ledger.getAllTransactions?.() || []);
         }
     };
 
@@ -1361,28 +1381,205 @@ export function TransactionsTable({
                     maxWidth: activePanel ? 'calc(100vw - 370px)' : '100%'  // Prevent bleeding into panel
                 }}
             >
-                {/* Batch Action Bar */}
+                {/* ── Bulk Action Bar ─────────────────────────────────────────── */}
                 {Object.keys(rowSelection).length > 0 && (
-                    <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
-                        <span className="text-sm font-bold text-blue-900">{Object.keys(rowSelection).length} selected</span>
-                        <div className="ml-auto flex items-center gap-2">
+                    <div
+                        style={{
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 40,
+                            background: '#1e40af',
+                            borderBottom: '1px solid #1d4ed8',
+                            display: 'flex',
+                            flexDirection: 'column',
+                        }}
+                    >
+                        {/* Main row */}
+                        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 20px', gap: 10 }}>
+                            {/* Count badge */}
+                            <span style={{
+                                background: 'rgba(255,255,255,0.15)',
+                                color: '#fff',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                padding: '3px 10px',
+                                borderRadius: 20,
+                                flexShrink: 0,
+                                letterSpacing: '0.03em',
+                            }}>
+                                {Object.keys(rowSelection).length} selected
+                            </span>
+
+                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {/* ── Categorize ── */}
+                                <button
+                                    onClick={() => { setBulkCOAOpen(o => !o); setBulkRenameOpen(false); }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 6,
+                                        padding: '5px 12px',
+                                        background: bulkCOAOpen ? '#fff' : 'rgba(255,255,255,0.12)',
+                                        color: bulkCOAOpen ? '#1e40af' : '#fff',
+                                        border: '1px solid rgba(255,255,255,0.3)',
+                                        borderRadius: 6,
+                                        fontSize: 12, fontWeight: 600,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.12s',
+                                    }}
+                                >
+                                    <i className="ph ph-tag" style={{ fontSize: 13 }}></i>
+                                    Categorize
+                                    <i className={`ph ph-caret-${bulkCOAOpen ? 'up' : 'down'}`} style={{ fontSize: 10, opacity: 0.7 }}></i>
+                                </button>
+
+                                {/* ── Rename ── */}
+                                <button
+                                    onClick={() => { setBulkRenameOpen(o => !o); setBulkCOAOpen(false); }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 6,
+                                        padding: '5px 12px',
+                                        background: bulkRenameOpen ? '#fff' : 'rgba(255,255,255,0.12)',
+                                        color: bulkRenameOpen ? '#1e40af' : '#fff',
+                                        border: '1px solid rgba(255,255,255,0.3)',
+                                        borderRadius: 6,
+                                        fontSize: 12, fontWeight: 600,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.12s',
+                                    }}
+                                >
+                                    <i className="ph ph-pencil-simple" style={{ fontSize: 13 }}></i>
+                                    Rename
+                                    <i className={`ph ph-caret-${bulkRenameOpen ? 'up' : 'down'}`} style={{ fontSize: 10, opacity: 0.7 }}></i>
+                                </button>
+
+                                {/* ── Delete ── */}
+                                <button
+                                    onClick={handleBulkDelete}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 6,
+                                        padding: '5px 12px',
+                                        background: 'rgba(239,68,68,0.2)',
+                                        color: '#fca5a5',
+                                        border: '1px solid rgba(239,68,68,0.35)',
+                                        borderRadius: 6,
+                                        fontSize: 12, fontWeight: 600,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.12s',
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = '#fca5a5'; }}
+                                >
+                                    <i className="ph ph-trash" style={{ fontSize: 13 }}></i>
+                                    Delete
+                                </button>
+                            </div>
+
+                            {/* Dismiss */}
                             <button
-                                onClick={handleBulkCategorize}
-                                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                                onClick={() => { setRowSelection({}); setBulkCOAOpen(false); setBulkRenameOpen(false); setBulkRenameValue(''); }}
+                                style={{
+                                    padding: '4px 8px',
+                                    background: 'transparent',
+                                    color: 'rgba(255,255,255,0.6)',
+                                    border: 'none',
+                                    borderRadius: 4,
+                                    cursor: 'pointer',
+                                    fontSize: 13,
+                                    lineHeight: 1,
+                                }}
+                                title="Clear selection"
                             >
-                                Categorize
-                            </button>
-                            <button className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">Match</button>
-                            <button
-                                onClick={handleBulkDelete}
-                                className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-white border border-red-300 rounded hover:bg-red-50"
-                            >
-                                Delete
-                            </button>
-                            <button onClick={() => setRowSelection({})} className="ml-2 p-1.5 text-gray-500 hover:text-gray-700">
-                                <i className="ph ph-x text-sm"></i>
+                                <i className="ph ph-x"></i>
                             </button>
                         </div>
+
+                        {/* ── COA Picker sub-panel ───────────────────────────────── */}
+                        {bulkCOAOpen && (
+                            <div style={{
+                                padding: '0 20px 12px 20px',
+                                background: '#eff6ff',
+                                borderTop: '1px solid #bfdbfe',
+                            }}>
+                                <div style={{ fontSize: 11, color: '#3b82f6', fontWeight: 700, marginBottom: 6, marginTop: 10, letterSpacing: '0.05em' }}>
+                                    SELECT ACCOUNT TO APPLY TO {Object.keys(rowSelection).length} TRANSACTION{Object.keys(rowSelection).length !== 1 ? 'S' : ''}
+                                </div>
+                                {/* Reuse COADropdown: value='' so nothing is pre-selected; onChange applies to all */}
+                                <div style={{ maxWidth: 420 }}>
+                                    <COADropdown
+                                        value=""
+                                        onChange={(code) => handleBulkSetCOA(code)}
+                                        txId="bulk"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── Rename sub-panel ──────────────────────────────────── */}
+                        {bulkRenameOpen && (
+                            <div style={{
+                                padding: '0 20px 12px 20px',
+                                background: '#eff6ff',
+                                borderTop: '1px solid #bfdbfe',
+                            }}>
+                                <div style={{ fontSize: 11, color: '#3b82f6', fontWeight: 700, marginBottom: 6, marginTop: 10, letterSpacing: '0.05em' }}>
+                                    RENAME {Object.keys(rowSelection).length} TRANSACTION{Object.keys(rowSelection).length !== 1 ? 'S' : ''} — CHANGE WILL BE AUDIT TRAILED
+                                </div>
+                                <div style={{ display: 'flex', gap: 8, maxWidth: 520 }}>
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={bulkRenameValue}
+                                        onChange={e => setBulkRenameValue(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleBulkRename();
+                                            if (e.key === 'Escape') { setBulkRenameOpen(false); setBulkRenameValue(''); }
+                                        }}
+                                        placeholder="New description / payee name..."
+                                        style={{
+                                            flex: 1,
+                                            padding: '7px 12px',
+                                            border: '1.5px solid #93c5fd',
+                                            borderRadius: 7,
+                                            fontSize: 13,
+                                            outline: 'none',
+                                            background: '#fff',
+                                            color: '#1e293b',
+                                        }}
+                                    />
+                                    <button
+                                        onClick={handleBulkRename}
+                                        disabled={!bulkRenameValue.trim()}
+                                        style={{
+                                            padding: '7px 16px',
+                                            background: bulkRenameValue.trim() ? '#2563eb' : '#93c5fd',
+                                            color: '#fff',
+                                            border: 'none',
+                                            borderRadius: 7,
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: bulkRenameValue.trim() ? 'pointer' : 'default',
+                                            display: 'flex', alignItems: 'center', gap: 5,
+                                        }}
+                                    >
+                                        <i className="ph ph-check-fat"></i>
+                                        Apply
+                                    </button>
+                                    <button
+                                        onClick={() => { setBulkRenameOpen(false); setBulkRenameValue(''); }}
+                                        style={{
+                                            padding: '7px 10px',
+                                            background: '#e2e8f0',
+                                            color: '#64748b',
+                                            border: 'none',
+                                            borderRadius: 7,
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
