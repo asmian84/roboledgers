@@ -3207,27 +3207,22 @@
       <!-- Professional Account Dashboard Header -->
       <div id="account-header-root" class="v5-account-workspace-header" style="background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 12px 24px; gap: 12px;">
         
-        <!-- Header Top: Account Tab Pills — single click jumps to that account -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <div style="font-size: 18px; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: -0.02em;">
-              ${UI_STATE.selectedAccount === 'ALL' ? 'ALL ACCOUNTS' : ((acc && (acc.name || acc.ref) || 'Account').toUpperCase())}
+        <!-- Header Top: Account Type & Selector -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <select id="account-selector" onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 4px 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase; outline: none; transition: opacity 0.2s;">
+                <option value="ALL" ${UI_STATE.selectedAccount === 'ALL' ? 'selected' : ''}>ALL ACCOUNTS</option>
+                ${accounts.map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${(a.name || a.ref).toUpperCase()}</option>`).join('')}
+              </select>
+              <i class="ph ph-caret-down" style="font-size: 14px; color: #64748b;"></i>
             </div>
-            <div id="account-subtitle" style="font-size: 11px; font-weight: 500; color: #94a3b8; text-transform: uppercase;">
-              ${acc ? (acc.bankName || 'Bank') + ' \u2022 ' + (acc.currency || 'CAD') : 'Consolidated View \u2022 CAD'}
+            <div id="account-subtitle" style="font-size: 11px; font-weight: 500; color: #94a3b8; margin-top: 2px; text-transform: uppercase;">
+              ${acc ? acc.bankName || 'Royal Bank of Canada' : 'Consolidated View'} • ${acc ? acc.currency || 'CAD' : 'CAD'}
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-            <button onclick="window.switchAccount('ALL')" style="padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; border: 2px solid ${UI_STATE.selectedAccount === 'ALL' ? '#1e293b' : '#e2e8f0'}; background: ${UI_STATE.selectedAccount === 'ALL' ? '#1e293b' : '#f8fafc'}; color: ${UI_STATE.selectedAccount === 'ALL' ? 'white' : '#64748b'}; transition: all 0.15s; white-space: nowrap;">ALL</button>
-            ${accounts.map(a => {
-              const isActive = UI_STATE.selectedAccount === a.id;
-              const accType = (a.accountType || a.type || 'chequing').toLowerCase();
-              const colors = accType === 'creditcard' ? { bg: '#fef2f2', border: '#fca5a5', activeBg: '#ef4444' }
-                           : accType === 'savings'    ? { bg: '#f0fdf4', border: '#86efac', activeBg: '#10b981' }
-                           : accType === 'investment' ? { bg: '#faf5ff', border: '#c4b5fd', activeBg: '#7c3aed' }
-                           :                           { bg: '#eff6ff', border: '#93c5fd', activeBg: '#3b82f6' };
-              return `<button onclick="window.switchAccount('${a.id}')" title="${(a.bankName || '') + ' ' + (a.accountNumber || '')}" style="padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; border: 2px solid ${isActive ? colors.activeBg : colors.border}; background: ${isActive ? colors.activeBg : colors.bg}; color: ${isActive ? 'white' : '#374151'}; transition: all 0.15s; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${(a.ref || a.name || a.id).toUpperCase()}</button>`;
-            }).join('')}
+          <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 12px;">
+            <span>Header V5.2 • Active Session</span>
           </div>
         </div>
 
