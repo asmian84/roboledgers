@@ -123,6 +123,13 @@ export function ReportsPage() {
         violet: { bg: 'bg-violet-50', border: 'border-violet-200', icon: 'text-violet-600', hover: 'hover:bg-violet-100', badge: 'bg-violet-600' }
     };
 
+    // Expose a global back-to-hub function so any sub-report's back button works
+    // (reports are rendered without props, so they use this global to navigate back)
+    React.useEffect(() => {
+        window.__reportsGoBack = () => setSelectedReport(null);
+        return () => { delete window.__reportsGoBack; };
+    }, []);
+
     // Render selected report component
     const selectedReportData = reports.find(r => r.id === selectedReport);
     if (selectedReportData?.ready && selectedReportData.component) {

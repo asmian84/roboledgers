@@ -697,7 +697,7 @@ export function TrialBalanceReport() {
             {/* Header */}
             <div className="max-w-7xl mx-auto mb-6">
                 <div className="flex items-center gap-3 mb-2">
-                    <button onClick={() => window.location.hash = '#/reports'} className="text-gray-600 hover:text-gray-900 mr-2">
+                    <button onClick={() => window.__reportsGoBack?.()} className="text-gray-600 hover:text-gray-900 mr-2">
                         <i className="ph ph-arrow-left text-2xl"></i>
                     </button>
                     <i className="ph ph-scales text-3xl text-blue-600"></i>

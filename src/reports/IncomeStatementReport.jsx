@@ -168,7 +168,7 @@ export function IncomeStatementReport() {
             <div className="max-w-7xl mx-auto mb-6">
                 <div className="flex items-center gap-3 mb-4">
                     <button
-                        onClick={() => window.location.hash = '#/reports'}
+                        onClick={() => window.__reportsGoBack?.()}
                         className="text-gray-600 hover:text-gray-900 mr-2"
                     >
                         <i className="ph ph-arrow-left text-2xl"></i>
