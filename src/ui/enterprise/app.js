@@ -43,7 +43,7 @@
     confidenceThreshold: 0.8,
     refOverride: 'TXN',
     dateFormat: 'MM/DD/YYYY',
-    province: 'ON',
+    province: 'AB',
     gstEnabled: true,
     // Grid Appearance Settings (NEW in V5.1)
     gridTheme: 'post-it-note',
@@ -2192,21 +2192,23 @@
         { val: 'webapp',      label: 'WebApp',      dot: '#f5f5f5' },
       ];
 
+      // Find active theme for color dot preview
+      const activeThemeObj = themes.find(t => t.val === UI_STATE.gridTheme) || themes[0];
+
       return `
         <div style="margin-bottom: 24px;">
-          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 12px;">THEME</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-            ${themes.map(t => `
-              <button onclick="window.previewGridTheme('${t.val}'); document.getElementById('settings-grid-theme-val').value='${t.val}';"
-                style="padding: 8px 10px; border: 2px solid ${UI_STATE.gridTheme === t.val ? '#3b82f6' : '#e2e8f0'}; border-radius: 8px; background: ${UI_STATE.gridTheme === t.val ? '#eff6ff' : 'white'}; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: ${UI_STATE.gridTheme === t.val ? '700' : '500'}; color: ${UI_STATE.gridTheme === t.val ? '#1e40af' : '#374151'}; text-align: left; transition: all 0.1s;">
-                <span style="width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; background: ${t.dot}; border: 1px solid rgba(0,0,0,0.1);"></span>
-                ${t.label}
-                ${UI_STATE.gridTheme === t.val ? '<i class="ph ph-check" style="margin-left:auto;font-size:12px;"></i>' : ''}
-              </button>
-            `).join('')}
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 10px;">THEME</div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="settings-theme-dot" style="width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; background: ${activeThemeObj.dot}; border: 1px solid rgba(0,0,0,0.12); display: inline-block;"></span>
+            <select id="settings-grid-theme"
+              onchange="window.previewGridTheme(this.value); const t = ${JSON.stringify(themes)}.find(x=>x.val===this.value); if(t) document.getElementById('settings-theme-dot').style.background=t.dot;"
+              style="flex: 1; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px; background: white; font-size: 12px; font-weight: 500; color: #1e293b; cursor: pointer; appearance: auto; outline: none; transition: border-color 0.15s;"
+              onfocus="this.style.borderColor='#3b82f6'"
+              onblur="this.style.borderColor='#e2e8f0'"
+            >
+              ${themes.map(t => `<option value="${t.val}" ${UI_STATE.gridTheme === t.val ? 'selected' : ''}>${t.label}</option>`).join('')}
+            </select>
           </div>
-          <input type="hidden" id="settings-grid-theme-val" value="${UI_STATE.gridTheme}">
-          <select id="settings-grid-theme" style="display:none;">${themes.map(t => `<option value="${t.val}" ${UI_STATE.gridTheme === t.val ? 'selected' : ''}>${t.label}</option>`).join('')}</select>
         </div>
 
         <div style="margin-bottom: 24px;">
@@ -2281,22 +2283,21 @@
         { val:'SK', label:'Saskatchewan',       tax:'5% GST + 6% PST' },
         { val:'YT', label:'Yukon',              tax:'5% GST' },
       ];
+      // Active province info for subtitle display
+      const activeProvObj = provinces.find(p => p.val === UI_STATE.province) || provinces[0];
+
       return `
         <div style="margin-bottom: 20px;">
-          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 12px;">PROVINCE / TERRITORY</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-            ${provinces.map(p => `
-              <button onclick="document.getElementById('settings-province').value='${p.val}'; this.closest('.province-grid').querySelectorAll('button').forEach(b=>{b.style.borderColor='#e2e8f0';b.style.background='white';b.style.color='#374151';b.style.fontWeight='500';}); this.style.borderColor='#3b82f6'; this.style.background='#eff6ff'; this.style.color='#1e40af'; this.style.fontWeight='700';"
-                style="padding: 8px 10px; border: 2px solid ${UI_STATE.province === p.val ? '#3b82f6' : '#e2e8f0'}; border-radius: 8px; background: ${UI_STATE.province === p.val ? '#eff6ff' : 'white'}; cursor: pointer; text-align: left; transition: all 0.1s; font-size: 11px; font-weight: ${UI_STATE.province === p.val ? '700' : '500'}; color: ${UI_STATE.province === p.val ? '#1e40af' : '#374151'};">
-                <div>${p.label}</div>
-                <div style="font-size: 10px; color: #94a3b8; font-weight: 400;">${p.tax}</div>
-              </button>
-            `).join('')}
-          </div>
-          <div class="province-grid" style="display:none;"></div>
-          <select id="settings-province" style="display:none;">
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 10px;">PROVINCE / TERRITORY</div>
+          <select id="settings-province"
+            onchange="document.getElementById('settings-province-tax').textContent = ${JSON.stringify(provinces)}.find(p=>p.val===this.value)?.tax || '';"
+            style="width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px; background: white; font-size: 12px; font-weight: 500; color: #1e293b; cursor: pointer; appearance: auto; outline: none; transition: border-color 0.15s; margin-bottom: 6px;"
+            onfocus="this.style.borderColor='#3b82f6'"
+            onblur="this.style.borderColor='#e2e8f0'"
+          >
             ${provinces.map(p => `<option value="${p.val}" ${UI_STATE.province === p.val ? 'selected' : ''}>${p.label}</option>`).join('')}
           </select>
+          <div id="settings-province-tax" style="font-size: 11px; color: #64748b; padding: 4px 2px;">${activeProvObj.tax}</div>
         </div>
 
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: ${UI_STATE.gstEnabled ? '#f0fdf4' : '#f8fafc'}; border: 1px solid ${UI_STATE.gstEnabled ? '#86efac' : '#e2e8f0'}; border-radius: 8px;">

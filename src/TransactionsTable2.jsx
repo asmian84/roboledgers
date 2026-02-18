@@ -34,9 +34,11 @@ const TAX_RATES = {
 };
 
 // Helper: Calculate GST/tax for a transaction amount
+// amount: dollars (e.g. 100.00)
+// Returns: INTEGER CENTS (e.g. 500 for $5.00 at 5% GST) — matches ledger.core.js convention
 function calculateTax(amount, province) {
     if (!amount || !province || !TAX_RATES[province]) return 0;
-    return (amount * TAX_RATES[province].total) / 100;
+    return Math.round(amount * TAX_RATES[province].total);  // dollars × rate% = cents
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
