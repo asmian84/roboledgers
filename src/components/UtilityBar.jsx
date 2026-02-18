@@ -82,7 +82,6 @@ function PieChart({ data, size = 200, onSliceClick }) {
                         stroke="white"
                         strokeWidth="2"
                         className="transition-opacity hover:opacity-80 cursor-pointer"
-                        title={`${slice.label} — click to filter`}
                         onClick={() => onSliceClick?.(slice)}
                     />
                 ))}
@@ -94,7 +93,6 @@ function PieChart({ data, size = 200, onSliceClick }) {
                     <div
                         key={index}
                         className="flex items-center justify-between text-xs cursor-pointer rounded px-1 py-0.5 hover:bg-gray-100 transition-colors"
-                        title={`Filter to: ${slice.label}`}
                         onClick={() => onSliceClick?.(slice)}
                     >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -230,7 +228,6 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                             label: 'GST Collected',
                             filter: tx => tx.gst_enabled && tx.polarity === 'CREDIT' && tx.tax_cents > 0
                         })}
-                        title="Click to filter GST Collected transactions"
                     >
                         <span className="text-xs text-gray-600">GST Collected</span>
                         <span className="text-sm font-bold font-mono text-green-700">
@@ -244,7 +241,6 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                             label: 'GST ITC (Paid)',
                             filter: tx => tx.gst_enabled && tx.polarity === 'DEBIT' && tx.tax_cents > 0
                         })}
-                        title="Click to filter GST ITC/Paid transactions"
                     >
                         <span className="text-xs text-gray-600">GST ITC (Paid)</span>
                         <span className="text-sm font-bold font-mono text-blue-700">
@@ -258,7 +254,6 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
                             label: 'Total Revenue',
                             filter: tx => tx.polarity === 'CREDIT' && tx.gst_enabled
                         })}
-                        title="Click to filter Revenue transactions"
                     >
                         <span className="text-xs text-gray-600">Total Revenue</span>
                         <span className="text-sm font-bold font-mono text-gray-700">
