@@ -233,6 +233,8 @@ window.setTxGridFilter = (filterValue) => {
     } else if (filterValue === null || filterValue === undefined) {
         window._txGridFilterPredicate = null;
         filteredData = allData;
+        window._txGridActiveFilter = null;
+        window.__txGridClearFilter?.(); // Notify React to clear the breadcrumb
         console.log(`[setTxGridFilter] cleared → ${allData.length} rows`);
     } else {
         window._txGridFilterPredicate = null;

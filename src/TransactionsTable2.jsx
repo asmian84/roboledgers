@@ -1074,6 +1074,9 @@ export function TransactionsTable({
     // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
     const [activePanel, setActivePanel] = useState(null);
 
+    // FILTER LABEL: Track the label of the currently active predicate filter (null = no filter)
+    const [activeFilterLabel, setActiveFilterLabel] = useState(null);
+
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
         setData(initialData || []);
@@ -1088,7 +1091,15 @@ export function TransactionsTable({
     // the grid without going through the stale React root reference.
     useEffect(() => {
         window.__txGridSetData = (rows) => setData(rows || []);
-        return () => { delete window.__txGridSetData; };
+        // Clear filter bridge — called by setTxGridFilter(null) and vanilla JS
+        window.__txGridClearFilter = () => {
+            setActiveFilterLabel(null);
+            window._txGridActiveFilter = null;
+        };
+        return () => {
+            delete window.__txGridSetData;
+            delete window.__txGridClearFilter;
+        };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // DETAIL MODE: Sidebar collapse detection
@@ -1379,6 +1390,13 @@ export function TransactionsTable({
                         onToggleSettings={() => window.toggleSettings?.(true)}
                         isDetailMode={isDetailMode}  // Pass mode to show/hide panel toggles
                         activePanel={activePanel}     // Pass active panel for button highlighting
+                        activeFilter={activeFilterLabel}
+                        onClearFilter={() => {
+                            const source = window._txGridAllData || data;
+                            window.__txGridSetData?.(source);
+                            setActiveFilterLabel(null);
+                            window._txGridActiveFilter = null;
+                        }}
                         onToggleReportPanel={() => {
                             const newPanel = activePanel === 'report' ? null : 'report';
                             setActivePanel(newPanel);
@@ -1596,13 +1614,25 @@ export function TransactionsTable({
                 {activePanel === 'utility' && (
                     <UtilityBar
                         transactions={data}
+                        activeFilter={activeFilterLabel}
+                        onClearFilter={() => {
+                            const source = window._txGridAllData || data;
+                            window.__txGridSetData?.(source);
+                            setActiveFilterLabel(null);
+                            window._txGridActiveFilter = null;
+                        }}
                         onFilterTransactions={(spec) => {
                             const source = window._txGridAllData || data;
                             if (!window._txGridAllData) window._txGridAllData = source;
                             if (!spec) {
                                 window.__txGridSetData?.(source);
+                                setActiveFilterLabel(null);
+                                window._txGridActiveFilter = null;
                             } else if (typeof spec.filter === 'function') {
                                 window.__txGridSetData?.(source.filter(spec.filter));
+                                const label = spec.label || 'Filtered';
+                                setActiveFilterLabel(label);
+                                window._txGridActiveFilter = label;
                             }
                         }}
                     />

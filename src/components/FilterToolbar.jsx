@@ -25,6 +25,8 @@ export function FilterToolbar({
     isDetailMode = false,
     isPanelOpen = false,
     activePanel = null,      // 'utility' | 'report' | null — for TransactionsTable2
+    activeFilter = null,     // string label of current filter (e.g. "Office Supplies") or null
+    onClearFilter,           // () => void — called to clear the active filter
 }) {
     const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -91,6 +93,28 @@ export function FilterToolbar({
                         </option>
                     ))}
                 </select>
+
+                {/* Active Filter Pill — visible when a predicate filter is active */}
+                {activeFilter && (
+                    <>
+                        <div className="w-px h-5 bg-[#e5e7eb]"></div>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-300 rounded-full text-[11px] font-semibold text-amber-800 max-w-[180px]">
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className="shrink-0 text-amber-500">
+                                <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                            </svg>
+                            <span className="truncate">{activeFilter}</span>
+                            <button
+                                onClick={() => onClearFilter?.()}
+                                className="ml-0.5 shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-200 text-amber-600 transition-colors"
+                                title="Clear filter — show all transactions"
+                            >
+                                <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                                    <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* RIGHT: Export + Panel Toggles + Grid Settings */}
