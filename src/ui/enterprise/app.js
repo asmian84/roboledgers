@@ -1157,10 +1157,7 @@
 
     // HOMEPAGE ROUTE: delegate to React HomePage component
     if (UI_STATE.currentRoute === 'home') {
-      const stage = document.getElementById('app-stage');
-      if (stage) {
-        stage.innerHTML = renderHome();
-      }
+      renderHome();
       return;
     }
 
@@ -2584,7 +2581,7 @@
 
     // 3. Stage Content
     const stage = document.getElementById('app-stage');
-    stage.innerHTML = `<div class="fade-in">${renderPage()}</div>`;
+    if (UI_STATE.currentRoute !== 'home') { stage.innerHTML = `<div class="fade-in">${renderPage()}</div>`; } else { renderHome(); }
 
     // 4. Show recovery prompt if data exists from previous session
     if (UI_STATE.recoveryPending) {
@@ -2623,7 +2620,7 @@
       case 'import': return renderTransactionsRestored();
       case 'coa': return renderCOAPage();
       case 'reports': return renderReportsPage();
-      case 'home': return renderHome();
+      case 'home': renderHome(); return ''; // renderHome() manages stage directly
       default: return renderPlaceholder(UI_STATE.currentRoute.toUpperCase());
     }
   }
@@ -2779,7 +2776,18 @@
   };
 
   function renderHome() {
-    // Mount the React HomePage component — poll until mountHomePage is available
+    const stage = document.getElementById('app-stage');
+    if (!stage) return;
+
+    // If the container already exists and React is mounted, just re-render in place
+    if (document.getElementById('home-container') && window.mountHomePage) {
+      window.mountHomePage();
+      return;
+    }
+
+    // First visit: inject container then mount React
+    stage.innerHTML = `<div id="home-container" style="width:100%;height:100vh;overflow:auto;"></div>`;
+
     const _tryMount = (attemptsLeft) => {
       if (window.mountHomePage) {
         window.mountHomePage();
@@ -2789,9 +2797,7 @@
         console.error('[RENDER_HOME] window.mountHomePage not found after retries');
       }
     };
-    setTimeout(() => _tryMount(15), 50); // up to ~1.25s total
-
-    return `<div id="home-container" style="width: 100%; height: 100vh; overflow: auto;"></div>`;
+    setTimeout(() => _tryMount(20), 30); // up to ~1.6s total
   }
 
 
