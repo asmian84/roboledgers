@@ -130,126 +130,266 @@ function splitCsvLine(line, delimiter) {
 
 // ─── PDF Trial Balance parser ─────────────────────────────────────────────────
 /**
- * Extracts text from a QB/Caseware TB PDF printout and converts it to the
- * same { [coaCode]: { name, debit, credit, balance } } structure.
+ * Extracts text from a Caseware Working Papers or QuickBooks TB PDF printout.
  *
- * Both QB and Caseware TB PDFs follow a predictable columnar layout:
- *   Code   Account Name         Debit       Credit     Balance
- *   1040   Savings account #2   398,094.65             398,094.65
+ * CASEWARE WORKING PAPERS TB FORMAT (from real printouts):
+ * ──────────────────────────────────────────────────────────
+ * Page header: company name, "Trial Balance", period, "Prepared by / Date"
  *
- * Strategy: extract all text items with x-positions, identify column boundaries
- * by looking at where "DEBIT" / "CREDIT" / "BALANCE" headers sit, then parse
- * each data row by x-position bucketing.
+ * Column header row (right-aligned labels over numeric columns):
+ *   [blank]                         Debit        Credit       Balance
+ *
+ * Data rows — two common layouts:
+ *   A) Code LEFT + Name RIGHT of code + numbers right-aligned in columns
+ *      "  1040   Bank - chequing                  398,094.65               398,094.65"
+ *
+ *   B) Name only (no code) + single net balance column (simpler CW exports)
+ *      "  Bank - chequing                                                  398,094.65"
+ *
+ * Section headers (group rows, no numbers):
+ *   "  ASSETS"  or  "  Current Assets"  (bold, no numbers on that line)
+ *
+ * Subtotal rows:
+ *   "  Total Current Assets                    xxx,xxx.xx               xxx,xxx.xx"
+ *   "  Total Assets                            xxx,xxx.xx               xxx,xxx.xx"
+ *
+ * Sign convention:
+ *   - Caseware uses PARENTHESES for negative amounts: (125,000.00)
+ *   - Some versions use a trailing minus:  125,000.00-
+ *   - Credits on liability/equity/revenue accounts are shown as positive Balance
+ *
+ * QUICKBOOKS ONLINE TB PDF:
+ *   Company name, "Trial Balance", "As of DATE"
+ *   Column headers: DEBIT  CREDIT  (no Balance column — balance is implied)
+ *   OR: single TOTAL column
+ *
+ * Strategy:
+ *   1. Extract all text items with (x, y) coordinates from every page
+ *   2. Group by y-position into "lines" (3pt bucket tolerance for sub-pixels)
+ *   3. Find the column header line → record exact x-positions of Debit/Credit/Balance
+ *   4. For each data row: bucket items into left-side (code+name) vs numeric columns
+ *   5. Parse amounts — handle parentheses, trailing minus, commas, dollar signs
+ *   6. Match to COA by code (exact) then by name (fuzzy)
+ *   7. Fallback: reconstruct as plain text → feed to parseTBCsv
  */
 async function parseTBPdf(arrayBuffer) {
     const pdfjsLib = window.pdfjsLib;
     if (!pdfjsLib) throw new Error('PDF.js not available');
 
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const allLines = [];
+
+    // ── Step 1: Extract all text items with coordinates, all pages ────────────
+    const allLines = []; // Each entry: Array<{ x, y, text, width }>
 
     for (let p = 1; p <= pdf.numPages; p++) {
-        const page = await pdf.getPage(p);
+        const page    = await pdf.getPage(p);
         const content = await page.getTextContent();
+        const vp      = page.getViewport({ scale: 1.0 });
 
-        // Group text items into lines by y-position (within 3pt tolerance)
+        // Bucket items into lines by y-position (3pt tolerance handles sub-pixel variations)
         const lineMap = {};
         content.items.forEach(item => {
-            const y = Math.round(item.transform[5]); // y coordinate
-            const x = item.transform[4];
-            if (!lineMap[y]) lineMap[y] = [];
-            lineMap[y].push({ x, text: item.str.trim() });
+            if (!item.str?.trim()) return;
+            const rawY = item.transform[5];
+            const x    = item.transform[4];
+            // Round to nearest 3pt bucket
+            const yKey = Math.round(rawY / 3) * 3;
+            if (!lineMap[yKey]) lineMap[yKey] = [];
+            lineMap[yKey].push({
+                x,
+                y:    rawY,
+                text: item.str,
+                w:    item.width || 0,
+            });
         });
 
-        // Sort lines top-to-bottom (descending y in PDF coords)
+        // Sort lines top-to-bottom (PDF y=0 is bottom, so descending = top-first)
         const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
-        sortedYs.forEach(y => {
-            const items = lineMap[y].sort((a, b) => a.x - b.x);
+        sortedYs.forEach(yKey => {
+            const items = lineMap[yKey].sort((a, b) => a.x - b.x);
             allLines.push(items);
         });
     }
 
-    // Find the header line with DEBIT/CREDIT/BALANCE to establish column x-boundaries
-    let debitX = null, creditX = null, balanceX = null, codeX = null;
-    for (const line of allLines) {
-        const texts = line.map(i => i.text.toUpperCase());
-        const debitIdx  = texts.findIndex(t => t === 'DEBIT' || t === 'DR');
-        const creditIdx = texts.findIndex(t => t === 'CREDIT' || t === 'CR');
-        const balIdx    = texts.findIndex(t => t === 'BALANCE' || t === 'NET');
-        if (debitIdx >= 0 && creditIdx >= 0) {
-            debitX  = line[debitIdx].x;
-            creditX = line[creditIdx].x;
-            balanceX = balIdx >= 0 ? line[balIdx].x : creditX + 80;
-            // Code column is the leftmost item (usually first)
-            codeX = line[0].x;
-            break;
+    // ── Step 2: Find the column header line ───────────────────────────────────
+    // Caseware:   [blank]            Debit        Credit       Balance
+    // QB Online:  [blank]            Debit        Credit
+    // QB Desktop: [blank]            Debit        Credit       Balance
+    // Some CW:    Ref No  Account Description    Debit  Credit  Balance
+
+    let debitX = null, creditX = null, balanceX = null;
+    let headerLineIdx = -1;
+
+    for (let i = 0; i < allLines.length; i++) {
+        const line  = allLines[i];
+        const texts = line.map(item => item.text.trim().toUpperCase());
+        const joined = texts.join(' ');
+
+        // Look for a line that contains at least DEBIT and CREDIT (case-insensitive)
+        if (/\bDEBIT\b/.test(joined) && /\bCREDIT\b/.test(joined)) {
+            const debitItem  = line.find(item => /^DEBIT$/i.test(item.text.trim()));
+            const creditItem = line.find(item => /^CREDIT$/i.test(item.text.trim()));
+            const balItem    = line.find(item => /^BALANCE$/i.test(item.text.trim()));
+
+            if (debitItem && creditItem) {
+                // For right-aligned column headers the x is the left edge of the text —
+                // the actual column right edge = x + width. Use the right edge as anchor.
+                debitX  = debitItem.x  + (debitItem.w  || 0);
+                creditX = creditItem.x + (creditItem.w || 0);
+                balanceX = balItem ? (balItem.x + (balItem.w || 0)) : creditX + 90;
+                headerLineIdx = i;
+                break;
+            }
         }
     }
 
-    // If we couldn't find column headers, fall back to text reconstruction
+    // ── Step 3: If no explicit header found, try plain-text reconstruction ────
     if (debitX === null) {
-        // Reconstruct as plain text and feed to CSV parser
-        const textLines = allLines.map(line =>
-            line.map(i => i.text).filter(t => t).join('  ')
-        ).filter(l => l.trim());
+        const textLines = allLines
+            .map(line => line.map(i => i.text).filter(t => t.trim()).join('  '))
+            .filter(l => l.trim());
         return parseTBCsv(textLines.join('\n'));
     }
 
-    // Column bucket tolerance (px)
-    const TOL = 60;
-    const inBucket = (itemX, bucketX) => Math.abs(itemX - bucketX) < TOL;
+    // ── Step 4: Define column x-boundaries ───────────────────────────────────
+    // Each numeric column spans roughly 80–100 pts wide, right-aligned.
+    // We define a "slot" as [rightEdge - slotWidth, rightEdge].
+    const SLOT_W  = 100; // pts — wide enough to catch all digits
+    const NAME_MAX = debitX - SLOT_W - 10; // everything left of here = code/name region
 
+    const inDebitSlot   = (x) => x > (debitX  - SLOT_W) && x <= (debitX  + 20);
+    const inCreditSlot  = (x) => x > (creditX - SLOT_W) && x <= (creditX + 20);
+    const inBalanceSlot = (x) => x > (balanceX - SLOT_W) && x <= (balanceX + 20);
+    const inNameRegion  = (x) => x < NAME_MAX;
+
+    // ── Step 5: Amount parser — handles parentheses, trailing minus, commas ──
+    const parseAmt = (v) => {
+        if (!v) return null;
+        let s = String(v).replace(/[$\s,]/g, '').trim();
+        if (!s || s === '-' || s === '—' || s === '') return null;
+        // Parentheses = negative: (125000.00) → -125000.00
+        const isNeg = s.startsWith('(') && s.endsWith(')');
+        const hasTrailingMinus = s.endsWith('-');
+        s = s.replace(/[()]/g, '').replace(/-$/, '');
+        const n = parseFloat(s);
+        if (isNaN(n)) return null;
+        return isNeg || hasTrailingMinus ? -n : n;
+    };
+
+    // ── Step 6: Lines to skip (headers, totals, section labels, page noise) ──
+    const isSkipLine = (joined) => {
+        if (!joined.trim()) return true;
+        // Pure section headers (ASSETS, LIABILITIES, etc.) — no numbers on the line
+        if (/^(assets?|liabilit|equity|revenue|income|expense|cost\s+of|total\s+|subtotal|grand\s*total|net\s*income|net\s*loss|retained earn|opening|closing|prepared\s*by|partner|working\s*paper|trial\s*balance|balance\s*sheet|income\s*statement|period\s*end|as\s*of\s*|page\s*\d)/i.test(joined.trim())) return true;
+        // Column header row
+        if (/\bDEBIT\b.*\bCREDIT\b/i.test(joined)) return true;
+        return false;
+    };
+
+    // ── Step 7: Parse data rows ───────────────────────────────────────────────
     const result = {};
     const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
 
-    for (const line of allLines) {
-        if (line.length < 2) continue;
-        const texts = line.map(i => i.text).filter(t => t);
+    for (let i = 0; i < allLines.length; i++) {
+        if (i <= headerLineIdx) continue; // skip everything above/including header
 
-        // Skip header / total rows
-        const joined = texts.join(' ').trim();
-        if (!joined || /^(debit|credit|balance|total|grand\s*total|subtotal|net\s*income|retained earnings\s*$)/i.test(joined)) continue;
+        const line  = allLines[i];
+        const joined = line.map(item => item.text).join(' ').trim();
+        if (isSkipLine(joined)) continue;
 
-        // Bucket items into columns
-        const debitItems   = line.filter(i => inBucket(i.x, debitX)).map(i => i.text).join('');
-        const creditItems  = line.filter(i => inBucket(i.x, creditX)).map(i => i.text).join('');
-        const balItems     = line.filter(i => inBucket(i.x, balanceX)).map(i => i.text).join('');
-        const leftItems    = line.filter(i => i.x < debitX - TOL).map(i => i.text).join(' ').trim();
+        // Collect items by column region
+        const nameItems   = line.filter(item => inNameRegion(item.x));
+        const debitItems  = line.filter(item => inDebitSlot(item.x));
+        const creditItems = line.filter(item => inCreditSlot(item.x));
+        const balItems    = line.filter(item => inBalanceSlot(item.x));
 
-        if (!leftItems) continue;
+        const leftText = nameItems.map(i => i.text).join(' ').trim();
+        if (!leftText) continue;
 
-        // Extract code from left side: "1040 Savings account #2" or just "Savings account #2"
-        let code = '', name = leftItems;
-        const codeMatch = leftItems.match(/^(\d{3,5})\s+(.+)$/);
-        if (codeMatch) { code = codeMatch[1]; name = codeMatch[2]; }
+        // Skip pure section/group headers (lines with no numeric content at all)
+        const hasAnyNumber = debitItems.length > 0 || creditItems.length > 0 || balItems.length > 0;
+        if (!hasAnyNumber) continue;
 
-        // Fuzzy match to COA
-        let matchedCode = code;
-        if (!matchedCode || !allCOA.find(a => String(a.code) === matchedCode)) {
+        // Extract code + name from left region
+        // Caseware: code is a separate left-most item, name is next items
+        // Sometimes code is embedded: "1040  Bank - chequing"
+        let code = '', name = leftText;
+
+        // If leftText starts with a 4-digit code
+        const codePrefixMatch = leftText.match(/^(\d{3,5})\s{2,}(.+)$/);
+        if (codePrefixMatch) {
+            code = codePrefixMatch[1];
+            name = codePrefixMatch[2].trim();
+        } else if (nameItems.length >= 2) {
+            // First item might be the code (pure numeric)
+            const firstItem = nameItems[0].text.trim();
+            if (/^\d{3,5}$/.test(firstItem)) {
+                code = firstItem;
+                name = nameItems.slice(1).map(i => i.text).join(' ').trim();
+            }
+        }
+
+        // Parse amounts — join multi-item cells (e.g. "$" and "398,094.65" as separate PDF items)
+        const debitStr  = debitItems.map(i => i.text).join('').trim();
+        const creditStr = creditItems.map(i => i.text).join('').trim();
+        const balStr    = balItems.map(i => i.text).join('').trim();
+
+        const debit   = parseAmt(debitStr)  ?? 0;
+        const credit  = parseAmt(creditStr) ?? 0;
+        const balance = parseAmt(balStr);
+
+        // Derived balance if not present
+        const finalBalance = balance !== null ? balance : (debit - credit);
+
+        // Skip rows that appear to be zero-everything (likely blank or noise)
+        if (debit === 0 && credit === 0 && finalBalance === 0 && !code) continue;
+
+        // COA matching: code exact → code fuzzy → name fuzzy
+        let matchedCode = '';
+
+        if (code) {
+            // Exact code match
+            if (allCOA.find(a => String(a.code) === code)) {
+                matchedCode = code;
+            }
+        }
+
+        if (!matchedCode) {
+            // Name fuzzy match
             const nameLower = name.toLowerCase().replace(/[^a-z0-9]/g, '');
             const byName = allCOA.find(a => {
                 const aName = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                return aName === nameLower || aName.startsWith(nameLower) || nameLower.startsWith(aName);
+                return aName === nameLower
+                    || (nameLower.length > 5 && aName.startsWith(nameLower.slice(0, 8)))
+                    || (nameLower.length > 5 && nameLower.startsWith(aName.slice(0, 8)));
             });
             if (byName) matchedCode = String(byName.code);
         }
+
+        if (!matchedCode && code) {
+            // Keep unmatched codes anyway — user may have custom COA
+            matchedCode = code;
+        }
+
         if (!matchedCode) continue;
 
-        const parseAmt = (v) => {
-            if (!v) return 0;
-            const s = String(v).replace(/[$, ]/g, '').trim();
-            if (!s || s === '-' || s === '—') return 0;
-            return parseFloat(s) || 0;
-        };
-
-        const debit   = parseAmt(debitItems);
-        const credit  = parseAmt(creditItems);
-        const balance = parseAmt(balItems) || (debit - credit);
-
-        result[matchedCode] = { name, debit, credit, balance };
+        // Deduplicate: if we already have this code, accumulate (handles multi-page runs)
+        if (result[matchedCode]) {
+            result[matchedCode].debit  += debit;
+            result[matchedCode].credit += credit;
+            result[matchedCode].balance = result[matchedCode].debit - result[matchedCode].credit;
+        } else {
+            result[matchedCode] = { name, debit, credit, balance: finalBalance };
+        }
     }
 
-    return Object.keys(result).length > 0 ? result : null;
+    if (Object.keys(result).length > 0) return result;
+
+    // ── Fallback: plain-text reconstruction → CSV parser ─────────────────────
+    const textLines = allLines
+        .map(line => line.map(i => i.text).filter(t => t.trim()).join('  '))
+        .filter(l => l.trim());
+    return parseTBCsv(textLines.join('\n'));
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
