@@ -316,12 +316,20 @@ class RuleEngine {
               action: { coa_code: '6800' }, logic: 'AND', priority: 8 },
 
             // REVENUE — AIRBNB only fires on CREDIT, both conditions required
-            { name: 'AIRBNB → Rental Revenue (4000)',
+            { name: 'AIRBNB → Rental Revenue (4900)',
               conditions: [
                   { field: 'description', operator: 'contains', value: 'AIRBNB' },
                   { field: 'polarity',    operator: 'equals',   value: 'CREDIT' },
               ],
-              action: { coa_code: '4000' }, logic: 'AND', priority: 10 },
+              action: { coa_code: '4900' }, logic: 'AND', priority: 10 },
+
+            // REVENUE — E-Transfer Credits = Rental Revenue (Airbnb guests)
+            { name: 'E-Transfer Credit → Rental Revenue (4900)',
+              conditions: [
+                  { field: 'description', operator: 'regex', value: 'E-TRANSFER|INTERAC|E-TRF|AUTODEPOSIT' },
+                  { field: 'polarity',    operator: 'equals',   value: 'CREDIT' },
+              ],
+              action: { coa_code: '4900' }, logic: 'AND', priority: 9 },
 
             // REPAIRS
             { name: 'HOME DEPOT → Repairs & Maintenance (7300)',

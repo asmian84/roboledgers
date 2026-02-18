@@ -1034,7 +1034,7 @@ export function TransactionsTable({
 
     useEffect(() => {
         const handleSidebarCollapse = (e) => {
-            const isCollapsed = e.detail?.collapsed ?? false;  // FIX: Property is 'collapsed'
+            const isCollapsed = e.detail?.isCollapsed ?? false;
             console.log('[DETAIL_MODE] Sidebar collapsed event received:', isCollapsed);
             setIsDetailMode(isCollapsed);
             console.log('[DETAIL_MODE] Current activePanel:', activePanel);
@@ -1313,6 +1313,7 @@ export function TransactionsTable({
                         onToggleFilters={() => window.toggleGridFilters?.()}
                         onToggleSettings={() => window.toggleSettings?.(true)}
                         isDetailMode={isDetailMode}  // Pass mode to show/hide panel toggles
+                        activePanel={activePanel}     // Pass active panel for button highlighting
                         onToggleReportPanel={() => {
                             const newPanel = activePanel === 'report' ? null : 'report';
                             setActivePanel(newPanel);

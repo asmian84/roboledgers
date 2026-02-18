@@ -1,25 +1,35 @@
 :root {
-    /* --- V4/V5 RESTORATION TOKENS --- */
+    /* --- V5.2 DESIGN TOKENS --- */
     --primary-color: #2563eb;
     --primary-hover: #1d4ed8;
+    --primary-subtle: #eff6ff;
     --bg-primary: #ffffff;
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;
 
-    --sidebar-width: 260px;
-    --breadcrumb-height: 60px;
+    --sidebar-width: 240px;
+    --sidebar-collapsed-width: 64px;
+    --breadcrumb-height: 56px;
 
     --text-primary: #0f172a;
     --text-secondary: #475569;
     --text-tertiary: #94a3b8;
 
     --border-color: #e2e8f0;
+    --border-subtle: #f1f5f9;
 
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.1), 0 4px 8px -4px rgba(0, 0, 0, 0.04);
 
     --font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --transition-fast: 150ms ease;
     --transition-normal: 250ms ease;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
 }
 
 * {
@@ -45,26 +55,25 @@ body {
     min-height: 100vh;
 }
 
-/* Sidebar (Restored Navy Gradient) */
+/* Sidebar — Modern Minimal (Linear/Notion feel) */
 .sidebar {
     width: var(--sidebar-width);
     height: 100vh;
     position: fixed;
     left: 0;
     top: 0;
-    background: linear-gradient(180deg, #334155 0%, #475569 100%);
-    color: #e2e8f0;
+    background: #1a1a2e;
+    color: #a0a0b8;
     display: flex;
     flex-direction: column;
-    box-shadow: 1px 0 4px rgba(0, 0, 0, 0.05);
     z-index: 100;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
-    transition: width 0.3s ease, left 0.3s ease;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar.collapsed {
-    width: 70px;
-    --sidebar-width: 70px;
+    width: 64px;
+    --sidebar-width: 64px;
 }
 
 /* Hide text content when sidebar is collapsed */
@@ -73,151 +82,150 @@ body {
 }
 
 .sidebar.collapsed .nav-group-header {
-    display: none;
+    opacity: 0;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
 }
 
 .sidebar.collapsed .nav-item {
-    padding: 10px;
+    padding: 10px 0;
     justify-content: center;
     gap: 0;
     font-size: 0;
+    border-left: 3px solid transparent;
+    border-radius: 0;
 }
 
 .sidebar.collapsed .nav-icon {
-    font-size: 1.25rem !important;
+    font-size: 1.2rem !important;
     margin: 0 !important;
 }
 
 .sidebar.collapsed .nav-group {
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .sidebar.collapsed .sidebar-footer {
-    padding: 12px;
+    padding: 10px;
 }
 
 .sidebar.collapsed .sidebar-toggle {
     width: 24px;
     height: 24px;
-    font-size: 12px;
+    font-size: 11px;
 }
 
+/* Sidebar Brand */
 .sidebar-brand {
-    padding: 24px 20px 10px 20px;
-    margin-bottom: 10px;
+    padding: 20px 16px 12px 16px;
+    margin-bottom: 4px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    transition: padding 0.3s ease;
+    gap: 10px;
+    transition: padding 0.25s ease;
 }
 
 .sidebar.collapsed .sidebar-brand {
-    padding: 12px 8px;
+    padding: 14px 8px;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
 }
 
 .brand-logo-text {
-    font-size: 1.25rem;
-    font-weight: 800;
-    letter-spacing: -0.05em;
-    color: white;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: #f0f0f5;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex: 1;
 }
 
 .brand-logo-text::before {
-    content: ":::";
-    font-size: 1.5rem;
-    color: #94a3b8;
-    letter-spacing: 1px;
+    content: "⬡";
+    font-size: 1.15rem;
+    color: #6366f1;
+    letter-spacing: 0;
 }
 
 /* Sidebar Toggle Button */
 .sidebar-toggle {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #e2e8f0;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #64647c;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    transition: all 0.3s ease;
+    font-size: 13px;
+    transition: all var(--transition-fast);
     flex-shrink: 0;
     padding: 0;
 }
 
 .sidebar-toggle:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
+    background: rgba(255, 255, 255, 0.1);
+    color: #c0c0d0;
 }
 
 .sidebar-toggle:active {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.sidebar-toggle:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-}
-
-.sidebar-toggle:active {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.14);
 }
 
 /* Navigation Items */
 .nav-group {
-    margin-bottom: 24px;
+    margin-bottom: 16px;
 }
 
 .nav-group-header {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: #64748b;
-    padding: 0 24px;
-    margin-bottom: 8px;
-    letter-spacing: 0.1em;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #4a4a6a;
+    padding: 0 20px;
+    margin-bottom: 4px;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
+    transition: opacity 0.2s ease, height 0.2s ease;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
-    padding: 10px 24px;
-    color: #94a3b8;
+    padding: 8px 16px;
+    margin: 1px 8px;
+    color: #8888a4;
     text-decoration: none;
-    font-size: 0.95rem;
+    font-size: 0.875rem;
     font-weight: 500;
-    gap: 12px;
-    border-left: 3px solid transparent;
-    transition: all var(--transition-normal);
+    gap: 10px;
+    border-left: none;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
     cursor: pointer;
-    /* Prevent text overflow */
     min-width: 0;
 }
 
 .nav-item:hover {
-    color: white;
-    background: rgba(255, 255, 255, 0.03);
+    color: #d0d0e0;
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .nav-item.active {
-    color: white;
-    background: linear-gradient(90deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0) 100%);
-    border-left-color: #3b82f6;
+    color: #f0f0f5;
+    background: rgba(99, 102, 241, 0.12);
+    border-left: none;
 }
 
 .nav-icon {
-    font-size: 1.25rem;
-    opacity: 0.8;
-    /* Fixed width for icon symmetry */
+    font-size: 1.15rem;
+    opacity: 0.7;
     flex-shrink: 0;
     width: 20px;
     height: 20px;
@@ -227,17 +235,19 @@ body {
 }
 
 .nav-item.active .nav-icon {
-    color: #93c5fd;
+    color: #818cf8;
     opacity: 1;
 }
 
-/* User Footer (Alex Johnson) */
+.nav-item:hover .nav-icon {
+    opacity: 0.9;
+}
+
+/* User Footer */
 .sidebar-footer {
     margin-top: auto;
-    padding: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(15, 23, 42, 0.5);
-    /* Prevent overflow beyond sidebar */
+    padding: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
     overflow: hidden;
     min-width: 0;
 }
@@ -245,41 +255,44 @@ body {
 .user-card {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     padding: 8px;
-    border-radius: 12px;
-    /* Prevent content overflow */
+    border-radius: var(--radius-md);
     min-width: 0;
     overflow: hidden;
+    transition: background var(--transition-fast);
+}
+
+.user-card:hover {
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .user-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    background: #3b82f6;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, #6366f1, #818cf8);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
     color: white;
-    font-size: 14px;
+    font-size: 12px;
+    flex-shrink: 0;
 }
 
 .user-name {
-    font-size: 0.9rem;
+    font-size: 0.825rem;
     font-weight: 600;
-    color: white;
-    /* Prevent text overflow */
+    color: #d0d0e0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .user-role {
-    font-size: 0.75rem;
-    color: #94a3b8;
-    /* Prevent text overflow */
+    font-size: 0.7rem;
+    color: #64647c;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -302,31 +315,49 @@ body {
 
 /* Responsive: Main wrapper adjusts when sidebar collapses */
 .sidebar.collapsed~.main-wrapper {
-    margin-left: 70px;
-    max-width: calc(100vw - 70px);
+    margin-left: 64px;
+    max-width: calc(100vw - 64px);
 }
 
-/* Breadcrumb (Restored White Bar - FULL WIDTH) */
+/* DETAIL MODE: Hide the account workspace header when sidebar collapses */
+body.sidebar-collapsed .v5-account-workspace-header {
+    display: none !important;
+}
+
+/* DETAIL MODE: Remove stage padding for edge-to-edge grid */
+body.sidebar-collapsed .stage {
+    padding: 0;
+}
+
+/* Breadcrumb Bar */
 .breadcrumb-bar {
     width: 100%;
-    margin: 0 0 16px 0;
-    min-height: 48px;
+    margin: 0;
+    height: 40px;
     background: #ffffff;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
-    padding: 0 24px;
-    gap: 8px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    padding: 0 20px;
+    gap: 0;
     box-sizing: border-box;
+    font-family: var(--font-family);
 }
 
 .breadcrumb-item {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     color: #64748b;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    white-space: nowrap;
+    transition: color 0.15s;
+}
+
+.breadcrumb-item:not(.active):hover {
+    color: #3b82f6;
 }
 
 .breadcrumb-item.active {
@@ -334,29 +365,20 @@ body {
     font-weight: 600;
 }
 
-.breadcrumb-link {
-    text-decoration: none;
-    color: inherit;
-    cursor: pointer;
-}
-
-.breadcrumb-link:hover {
-    color: #3b82f6;
-}
-
 .breadcrumb-separator {
-    color: #94a3b8;
-    display: flex;
+    color: #cbd5e1;
+    display: inline-flex;
     align-items: center;
+    margin: 0 8px;
+    font-size: 10px;
+    line-height: 1;
 }
 
 /* Main Stage */
 .stage {
     flex: 1;
-    padding: 24px;
-    /* Container padding - prevents UI bleeding */
-    /* Maximize width of the stages */
-    background: #f8fafc;
+    padding: 16px;
+    background: var(--bg-secondary);
     overflow: hidden;
     display: flex;
     flex-direction: column;

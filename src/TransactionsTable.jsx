@@ -209,44 +209,44 @@ function getActiveTheme() {
 // Dynamic GRID_TOKENS - merges defaults with active theme
 const GRID_TOKENS_BASE = {
     // Typography - Headers
-    headerFontSize: '12px',
+    headerFontSize: '11px',
     headerFontWeight: 600,
-    headerLetterSpacing: '0.04em',
-    headerColor: '#6B7280',
+    headerLetterSpacing: '0.06em',
+    headerColor: '#94a3b8',
     headerHeight: '36px',
 
     // Typography - Cells
-    cellFontSize: '13.5px',
+    cellFontSize: '13px',
     cellFontWeight: 400,
-    cellColor: '#111827',
-    cellLineHeight: '1.3',
+    cellColor: '#1e293b',
+    cellLineHeight: '1.4',
 
     // Typography - Description Line 1 (Payee)
-    descLine1FontSize: '13.5px',
-    descLine1FontWeight: 500,
-    descLine1Color: '#111827',
+    descLine1FontSize: '13px',
+    descLine1FontWeight: 550,
+    descLine1Color: '#0f172a',
 
-    // Typography - Description Line 2 (Type)
-    descLine2FontSize: '12px',
+    // Typography - Description Line 2 (Type/Memo)
+    descLine2FontSize: '11.5px',
     descLine2FontWeight: 400,
-    descLine2Color: '#6B7280',
+    descLine2Color: '#94a3b8',
 
     // Typography - Numbers
-    numberFontSize: '13.5px',
-    numberFontWeight: 500,
+    numberFontSize: '13px',
+    numberFontWeight: 550,
 
     // Row Dimensions
-    rowHeight: 56, // Comfortable density (px)
-    rowPaddingX: '4px',
+    rowHeight: 52, // Comfortable but not bloated
+    rowPaddingX: '6px',
 
     // Colors
-    debitColor: '#111827',
-    creditColor: '#10b981',
-    negativeColor: '#ef4444',
+    debitColor: '#1e293b',
+    creditColor: '#059669',
+    negativeColor: '#dc2626',
     borderColor: '#f1f5f9',
     hoverBg: '#f8fafc',
     rowBg: '#ffffff',        // Even rows
-    rowBgAlt: '#ffffff',     // Odd rows (same for default)
+    rowBgAlt: '#fafbfc',    // Subtle alternating
     selectedRowBg: '#eff6ff',
 };
 
@@ -953,8 +953,9 @@ export function TransactionsTable({
     const [auditSidebarOpen, setAuditSidebarOpen] = useState(false);
     const [selectedAuditTransaction, setSelectedAuditTransaction] = useState(null);
 
-    // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
-    const [activePanel, setActivePanel] = useState(null);
+    // PANEL SYSTEM: Tab-based side panel
+    const [isPanelOpen, setIsPanelOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'trial-balance'
 
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
@@ -972,23 +973,15 @@ export function TransactionsTable({
             const isCollapsed = e.detail?.isCollapsed ?? false;
 
             if (isCollapsed) {
-                // DETAIL MODE ON: Open utility bar automatically
-                setActivePanel('utility');
-
-                // Auto-scroll to FilterToolbar (hide reconciliation/metadata)
+                // DETAIL MODE ON: Open panel with dashboard tab + scroll to top
+                setIsPanelOpen(true);
+                setActiveTab('dashboard');
                 if (parentRef.current) {
-                    setTimeout(() => {
-                        const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
-                        let scrollAmount = 0;
-                        headerCards.forEach(card => {
-                            scrollAmount += card.offsetHeight;
-                        });
-                        parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
-                    }, 100);
+                    parentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
                 }
             } else {
-                // DETAIL MODE OFF: Close all panels
-                setActivePanel(null);
+                // DETAIL MODE OFF: Close panel
+                setIsPanelOpen(false);
             }
         };
 
@@ -1078,19 +1071,8 @@ export function TransactionsTable({
             }));
         };
 
-        // EXPERIMENTAL: Expose audit sidebar function
+        // Expose audit sidebar function
         window.openAuditSidebar = (row) => {
-            const gridContainer = parentRef.current;
-            if (gridContainer) {
-                const scrollTop = gridContainer.scrollTop;
-                const topBarHeight = 280;
-                if (scrollTop < topBarHeight) {
-                    gridContainer.scrollTo({
-                        top: topBarHeight,
-                        behavior: 'smooth'
-                    });
-                }
-            }
             setSelectedAuditTransaction(row);
             setAuditSidebarOpen(true);
         };
@@ -1172,22 +1154,17 @@ export function TransactionsTable({
         return () => window.removeEventListener('sidebarCollapsed', handleSidebarToggle);
     }, []);
 
-    // Reset panel when exiting detail mode
+    // Close panel when exiting detail mode
     useEffect(() => {
-        if (!isDetailMode && activePanel) {
-            setActivePanel(null); // Close panel when leaving detail mode
+        if (!isDetailMode && isPanelOpen) {
+            setIsPanelOpen(false);
         }
     }, [isDetailMode]);
 
-    // Auto-scroll to FilterToolbar when entering detail mode
+    // Scroll to top when entering detail mode (workspace header hidden via CSS)
     useEffect(() => {
         if (isDetailMode && parentRef.current) {
-            setTimeout(() => {
-                const stickyToolbar = parentRef.current?.querySelector('[style*="sticky"]');
-                if (stickyToolbar) {
-                    stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }, 100);
+            parentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }, [isDetailMode]);
 
@@ -1220,7 +1197,7 @@ export function TransactionsTable({
             {/* 77% GRID SECTION */}
             <div
                 style={{
-                    width: isDetailMode && activePanel ? '77%' : '100%',  // 77% only in detail mode with panel
+                    width: isDetailMode && isPanelOpen ? '77%' : '100%',  // 77% only in detail mode with panel
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
@@ -1265,14 +1242,15 @@ export function TransactionsTable({
                         position: 'relative'
                     }}
                 >
-                    {/* Metadata summary - inline stats */}
-                    {data.length > 0 && (
+                    {/* Metadata summary - compact stats strip */}
+                    {data.length > 0 && !isDetailMode && (
                         <div style={{
-                            display: 'flex', gap: '16px', padding: '8px 12px',
-                            fontSize: '12px', color: '#64748b', borderBottom: '1px solid #e2e8f0'
+                            display: 'flex', gap: '16px', padding: '6px 16px',
+                            fontSize: '11px', color: '#9ca3af', borderBottom: '1px solid #f3f4f6',
+                            background: '#fafbfc'
                         }}>
-                            <span><strong>{data.length.toLocaleString()}</strong> transactions</span>
-                            <span>Total: <strong>{new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(
+                            <span><strong style={{ color: '#6b7280' }}>{data.length.toLocaleString()}</strong> transactions</span>
+                            <span>Total: <strong style={{ color: '#6b7280' }}>{new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(
                                 data.reduce((sum, tx) => sum + Math.abs((tx.amount_cents || 0)), 0) / 100
                             )}</strong></span>
                         </div>
@@ -1283,41 +1261,15 @@ export function TransactionsTable({
                         showFilters={showFilters}
                         onToggleFilters={() => setShowFilters(prev => !prev)}
                         onToggleSettings={() => window.toggleSettings?.(true)}
-                        isDetailMode={isDetailMode}  // Pass mode to control toggle visibility
-                        onToggleReportPanel={() => {
-                            const newPanel = activePanel === 'report' ? null : 'report';
-                            setActivePanel(newPanel);
-
-                            // Auto-scroll to FilterToolbar (hide pink box)
-                            if (newPanel && parentRef.current) {
-                                setTimeout(() => {
-                                    const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
-                                    if (stickyToolbar) {
-                                        stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                    }
-                                }, 350); // Wait for transition
-                            }
-                        }}
-                        onToggleUtilityBar={() => {
-                            const newPanel = activePanel === 'utility' ? null : 'utility';
-                            setActivePanel(newPanel);
-
-                            // Auto-scroll to FilterToolbar (hide pink box)
-                            if (newPanel && parentRef.current) {
-                                setTimeout(() => {
-                                    const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
-                                    if (stickyToolbar) {
-                                        stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                    }
-                                }, 350); // Wait for transition
-                            }
-                        }}
+                        isDetailMode={isDetailMode}
+                        isPanelOpen={isPanelOpen}
+                        onTogglePanel={() => setIsPanelOpen(prev => !prev)}
                         onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
                     />
                 </div>
 
                 {/* Grid Header */}
-                <div className="flex bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-[44px] z-20">
+                <div className="flex bg-[#fafbfc] border-b border-[#e5e7eb] sticky top-[42px] z-20">
                     {table.getFlatHeaders().map(header => (
                         <div
                             key={header.id}
@@ -1329,9 +1281,10 @@ export function TransactionsTable({
                                 flexShrink: 0,
                                 height: GRID_TOKENS.headerHeight,
                                 // Custom padding per column (match cell padding)
-                                padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
-                                    header.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                        `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
+                                padding: header.id === 'select' ? '0' :
+                                    header.id === 'balance' ? '0 8px 0 4px' :
+                                        `0 ${GRID_TOKENS.rowPaddingX}`,
+                                justifyContent: header.id === 'select' ? 'center' : undefined,
                                 fontSize: GRID_TOKENS.headerFontSize,
                                 fontWeight: GRID_TOKENS.headerFontWeight,
                                 letterSpacing: GRID_TOKENS.headerLetterSpacing,
@@ -1361,7 +1314,7 @@ export function TransactionsTable({
 
                 {/* Inline Filters Row - Collapsible */}
                 {showFilters && (
-                    <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[88px] z-19" style={{ transition: 'all 0.2s ease' }}>
+                    <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[78px] z-19" style={{ transition: 'all 0.2s ease' }}>
                         {table.getFlatHeaders().map(header => (
                             <div
                                 key={`filter-${header.id}`}
@@ -1371,9 +1324,9 @@ export function TransactionsTable({
                                     flex: header.id === 'description' ? '1 1 0' : undefined,
                                     minWidth: header.id === 'description' ? '250px' : undefined,
                                     flexShrink: 0,
-                                    height: '40px',
-                                    padding: header.id === 'select' ? '0 4px 0 6px' :
-                                        header.id === 'balance' ? '0 6px 0 2px' :
+                                    height: '36px',
+                                    padding: header.id === 'select' ? '0 4px 0 8px' :
+                                        header.id === 'balance' ? '0 8px 0 4px' :
                                             `0 ${GRID_TOKENS.rowPaddingX}`,
                                     borderRight: `1px solid ${GRID_TOKENS.borderColor}`
                                 }}
@@ -1445,10 +1398,10 @@ export function TransactionsTable({
                                                     flex: cell.column.id === 'description' ? '1 1 0' : undefined,
                                                     minWidth: cell.column.id === 'description' ? '250px' : undefined,
                                                     flexShrink: 0,
-                                                    // Custom padding per column - flush left
-                                                    padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
-                                                        cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                                            '0 8px 0 2px',                               // Others: minimal left, standard right
+                                                    padding: cell.column.id === 'select' ? '0' :
+                                                        cell.column.id === 'balance' ? '0 8px 0 4px' :
+                                                            `0 ${GRID_TOKENS.rowPaddingX}`,
+                                                    justifyContent: cell.column.id === 'select' ? 'center' : undefined,
                                                     borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
                                                     position: cell.column.id === 'category' ? 'relative' : undefined
                                                 }}
@@ -1482,65 +1435,93 @@ export function TransactionsTable({
                 />
             </div>
 
-            {/* 23% SIDE PANEL - DETAIL MODE ONLY */}
-            {isDetailMode && activePanel && (
+            {/* TABBED SIDE PANEL — Detail mode only */}
+            {isDetailMode && isPanelOpen && (
                 <div
                     style={{
                         width: '23%',
                         height: '100%',
-                        borderLeft: '2px solid #e5e7eb',
-                        backgroundColor: '#ffffff',
-                        overflow: 'auto',
-                        padding: '16px',
+                        borderLeft: '1px solid #e5e7eb',
+                        backgroundColor: '#fafbfc',
+                        display: 'flex',
+                        flexDirection: 'column',
                         boxSizing: 'border-box',
-                        boxShadow: '-2px 0 8px rgba(0, 0, 0, 0.05)'
                     }}
                 >
-                    {/* Close Button */}
-                    <button
-                        onClick={() => setActivePanel(null)}
-                        style={{
-                            position: 'absolute',
-                            top: '16px',
-                            right: '16px',
-                            padding: '8px',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#6b7280',
-                            borderRadius: '8px',
-                            transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.target.style.backgroundColor = '#f3f4f6';
-                            e.target.style.color = '#374151';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.target.style.backgroundColor = 'transparent';
-                            e.target.style.color = '#6b7280';
-                        }}
-                        title="Close panel"
-                    >
-                        <i className="ph ph-x" style={{ fontSize: '20px' }}></i>
-                    </button>
+                    {/* Tab Bar */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        borderBottom: '1px solid #e5e7eb',
+                        background: '#ffffff',
+                        padding: '0 4px',
+                        minHeight: '38px',
+                        gap: '0',
+                    }}>
+                        {[
+                            { id: 'dashboard', icon: 'ph-squares-four', label: 'Dashboard' },
+                            { id: 'trial-balance', icon: 'ph-scales', label: 'Trial Balance' },
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '8px 10px',
+                                    fontSize: '11px',
+                                    fontWeight: activeTab === tab.id ? 600 : 500,
+                                    color: activeTab === tab.id ? '#4f46e5' : '#9ca3af',
+                                    background: 'none',
+                                    border: 'none',
+                                    borderBottom: activeTab === tab.id ? '2px solid #4f46e5' : '2px solid transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                <i className={`ph ${tab.icon}`} style={{ fontSize: '13px' }}></i>
+                                {tab.label}
+                            </button>
+                        ))}
+                        {/* Close button */}
+                        <button
+                            onClick={() => setIsPanelOpen(false)}
+                            style={{
+                                marginLeft: 'auto',
+                                padding: '4px 6px',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#9ca3af',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                            }}
+                            title="Close panel"
+                        >
+                            <i className="ph ph-x" style={{ fontSize: '14px' }}></i>
+                        </button>
+                    </div>
 
-                    {/* Panel Content */}
-                    {activePanel === 'utility' && <UtilityBar transactions={data} />}
-                    {activePanel === 'report' && (
-                        <LiveReportPanel
-                            reportType="trial-balance"
-                            transactions={data}
-                            selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
-                            onAccountClick={(accountCode) => {
-                                // Set category column filter
-                                setColumnFilters([{ id: 'category', value: accountCode }]);
-                            }}
-                            onClearFilter={() => {
-                                // Clear category column filter
-                                setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
-                            }}
-                        />
-                    )}
+                    {/* Tab Content */}
+                    <div style={{ flex: 1, overflow: 'auto', padding: activeTab === 'trial-balance' ? '0' : '16px' }}>
+                        {activeTab === 'dashboard' && <UtilityBar transactions={data} />}
+                        {activeTab === 'trial-balance' && (
+                            <LiveReportPanel
+                                reportType="trial-balance"
+                                transactions={data}
+                                selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
+                                onAccountClick={(accountCode) => {
+                                    setColumnFilters([{ id: 'category', value: accountCode }]);
+                                }}
+                                onClearFilter={() => {
+                                    setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
+                                }}
+                            />
+                        )}
+                    </div>
                 </div>
             )}
         </div>

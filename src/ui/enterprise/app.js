@@ -566,7 +566,7 @@
 
       // Dispatch event for React components to listen to
       window.dispatchEvent(new CustomEvent('sidebarCollapsed', {
-        detail: { collapsed: isCollapsed }
+        detail: { isCollapsed }
       }));
 
       // Update utility bar content when collapsed
@@ -1600,20 +1600,15 @@
         const bcRoute = isHome ? 'home' : (bc.label === 'Transactions' ? 'import' : bc.label.toLowerCase());
 
         return `
-          <div class="breadcrumb-item ${isLast ? 'active' : ''}" 
+          <div class="breadcrumb-item ${isLast ? 'active' : ''}"
                style="cursor: ${isLast ? 'default' : 'pointer'};"
                onclick="${isLast ? '' : `window.navigateTo('${bcRoute}');`}">
-            ${isHome ? '<i class="ph ph-house breadcrumb-icon" style="margin-right: 6px; font-size: 14px; color: #3b82f6;"></i>' : ''}
-            <span class="breadcrumb-label" style="${!isLast ? 'color: #3b82f6; font-weight: 500;' : ''}">${bc.label}</span>
+            ${isHome ? '<i class="ph ph-house" style="margin-right: 5px; font-size: 13px;"></i>' : ''}
+            <span>${bc.label}</span>
           </div>
-          ${isLast ? '' : '<span class="breadcrumb-separator" style="margin: 0 10px; color: #cbd5e1;"><i class="ph ph-caret-right" style="font-size: 10px;"></i></span>'}
+          ${isLast ? '' : '<span class="breadcrumb-separator"><i class="ph ph-caret-right"></i></span>'}
         `;
-      }).join('') + `
-        <div style="flex: 1;"></div>
-        <button onclick="window.devReset()" style="padding: 4px 10px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 12px;" title="Clear all localStorage and reset (Dev only)">
-          ⚠️ DEV RESET
-        </button>
-      `;
+      }).join('');
     }
 
     //Update sidebar
@@ -2482,23 +2477,18 @@
       bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
         const isLast = i === UI_STATE.breadcrumbs.length - 1;
         const isHome = bc.label.toLowerCase() === 'home';
-        const route = isHome ? 'home' : 'import'; // Map labels to routes
+        const route = isHome ? 'home' : 'import';
 
         return `
-          <div class="breadcrumb-item ${isLast ? 'active' : ''}" 
+          <div class="breadcrumb-item ${isLast ? 'active' : ''}"
                style="cursor: ${isLast ? 'default' : 'pointer'};"
                onclick="${isLast ? '' : `window.navigateTo('${route}');`}">
-            ${isHome ? '<i class="ph ph-house breadcrumb-icon" style="margin-right: 6px; font-size: 14px; color: #3b82f6;"></i>' : ''}
-            <span class="breadcrumb-label" style="${!isLast ? 'color: #3b82f6; font-weight: 500;' : ''}">${bc.label}</span>
+            ${isHome ? '<i class="ph ph-house" style="margin-right: 5px; font-size: 13px;"></i>' : ''}
+            <span>${bc.label}</span>
           </div>
-          ${isLast ? '' : '<span class="breadcrumb-separator" style="margin: 0 10px; color: #cbd5e1;"><i class="ph ph-caret-right" style="font-size: 10px;"></i></span>'}
+          ${isLast ? '' : '<span class="breadcrumb-separator"><i class="ph ph-caret-right"></i></span>'}
         `;
-      }).join('') + `
-        <div style="flex: 1;"></div>
-        <button onclick="window.devReset()" style="padding: 4px 10px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 12px;" title="Clear all localStorage and reset (Dev only)">
-          ⚠️ DEV RESET
-        </button>
-      `;
+      }).join('');
     }
 
     // 3. Stage Content
@@ -2741,7 +2731,7 @@
     const getSingleIcon = (iconCode, size = 28) => {
       const bank = (iconCode || '').toLowerCase();
       const iconStyle = `width: ${size}px; height: ${size}px; border-radius: 4px; object-fit: contain;`;
-      const basePath = '/src/ui/enterprise/assets/logos/';
+      const basePath = '/logos/';
 
       // Bank icons
       if (bank === 'rbc' || bank.includes('royal')) return `<img src="${basePath}rbc.png" alt="RBC" style="${iconStyle}" />`;
@@ -3121,7 +3111,7 @@
     const getBankIcon = (bankName) => {
       const bank = (bankName || '').toLowerCase();
       const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
-      const basePath = '/src/ui/enterprise/assets/logos/';
+      const basePath = '/logos/';
       if (bank.includes('rbc') || bank.includes('royal')) return '<img src="' + basePath + 'rbc.png" alt="RBC" style="' + iconStyle + '" />';
       if (bank.includes('td') || bank.includes('dominion')) return '<img src="' + basePath + 'td.png" alt="TD" style="' + iconStyle + '" />';
       if (bank.includes('bmo') || bank.includes('montreal')) return '<img src="' + basePath + 'bmo.png" alt="BMO" style="' + iconStyle + '" />';
@@ -3395,12 +3385,12 @@
         
         <!-- Bank Icons Row -->
         <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; max-width: 600px; margin-left: auto; margin-right: auto;">
-          <img src="/src/ui/enterprise/assets/logos/rbc.png" alt="RBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="RBC Royal Bank">
-          <img src="/src/ui/enterprise/assets/logos/td.png" alt="TD" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="TD Canada Trust">
-          <img src="/src/ui/enterprise/assets/logos/bmo.png" alt="BMO" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="BMO Bank of Montreal">
-          <img src="/src/ui/enterprise/assets/logos/scotia.png" alt="Scotia" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="Scotiabank">
-          <img src="/src/ui/enterprise/assets/logos/cibc.png" alt="CIBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="CIBC">
-          <img src="/src/ui/enterprise/assets/logos/amex.png" alt="Amex" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="American Express">
+          <img src="/logos/rbc.png" alt="RBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="RBC Royal Bank">
+          <img src="/logos/td.png" alt="TD" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="TD Canada Trust">
+          <img src="/logos/bmo.png" alt="BMO" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="BMO Bank of Montreal">
+          <img src="/logos/scotia.png" alt="Scotia" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="Scotiabank">
+          <img src="/logos/cibc.png" alt="CIBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="CIBC">
+          <img src="/logos/amex.png" alt="Amex" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="American Express">
         </div>
         
         <div style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 8px;">No transactions yet.</div>

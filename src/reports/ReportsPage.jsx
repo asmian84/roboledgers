@@ -2,6 +2,11 @@ import React from 'react';
 import { TrialBalanceReport } from './TrialBalanceReport.jsx';
 import { GSTReport } from './GSTReport.jsx';
 import { IncomeStatementReport } from './IncomeStatementReport.jsx';
+import { BalanceSheetReport } from './BalanceSheetReport.jsx';
+import { GeneralLedgerReport } from './GeneralLedgerReport.jsx';
+import { GeneralJournalReport } from './GeneralJournalReport.jsx';
+import { COASummaryReport } from './COASummaryReport.jsx';
+import { FinancialRatiosReport } from './FinancialRatiosReport.jsx';
 
 /**
  * ReportsPage - Financial Reports Hub
@@ -44,7 +49,8 @@ export function ReportsPage() {
             title: 'Balance Sheet',
             description: 'Assets, liabilities, equity',
             color: 'cyan',
-            ready: false
+            ready: true,
+            component: BalanceSheetReport
         },
         {
             id: 'cash-flow',
@@ -60,7 +66,8 @@ export function ReportsPage() {
             title: 'General Ledger',
             description: 'Account-specific history',
             color: 'indigo',
-            ready: false
+            ready: true,
+            component: GeneralLedgerReport
         },
         {
             id: 'general-journal',
@@ -68,7 +75,8 @@ export function ReportsPage() {
             title: 'General Journal',
             description: 'Transaction log',
             color: 'purple',
-            ready: false
+            ready: true,
+            component: GeneralJournalReport
         },
         {
             id: 'coa-summary',
@@ -76,7 +84,8 @@ export function ReportsPage() {
             title: 'COA Summary',
             description: 'Category breakdown',
             color: 'orange',
-            ready: false
+            ready: true,
+            component: COASummaryReport
         },
         {
             id: 'financial-ratios',
@@ -84,7 +93,8 @@ export function ReportsPage() {
             title: 'Financial Ratios',
             description: 'Key metrics',
             color: 'violet',
-            ready: false
+            ready: true,
+            component: FinancialRatiosReport
         }
     ];
 
