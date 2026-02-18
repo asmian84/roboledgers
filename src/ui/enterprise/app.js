@@ -92,7 +92,7 @@
       validFiles.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
       window.handleFilesSelected(validFiles);
     } else {
-      alert('No PDF or CSV files found in the selected folder.');
+      console.warn('[Upload] No PDF or CSV files found in the selected folder.');
     }
     // Reset so same folder can be re-selected
     event.target.value = '';
@@ -216,7 +216,7 @@
           validFiles.sort((a, b) => (a._path || a.name).localeCompare(b._path || b.name));
           window.handleFilesSelected(validFiles);
         } else {
-          alert('No PDF or CSV files found in the dropped folder.');
+          console.warn('[DROP] No PDF or CSV files found in the dropped folder.');
         }
         return;
       }
@@ -4082,18 +4082,11 @@ window.handleMainUpload = function (input) {
     fileType === 'csv' ? 'CSV/Excel file' :
       'file';
 
-  let confirmMessage;
-  if (filteredCount === totalCount) {
-    // All files match the filter
-    confirmMessage = `Upload ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} to this site?\n\nThis will upload all files from "${isFolderMode ? 'selected folders' : 'selection'}". Only do this if you trust the site.`;
+  // Log summary to console (no confirmation popup)
+  if (filteredCount !== totalCount) {
+    console.log(`[Upload] Processing ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} (${totalCount - filteredCount} non-matching files skipped)`);
   } else {
-    // Show filtered vs total count
-    confirmMessage = `Upload ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} (out of ${totalCount} total files)?\n\nThis will upload all ${fileTypeName}s from "${isFolderMode ? 'selected folders' : 'selection'}". Only do this if you trust the site.`;
-  }
-
-  if (!confirm(confirmMessage)) {
-    input.value = '';
-    return;
+    console.log(`[Upload] Processing ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''}`);
   }
 
   // Show subfolder summary for folder mode
