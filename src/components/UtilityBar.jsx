@@ -19,7 +19,7 @@ const CHART_COLORS = [
 /**
  * Simple SVG Pie Chart
  */
-function PieChart({ data, size = 200 }) {
+function PieChart({ data, size = 200, onSliceClick }) {
     if (!data || data.length === 0) {
         return (
             <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
@@ -65,13 +65,14 @@ function PieChart({ data, size = 200 }) {
             color: CHART_COLORS[index % CHART_COLORS.length],
             label: item.label,
             value: item.value,
+            filterFn: item.filterFn,
             percentage: percentage.toFixed(1)
         };
     });
 
     return (
         <div className="space-y-3">
-            {/* SVG Pie Chart */}
+            {/* SVG Pie Chart — each slice is clickable */}
             <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="mx-auto">
                 {slices.map((slice, index) => (
                     <path
@@ -81,14 +82,21 @@ function PieChart({ data, size = 200 }) {
                         stroke="white"
                         strokeWidth="2"
                         className="transition-opacity hover:opacity-80 cursor-pointer"
+                        title={`${slice.label} — click to filter`}
+                        onClick={() => onSliceClick?.(slice)}
                     />
                 ))}
             </svg>
 
-            {/* Legend */}
+            {/* Legend — each row is clickable */}
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {slices.map((slice, index) => (
-                    <div key={index} className="flex items-center justify-between text-xs">
+                    <div
+                        key={index}
+                        className="flex items-center justify-between text-xs cursor-pointer rounded px-1 py-0.5 hover:bg-gray-100 transition-colors"
+                        title={`Filter to: ${slice.label}`}
+                        onClick={() => onSliceClick?.(slice)}
+                    >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                             <div
                                 className="w-3 h-3 rounded-sm flex-shrink-0"
@@ -298,9 +306,15 @@ export function UtilityBar({ transactions = [], onFilterTransactions }) {
             {/* Category Distribution Pie Chart */}
             <div className="p-4 bg-white border-b border-gray-200">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Category Distribution</h3>
+                <p className="text-[10px] text-gray-400 mb-2">Click a slice or row to filter the grid</p>
                 <PieChart
                     data={getCategoryDistribution(transactions)}
                     size={180}
+                    onSliceClick={(slice) => {
+                        if (typeof slice.filterFn === 'function') {
+                            onFilterTransactions?.({ label: slice.label, filter: slice.filterFn });
+                        }
+                    }}
                 />
             </div>
 
@@ -359,9 +373,12 @@ function getCategoryDistribution(transactions) {
         .map(([code, count]) => {
             // Try to get friendly name from COA
             const account = window.RoboLedger?.COA?.get(String(code));
+            const label = account?.name || (code === 'Uncategorized' ? 'Uncategorized' : code);
             return {
-                label: account?.name || code,
-                value: count
+                label,
+                value: count,
+                // filterFn used by PieChart onSliceClick to filter the grid
+                filterFn: (tx) => (tx.category || 'Uncategorized') === code,
             };
         });
 }

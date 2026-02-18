@@ -217,40 +217,48 @@ window.unmountDocumentViewer = (containerId) => {
  *   - null/undefined: clears all filters and restores full dataset
  */
 window.setTxGridFilter = (filterValue) => {
-    if (!window._txGridRoot || !window._txGridProps) {
-        console.warn('[setTxGridFilter] ❌ Grid not mounted (_txGridRoot=' + !!window._txGridRoot + ', _txGridProps=' + !!window._txGridProps + ')');
+    // Always resolve full dataset first
+    const allData = window._txGridAllData
+        || window._txGridProps?.data
+        || window.RoboLedger?.Ledger?.getAll()
+        || [];
+    if (!window._txGridAllData && allData.length) window._txGridAllData = allData;
+
+    let filteredData, newGlobalFilter = '';
+
+    if (typeof filterValue === 'function') {
+        window._txGridFilterPredicate = filterValue;
+        filteredData = allData.filter(filterValue);
+        console.log(`[setTxGridFilter] predicate → ${filteredData.length} / ${allData.length} rows`);
+    } else if (filterValue === null || filterValue === undefined) {
+        window._txGridFilterPredicate = null;
+        filteredData = allData;
+        console.log(`[setTxGridFilter] cleared → ${allData.length} rows`);
+    } else {
+        window._txGridFilterPredicate = null;
+        filteredData = allData;
+        newGlobalFilter = String(filterValue);
+        console.log(`[setTxGridFilter] globalFilter → "${newGlobalFilter}"`);
+    }
+
+    // Preferred: direct React state bridge (never goes stale)
+    if (window.__txGridSetData) {
+        if (window._txGridProps) {
+            window._txGridProps.data = filteredData;
+            window._txGridProps.globalFilter = newGlobalFilter;
+        }
+        window.__txGridSetData(filteredData);
         return;
     }
 
-    if (typeof filterValue === 'function') {
-        // Predicate filter: filter the full dataset and render filtered subset
-        // Store the predicate so we can restore it
-        window._txGridFilterPredicate = filterValue;
-        const allData = window._txGridAllData || window._txGridProps.data;
-        window._txGridAllData = allData; // Remember full dataset
-        const before = allData.length;
-        window._txGridProps.data = allData.filter(filterValue);
-        window._txGridProps.globalFilter = ''; // Clear text filter when using predicate
-        console.log(`[setTxGridFilter] predicate filter applied: ${before} → ${window._txGridProps.data.length} rows`);
-    } else if (filterValue === null || filterValue === undefined) {
-        // Clear filter — restore full dataset
-        window._txGridFilterPredicate = null;
-        if (window._txGridAllData) {
-            window._txGridProps.data = window._txGridAllData;
-        }
-        window._txGridProps.globalFilter = '';
-        console.log(`[setTxGridFilter] filter cleared — restored ${window._txGridProps.data.length} rows`);
-    } else {
-        // String/number: use as TanStack globalFilter (searches across columns)
-        window._txGridFilterPredicate = null;
-        if (window._txGridAllData) {
-            window._txGridProps.data = window._txGridAllData;
-        }
-        window._txGridProps.globalFilter = filterValue;
-        console.log(`[setTxGridFilter] globalFilter set to: "${filterValue}"`);
+    // Fallback: re-render via root (may be stale if DOM was replaced)
+    if (!window._txGridRoot || !window._txGridProps) {
+        console.warn('[setTxGridFilter] ❌ No bridge and no root available');
+        return;
     }
-
-    console.log('[setTxGridFilter] Re-rendering grid...');
+    console.log('[setTxGridFilter] → fallback root.render()');
+    window._txGridProps.data = filteredData;
+    window._txGridProps.globalFilter = newGlobalFilter;
     window._txGridRoot.render(
         <React.StrictMode>
             <ErrorBoundary fallbackMessage="Failed to render transactions grid">
