@@ -17,21 +17,157 @@ function setOpeningBalances(map) {
     window.RoboLedger._tbOpeningBalances = map;
 }
 
+// ─── Shared helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Normalize an account name to alphanumeric-only lowercase for fuzzy matching.
+ * Strips QB dot separators (·), dashes, slashes, punctuation — everything that
+ * differs between "1200 · Accounts Receivable" and "Accounts receivable".
+ */
+function normName(s) {
+    return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Strip QB-style dot separator and leading/trailing whitespace from a name.
+ * QB exports: "1200 · Accounts Receivable" or "6010 · Supplies"
+ * The · (U+00B7 middle dot) or • (U+2022 bullet) separates code from name.
+ */
+function stripQBDot(s) {
+    // Remove leading middle-dot / bullet / em-dash artifacts after code extraction
+    return s.replace(/^[\s·•\-–—]+/, '').trim();
+}
+
+/**
+ * Extract numeric code from a QB-style "NNNN · Account Name" string.
+ * Returns { code, name } or null if no code found.
+ * Handles:
+ *   "1200 · Accounts Receivable"      → { code: '1200', name: 'Accounts Receivable' }
+ *   "6010 Supplies"                    → { code: '6010', name: 'Supplies' }
+ *   "  1040   Bank - chequing"         → { code: '1040', name: 'Bank - chequing' }
+ *   "Accounts Receivable"              → null (no leading code)
+ */
+function extractCodeAndName(raw) {
+    if (!raw) return null;
+    // Match: optional leading spaces, 3-5 digits, then optional dot-separator, then name
+    const m = raw.match(/^\s*(\d{3,5})\s*[·•\-–—]?\s*(.+)$/);
+    if (m) return { code: m[1], name: stripQBDot(m[2]) };
+    return null;
+}
+
+/**
+ * Match an account against the COA using a multi-tier strategy:
+ *  1. Exact code match
+ *  2. Normalized full-name exact match
+ *  3. Prefix match (longer name starts with shorter, min 5 chars)
+ *  4. Token overlap (≥2 meaningful words in common, min 4 chars each)
+ *
+ * Returns the matched COA code string, or '' if no match.
+ */
+function matchToCOA(code, name, allCOA) {
+    // Tier 1: exact code
+    if (code && allCOA.find(a => String(a.code) === code)) return code;
+
+    const nl = normName(name);
+    if (!nl || nl.length < 2) {
+        // No useful name — keep unmatched code as-is (user's custom COA)
+        return code || '';
+    }
+
+    // Tier 2: normalized exact match
+    const exactMatch = allCOA.find(a => normName(a.name) === nl);
+    if (exactMatch) return String(exactMatch.code);
+
+    // Tier 3: prefix match (both directions, min 5 meaningful chars)
+    if (nl.length >= 5) {
+        const prefix8 = nl.slice(0, 8);
+        const prefixMatch = allCOA.find(a => {
+            const an = normName(a.name);
+            return an.length >= 5 && (an.startsWith(prefix8) || nl.startsWith(normName(a.name).slice(0, 8)));
+        });
+        if (prefixMatch) return String(prefixMatch.code);
+    }
+
+    // Tier 4: token overlap — split both into words ≥4 chars, require ≥2 in common
+    const tokens = (s) => s.match(/[a-z0-9]{4,}/g) || [];
+    const nlTokens = new Set(tokens(nl));
+    if (nlTokens.size >= 2) {
+        let bestScore = 0, bestMatch = null;
+        for (const a of allCOA) {
+            const an = normName(a.name);
+            const aTokens = tokens(an);
+            const overlap = aTokens.filter(t => nlTokens.has(t)).length;
+            if (overlap >= 2 && overlap > bestScore) {
+                bestScore = overlap;
+                bestMatch = a;
+            }
+        }
+        if (bestMatch) return String(bestMatch.code);
+    }
+
+    // No match — keep the extracted code anyway (user's custom COA entry)
+    return code || '';
+}
+
+/**
+ * Amount parser: handles $, commas, spaces, parentheses (negative), trailing minus.
+ * Returns null if the string is empty/blank/dash (not a real zero).
+ */
+function parseAmt(v) {
+    if (v == null) return null;
+    let s = String(v).replace(/[$\s,]/g, '').trim();
+    if (!s || s === '-' || s === '—' || s === '') return null;
+    const isNeg = s.startsWith('(') && s.endsWith(')');
+    const trailingMinus = s.endsWith('-');
+    s = s.replace(/[()]/g, '').replace(/-$/, '');
+    const n = parseFloat(s);
+    if (isNaN(n)) return null;
+    return (isNeg || trailingMinus) ? -n : n;
+}
+
+/**
+ * Returns true for lines that should be skipped entirely:
+ * section headers, subtotal/total rows, page noise, QB "As of" date lines,
+ * QB parent account rows (have code but no numeric columns — these are grouping
+ * headers only; children carry the actual balances).
+ */
+function isHeaderOrTotalLine(text) {
+    if (!text.trim()) return true;
+    // Skip "Total ..." / "TOTAL ..." subtotal rows (QB and Caseware both emit these)
+    if (/^\s*total\b/i.test(text)) return true;
+    // Skip grand total / net income / retained earnings synthesis rows
+    if (/^\s*(grand\s*total|net\s*income|net\s*loss|retained\s*earn)/i.test(text)) return true;
+    // Skip pure section headers (no numbers on the line): ASSETS, LIABILITIES etc
+    if (/^\s*(assets?|liabilit|equity|revenue|income|expense|cost\s+of|operating|non.?operating)\s*$/i.test(text)) return true;
+    // Skip QB report header lines
+    if (/^\s*(as\s+of\s+|accrual\s+basis|cash\s+basis|prepared\s+by|page\s+\d|trial\s+balance|balance\s+sheet|income\s+statement|profit\s+.+loss)/i.test(text)) return true;
+    // Skip column header row
+    if (/\b(debit|dr)\b.+\b(credit|cr)\b/i.test(text)) return true;
+    return false;
+}
+
 // ─── CSV parser ────────────────────────────────────────────────────────────────
+/**
+ * Parses a Trial Balance CSV from QuickBooks (comma or tab) or Caseware.
+ *
+ * QB Online export format (typical):
+ *   "","Trial Balance","",""
+ *   "","As of December 31, 2022","",""
+ *   "","","",""
+ *   "","DEBIT","CREDIT",""
+ *   "1001 · Bank - Chequing","398094.65","",""
+ *   "Total Bank - Chequing","398094.65","",""
+ *
+ * Caseware format:
+ *   Code,Account Description,Debit,Credit,Balance
+ *   1040,Savings account #2,398094.65,,398094.65
+ */
 function parseTBCsv(csvText) {
     const lines = csvText.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return null;
     const firstLine = lines[0];
     const delimiter = firstLine.includes('\t') ? '\t' : ',';
-    const headers = firstLine.split(delimiter).map(h => h.replace(/"/g, '').trim().toLowerCase());
-    const codeIdx    = headers.findIndex(h => /^(code|account\s*code|ref|ref\s*no|number|acct)$/i.test(h));
-    const nameIdx    = headers.findIndex(h => /^(account|account\s*name|description|name|account\s*description)$/i.test(h));
-    const debitIdx   = headers.findIndex(h => /^(debit|dr)$/i.test(h));
-    const creditIdx  = headers.findIndex(h => /^(credit|cr)$/i.test(h));
-    const balanceIdx = headers.findIndex(h => /^(balance|net|closing)$/i.test(h));
-    const hasExplicitCode = codeIdx >= 0;
-    const result = {};
-    const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+
     const splitLine = (line) => {
         if (delimiter !== ',') return line.split(delimiter);
         const res = []; let inQ = false, cur = '';
@@ -43,48 +179,118 @@ function parseTBCsv(csvText) {
         res.push(cur);
         return res;
     };
-    for (let i = 1; i < lines.length; i++) {
+
+    const clean = (v) => (v || '').replace(/"/g, '').trim();
+
+    // ── Detect header row ─────────────────────────────────────────────────────
+    // Scan up to first 10 lines for the column-header row (contains DEBIT or CREDIT)
+    let headerIdx = -1;
+    let codeIdx = -1, nameIdx = -1, debitIdx = -1, creditIdx = -1, balanceIdx = -1;
+
+    for (let i = 0; i < Math.min(10, lines.length); i++) {
+        const parts = splitLine(lines[i]).map(clean).map(h => h.toLowerCase());
+        const joined = parts.join(' ');
+        if (/\bdebit\b/.test(joined) || /\bcredit\b/.test(joined)) {
+            headerIdx = i;
+            codeIdx    = parts.findIndex(h => /^(code|account\s*code|ref|ref\s*no|number|acct|#)$/.test(h));
+            nameIdx    = parts.findIndex(h => /^(account|account\s*name|description|name|account\s*description)$/.test(h));
+            debitIdx   = parts.findIndex(h => /^(debit|dr)$/.test(h));
+            creditIdx  = parts.findIndex(h => /^(credit|cr)$/.test(h));
+            balanceIdx = parts.findIndex(h => /^(balance|net|closing|total|amount)$/.test(h));
+            break;
+        }
+    }
+
+    // QB Online uses a different layout: name in col 0, debit in col 1, credit in col 2
+    // If no explicit header found, default to that layout
+    const hasHeader    = headerIdx >= 0;
+    const hasExplicitCode = codeIdx >= 0;
+    const startIdx = hasHeader ? headerIdx + 1 : 1;
+
+    const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+    const result = {};
+
+    for (let i = startIdx; i < lines.length; i++) {
         const parts = splitLine(lines[i]);
         if (parts.length < 2) continue;
-        const rawName = nameIdx >= 0 ? parts[nameIdx]?.replace(/"/g, '').trim() : parts[0]?.replace(/"/g, '').trim();
+
+        // Determine raw name field
+        const rawName = nameIdx >= 0
+            ? clean(parts[nameIdx])
+            : clean(parts[0]);
         if (!rawName) continue;
-        if (/^(total|grand\s*total|subtotal|net\s*income|retained|opening)/i.test(rawName)) continue;
+
+        // Skip header/total/section lines
+        if (isHeaderOrTotalLine(rawName)) continue;
+
+        // Extract code and clean name
         let code = '', name = rawName;
         if (hasExplicitCode && parts[codeIdx]) {
-            code = parts[codeIdx].replace(/"/g, '').trim();
+            code = clean(parts[codeIdx]);
+            name = stripQBDot(rawName);
         } else {
-            const m = rawName.match(/^(\d{3,5})\s+(.+)$/);
-            if (m) { code = m[1]; name = m[2]; }
+            // Try extracting leading code from the name (QB: "1200 · Accounts Receivable")
+            const extracted = extractCodeAndName(rawName);
+            if (extracted) { code = extracted.code; name = extracted.name; }
         }
-        let matchedCode = code;
-        if (!matchedCode || !allCOA.find(a => String(a.code) === matchedCode)) {
-            const nl = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const byName = allCOA.find(a => {
-                const an = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                return an === nl || an.startsWith(nl) || nl.startsWith(an);
-            });
-            if (byName) matchedCode = String(byName.code);
-        }
+
+        // Match to COA
+        const matchedCode = matchToCOA(code, name, allCOA);
         if (!matchedCode) continue;
-        const parseAmt = (v) => {
-            if (!v) return 0;
-            const s = String(v).replace(/"/g, '').replace(/[$, ]/g, '').trim();
-            if (!s || s === '-' || s === '—') return 0;
-            return parseFloat(s) || 0;
-        };
-        const debit   = debitIdx   >= 0 ? parseAmt(parts[debitIdx])   : 0;
-        const credit  = creditIdx  >= 0 ? parseAmt(parts[creditIdx])  : 0;
-        const balance = balanceIdx >= 0 ? parseAmt(parts[balanceIdx]) : (debit - credit);
-        result[matchedCode] = { name, debit, credit, balance };
+
+        const parseField = (idx) => idx >= 0 ? (parseAmt(clean(parts[idx])) ?? 0) : 0;
+        const debit   = parseField(debitIdx   >= 0 ? debitIdx   : 1);
+        const credit  = parseField(creditIdx  >= 0 ? creditIdx  : 2);
+        const balance = balanceIdx >= 0 ? (parseAmt(clean(parts[balanceIdx])) ?? (debit - credit)) : (debit - credit);
+
+        // Deduplicate: accumulate if same code appears multiple times (multi-page CSV)
+        if (result[matchedCode]) {
+            result[matchedCode].debit  += debit;
+            result[matchedCode].credit += credit;
+            result[matchedCode].balance = result[matchedCode].debit - result[matchedCode].credit;
+        } else {
+            result[matchedCode] = { name, debit, credit, balance };
+        }
     }
+
     return Object.keys(result).length > 0 ? result : null;
 }
 
 // ─── PDF parser ────────────────────────────────────────────────────────────────
+/**
+ * Extracts a Trial Balance from a QB Online / QB Desktop / Caseware PDF.
+ *
+ * QB Online PDF layout (real-world):
+ *   - Page header: company name, "Trial Balance", "As of December 31, 2022", "Accrual Basis"
+ *   - Column headers: right-aligned "DEBIT" and "CREDIT" (sometimes just "TOTAL")
+ *   - Account rows: "1001 · Bank - Chequing    398,094.65"
+ *     where the code·name is left-justified and amount is right-justified
+ *   - Parent rows: "ASSETS" / "Current Assets" — no numbers
+ *   - Subtotal rows: "Total Current Assets   398,094.65" — skip these
+ *
+ * QB Desktop PDF: similar but uses "Balance Sheet" section headers more aggressively.
+ *
+ * Caseware PDF: "Ref No  Account Description  Debit  Credit  Balance"
+ *   — three numeric columns instead of QB's one or two.
+ *
+ * Strategy:
+ *   1. Extract text items with (x, y) coordinates from all pages
+ *   2. Group into lines by y-bucket (3pt tolerance)
+ *   3. Find column header line → determine x-anchors for numeric columns
+ *   4. For each data row: extract left-side name/code, bucket into numeric columns
+ *   5. Skip parent/total lines (no numeric columns, or "Total" prefix)
+ *   6. Match each row to COA via matchToCOA()
+ *   7. De-duplicate parent vs child: if parent code already has a value and
+ *      children with sub-codes are found later, prefer children (last-write wins
+ *      for same code; different codes accumulate independently)
+ *   8. Fallback: reconstruct plain text → feed to parseTBCsv
+ */
 async function parseTBPdf(arrayBuffer) {
     const pdfjsLib = window.pdfjsLib;
     if (!pdfjsLib) throw new Error('PDF.js not available');
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    // ── Step 1: Extract all text items with coordinates ───────────────────────
     const allLines = [];
     for (let p = 1; p <= pdf.numPages; p++) {
         const page    = await pdf.getPage(p);
@@ -98,104 +304,161 @@ async function parseTBPdf(arrayBuffer) {
             if (!lineMap[yKey]) lineMap[yKey] = [];
             lineMap[yKey].push({ x, y: rawY, text: item.str, w: item.width || 0 });
         });
-        const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
-        sortedYs.forEach(yKey => {
+        // Sort top-to-bottom (PDF y=0 at bottom, so descending y = top-first)
+        Object.keys(lineMap).map(Number).sort((a, b) => b - a).forEach(yKey => {
             allLines.push(lineMap[yKey].sort((a, b) => a.x - b.x));
         });
     }
-    let debitX = null, creditX = null, balanceX = null, headerLineIdx = -1;
+
+    // ── Step 2: Find the column header line ───────────────────────────────────
+    // QB Online:   [blank]  DEBIT  CREDIT
+    // QB Desktop:  [blank]  DEBIT  CREDIT  (sometimes BALANCE too)
+    // QB Online v2: [blank]  TOTAL           (single-column TB)
+    // Caseware:    Ref No   Account Description   Debit   Credit   Balance
+    let debitX = null, creditX = null, balanceX = null;
+    let totalX  = null;  // QB Online single-column mode
+    let headerLineIdx = -1;
+    let isSingleColumn = false;
+
     for (let i = 0; i < allLines.length; i++) {
-        const line  = allLines[i];
+        const line   = allLines[i];
         const joined = line.map(item => item.text.trim().toUpperCase()).join(' ');
+
         if (/\bDEBIT\b/.test(joined) && /\bCREDIT\b/.test(joined)) {
             const debitItem  = line.find(item => /^DEBIT$/i.test(item.text.trim()));
             const creditItem = line.find(item => /^CREDIT$/i.test(item.text.trim()));
             const balItem    = line.find(item => /^BALANCE$/i.test(item.text.trim()));
             if (debitItem && creditItem) {
-                debitX  = debitItem.x  + (debitItem.w  || 0);
-                creditX = creditItem.x + (creditItem.w || 0);
+                debitX   = debitItem.x  + (debitItem.w  || 0);
+                creditX  = creditItem.x + (creditItem.w || 0);
                 balanceX = balItem ? (balItem.x + (balItem.w || 0)) : creditX + 90;
                 headerLineIdx = i;
                 break;
             }
         }
+
+        // QB Online single-column: header says "TOTAL" only
+        if (!debitX && /\bTOTAL\b/.test(joined) && !/\bDEBIT\b/.test(joined)) {
+            const totalItem = line.find(item => /^TOTAL$/i.test(item.text.trim()));
+            if (totalItem) {
+                totalX = totalItem.x + (totalItem.w || 0);
+                isSingleColumn = true;
+                headerLineIdx = i;
+                break;
+            }
+        }
     }
-    if (debitX === null) {
-        const textLines = allLines.map(line => line.map(i => i.text).filter(t => t.trim()).join('  ')).filter(l => l.trim());
+
+    // ── Step 3: Fallback to plain-text CSV reconstruction ─────────────────────
+    if (debitX === null && !isSingleColumn) {
+        const textLines = allLines
+            .map(line => line.map(i => i.text).filter(t => t.trim()).join('  '))
+            .filter(l => l.trim());
         return parseTBCsv(textLines.join('\n'));
     }
-    const SLOT_W  = 100;
-    const NAME_MAX = debitX - SLOT_W - 10;
-    const inDebitSlot   = (x) => x > (debitX  - SLOT_W) && x <= (debitX  + 20);
-    const inCreditSlot  = (x) => x > (creditX - SLOT_W) && x <= (creditX + 20);
-    const inBalanceSlot = (x) => x > (balanceX - SLOT_W) && x <= (balanceX + 20);
+
+    // ── Step 4: Define column slot predicates ─────────────────────────────────
+    const SLOT_W   = 110; // points — generous to catch all digit widths
+    const NAME_MAX = isSingleColumn
+        ? (totalX - SLOT_W - 10)
+        : (debitX - SLOT_W - 10);
+
+    const inDebitSlot   = (x) => !isSingleColumn && x > (debitX  - SLOT_W) && x <= (debitX  + 25);
+    const inCreditSlot  = (x) => !isSingleColumn && x > (creditX - SLOT_W) && x <= (creditX + 25);
+    const inBalanceSlot = (x) => !isSingleColumn && x > (balanceX - SLOT_W) && x <= (balanceX + 25);
+    const inTotalSlot   = (x) => isSingleColumn  && x > (totalX  - SLOT_W) && x <= (totalX  + 25);
     const inNameRegion  = (x) => x < NAME_MAX;
-    const parseAmt = (v) => {
-        if (!v) return null;
-        let s = String(v).replace(/[$\s,]/g, '').trim();
-        if (!s || s === '-' || s === '—') return null;
-        const isNeg = s.startsWith('(') && s.endsWith(')');
-        const hasTrailingMinus = s.endsWith('-');
-        s = s.replace(/[()]/g, '').replace(/-$/, '');
-        const n = parseFloat(s);
-        if (isNaN(n)) return null;
-        return isNeg || hasTrailingMinus ? -n : n;
-    };
-    const isSkipLine = (joined) => {
-        if (!joined.trim()) return true;
-        if (/^(assets?|liabilit|equity|revenue|income|expense|cost\s+of|total\s+|subtotal|grand\s*total|net\s*income|net\s*loss|retained earn|opening|closing|prepared\s*by|partner|working\s*paper|trial\s*balance|balance\s*sheet|income\s*statement|period\s*end|as\s*of\s*|page\s*\d)/i.test(joined.trim())) return true;
-        if (/\bDEBIT\b.*\bCREDIT\b/i.test(joined)) return true;
-        return false;
-    };
-    const result = {};
+
+    // ── Step 5: Parse data rows ───────────────────────────────────────────────
     const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+    const result = {};
+
     for (let i = 0; i < allLines.length; i++) {
         if (i <= headerLineIdx) continue;
+
         const line   = allLines[i];
         const joined = line.map(item => item.text).join(' ').trim();
-        if (isSkipLine(joined)) continue;
+
+        // Skip header/total/section lines
+        if (isHeaderOrTotalLine(joined)) continue;
+
+        // Bucket items
         const nameItems   = line.filter(item => inNameRegion(item.x));
         const debitItems  = line.filter(item => inDebitSlot(item.x));
         const creditItems = line.filter(item => inCreditSlot(item.x));
         const balItems    = line.filter(item => inBalanceSlot(item.x));
+        const totalItems  = line.filter(item => inTotalSlot(item.x));
+
+        // Reconstruct the left-side text (code + name region)
         const leftText = nameItems.map(i => i.text).join(' ').trim();
         if (!leftText) continue;
-        const hasAnyNumber = debitItems.length > 0 || creditItems.length > 0 || balItems.length > 0;
-        if (!hasAnyNumber) continue;
+
+        // Must have at least one numeric column to be a data row
+        const numericItems = isSingleColumn ? totalItems : [...debitItems, ...creditItems, ...balItems];
+        if (numericItems.length === 0) continue;
+
+        // ── Extract code and name ─────────────────────────────────────────────
+        // Strategy A: leftText joined has leading digits with QB dot: "1200 · Name"
+        // Strategy B: first PDF item is pure digits (Caseware separate code cell)
+        // Strategy C: leftText starts with digits+spaces+name (no dot)
         let code = '', name = leftText;
-        const codePrefixMatch = leftText.match(/^(\d{3,5})\s{2,}(.+)$/);
-        if (codePrefixMatch) { code = codePrefixMatch[1]; name = codePrefixMatch[2].trim(); }
-        else if (nameItems.length >= 2) {
+
+        const extracted = extractCodeAndName(leftText);
+        if (extracted) {
+            code = extracted.code;
+            name = extracted.name;
+        } else if (nameItems.length >= 2) {
+            // Caseware: code is a separate left-most PDF item
             const firstItem = nameItems[0].text.trim();
-            if (/^\d{3,5}$/.test(firstItem)) { code = firstItem; name = nameItems.slice(1).map(i => i.text).join(' ').trim(); }
+            if (/^\d{3,5}$/.test(firstItem)) {
+                code = firstItem;
+                name = nameItems.slice(1).map(i => i.text).join(' ').trim();
+            }
         }
-        const debit   = parseAmt(debitItems.map(i => i.text).join('').trim())  ?? 0;
-        const credit  = parseAmt(creditItems.map(i => i.text).join('').trim()) ?? 0;
-        const balance = parseAmt(balItems.map(i => i.text).join('').trim());
-        const finalBalance = balance !== null ? balance : (debit - credit);
-        if (debit === 0 && credit === 0 && finalBalance === 0 && !code) continue;
-        let matchedCode = '';
-        if (code && allCOA.find(a => String(a.code) === code)) matchedCode = code;
-        if (!matchedCode) {
-            const nl = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const byName = allCOA.find(a => {
-                const an = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                return an === nl || (nl.length > 5 && an.startsWith(nl.slice(0, 8))) || (nl.length > 5 && nl.startsWith(an.slice(0, 8)));
-            });
-            if (byName) matchedCode = String(byName.code);
+
+        // Also strip any QB dot artifact from name that survived extraction
+        name = stripQBDot(name);
+
+        // ── Parse amounts ─────────────────────────────────────────────────────
+        const joinAmt = (items) => items.map(i => i.text).join('').trim();
+
+        let debit = 0, credit = 0, balance = 0;
+        if (isSingleColumn) {
+            // QB single-column: TOTAL = net balance (positive = debit-normal)
+            const tot = parseAmt(joinAmt(totalItems)) ?? 0;
+            debit  = tot > 0 ? tot : 0;
+            credit = tot < 0 ? Math.abs(tot) : 0;
+            balance = tot;
+        } else {
+            debit   = parseAmt(joinAmt(debitItems))  ?? 0;
+            credit  = parseAmt(joinAmt(creditItems)) ?? 0;
+            const bal = parseAmt(joinAmt(balItems));
+            balance = bal !== null ? bal : (debit - credit);
         }
-        if (!matchedCode && code) matchedCode = code;
+
+        // Skip if truly empty (happens with zero-balance accounts in some QB versions)
+        if (debit === 0 && credit === 0 && balance === 0 && !code) continue;
+
+        // ── Match to COA ──────────────────────────────────────────────────────
+        const matchedCode = matchToCOA(code, name, allCOA);
         if (!matchedCode) continue;
+
+        // Deduplicate: accumulate debits/credits if same code appears across pages
         if (result[matchedCode]) {
             result[matchedCode].debit  += debit;
             result[matchedCode].credit += credit;
             result[matchedCode].balance = result[matchedCode].debit - result[matchedCode].credit;
         } else {
-            result[matchedCode] = { name, debit, credit, balance: finalBalance };
+            result[matchedCode] = { name, debit, credit, balance };
         }
     }
+
+    // ── Step 6: Fallback if nothing was parsed ────────────────────────────────
     if (Object.keys(result).length > 0) return result;
-    const textLines = allLines.map(line => line.map(i => i.text).filter(t => t.trim()).join('  ')).filter(l => l.trim());
+
+    const textLines = allLines
+        .map(line => line.map(i => i.text).filter(t => t.trim()).join('  '))
+        .filter(l => l.trim());
     return parseTBCsv(textLines.join('\n'));
 }
 
