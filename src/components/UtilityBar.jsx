@@ -374,9 +374,12 @@ export function UtilityBar({
 }) {
     // Calculate stats from transactions
     const stats = React.useMemo(() => {
-        const categorized   = transactions.filter(t => t.category && t.category !== 'UNCAT');
-        const uncategorized = transactions.filter(t => !t.category || t.category === 'UNCAT');
-        const needsReview   = transactions.filter(t => t.confidence != null && t.confidence < 0.7);
+        // 9970 = "Unusual item" — the fallback uncategorized bucket; treat as uncategorized
+        const isUncategorized = t => !t.category || t.category === 'UNCAT' || String(t.category) === '9970';
+        const categorized   = transactions.filter(t => !isUncategorized(t));
+        const uncategorized = transactions.filter(isUncategorized);
+        const needsReview   = transactions.filter(t =>
+            t.status === 'needs_review' || (t.confidence != null && t.confidence < 0.7));
 
         const totalDebit = transactions.reduce((sum, t) =>
             t.polarity === 'DEBIT'  ? sum + (t.amount_cents || 0) : sum, 0) / 100;
@@ -485,7 +488,7 @@ export function UtilityBar({
                         <div
                             className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
                             onClick={() => drill('Categorized',
-                                t => !!(t.category && t.category !== 'UNCAT'))}
+                                t => !!(t.category && t.category !== 'UNCAT' && String(t.category) !== '9970'))}
                         >
                             <div className="text-2xl font-bold text-blue-600">{stats.categorized}</div>
                             <div className="text-xs text-gray-500 mt-1">Categorized ({categorizationProgress}%)</div>
@@ -495,7 +498,7 @@ export function UtilityBar({
                         <div
                             className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
                             onClick={() => drill('Uncategorized',
-                                t => !t.category || t.category === 'UNCAT')}
+                                t => !t.category || t.category === 'UNCAT' || String(t.category) === '9970')}
                         >
                             <div className="text-2xl font-bold text-amber-600">{stats.uncategorized}</div>
                             <div className="text-xs text-gray-500 mt-1">Uncategorized</div>
@@ -508,7 +511,7 @@ export function UtilityBar({
                         <div
                             className="border-t border-pink-200 px-3 py-2 flex justify-between items-center cursor-pointer hover:bg-pink-100 transition-colors"
                             onClick={() => drill('Needs Review',
-                                t => t.confidence != null && t.confidence < 0.7)}
+                                t => t.status === 'needs_review' || (t.confidence != null && t.confidence < 0.7))}
                         >
                             <span className="text-xs text-orange-700 font-medium">⚠ Needs Review</span>
                             <span className="text-xs font-bold text-orange-700">{stats.needsReview}</span>
