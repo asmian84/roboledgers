@@ -124,9 +124,11 @@ const CASEWARE_THEMES = {
         headerFontSize: '12px',
         rowHeight: 56,
         borderColor: '#e4e7eb',
-        hoverBg: '#f0f9ff',
+        hoverBg: '#dbeafe',
         headerBg: '#eff6ff',
-        headerColor: '#3b82f6'
+        headerColor: '#3b82f6',
+        rowBg: '#f0f9ff',
+        rowBgAlt: '#e0f2fe'
     },
     'spectrum': {
         fontFamily: '"Segoe UI", Tahoma, sans-serif',
@@ -134,39 +136,47 @@ const CASEWARE_THEMES = {
         headerFontSize: '11px',
         rowHeight: 50,
         borderColor: '#e9d5ff',
-        hoverBg: '#faf5ff',
+        hoverBg: '#ede9fe',
         headerBg: '#f3e8ff',
-        headerColor: '#7c3aed'
+        headerColor: '#7c3aed',
+        rowBg: '#faf5ff',
+        rowBgAlt: '#f3e8ff'
     },
     'subliminal': {
         fontFamily: 'Georgia, serif',
         cellFontSize: '11.5px',
         headerFontSize: '10.5px',
         rowHeight: 48,
-        borderColor: '#f5f5f4',
-        hoverBg: '#fafaf9',
-        headerBg: '#f5f5f4',
-        headerColor: '#78716c'
+        borderColor: '#e7e5e4',
+        hoverBg: '#f5f5f4',
+        headerBg: '#e7e5e4',
+        headerColor: '#44403c',
+        rowBg: '#fafaf9',
+        rowBgAlt: '#f5f5f4'
     },
     'subtle': {
         fontFamily: 'Inter, sans-serif',
         cellFontSize: '12px',
         headerFontSize: '11px',
         rowHeight: 50,
-        borderColor: '#f1f5f9',
-        hoverBg: '#f8fafc',
+        borderColor: '#e2e8f0',
+        hoverBg: '#e2e8f0',
         headerBg: '#f1f5f9',
-        headerColor: '#64748b'
+        headerColor: '#64748b',
+        rowBg: '#ffffff',
+        rowBgAlt: '#f1f5f9'
     },
     'tracker': {
         fontFamily: '"SF Mono", Monaco, "Cascadia Code", monospace',
         cellFontSize: '11px',
         headerFontSize: '10px',
         rowHeight: 46,
-        borderColor: '#22c55e',
-        hoverBg: '#f0fdf4',
+        borderColor: '#86efac',
+        hoverBg: '#bbf7d0',
         headerBg: '#dcfce7',
-        headerColor: '#15803d'
+        headerColor: '#15803d',
+        rowBg: '#f0fdf4',
+        rowBgAlt: '#dcfce7'
     },
     'vintage': {
         fontFamily: '"Times New Roman", Times, serif',
@@ -174,19 +184,23 @@ const CASEWARE_THEMES = {
         headerFontSize: '11px',
         rowHeight: 50,
         borderColor: '#d4a373',
-        hoverBg: '#fef3e2',
+        hoverBg: '#fde8cc',
         headerBg: '#fde8cc',
-        headerColor: '#92400e'
+        headerColor: '#92400e',
+        rowBg: '#fff8f0',
+        rowBgAlt: '#fef3e2'
     },
     'wave': {
         fontFamily: '"Trebuchet MS", sans-serif',
         cellFontSize: '12px',
         headerFontSize: '11px',
         rowHeight: 52,
-        borderColor: '#a5f3fc',
-        hoverBg: '#cffafe',
-        headerBg: '#ecfeff',
-        headerColor: '#0e7490'
+        borderColor: '#67e8f9',
+        hoverBg: '#a5f3fc',
+        headerBg: '#cffafe',
+        headerColor: '#0e7490',
+        rowBg: '#ecfeff',
+        rowBgAlt: '#cffafe'
     },
     'webapp': {
         fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -194,9 +208,11 @@ const CASEWARE_THEMES = {
         headerFontSize: '12px',
         rowHeight: 54,
         borderColor: '#e5e5e5',
-        hoverBg: '#fafafa',
+        hoverBg: '#e5e5e5',
         headerBg: '#f5f5f5',
-        headerColor: '#525252'
+        headerColor: '#525252',
+        rowBg: '#ffffff',
+        rowBgAlt: '#f5f5f5'
     }
 };
 
@@ -694,26 +710,31 @@ const columns = [
     }),
 
     // 5. Debit
-    columnHelper.accessor('debit', {
+    // ASSET accounts  (chq/sav):   DEBIT = money OUT  → red
+    // LIABILITY accounts (CC):     DEBIT = payment IN → reduces debt → green
+    //   Accounting convention for liability: purchases flow to CREDIT side, payments to DEBIT side.
+    //   Raw parsers store CC purchases as polarity=DEBIT (bank-statement perspective).
+    //   We flip the display: for CC accounts, raw DEBIT (purchase) shows in Credit column; raw CREDIT (payment) shows in Debit column.
+    columnHelper.display({
+        id: 'debit',
         header: 'DEBIT',
-        size: 85,
-        minSize: 75,
-        maxSize: 100,
-        enableColumnFilter: true,
-        filterFn: 'auto',
+        size: 105,
+        minSize: 90,
+        maxSize: 130,
         cell: info => {
-            const val = info.getValue();
             const row = info.row.original;
             const account = window.RoboLedger?.Accounts?.get(row.account_id);
             const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
                 account?.type === 'liability' || account?.type === 'creditcard';
 
-            // Color logic:
-            // - ASSET accounts (chequing/savings): Debits are BAD (withdrawals) = RED
-            // - LIABILITY accounts (credit cards): Debits are GOOD (payments reduce debt) = GREEN
+            // For LIABILITY: Debit column shows raw CREDIT amounts (payment reducing liability = DR the liability)
+            // For ASSET:     Debit column shows raw DEBIT amounts (money out)
+            const val = isLiability ? (row.credit || 0) : (row.debit || 0);
+
+            // Color: payment/debit on liability is GREEN (reduces what you owe), withdrawal on asset is RED
             const color = isLiability ? '#10b981' : '#ef4444';
 
-            return (
+            return val ? (
                 <span
                     className="text-right block"
                     style={{
@@ -725,31 +746,33 @@ const columns = [
                 >
                     {formatCurrency(val)}
                 </span>
-            );
+            ) : <span className="text-right block" style={{ color: '#cbd5e1' }}>—</span>;
         }
     }),
 
     // 6. Credit
-    columnHelper.accessor('credit', {
+    // ASSET accounts  (chq/sav):   CREDIT = money IN  → green
+    // LIABILITY accounts (CC):     CREDIT = purchase  → increases debt → red
+    columnHelper.display({
+        id: 'credit',
         header: 'CREDIT',
-        size: 85,
-        minSize: 75,
-        maxSize: 100,
-        enableColumnFilter: true,
-        filterFn: 'auto',
+        size: 105,
+        minSize: 90,
+        maxSize: 130,
         cell: info => {
-            const val = info.getValue();
             const row = info.row.original;
             const account = window.RoboLedger?.Accounts?.get(row.account_id);
             const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
                 account?.type === 'liability' || account?.type === 'creditcard';
 
-            // Color logic:
-            // - ASSET accounts (chequing/savings): Credits are GOOD (deposits) = GREEN
-            // - LIABILITY accounts (credit cards): Credits are BAD (charges increase debt) = RED
+            // For LIABILITY: Credit column shows raw DEBIT amounts (purchase increasing liability = CR the liability)
+            // For ASSET:     Credit column shows raw CREDIT amounts (money in)
+            const val = isLiability ? (row.debit || 0) : (row.credit || 0);
+
+            // Color: purchase/credit on liability is RED (you owe more), deposit on asset is GREEN
             const color = isLiability ? '#ef4444' : '#10b981';
 
-            return (
+            return val ? (
                 <span
                     className="text-right block"
                     style={{
@@ -761,16 +784,16 @@ const columns = [
                 >
                     {formatCurrency(val)}
                 </span>
-            );
+            ) : <span className="text-right block" style={{ color: '#cbd5e1' }}>—</span>;
         }
     }),
 
     //7. Account (COA Dropdown)
     columnHelper.accessor('category', {
         header: 'ACCOUNT',
-        size: 160,
-        minSize: 150,
-        maxSize: 200,
+        size: 230,
+        minSize: 210,
+        maxSize: 320,
         enableColumnFilter: true,
         filterFn: (row, columnId, filterValue) => {
             const categoryValue = row.getValue(columnId);
@@ -819,9 +842,9 @@ const columns = [
     columnHelper.display({
         id: 'balance',
         header: 'BALANCE',
-        size: 85,  // Wide enough for full balance numbers
-        minSize: 80,
-        maxSize: 100,
+        size: 110,  // Wide enough for large balances e.g. $12,345.67
+        minSize: 100,
+        maxSize: 140,
         cell: info => {
             // Get the sorted rows to calculate running balance
             const sortedRows = info.table.getRowModel().rows;
@@ -869,21 +892,39 @@ const columns = [
     // Optional: Sales Tax (GST/HST)
     columnHelper.accessor('tax_cents', {
         header: 'GST/HST',
-        size: 75,
+        size: 80,
         minSize: 70,
         maxSize: 100,
         cell: info => {
             const val = info.getValue();
             const row = info.row.original;
 
-            // Auto-calculate tax if column is visible and province set
+            // No GST on financial / pass-through transactions:
+            //   CC payments, bank transfers, interest income/expense, refunds, cash back,
+            //   dividends, insurance, payroll, e-transfer rounded amounts, inter-bank
+            const noGSTCategories = ['9971', '9970', '7700', '7000', '4900', '4800', '8100'];
+            const desc = (row.raw_description || row.payee || '').toUpperCase();
+            const amount = row.debit || row.credit || 0;
+            // Rounded amount heuristic: amounts like $1500.00, $250.00 — no cents → likely non-taxable
+            const isRoundedAmount = amount > 0 && amount % 100 === 0 && amount >= 5000; // >= $50.00, no cents
+            const isFinancialTx = /\bPAYMENT\b|\bINTEREST\b|\bTRANSFER\b|\bCASH\s*BACK\b|\bREFUND\b|\bREBATE\b|\bDIVIDEND\b|\bINSURANCE\b|\bPAYROLL\b|\bSALARY\b|\bWAGE\b|\bT4\b/.test(desc)
+                || noGSTCategories.includes(row.category)
+                || (row._isCCPayment)
+                || (row._isCashBack)
+                || (row._isBankRebate)
+                || (row.transaction_type_label || '').includes('e-transfer') && isRoundedAmount;
+
+            if (isFinancialTx) {
+                return <span className="text-right block" style={{ color: '#cbd5e1', fontSize: GRID_TOKENS.numberFontSize }}>—</span>;
+            }
+
+            // Auto-calculate tax if not already stored
             let displayValue = val;
             if (!val || val === 0) {
-                const province = window.UI_STATE?.province;
+                const province = window.UI_STATE?.province || 'AB';
                 const amount = row.debit || row.credit || 0;
                 if (province && amount) {
-                    const calculatedTax = calculateTax(amount, province);
-                    displayValue = calculatedTax;
+                    displayValue = calculateTax(amount, province);
                 }
             }
 
@@ -893,11 +934,11 @@ const columns = [
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: GRID_TOKENS.numberColor,
+                        color: '#64748b',
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
-                    {displayValue ? `$${(displayValue / 100).toFixed(2)}` : '-'}
+                    {displayValue ? `$${(displayValue / 100).toFixed(2)}` : '—'}
                 </span>
             );
         }
@@ -914,7 +955,7 @@ export function TransactionsTable({
     gridTheme = 'default',
     gridFontSize = 13.5,
     gridDensity = 'comfortable',
-    columnVisibility: initialColumnVisibility = { tax_cents: true }
+    columnVisibility: initialColumnVisibility = { tax_cents: false }
 }) {
     // CRITICAL: Update UI_STATE with new theme values
     if (window.UI_STATE) {
@@ -996,70 +1037,93 @@ export function TransactionsTable({
     /**
      * Auto-categorize selected transactions using RuleEngine
      */
+    const [bulkCOA, setBulkCOA] = useState('');
+    const [showBulkCOAPicker, setShowBulkCOAPicker] = useState(false);
+    const [showBulkRename, setShowBulkRename] = useState(false);
+    const [bulkRenameValue, setBulkRenameValue] = useState('');
+
+    const getSelectedTxs = () =>
+        Object.keys(rowSelection)
+            .map(id => window.RoboLedger?.Ledger?.get(id))
+            .filter(Boolean);
+
     const handleBulkCategorize = () => {
         const selectedTxIds = Object.keys(rowSelection);
         if (selectedTxIds.length === 0) return;
+        const selectedTxs = getSelectedTxs();
+        if (selectedTxs.length === 0) return alert('No valid transactions selected');
 
-        // Get selected transactions
-        const selectedTxs = selectedTxIds
-            .map(id => window.RoboLedger?.Ledger?.transactions[id])
-            .filter(Boolean);
-
-        if (selectedTxs.length === 0) {
-            alert('No valid transactions selected');
-            return;
-        }
-
-        // Use RuleEngine to bulk categorize
+        // Use RuleEngine to auto-categorize
         const results = window.RoboLedger?.RuleEngine?.bulkCategorize(selectedTxs);
-
         if (results) {
-            // Show results
-            const message = `✅ Categorized ${results.categorized}/${selectedTxs.length} transactions`;
-
-            // Show toast if available
-            if (window.showToast) {
-                window.showToast(message, 'success');
-            } else {
-                alert(message);
-            }
-
-            // Clear selection
+            if (window.showToast) window.showToast(`✅ Categorized ${results.categorized}/${selectedTxs.length} transactions`, 'success');
             setRowSelection({});
-
-            // Force re-render
-            setData([...data]);
+            setData([...(window.RoboLedger?.Ledger?.getAll() || data)]);
+            if (window.updateWorkspace) window.updateWorkspace();
         } else {
-            alert('Bulk categorization failed - RuleEngine not available');
+            alert('Bulk categorization failed — RuleEngine not available');
         }
     };
 
-    /**
-     * Delete selected transactions
-     */
+    const handleBulkSetCOA = (code) => {
+        if (!code) return;
+        const selectedTxs = getSelectedTxs();
+        let updated = 0;
+        selectedTxs.forEach(tx => {
+            if (window.RoboLedger?.Ledger?.updateCategory) {
+                window.RoboLedger.Ledger.updateCategory(tx.tx_id, code);
+                updated++;
+            }
+        });
+        const coaName = window.RoboLedger?.COA?.get(code)?.name || code;
+        if (window.showToast) window.showToast(`✅ Set ${updated} transactions → ${coaName}`, 'success');
+        setShowBulkCOAPicker(false);
+        setBulkCOA('');
+        setRowSelection({});
+        setData([...(window.RoboLedger?.Ledger?.getAll() || data)]);
+        if (window.updateWorkspace) window.updateWorkspace();
+    };
+
+    const handleBulkRename = () => {
+        if (!bulkRenameValue.trim()) return;
+        const selectedTxs = getSelectedTxs();
+        let updated = 0;
+        selectedTxs.forEach(tx => {
+            if (window.RoboLedger?.Ledger?.update) {
+                window.RoboLedger.Ledger.update(tx.tx_id, { payee: bulkRenameValue.trim(), raw_description: bulkRenameValue.trim() });
+                updated++;
+            }
+        });
+        if (window.showToast) window.showToast(`✅ Renamed ${updated} transactions`, 'success');
+        setShowBulkRename(false);
+        setBulkRenameValue('');
+        setRowSelection({});
+        setData([...(window.RoboLedger?.Ledger?.getAll() || data)]);
+    };
+
+    const handleAddRow = () => {
+        const accId = window.UI_STATE?.selectedAccount;
+        if (!accId || accId === 'ALL') return alert('Select a specific account first to add a row.');
+        if (window.RoboLedger?.Ledger?.createManual) {
+            window.RoboLedger.Ledger.createManual(accId);
+            setData([...(window.RoboLedger?.Ledger?.getAll() || data)]);
+            if (window.updateWorkspace) window.updateWorkspace();
+        }
+    };
+
     const handleBulkDelete = () => {
         const selectedTxIds = Object.keys(rowSelection);
         if (selectedTxIds.length === 0) return;
+        if (!confirm(`Delete ${selectedTxIds.length} selected transaction${selectedTxIds.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
 
-        if (!confirm(`Delete ${selectedTxIds.length} selected transactions? This cannot be undone.`)) {
-            return;
-        }
-
-        // Delete each transaction
         let deleted = 0;
         selectedTxIds.forEach(txId => {
-            if (window.RoboLedger?.Ledger?.deleteTransaction?.(txId)) {
-                deleted++;
-            }
+            if (window.RoboLedger?.Ledger?.deleteTransaction?.(txId)) deleted++;
         });
-
-        // Clear selection
         setRowSelection({});
-
-        // Force re-render by updating data
-        if (window.RoboLedger?.Ledger) {
-            setData(window.RoboLedger.Ledger.getAllTransactions());
-        }
+        if (window.RoboLedger?.Ledger) setData(window.RoboLedger.Ledger.getAll());
+        if (window.updateWorkspace) window.updateWorkspace();
+        if (window.showToast) window.showToast(`🗑 Deleted ${deleted} transaction${deleted !== 1 ? 's' : ''}`, 'info');
     };
 
     // Expose column visibility control to window (for settings drawer)
@@ -1207,30 +1271,110 @@ export function TransactionsTable({
                     boxSizing: 'border-box'  // Prevent width bleeding
                 }}
             >
-                {/* Batch Action Bar */}
+                {/* Bulk Action Bar — appears when rows are selected */}
                 {Object.keys(rowSelection).length > 0 && (
-                    <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
-                        <span className="text-sm font-bold text-blue-900">{Object.keys(rowSelection).length} selected</span>
-                        <div className="ml-auto flex items-center gap-2">
-                            <button
-                                onClick={handleBulkCategorize}
-                                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                            >
-                                Categorize
-                            </button>
-                            <button className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">Match</button>
-                            <button
-                                onClick={handleBulkDelete}
-                                className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-white border border-red-300 rounded hover:bg-red-50"
-                            >
-                                Delete
-                            </button>
-                            <button onClick={() => setRowSelection({})} className="ml-2 p-1.5 text-gray-500 hover:text-gray-700">
-                                <i className="ph ph-x text-sm"></i>
+                    <div style={{ position: 'relative', zIndex: 40 }}>
+                        <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ background: '#1e40af', borderColor: '#1d4ed8' }}>
+                            {/* Count badge */}
+                            <div style={{ background: 'white', color: '#1e40af', fontWeight: 800, fontSize: '12px', padding: '2px 10px', borderRadius: '12px', whiteSpace: 'nowrap' }}>
+                                {Object.keys(rowSelection).length} selected
+                            </div>
+
+                            <div className="flex items-center gap-1 ml-2">
+                                {/* Auto-categorize */}
+                                <button onClick={handleBulkCategorize} title="AI auto-categorize selected"
+                                    style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-robot" style={{ fontSize: '13px' }}></i> Auto-Cat
+                                </button>
+
+                                {/* Set COA (Account) */}
+                                <button onClick={() => { setShowBulkCOAPicker(p => !p); setShowBulkRename(false); }} title="Set account for all selected"
+                                    style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-tag" style={{ fontSize: '13px' }}></i> Set Account
+                                </button>
+
+                                {/* Rename */}
+                                <button onClick={() => { setShowBulkRename(p => !p); setShowBulkCOAPicker(false); }} title="Rename/re-describe selected"
+                                    style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-pencil-simple" style={{ fontSize: '13px' }}></i> Rename
+                                </button>
+
+                                {/* Add row */}
+                                <button onClick={handleAddRow} title="Add blank row to current account"
+                                    style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-plus" style={{ fontSize: '13px' }}></i> Add Row
+                                </button>
+
+                                {/* Delete */}
+                                <button onClick={handleBulkDelete} title="Delete selected transactions"
+                                    style={{ padding: '5px 10px', background: 'rgba(239,68,68,0.25)', color: '#fecaca', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-trash" style={{ fontSize: '13px' }}></i> Delete
+                                </button>
+                            </div>
+
+                            <button onClick={() => setRowSelection({})} title="Clear selection"
+                                style={{ marginLeft: 'auto', padding: '4px 8px', background: 'transparent', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}>
+                                <i className="ph ph-x"></i>
                             </button>
                         </div>
+
+                        {/* COA Picker sub-bar */}
+                        {showBulkCOAPicker && (
+                            <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>Set Account:</span>
+                                <select
+                                    value={bulkCOA}
+                                    onChange={e => setBulkCOA(e.target.value)}
+                                    style={{ flex: 1, maxWidth: '320px', padding: '4px 8px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
+                                >
+                                    <option value="">— Choose COA account —</option>
+                                    {(window.RoboLedger?.COA?.getAll() || []).map(a => (
+                                        <option key={a.code} value={a.code}>{a.code} · {a.name}</option>
+                                    ))}
+                                </select>
+                                <button onClick={() => handleBulkSetCOA(bulkCOA)} disabled={!bulkCOA}
+                                    style={{ padding: '5px 14px', background: '#1e40af', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: bulkCOA ? 'pointer' : 'not-allowed', opacity: bulkCOA ? 1 : 0.5 }}>
+                                    Apply
+                                </button>
+                                <button onClick={() => setShowBulkCOAPicker(false)} style={{ padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px' }}>
+                                    <i className="ph ph-x"></i>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Rename sub-bar */}
+                        {showBulkRename && (
+                            <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>New name:</span>
+                                <input
+                                    type="text"
+                                    value={bulkRenameValue}
+                                    onChange={e => setBulkRenameValue(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleBulkRename()}
+                                    placeholder="e.g. Costco Wholesale"
+                                    style={{ flex: 1, maxWidth: '320px', padding: '4px 10px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
+                                    autoFocus
+                                />
+                                <button onClick={handleBulkRename} disabled={!bulkRenameValue.trim()}
+                                    style={{ padding: '5px 14px', background: '#1e40af', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: bulkRenameValue.trim() ? 'pointer' : 'not-allowed', opacity: bulkRenameValue.trim() ? 1 : 0.5 }}>
+                                    Rename All
+                                </button>
+                                <button onClick={() => setShowBulkRename(false)} style={{ padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px' }}>
+                                    <i className="ph ph-x"></i>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
+
+                {/* Add Row button (always visible in bottom corner) */}
+                <button onClick={handleAddRow} title="Add blank row to current account"
+                    style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 50, width: '44px', height: '44px', borderRadius: '50%', background: '#1e40af', color: 'white', border: 'none', boxShadow: '0 4px 12px rgba(30,64,175,0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}
+                    onMouseOver={e => e.currentTarget.style.background = '#1d4ed8'}
+                    onMouseOut={e => e.currentTarget.style.background = '#1e40af'}
+                >
+                    <i className="ph ph-plus"></i>
+                </button>
 
                 {/* SCROLL CONTAINER - wraps metadata + toolbar + grid */}
                 <div

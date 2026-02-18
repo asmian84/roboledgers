@@ -1956,183 +1956,241 @@
   }
 
   function renderSettingsDrawer() {
+    // Sync tab from onclick shim before rendering
+    if (window.__settingsTab) { UI_STATE.settingsTab = window.__settingsTab; window.__settingsTab = null; }
+
     const drawer = document.getElementById('settings-drawer');
+    const tabs = [
+      { id: 'grid',    icon: 'ph-paint-brush', label: 'Appearance' },
+      { id: 'columns', icon: 'ph-columns',      label: 'Columns'    },
+      { id: 'tax',     icon: 'ph-percent',       label: 'Tax'        },
+      { id: 'data',    icon: 'ph-database',      label: 'Data'       },
+    ];
+
     drawer.innerHTML = `
-      <div class="drawer-header" style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-              <div style="background: #f1f5f9; padding: 8px; border-radius: 8px; color: #64748b;">
-                  <i class="ph ph-gear-six" style="font-size: 1.2rem;"></i>
-              </div>
-              <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0;">Settings</h2>
-          </div>
-          <i class="ph ph-x close-drawer" style="font-size: 20px; cursor: pointer; color: #94a3b8;" onclick="toggleSettings(false)"></i>
+      <!-- HEADER -->
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: #1e293b;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <i class="ph ph-gear-six" style="font-size: 18px; color: #94a3b8;"></i>
+          <span style="font-size: 14px; font-weight: 700; color: white; letter-spacing: -0.01em;">Preferences</span>
+        </div>
+        <button onclick="toggleSettings(false)" style="background: rgba(255,255,255,0.1); border: none; color: #94a3b8; cursor: pointer; padding: 6px; border-radius: 6px; display: flex; align-items: center; line-height: 1;" title="Close">
+          <i class="ph ph-x" style="font-size: 16px;"></i>
+        </button>
       </div>
-      <div class="drawer-tabs">
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'grid' ? 'active' : ''}" data-tab="grid">GRID</div>
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'columns' ? 'active' : ''}" data-tab="columns">COLUMNS</div>
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'data' ? 'active' : ''}" data-tab="data">DATA</div>
+
+      <!-- TAB NAV -->
+      <div style="display: flex; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+        ${tabs.map(t => `
+          <button data-tab="${t.id}" onclick="(function(){window.__settingsTab='${t.id}'; renderSettingsDrawer();})()" style="flex: 1; padding: 10px 4px; border: none; border-bottom: 2px solid ${UI_STATE.settingsTab === t.id ? '#3b82f6' : 'transparent'}; background: transparent; color: ${UI_STATE.settingsTab === t.id ? '#3b82f6' : '#64748b'}; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: all 0.15s;">
+            <i class="ph ${t.icon}" style="font-size: 16px;"></i>
+            ${t.label.toUpperCase()}
+          </button>
+        `).join('')}
       </div>
-      <div class="drawer-content">
-          ${renderSettingsTabContent()}
+
+      <!-- CONTENT -->
+      <div style="flex: 1; overflow-y: auto; padding: 20px;">
+        ${renderSettingsTabContent()}
       </div>
-      <div class="drawer-footer">
-          <button class="btn-restored" style="background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;" onclick="window.resetSettings()">Reset to Defaults</button>
-          <button class="btn-restored" onclick="window.saveSettings()">Save Settings</button>
+
+      <!-- FOOTER -->
+      <div style="padding: 12px 20px; border-top: 1px solid #e2e8f0; display: flex; gap: 8px; background: #f8fafc;">
+        <button onclick="window.resetSettings()" style="flex: 1; padding: 8px; border: 1px solid #e2e8f0; background: white; color: #64748b; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;">Reset Defaults</button>
+        <button onclick="window.saveSettings()" style="flex: 2; padding: 8px; border: none; background: #1e293b; color: white; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">Save & Apply</button>
       </div>
     `;
 
-    // Wire tab switching
-    drawer.querySelectorAll('.drawer-tab').forEach(tab => {
-      tab.onclick = () => {
-        UI_STATE.settingsTab = tab.dataset.tab;
-        renderSettingsDrawer();
-      };
-    });
   }
 
   function renderSettingsTabContent() {
-    // TAB 1: GRID - All appearance settings
+
+    // ── APPEARANCE ──────────────────────────────────────────────────────────
     if (UI_STATE.settingsTab === 'grid') {
-      return `
-            <div class="setting-group">
-                <div class="setting-group-title">Professional Theme</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Preset themes matching professional accounting software</div>
-                <select class="v5-select" id="settings-grid-theme" onchange="window.previewGridTheme(this.value)">
-                    <option value="vanilla" ${UI_STATE.gridTheme === 'vanilla' ? 'selected' : ''}>Vanilla</option>
-                    <option value="classic" ${UI_STATE.gridTheme === 'classic' ? 'selected' : ''}>Classic</option>
-                    <option value="default" ${UI_STATE.gridTheme === 'default' ? 'selected' : ''}>Default</option>
-                    <option value="ledger-pad" ${UI_STATE.gridTheme === 'ledger-pad' ? 'selected' : ''}>Ledger Pad</option>
-                    <option value="post-it-note" ${UI_STATE.gridTheme === 'post-it-note' ? 'selected' : ''}>Post-it Note</option>
-                    <option value="rainbow" ${UI_STATE.gridTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
-                    <option value="social" ${UI_STATE.gridTheme === 'social' ? 'selected' : ''}>Social</option>
-                    <option value="spectrum" ${UI_STATE.gridTheme === 'spectrum' ? 'selected' : ''}>Spectrum</option>
-                    <option value="subliminal" ${UI_STATE.gridTheme === 'subliminal' ? 'selected' : ''}>Subliminal</option>
-                    <option value="subtle" ${UI_STATE.gridTheme === 'subtle' ? 'selected' : ''}>Subtle</option>
-                    <option value="tracker" ${UI_STATE.gridTheme === 'tracker' ? 'selected' : ''}>Tracker</option>
-                    <option value="vintage" ${UI_STATE.gridTheme === 'vintage' ? 'selected' : ''}>Vintage</option>
-                    <option value="wave" ${UI_STATE.gridTheme === 'wave' ? 'selected' : ''}>Wave</option>
-                    <option value="webapp" ${UI_STATE.gridTheme === 'webapp' ? 'selected' : ''}>WebApp</option>
-                </select>
-            </div>
-            
-            <div class="setting-group">
-                <div class="setting-group-title">Custom Adjustments</div>
-                <div style="margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label style="font-size: 11px; font-weight: 700; color: #94a3b8;">GRID FONT SIZE</label>
-                        <span id="grid-fontsize-display" style="font-size: 11px; font-weight: 700; color: #3b82f6;">${UI_STATE.gridFontSize}px</span>
-                    </div>
-                    <input type="range" id="settings-grid-fontsize" min="9" max="16" step="0.5" value="${UI_STATE.gridFontSize}" 
-                           style="width: 100%;" 
-                           oninput="window.previewGridFontSize(this.value)">
-                    <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Overrides theme default</div>
-                </div>
-                
-                <div>
-                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 8px;">ROW HEIGHT</label>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'compact' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('compact')">Compact</button>
-                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'comfortable' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('comfortable')">Comfortable</button>
-                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'spacious' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('spacious')">Spacious</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // TAB 2: COLUMNS - Visibility toggles
-    if (UI_STATE.settingsTab === 'columns') {
-      // Load saved column preferences from localStorage
-      const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
-
-      const columns = [
-        { field: 'date', label: 'Date', visible: savedPrefs.date !== false }, // default true
-        { field: 'ref', label: 'Ref #', visible: savedPrefs.ref !== false },
-        { field: 'description', label: 'Description', visible: savedPrefs.description !== false },
-        { field: 'debit_col', label: 'Debit', visible: savedPrefs.debit_col !== false },
-        { field: 'credit_col', label: 'Credit', visible: savedPrefs.credit_col !== false },
-        { field: 'balance', label: 'Balance', visible: savedPrefs.balance !== false },
-        { field: 'coa_code', label: 'Category', visible: savedPrefs.coa_code !== false },
-        { field: 'tax_cents', label: 'Sales Tax', visible: savedPrefs.tax_cents === true } // default false
+      const themes = [
+        { val: 'default',     label: 'Default',     dot: '#6b7280' },
+        { val: 'vanilla',     label: 'Vanilla',     dot: '#fef9c3' },
+        { val: 'classic',     label: 'Classic',     dot: '#d0d0d0' },
+        { val: 'ledger-pad',  label: 'Ledger Pad',  dot: '#ede9fe' },
+        { val: 'post-it-note',label: 'Post-it',     dot: '#fef9c3' },
+        { val: 'rainbow',     label: 'Rainbow',     dot: 'linear-gradient(90deg,#fee2e2,#fef3c7,#d9f99d,#bfdbfe,#ddd6fe)' },
+        { val: 'social',      label: 'Social',      dot: '#eff6ff' },
+        { val: 'spectrum',    label: 'Spectrum',    dot: '#f3e8ff' },
+        { val: 'subliminal',  label: 'Subliminal',  dot: '#f5f5f4' },
+        { val: 'subtle',      label: 'Subtle',      dot: '#f1f5f9' },
+        { val: 'tracker',     label: 'Tracker',     dot: '#dcfce7' },
+        { val: 'vintage',     label: 'Vintage',     dot: '#fde8cc' },
+        { val: 'wave',        label: 'Wave',        dot: '#cffafe' },
+        { val: 'webapp',      label: 'WebApp',      dot: '#f5f5f5' },
       ];
 
       return `
-            <div class="setting-group">
-                <div class="setting-group-title">Column Visibility</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Show or hide columns in the transaction grid</div>
-                ${columns.map(col => `
-                    <div class="column-toggle">
-                        <label>${col.label}</label>
-                        <label class="switch">
-                            <input type="checkbox" ${col.visible ? 'checked' : ''} onchange="window.toggleGridColumn('${col.field}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                `).join('')}
-            </div>
-        `;
+        <div style="margin-bottom: 24px;">
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 12px;">THEME</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            ${themes.map(t => `
+              <button onclick="window.previewGridTheme('${t.val}'); document.getElementById('settings-grid-theme-val').value='${t.val}';"
+                style="padding: 8px 10px; border: 2px solid ${UI_STATE.gridTheme === t.val ? '#3b82f6' : '#e2e8f0'}; border-radius: 8px; background: ${UI_STATE.gridTheme === t.val ? '#eff6ff' : 'white'}; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: ${UI_STATE.gridTheme === t.val ? '700' : '500'}; color: ${UI_STATE.gridTheme === t.val ? '#1e40af' : '#374151'}; text-align: left; transition: all 0.1s;">
+                <span style="width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; background: ${t.dot}; border: 1px solid rgba(0,0,0,0.1);"></span>
+                ${t.label}
+                ${UI_STATE.gridTheme === t.val ? '<i class="ph ph-check" style="margin-left:auto;font-size:12px;"></i>' : ''}
+              </button>
+            `).join('')}
+          </div>
+          <input type="hidden" id="settings-grid-theme-val" value="${UI_STATE.gridTheme}">
+          <select id="settings-grid-theme" style="display:none;">${themes.map(t => `<option value="${t.val}" ${UI_STATE.gridTheme === t.val ? 'selected' : ''}>${t.label}</option>`).join('')}</select>
+        </div>
+
+        <div style="margin-bottom: 24px;">
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 12px;">ROW DENSITY</div>
+          <div style="display: flex; gap: 6px;">
+            ${['compact','comfortable','spacious'].map(d => `
+              <button onclick="window.setDensity('${d}'); this.closest('.density-group').querySelectorAll('button').forEach(b=>b.classList.remove('active-density')); this.classList.add('active-density');"
+                style="flex: 1; padding: 8px 6px; border: 2px solid ${UI_STATE.density === d ? '#3b82f6' : '#e2e8f0'}; border-radius: 8px; background: ${UI_STATE.density === d ? '#eff6ff' : 'white'}; cursor: pointer; font-size: 11px; font-weight: ${UI_STATE.density === d ? '700' : '500'}; color: ${UI_STATE.density === d ? '#1e40af' : '#64748b'}; transition: all 0.1s; text-transform: capitalize;"
+              >${d}</button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">FONT SIZE</div>
+            <span id="grid-fontsize-display" style="font-size: 11px; font-weight: 700; color: #3b82f6; background: #eff6ff; padding: 2px 8px; border-radius: 10px;">${UI_STATE.gridFontSize}px</span>
+          </div>
+          <input type="range" id="settings-grid-fontsize" min="9" max="16" step="0.5" value="${UI_STATE.gridFontSize}"
+            style="width: 100%; accent-color: #3b82f6;"
+            oninput="window.previewGridFontSize(this.value)">
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; margin-top: 2px;"><span>9px</span><span>16px</span></div>
+        </div>
+      `;
     }
 
-    // TAB 3: DATA - Export and management
+    // ── COLUMNS ─────────────────────────────────────────────────────────────
+    if (UI_STATE.settingsTab === 'columns') {
+      const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+      const columns = [
+        { field: 'date',      label: 'Date',       icon: 'ph-calendar-blank', visible: savedPrefs.date !== false },
+        { field: 'ref',       label: 'Ref #',      icon: 'ph-hash',           visible: savedPrefs.ref !== false },
+        { field: 'description', label: 'Description', icon: 'ph-text-aa',     visible: savedPrefs.description !== false },
+        { field: 'debit_col', label: 'Debit',      icon: 'ph-arrow-up-right', visible: savedPrefs.debit_col !== false },
+        { field: 'credit_col',label: 'Credit',     icon: 'ph-arrow-down-left',visible: savedPrefs.credit_col !== false },
+        { field: 'balance',   label: 'Balance',    icon: 'ph-scales',         visible: savedPrefs.balance !== false },
+        { field: 'coa_code',  label: 'Account',    icon: 'ph-tag',            visible: savedPrefs.coa_code !== false },
+        { field: 'tax_cents', label: 'GST/HST',    icon: 'ph-percent',        visible: savedPrefs.tax_cents === true },
+      ];
+
+      return `
+        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Toggle columns visible in the transaction grid. Drag to reorder (coming soon).</div>
+        ${columns.map(col => `
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; margin-bottom: 6px; background: ${col.visible ? '#f0f9ff' : '#f8fafc'}; border: 1px solid ${col.visible ? '#bae6fd' : '#e2e8f0'}; border-radius: 8px; transition: all 0.15s;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <i class="ph ${col.icon}" style="font-size: 16px; color: ${col.visible ? '#0284c7' : '#94a3b8'};"></i>
+              <span style="font-size: 12px; font-weight: ${col.visible ? '600' : '400'}; color: ${col.visible ? '#0c4a6e' : '#64748b'};">${col.label}</span>
+            </div>
+            <label class="switch" style="flex-shrink: 0;">
+              <input type="checkbox" ${col.visible ? 'checked' : ''} onchange="window.toggleGridColumn('${col.field}', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    // ── TAX ─────────────────────────────────────────────────────────────────
+    if (UI_STATE.settingsTab === 'tax') {
+      const provinces = [
+        { val:'AB', label:'Alberta',           tax:'5% GST' },
+        { val:'BC', label:'British Columbia',   tax:'5% GST + 7% PST' },
+        { val:'MB', label:'Manitoba',           tax:'5% GST + 7% PST' },
+        { val:'NB', label:'New Brunswick',      tax:'15% HST' },
+        { val:'NL', label:'Newfoundland',       tax:'15% HST' },
+        { val:'NT', label:'NW Territories',     tax:'5% GST' },
+        { val:'NS', label:'Nova Scotia',        tax:'15% HST' },
+        { val:'NU', label:'Nunavut',            tax:'5% GST' },
+        { val:'ON', label:'Ontario',            tax:'13% HST' },
+        { val:'PE', label:'Prince Edward Is.',  tax:'15% HST' },
+        { val:'QC', label:'Quebec',             tax:'5% GST + 9.975% QST' },
+        { val:'SK', label:'Saskatchewan',       tax:'5% GST + 6% PST' },
+        { val:'YT', label:'Yukon',              tax:'5% GST' },
+      ];
+      return `
+        <div style="margin-bottom: 20px;">
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 12px;">PROVINCE / TERRITORY</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            ${provinces.map(p => `
+              <button onclick="document.getElementById('settings-province').value='${p.val}'; this.closest('.province-grid').querySelectorAll('button').forEach(b=>{b.style.borderColor='#e2e8f0';b.style.background='white';b.style.color='#374151';b.style.fontWeight='500';}); this.style.borderColor='#3b82f6'; this.style.background='#eff6ff'; this.style.color='#1e40af'; this.style.fontWeight='700';"
+                style="padding: 8px 10px; border: 2px solid ${UI_STATE.province === p.val ? '#3b82f6' : '#e2e8f0'}; border-radius: 8px; background: ${UI_STATE.province === p.val ? '#eff6ff' : 'white'}; cursor: pointer; text-align: left; transition: all 0.1s; font-size: 11px; font-weight: ${UI_STATE.province === p.val ? '700' : '500'}; color: ${UI_STATE.province === p.val ? '#1e40af' : '#374151'};">
+                <div>${p.label}</div>
+                <div style="font-size: 10px; color: #94a3b8; font-weight: 400;">${p.tax}</div>
+              </button>
+            `).join('')}
+          </div>
+          <div class="province-grid" style="display:none;"></div>
+          <select id="settings-province" style="display:none;">
+            ${provinces.map(p => `<option value="${p.val}" ${UI_STATE.province === p.val ? 'selected' : ''}>${p.label}</option>`).join('')}
+          </select>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: ${UI_STATE.gstEnabled ? '#f0fdf4' : '#f8fafc'}; border: 1px solid ${UI_STATE.gstEnabled ? '#86efac' : '#e2e8f0'}; border-radius: 8px;">
+          <div>
+            <div style="font-size: 12px; font-weight: 600; color: #1e293b;">Auto-extract GST / HST</div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Show calculated tax in GST/HST column</div>
+          </div>
+          <label class="switch" style="flex-shrink: 0;">
+            <input type="checkbox" id="settings-gst-enabled" ${UI_STATE.gstEnabled ? 'checked' : ''}>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-top: 12px; padding: 10px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 11px; color: #92400e; line-height: 1.5;">
+          <i class="ph ph-info" style="margin-right:4px;"></i>
+          GST is not applied to: CC payments, bank transfers, interest, dividends, insurance, rounded deposits, or inter-bank transactions.
+        </div>
+      `;
+    }
+
+    // ── DATA ─────────────────────────────────────────────────────────────────
     if (UI_STATE.settingsTab === 'data') {
       const txnCount = window.RoboLedger ? window.RoboLedger.Ledger.getAll().length : 0;
       const accountCount = window.RoboLedger ? window.RoboLedger.Accounts.getAll().length : 0;
 
       return `
-            <div class="setting-group">
-                <div class="setting-group-title">Tax Settings</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Configure regional tax rates</div>
-                <div style="margin-bottom: 12px;">
-                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">PROVINCE</label>
-                    <select id="settings-province" class="v5-select">
-                        <option value="ON" ${UI_STATE.province === 'ON' ? 'selected' : ''}>Ontario (13% HST)</option>
-                        <option value="BC" ${UI_STATE.province === 'BC' ? 'selected' : ''}>British Columbia (5% GST + 7% PST)</option>
-                        <option value="AB" ${UI_STATE.province === 'AB' ? 'selected' : ''}>Alberta (5% GST)</option>
-                        <option value="QC" ${UI_STATE.province === 'QC' ? 'selected' : ''}>Quebec (5% GST + 9.975% QST)</option>
-                        <option value="NS" ${UI_STATE.province === 'NS' ? 'selected' : ''}>Nova Scotia (15% HST)</option>
-                        <option value="NB" ${UI_STATE.province === 'NB' ? 'selected' : ''}>New Brunswick (15% HST)</option>
-                        <option value="MB" ${UI_STATE.province === 'MB' ? 'selected' : ''}>Manitoba (5% GST + 7% PST)</option>
-                        <option value="SK" ${UI_STATE.province === 'SK' ? 'selected' : ''}>Saskatchewan (5% GST + 6% PST)</option>
-                        <option value="PE" ${UI_STATE.province === 'PE' ? 'selected' : ''}>Prince Edward Island (15% HST)</option>
-                        <option value="NL" ${UI_STATE.province === 'NL' ? 'selected' : ''}>Newfoundland and Labrador (15% HST)</option>
-                        <option value="YT" ${UI_STATE.province === 'YT' ? 'selected' : ''}>Yukon (5% GST)</option>
-                        <option value="NT" ${UI_STATE.province === 'NT' ? 'selected' : ''}>Northwest Territories (5% GST)</option>
-                        <option value="NU" ${UI_STATE.province === 'NU' ? 'selected' : ''}>Nunavut (5% GST)</option>
-                    </select>
-                </div>
-                <div class="column-toggle">
-                    <label>Enable GST/HST Extraction</label>
-                    <label class="switch">
-                        <input type="checkbox" id="settings-gst-enabled" ${UI_STATE.gstEnabled ? 'checked' : ''}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Automatically calculate tax based on regional rates</div>
-            </div>
-            
-            <div class="setting-group">
-                <div class="setting-group-title">Export Data</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Export your transactions and accounts</div>
-                <div style="padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
-                    <div style="font-size: 12px; font-weight: 600; color: #1e293b;">${txnCount} transactions</div>
-                    <div style="font-size: 11px; color: #64748b;">${accountCount} accounts</div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('csv')">Export CSV</button>
-                    <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('json')">Export JSON</button>
-                </div>
-            </div>
-            
-            <div class="setting-group">
-                <div class="setting-group-title">System</div>
-                <div style="font-size: 11px; color: #64748b; margin-bottom: 12px;">
-                    <div>Version: ${UI_STATE.version}</div>
-                    <div>Mode: ${window.location.protocol === 'file:' ? 'Native' : 'Web'}</div>
-                </div>
-                <button class="btn-restored" style="width: 100%; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;" onclick="window.devReset()">Clear All Data</button>
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">⚠️ This will delete all transactions and accounts</div>
-            </div>
-        `;
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+          <div style="padding: 14px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; text-align: center;">
+            <div style="font-size: 22px; font-weight: 800; color: #0284c7;">${txnCount.toLocaleString()}</div>
+            <div style="font-size: 11px; color: #0369a1; font-weight: 600;">TRANSACTIONS</div>
+          </div>
+          <div style="padding: 14px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 10px; text-align: center;">
+            <div style="font-size: 22px; font-weight: 800; color: #16a34a;">${accountCount}</div>
+            <div style="font-size: 11px; color: #15803d; font-weight: 600;">ACCOUNTS</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 10px;">EXPORT</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button onclick="window.exportData('csv')" style="padding: 10px; border: 1px solid #e2e8f0; background: white; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 600; color: #374151;">
+              <i class="ph ph-file-csv" style="font-size: 16px; color: #10b981;"></i> CSV
+            </button>
+            <button onclick="window.exportData('json')" style="padding: 10px; border: 1px solid #e2e8f0; background: white; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 600; color: #374151;">
+              <i class="ph ph-file-code" style="font-size: 16px; color: #3b82f6;"></i> JSON
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 10px;">SYSTEM</div>
+          <div style="padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; color: #64748b; line-height: 1.8;">
+            <div>Version: <strong style="color:#1e293b;">${UI_STATE.version}</strong></div>
+            <div>Mode: <strong style="color:#1e293b;">${window.location.protocol === 'file:' ? 'Native' : 'Web'}</strong></div>
+          </div>
+        </div>
+
+        <button onclick="window.devReset()" style="width: 100%; padding: 10px; border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <i class="ph ph-trash"></i> Clear All Data
+        </button>
+        <div style="font-size: 11px; color: #94a3b8; text-align: center; margin-top: 6px;">Permanently deletes all transactions and accounts</div>
+      `;
     }
 
     return '';
@@ -3149,22 +3207,27 @@
       <!-- Professional Account Dashboard Header -->
       <div id="account-header-root" class="v5-account-workspace-header" style="background: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 12px 24px; gap: 12px;">
         
-        <!-- Header Top: Account Type & Selector -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; flex-direction: column;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <select id="account-selector" onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 4px 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase; outline: none; transition: opacity 0.2s;">
-                <option value="ALL" ${UI_STATE.selectedAccount === 'ALL' ? 'selected' : ''}>ALL ACCOUNTS</option>
-                ${accounts.map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${(a.name || a.ref).toUpperCase()}</option>`).join('')}
-              </select>
-              <i class="ph ph-caret-down" style="font-size: 14px; color: #64748b;"></i>
+        <!-- Header Top: Account Tab Pills — single click jumps to that account -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 18px; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: -0.02em;">
+              ${UI_STATE.selectedAccount === 'ALL' ? 'ALL ACCOUNTS' : ((acc && (acc.name || acc.ref) || 'Account').toUpperCase())}
             </div>
-            <div id="account-subtitle" style="font-size: 11px; font-weight: 500; color: #94a3b8; margin-top: 2px; text-transform: uppercase;">
-              ${acc ? acc.bankName || 'Royal Bank of Canada' : 'Consolidated View'} • ${acc ? acc.currency || 'CAD' : 'CAD'}
+            <div id="account-subtitle" style="font-size: 11px; font-weight: 500; color: #94a3b8; text-transform: uppercase;">
+              ${acc ? (acc.bankName || 'Bank') + ' \u2022 ' + (acc.currency || 'CAD') : 'Consolidated View \u2022 CAD'}
             </div>
           </div>
-          <div style="text-align: right; color: #94a3b8; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 12px;">
-            <span>Header V5.2 • Active Session</span>
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <button onclick="window.switchAccount('ALL')" style="padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; border: 2px solid ${UI_STATE.selectedAccount === 'ALL' ? '#1e293b' : '#e2e8f0'}; background: ${UI_STATE.selectedAccount === 'ALL' ? '#1e293b' : '#f8fafc'}; color: ${UI_STATE.selectedAccount === 'ALL' ? 'white' : '#64748b'}; transition: all 0.15s; white-space: nowrap;">ALL</button>
+            ${accounts.map(a => {
+              const isActive = UI_STATE.selectedAccount === a.id;
+              const accType = (a.accountType || a.type || 'chequing').toLowerCase();
+              const colors = accType === 'creditcard' ? { bg: '#fef2f2', border: '#fca5a5', activeBg: '#ef4444' }
+                           : accType === 'savings'    ? { bg: '#f0fdf4', border: '#86efac', activeBg: '#10b981' }
+                           : accType === 'investment' ? { bg: '#faf5ff', border: '#c4b5fd', activeBg: '#7c3aed' }
+                           :                           { bg: '#eff6ff', border: '#93c5fd', activeBg: '#3b82f6' };
+              return `<button onclick="window.switchAccount('${a.id}')" title="${(a.bankName || '') + ' ' + (a.accountNumber || '')}" style="padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; border: 2px solid ${isActive ? colors.activeBg : colors.border}; background: ${isActive ? colors.activeBg : colors.bg}; color: ${isActive ? 'white' : '#374151'}; transition: all 0.15s; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${(a.ref || a.name || a.id).toUpperCase()}</button>`;
+            }).join('')}
           </div>
         </div>
 
