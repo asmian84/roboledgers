@@ -22,6 +22,7 @@ SMART PARSING RULES:
      * Parse TD Chequing statement using regex
      */
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
 
         // [PHASE 4] Store metadata for audit
         this.lastLineMetadata = lineMetadata;

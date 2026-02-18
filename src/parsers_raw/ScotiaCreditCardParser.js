@@ -8,6 +8,7 @@ class ScotiaCreditCardParser extends BaseBankParser {
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
         // LOUD DIAGNOSTIC
 
