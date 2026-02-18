@@ -578,52 +578,56 @@ export function ReportsPage() {
     const obTotalCredit = obEntries.reduce((s, [, bal]) => s + (bal < 0 ? Math.abs(bal) : 0), 0);
 
     return (
-        <div className="min-h-screen bg-gray-50 p-8">
+        <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
 
-            {/* ── Page header ────────────────────────────────────────────────── */}
-            <div className="max-w-7xl mx-auto mb-8">
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                        <i className="ph ph-chart-pie-slice text-3xl text-blue-600"></i>
-                        <h1 className="text-3xl font-bold text-gray-900">Financial Reports</h1>
-                    </div>
+            {/* ── Page header — consistent with sub-report headers ────────────── */}
+            <div className="flex items-center gap-3 px-5 py-3 bg-white border-b border-gray-200 flex-shrink-0">
+                <i className="ph ph-chart-pie-slice text-lg text-blue-600"></i>
+                <div>
+                    <h1 className="text-sm font-bold text-gray-800 leading-tight">Financial Reports</h1>
+                    <p className="text-[10px] text-gray-400 leading-tight">Professional accounting reports — Caseware standard</p>
+                </div>
+                <div className="ml-auto">
                     <button
                         onClick={() => { setShowImport(true); setImportPreview(null); setImportError(''); }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-[12px] font-semibold transition-colors ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
                             hasOB
                                 ? 'bg-purple-600 border-purple-700 text-white hover:bg-purple-700'
                                 : 'bg-white border-purple-300 text-purple-700 hover:bg-purple-50'
                         }`}
                     >
-                        <i className="ph ph-arrow-square-in text-[15px]"></i>
-                        {hasOB ? `Prior Year Loaded · ${obEntries.length} accounts` : 'Import Prior Year'}
+                        <i className="ph ph-arrow-square-in text-sm"></i>
+                        {hasOB ? `Prior Year · ${obEntries.length} accounts` : 'Import Prior Year'}
                     </button>
                 </div>
-                <p className="text-gray-500 text-sm">Professional accounting reports — Caseware standard</p>
             </div>
 
+            {/* ── Scrollable body ─────────────────────────────────────────────── */}
+            <div className="flex-1 overflow-y-auto">
+                <div className="max-w-5xl mx-auto px-6 py-6">
+
             {/* ── Report cards grid ──────────────────────────────────────────── */}
-            <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                 {reports.map(report => {
                     const colors = colorMap[report.color];
                     return (
                         <button
                             key={report.id}
                             onClick={() => report.ready ? setSelectedReport(report.id) : null}
-                            className={`${colors.bg} ${colors.border} ${report.ready ? colors.hover + ' cursor-pointer' : 'cursor-not-allowed opacity-50'} border-2 rounded-xl p-6 text-left transition-all duration-200 ${report.ready ? 'hover:shadow-lg hover:scale-[1.02]' : ''} relative`}
+                            className={`${colors.bg} ${colors.border} ${report.ready ? colors.hover + ' cursor-pointer' : 'cursor-not-allowed opacity-50'} border-2 rounded-xl p-5 text-left transition-all duration-200 ${report.ready ? 'hover:shadow-md hover:scale-[1.02]' : ''} relative`}
                         >
                             {!report.ready && (
                                 <div className="absolute top-3 right-3 bg-gray-400 text-white text-[10px] font-bold px-2 py-0.5 rounded">
                                     SOON
                                 </div>
                             )}
-                            <div className="flex flex-col gap-4">
-                                <div className={`${colors.icon} text-4xl`}>
+                            <div className="flex flex-col gap-3">
+                                <div className={`${colors.icon} text-3xl`}>
                                     <i className={`ph ${report.icon}`}></i>
                                 </div>
                                 <div>
-                                    <h3 className="text-[15px] font-bold text-gray-900 mb-1">{report.title}</h3>
-                                    <p className="text-[12px] text-gray-500">{report.description}</p>
+                                    <h3 className="text-[14px] font-bold text-gray-900 mb-0.5">{report.title}</h3>
+                                    <p className="text-[11px] text-gray-500">{report.description}</p>
                                 </div>
                             </div>
                         </button>
@@ -633,7 +637,7 @@ export function ReportsPage() {
 
             {/* ── Prior Year · Imported Trial Balance section ────────────────── */}
             {hasOB && (
-                <div className="max-w-7xl mx-auto">
+                <div>
                     <div className="bg-white border border-purple-200 rounded-xl shadow-sm overflow-hidden">
                         {/* Section header */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-purple-100 bg-purple-50">
@@ -737,6 +741,9 @@ export function ReportsPage() {
                     </div>
                 </div>
             )}
+
+                </div>{/* /max-w-5xl */}
+            </div>{/* /scroll body */}
 
             {/* ── Import modal ───────────────────────────────────────────────── */}
             {showImport && (
