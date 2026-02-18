@@ -121,7 +121,7 @@ BMO US FORMAT:
             rawText: this.cleanRawText(originalLine),
             parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
-            audit: auditData.audit
+            audit: auditData.audit,
             _brand: 'BMOUS',
             _tag: 'Chequing'
         };

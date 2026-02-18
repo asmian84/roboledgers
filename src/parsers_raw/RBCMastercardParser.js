@@ -17,6 +17,7 @@ RBC MASTERCARD FORMAT:
 
     async parse(statementText, metadata = null, lineMetadata = []) {
         this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
+        this._getStmtId(statementText); // Pre-warm cache so finalizeTransaction() can call without text arg
         this.lastLineMetadata = lineMetadata;
 
         const lines = statementText.split('\n');
@@ -210,7 +211,7 @@ RBC MASTERCARD FORMAT:
         const finalDescription = `${cleanDesc}\n${type}`;
 
         // Build audit data for source document viewing
-        const auditData = this.buildAuditData(pending.fullRaw, 'RBCMastercardParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
+        const auditData = this.buildAuditData(pending.fullRaw, 'RBCMastercardParser', { statementId: this._getStmtId(), lineNumber: ++this._txSeq });
 
         return {
             date: pending.date,
@@ -229,7 +230,7 @@ RBC MASTERCARD FORMAT:
             _transit: '00000',
             _acct: pending.accountNumber || '',
             rawText: pending.fullRaw,
-            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
+            parser_ref: this._getStmtId() + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };

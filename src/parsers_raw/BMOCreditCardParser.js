@@ -9,6 +9,7 @@ class BMOCreditCardParser extends BaseBankParser {
 
     async parse(statementText, metadata = null, lineMetadata = []) {
         this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
+        this._getStmtId(statementText); // Pre-warm cache so inner calls can omit text arg
         this.lastLineMetadata = lineMetadata;
         const lines = statementText.split('\n');
                 // Extract balances using base helper
@@ -51,7 +52,7 @@ class BMOCreditCardParser extends BaseBankParser {
             // Determine type by keywords
             const isPayment = /payment|credit|refund/i.test(description);
 
-            const auditData = this.buildAuditData(line, 'BMOCreditCardParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
+            const auditData = this.buildAuditData(line, 'BMOCreditCardParser', { statementId: this._getStmtId(), lineNumber: ++this._txSeq });
 
             transactions.push({
                 date: isoDate,
@@ -64,7 +65,7 @@ class BMOCreditCardParser extends BaseBankParser {
                 _tag: 'CreditCard',
                 _accountType: 'CreditCard', // [NEW] Explicit liability flagging
                 rawText: this.cleanRawText(line),
-                parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
+                parser_ref: this._getStmtId() + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
                 audit: auditData.audit
             });

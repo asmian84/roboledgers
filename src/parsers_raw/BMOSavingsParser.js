@@ -25,6 +25,7 @@ BMO CHEQUING FORMAT:
      */
     async parse(statementText, metadata = null, lineMetadata = []) {
         this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
+        this._getStmtId(statementText); // Pre-warm cache so parseLineWithAmounts can call without text arg
         this.lastLineMetadata = lineMetadata;
         const lines = statementText.split('\n');
         const transactions = [];
@@ -226,7 +227,7 @@ BMO CHEQUING FORMAT:
         if (debit === 0 && credit === 0) return null;
 
         // Build audit data for source document viewing
-        const auditData = this.buildAuditData(fullLine, 'BMOSavingsParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
+        const auditData = this.buildAuditData(fullLine, 'BMOSavingsParser', { statementId: this._getStmtId(), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
@@ -235,7 +236,7 @@ BMO CHEQUING FORMAT:
             debit: debit,
             credit: credit,
             balance: balance,
-            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
+            parser_ref: this._getStmtId() + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit,
             rawText: this.cleanRawText(fullLine)
