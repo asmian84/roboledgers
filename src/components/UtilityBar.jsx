@@ -186,32 +186,6 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
 
     return (
         <div className="h-full overflow-y-auto bg-gray-50">
-            {/* Active Filter Breadcrumb — shown when a drill filter is active */}
-            {activeFilter && (
-                <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border-b border-amber-200 sticky top-0 z-10">
-                    <div className="flex items-center gap-1.5 text-xs text-amber-800 min-w-0">
-                        <button
-                            className="text-amber-600 hover:text-amber-900 font-medium shrink-0 underline underline-offset-2"
-                            onClick={() => onClearFilter?.()}
-                            title="Show all transactions"
-                        >
-                            All
-                        </button>
-                        <span className="text-amber-400">›</span>
-                        <span className="font-semibold truncate">{activeFilter}</span>
-                    </div>
-                    <button
-                        className="ml-2 shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-amber-200 hover:bg-amber-300 text-amber-700 transition-colors"
-                        onClick={() => onClearFilter?.()}
-                        title="Clear filter"
-                    >
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                            <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                        </svg>
-                    </button>
-                </div>
-            )}
-
             {/* Dashboard Section - 3 Column Stats */}
             <div className="p-3 bg-white border-b border-gray-200">
                 <div className="bg-pink-50 border border-pink-200 rounded-md overflow-hidden">
@@ -331,8 +305,35 @@ export function UtilityBar({ transactions = [], onFilterTransactions, activeFilt
 
             {/* Category Distribution Pie Chart */}
             <div className="p-4 bg-white border-b border-gray-200">
-                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Category Distribution</h3>
-                <p className="text-[10px] text-gray-400 mb-2">Click a slice or row to filter the grid</p>
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">Category Distribution</h3>
+
+                {/* Active Filter Breadcrumb — sits right above the pie */}
+                {activeFilter ? (
+                    <div className="flex items-center justify-between mb-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-md">
+                        <div className="flex items-center gap-1.5 text-xs text-amber-800 min-w-0">
+                            <button
+                                className="text-amber-600 hover:text-amber-900 font-medium shrink-0 underline underline-offset-2"
+                                onClick={() => onClearFilter?.()}
+                                title="Show all transactions"
+                            >
+                                All
+                            </button>
+                            <span className="text-amber-400">›</span>
+                            <span className="font-semibold truncate">{activeFilter}</span>
+                        </div>
+                        <button
+                            className="ml-2 shrink-0 w-4 h-4 flex items-center justify-center rounded-full bg-amber-200 hover:bg-amber-300 text-amber-700 transition-colors"
+                            onClick={() => onClearFilter?.()}
+                            title="Clear filter"
+                        >
+                            <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                                <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                ) : (
+                    <p className="text-[10px] text-gray-400 mb-2">Click a slice or row to filter the grid</p>
+                )}
                 <PieChart
                     data={getCategoryDistribution(transactions)}
                     size={180}
