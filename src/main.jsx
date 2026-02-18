@@ -76,6 +76,9 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
         // If user disabled tax (savedPrefs.tax_cents === false/undefined), pass true to TanStack (hidden)
         tax_cents: savedPrefs.tax_cents !== true
     };
+    // Restore any active drill-down filter from UI_STATE so it survives re-renders
+    const activeDrillFilter = window.UI_STATE?.activeCategoryFilter || null;
+
     // Create props object and save for updateGridDensity
     const gridProps = {
         data: pureTransactions,
@@ -83,7 +86,8 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
         gridTheme: theme,
         gridFontSize: fontSize,
         gridDensity: density,
-        columnVisibility: columnVisibility
+        columnVisibility: columnVisibility,
+        initialCategoryFilter: activeDrillFilter,   // Persists drill-down across re-renders
     };
     window._txGridProps = gridProps;
 

@@ -491,6 +491,9 @@
         // Reset ingesting state so render() excludes progress bar HTML
         UI_STATE.isIngesting = false;
 
+        // Retroactively fix any CC refunds/cashback mis-categorized as revenue
+        window.fixCCRefunds?.();
+
         // Render - this will naturally exclude progress bar since isIngesting is false
         render();
 
@@ -938,9 +941,87 @@
   // UNIFIED WORKSPACE UPDATE - MAGNETIC CONTAINER COUPLING
   // ═══════════════════════════════════════════════════════════════
   /**
+   * Retroactive CC refund/cashback cleanup.
+   * Scans all stored transactions and re-routes any CC credit that is mis-categorized
+   * as REVENUE (or that is cash back still pointing to 9971/revenue).
+   * Called automatically after import and available as window.fixCCRefunds().
+   */
+  window.fixCCRefunds = function () {
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    const COA = window.RoboLedger?.COA;
+    let fixed = 0;
+
+    const REVENUE_ROOTS = new Set(['REVENUE']);
+    const CC_TYPES = new Set(['creditcard', 'liability', 'credit card']);
+
+    allTxns.forEach(tx => {
+      if (tx.polarity !== 'CREDIT') return;
+
+      const acc = window.RoboLedger?.Accounts?.get(tx.account_id);
+      const accType = (acc?.accountType || acc?.type || '').toLowerCase();
+      const isCCAcct = CC_TYPES.has(accType) || /visa|mastercard|amex|credit/i.test(acc?.name || '');
+      if (!isCCAcct) return;
+
+      const desc = (tx.raw_description || tx.description || '').toUpperCase();
+      const isCashBack = /CASH\s*BACK|CASHBACK|REWARD/i.test(desc);
+      const isCCRefund = /\bREFUND\b/i.test(desc);
+      const isBankRebate = /\bREBATE\b/i.test(desc);
+      const isCCPayment = !isCashBack && !isCCRefund && !isBankRebate;
+
+      if (isCCPayment) return; // Payments are fine wherever they are
+
+      const currentCOA = COA?.get(tx.category);
+      const isRevenue = currentCOA && REVENUE_ROOTS.has(currentCOA.root);
+      const is9971 = tx.category === '9971';
+      const needsFix = isRevenue || (isCashBack && is9971);
+
+      if (!needsFix) return;
+
+      if (isCashBack || isBankRebate) {
+        // Cash back / rebate → 7700 (contra bank fees)
+        window.RoboLedger.Ledger.updateCategory(tx.tx_id, '7700');
+        fixed++;
+        console.log(`[FIX] Cash back/rebate → 7700: ${tx.description || tx.raw_description}`);
+      } else if (isCCRefund) {
+        // Refund → try to mirror same vendor's debit on same account
+        const vendorWords = desc.replace(/\bREFUND\b/gi, '').trim().split(/\s+/).slice(0, 3).join(' ');
+        const matchingDebit = allTxns.find(other =>
+          other.tx_id !== tx.tx_id &&
+          other.account_id === tx.account_id &&
+          other.polarity === 'DEBIT' &&
+          other.category &&
+          !['9970', '9971'].includes(other.category) &&
+          (other.raw_description || other.description || '').toUpperCase().includes(vendorWords)
+        );
+
+        if (matchingDebit) {
+          const mirrorCOA = COA?.get(matchingDebit.category);
+          if (mirrorCOA && mirrorCOA.root !== 'REVENUE' && mirrorCOA.root !== 'LIABILITY') {
+            window.RoboLedger.Ledger.updateCategory(tx.tx_id, matchingDebit.category);
+            fixed++;
+            console.log(`[FIX] Refund mirrored → ${matchingDebit.category}: ${tx.description || tx.raw_description}`);
+            return;
+          }
+        }
+
+        // No mirror found — clear category so it shows as needs_review
+        window.RoboLedger.Ledger.updateCategory(tx.tx_id, null);
+        fixed++;
+        console.log(`[FIX] Refund revenue cleared → needs review: ${tx.description || tx.raw_description}`);
+      }
+    });
+
+    if (fixed > 0) {
+      console.log(`[FIX] CC refund cleanup: fixed ${fixed} transactions`);
+      if (window.showToast) window.showToast(`Fixed ${fixed} CC credit mis-categorization${fixed !== 1 ? 's' : ''}`, 'success');
+    }
+    return fixed;
+  };
+
+  /**
    * Ensures metadata, reconciliation, and grid are MAGNETICALLY coupled
    * This is the SINGLE SOURCE OF TRUTH for updating the workspace
-   * 
+   *
    * @param {string|null} accountId - Account ID to display, or null to use current UI_STATE
    */
   window.updateWorkspace = function (accountId = null) {

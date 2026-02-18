@@ -955,7 +955,8 @@ export function TransactionsTable({
     gridTheme = 'default',
     gridFontSize = 13.5,
     gridDensity = 'comfortable',
-    columnVisibility: initialColumnVisibility = { tax_cents: false }
+    columnVisibility: initialColumnVisibility = { tax_cents: false },
+    initialCategoryFilter = null,   // Persisted drill-down filter (category COA code)
 }) {
     // CRITICAL: Update UI_STATE with new theme values
     if (window.UI_STATE) {
@@ -987,7 +988,10 @@ export function TransactionsTable({
     const [density] = useState('comfortable'); // Fixed at comfortable for now
 
     // INLINE FILTERS: State for column-specific filters
-    const [columnFilters, setColumnFilters] = useState([]);
+    // Initialise from persisted drill-down filter if provided (survives re-renders)
+    const [columnFilters, setColumnFilters] = useState(
+        initialCategoryFilter ? [{ id: 'category', value: initialCategoryFilter }] : []
+    );
     const [showFilters, setShowFilters] = useState(false);
 
     // EXPERIMENTAL: Audit sidebar state
@@ -1658,9 +1662,13 @@ export function TransactionsTable({
                                 transactions={data}
                                 selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
                                 onAccountClick={(accountCode) => {
+                                    // Persist to UI_STATE so it survives the next renderTransactionsGrid() call
+                                    if (window.UI_STATE) window.UI_STATE.activeCategoryFilter = accountCode;
                                     setColumnFilters([{ id: 'category', value: accountCode }]);
                                 }}
                                 onClearFilter={() => {
+                                    // Clear persisted filter too
+                                    if (window.UI_STATE) window.UI_STATE.activeCategoryFilter = null;
                                     setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
                                 }}
                             />
