@@ -1892,15 +1892,32 @@ window.RoboLedger = (function () {
                 }
 
                 // Keyword Heuristic (Override for ambiguous markers)
-                if (raw_description) { // FIX: Check if raw_description exists before calling toUpperCase()
+                // NOTE: Credit card accounts use a SEPARATE keyword set.
+                // The bare word 'CREDIT' must NOT flip polarity on CC accounts —
+                // CC statements use "CREDIT" to mean a charge/purchase (e.g. "ONLINE CREDIT PURCHASE").
+                // Only explicit payment language (PAYMENT - THANK YOU, PAIEMENT - MERCI) should flip CC polarity.
+                if (raw_description) {
                     const upperDesc = raw_description.toUpperCase();
-                    const debitKeywords = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE', 'FX RATE'];
-                    const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND', 'PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'CASH BACK'];
 
-                    if (debitKeywords.some(k => upperDesc.includes(k))) {
-                        polarity = Polarity.DEBIT;
-                    } else if (creditKeywords.some(k => upperDesc.includes(k))) {
-                        polarity = Polarity.CREDIT;
+                    if (isLiabilityAcct) {
+                        // Credit card keyword set — narrow: only unambiguous payment language
+                        const ccDebitKeywords  = ['PURCHASE', 'INTEREST CHARGE', 'ANNUAL FEE', 'FX RATE', 'FOREIGN TRANSACTION'];
+                        const ccCreditKeywords = ['PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'PAYMENT RECEIVED', 'AUTOPAY'];
+                        if (ccDebitKeywords.some(k => upperDesc.includes(k))) {
+                            polarity = Polarity.DEBIT;
+                        } else if (ccCreditKeywords.some(k => upperDesc.includes(k))) {
+                            polarity = Polarity.CREDIT;
+                        }
+                        // All other CC descriptions: keep polarity as derived from debit/credit columns above
+                    } else {
+                        // Bank / chequing / savings keyword set — broader
+                        const debitKeywords  = ['PURCHASE', 'WITHDRAWAL', 'DEBIT', 'TRANSFER TO', 'PAYMENT TO', 'INTEREST CHARGE', 'FEE', 'FX RATE'];
+                        const creditKeywords = ['DEPOSIT', 'TRANSFER FROM', 'PAYMENT RECEIVED', 'INTEREST EARNED', 'CREDIT', 'REFUND', 'PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'CASH BACK'];
+                        if (debitKeywords.some(k => upperDesc.includes(k))) {
+                            polarity = Polarity.DEBIT;
+                        } else if (creditKeywords.some(k => upperDesc.includes(k))) {
+                            polarity = Polarity.CREDIT;
+                        }
                     }
                 }
 

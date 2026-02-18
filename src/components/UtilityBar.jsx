@@ -324,26 +324,40 @@ export function UtilityBar({
 
         transactions.forEach(t => {
             const amtDollars = (t.amount_cents || 0) / 100;
-            const account    = window.RoboLedger?.COA?.get(t.category);
+            const coaAcct    = window.RoboLedger?.COA?.get(t.category);
+
+            // Is this transaction from a credit card / liability account?
+            // CC charges are NEVER revenue — the card owner is spending, not earning.
+            const ledgerAcct = window.RoboLedger?.Accounts?.get(t.account_id);
+            const isCCAcct   = !!(ledgerAcct?.brand || ledgerAcct?.cardNetwork ||
+                                  (ledgerAcct?.accountType || '').toLowerCase() === 'creditcard');
 
             // Revenue / Expense totals (all transactions, not just GST-enabled)
-            if (account?.root === 'REVENUE') {
+            // Credit card transactions with a REVENUE category are misclassified — treat as expense
+            if (coaAcct?.root === 'REVENUE' && !isCCAcct) {
                 totalRevenue += amtDollars;
-            } else if (account?.root === 'EXPENSE' || account?.class === 'COGS') {
+            } else if (coaAcct?.root === 'EXPENSE' || coaAcct?.class === 'COGS') {
+                totalExpense += amtDollars;
+            } else if (isCCAcct && coaAcct?.root === 'REVENUE') {
+                // CC account with a revenue category = miscategorized charge → count as expense
                 totalExpense += amtDollars;
             }
 
             if (!t.gst_enabled) return;
             const taxAmount = (t.tax_cents || 0) / 100;
 
-            if (account?.root === 'REVENUE') {
+            if (coaAcct?.root === 'REVENUE' && !isCCAcct) {
+                // Revenue on a bank/chequing account = GST Collected
                 gstCollected += taxAmount;
-            } else if (account?.root === 'EXPENSE' || account?.class === 'COGS') {
+            } else if (coaAcct?.root === 'EXPENSE' || coaAcct?.class === 'COGS' || isCCAcct) {
+                // Expenses, COGS, or ANY credit card transaction = GST ITC (paid to vendor)
                 gstPaid += taxAmount;
-            } else if (!account && t.polarity === 'CREDIT') {
+            } else if (!coaAcct && !isCCAcct && t.polarity === 'CREDIT') {
+                // Uncategorized bank CREDIT (deposit) — assume revenue/collected
                 gstCollected += taxAmount;
                 totalRevenue += amtDollars;
-            } else if (!account && t.polarity === 'DEBIT') {
+            } else if (!coaAcct) {
+                // Everything else uncategorized = assume expense/ITC
                 gstPaid += taxAmount;
             }
         });

@@ -936,8 +936,13 @@ const columns = [
                     displayValue = calculatedTax;
                     // Write back so LiveReportPanel can use it
                     row.tax_cents = calculatedTax;
-                    // Set GST account routing
-                    const isRevenue = catStr.startsWith('4');
+                    // GST account routing:
+                    // Revenue (4xxx) on a NON-credit-card account = GST Collected (2160)
+                    // Everything on a credit card = always GST ITC/Paid (2150) — CC charges are NEVER revenue
+                    const acctForGST = window.RoboLedger?.Accounts?.get(row.account_id);
+                    const isCCAcct   = !!(acctForGST?.brand || acctForGST?.cardNetwork ||
+                                         (acctForGST?.accountType || '').toLowerCase() === 'creditcard');
+                    const isRevenue  = !isCCAcct && catStr.startsWith('4');
                     row.gst_account = isRevenue ? '2160' : '2150';
                     row.gst_type    = isRevenue ? 'collected' : 'itc';
                 }
@@ -955,7 +960,10 @@ const columns = [
                     if (province && amount) {
                         const calculatedTax = calculateTax(amount, province);
                         row.tax_cents = calculatedTax;
-                        const isRevenue = catStr.startsWith('4');
+                        const acctForGST = window.RoboLedger?.Accounts?.get(row.account_id);
+                        const isCCAcct   = !!(acctForGST?.brand || acctForGST?.cardNetwork ||
+                                             (acctForGST?.accountType || '').toLowerCase() === 'creditcard');
+                        const isRevenue  = !isCCAcct && catStr.startsWith('4');
                         row.gst_account = isRevenue ? '2160' : '2150';
                         row.gst_type    = isRevenue ? 'collected' : 'itc';
                     }
