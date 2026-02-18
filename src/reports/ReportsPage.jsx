@@ -182,11 +182,7 @@ export function ReportsPage() {
                             onClick={() => report.ready ? setSelectedReport(report.id) : null}
                             className={`${colors.bg} ${colors.border} ${report.ready ? colors.hover + ' cursor-pointer' : 'cursor-not-allowed opacity-60'} border-2 rounded-lg p-6 text-left transition-all duration-200 ${report.ready ? 'hover:shadow-lg hover:scale-105' : ''} relative`}
                         >
-                            {report.ready ? (
-                                <div className={`absolute top-3 right-3 ${colors.badge} text-white text-xs font-bold px-2 py-1 rounded`}>
-                                    READY
-                                </div>
-                            ) : (
+                            {!report.ready && (
                                 <div className="absolute top-3 right-3 bg-gray-400 text-white text-xs font-bold px-2 py-1 rounded">
                                     SOON
                                 </div>
