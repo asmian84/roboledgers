@@ -14,6 +14,19 @@ import { FinancialRatiosReport } from './FinancialRatiosReport.jsx';
  */
 export function ReportsPage() {
     const [selectedReport, setSelectedReport] = React.useState(null);
+    // Reflect global opening balances state so the hub badge stays in sync
+    const [obCount, setObCount] = React.useState(
+        () => Object.keys(window.RoboLedger?._tbOpeningBalances || {}).length
+    );
+
+    // Poll for OB changes (set by TrialBalanceReport on import/clear)
+    React.useEffect(() => {
+        const id = setInterval(() => {
+            const n = Object.keys(window.RoboLedger?._tbOpeningBalances || {}).length;
+            setObCount(n);
+        }, 800);
+        return () => clearInterval(id);
+    }, []);
 
     const reports = [
         {
@@ -120,13 +133,37 @@ export function ReportsPage() {
     return (
         <div className="min-h-screen bg-gray-50 p-8">
             <div className="max-w-7xl mx-auto mb-8">
-                <div className="flex items-center gap-3 mb-2">
-                    <i className="ph ph-chart-pie-slice text-3xl text-blue-600"></i>
-                    <h1 className="text-3xl font-bold text-gray-900">Financial Reports</h1>
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                        <i className="ph ph-chart-pie-slice text-3xl text-blue-600"></i>
+                        <h1 className="text-3xl font-bold text-gray-900">Financial Reports</h1>
+                    </div>
+                    {/* Prior Year / Opening Balances — global action surfaced at hub level */}
+                    <button
+                        onClick={() => setSelectedReport('trial-balance')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-[12px] font-semibold transition-colors ${
+                            obCount > 0
+                                ? 'bg-purple-600 border-purple-700 text-white hover:bg-purple-700'
+                                : 'bg-white border-purple-300 text-purple-700 hover:bg-purple-50'
+                        }`}
+                        title="Import a prior-year Trial Balance from QuickBooks or Caseware to enable comparative columns"
+                    >
+                        <i className="ph ph-arrow-square-in text-[15px]"></i>
+                        {obCount > 0
+                            ? `Prior Year Loaded · ${obCount} accounts`
+                            : 'Import Prior Year / Opening Balances'
+                        }
+                    </button>
                 </div>
                 <p className="text-gray-600">
                     Professional accounting reports matching Caseware standards
                 </p>
+                {obCount > 0 && (
+                    <div className="mt-3 flex items-center gap-2 text-[11px] text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+                        <i className="ph ph-check-circle text-purple-500"></i>
+                        <span>Prior year opening balances loaded — Trial Balance and Income Statement show comparative columns. Click <strong>Trial Balance</strong> to view or clear.</span>
+                    </div>
+                )}
             </div>
 
             <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
