@@ -211,7 +211,7 @@ RBC MASTERCARD FORMAT:
         const finalDescription = `${cleanDesc}\n${type}`;
 
         // Build audit data for source document viewing
-        const auditData = this.buildAuditData(pending.fullRaw, 'RBCMastercardParser');
+        const auditData = this.buildAuditData(pending.fullRaw, 'RBCMastercardParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: pending.date,
@@ -230,10 +230,26 @@ RBC MASTERCARD FORMAT:
             _transit: '00000',
             _acct: pending.accountNumber || '',
             rawText: pending.fullRaw,
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'RBCMC-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.RBCMastercardParser = RBCMastercardParser;

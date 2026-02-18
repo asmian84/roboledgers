@@ -24,6 +24,31 @@ SMART PARSING RULES:
    * [PHASE 4] Now accepts lineMetadata for spatial tracking
    */
   parseWithRegex(text, inputMetadata = null, lineMetadata = []) {
+        // ── AUDIT IDENTITY: statement ID + sequence counter ──────────────────
+        // Produces parser_ref like "SCOTIASAV-2024NOV-001" on every transaction.
+        // Mirrors AmexParser audit structure for consistent audit drawer display.
+        let _statementYear = new Date().getFullYear().toString();
+        let _statementMonth = 'UNK';
+        const _yearMatch = text.match(/20\d{2}/);
+        if (_yearMatch) _statementYear = _yearMatch[0];
+        const _monthMatch = text.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (_monthMatch) _statementMonth = _monthMatch[1].substring(0, 3).toUpperCase();
+        const _statementId = 'SCOTIASAV-' + _statementYear + _statementMonth;
+        let _seqNum = 0;
+
+        // ── Audit helper — call this when building each transaction ──────────
+        const _makeAuditRef = (rawLine, lineMetadata) => {
+            _seqNum++;
+            const auditResult = typeof this.buildAuditData === 'function'
+                ? this.buildAuditData(rawLine, this.constructor.name, { statementId: _statementId, lineNumber: _seqNum })
+                : { pdfLocation: null, audit: null };
+            return {
+                parser_ref: _statementId + '-' + String(_seqNum).padStart(3, '0'),
+                pdfLocation: auditResult.pdfLocation,
+                audit: auditResult.audit,
+            };
+        };
+
     this.lastLineMetadata = lineMetadata;
     const lines = text.split('\n');
     const transactions = [];
