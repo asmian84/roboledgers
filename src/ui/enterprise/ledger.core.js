@@ -1023,7 +1023,7 @@ window.RoboLedger = (function () {
          */
         getActive: function () {
             const txnCounts = {};
-            (state.transactions || []).forEach(tx => {
+            Object.values(state.transactions || {}).forEach(tx => {
                 if (tx.account_id) txnCounts[tx.account_id] = (txnCounts[tx.account_id] || 0) + 1;
             });
             return state.accounts.filter(acc => {
@@ -1040,7 +1040,7 @@ window.RoboLedger = (function () {
          */
         pruneGhosts: function () {
             const txnCounts = {};
-            (state.transactions || []).forEach(tx => {
+            Object.values(state.transactions || {}).forEach(tx => {
                 if (tx.account_id) txnCounts[tx.account_id] = (txnCounts[tx.account_id] || 0) + 1;
             });
             const before = state.accounts.length;
