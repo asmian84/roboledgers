@@ -217,52 +217,40 @@ window.unmountDocumentViewer = (containerId) => {
  *   - null/undefined: clears all filters and restores full dataset
  */
 window.setTxGridFilter = (filterValue) => {
-    // ── Resolve the full source dataset ──────────────────────────────────────
-    const allData = window._txGridAllData
-        || window._txGridProps?.data
-        || window.RoboLedger?.Ledger?.getAll()
-        || [];
-
-    // Keep _txGridAllData always pointing at the unfiltered full set
-    if (!window._txGridAllData && allData.length) window._txGridAllData = allData;
-
-    let filteredData, newGlobalFilter = '';
+    if (!window._txGridRoot || !window._txGridProps) {
+        console.warn('[setTxGridFilter] ❌ Grid not mounted (_txGridRoot=' + !!window._txGridRoot + ', _txGridProps=' + !!window._txGridProps + ')');
+        return;
+    }
 
     if (typeof filterValue === 'function') {
+        // Predicate filter: filter the full dataset and render filtered subset
+        // Store the predicate so we can restore it
         window._txGridFilterPredicate = filterValue;
-        filteredData = allData.filter(filterValue);
-        console.log(`[setTxGridFilter] predicate → ${filteredData.length} / ${allData.length} rows`);
+        const allData = window._txGridAllData || window._txGridProps.data;
+        window._txGridAllData = allData; // Remember full dataset
+        const before = allData.length;
+        window._txGridProps.data = allData.filter(filterValue);
+        window._txGridProps.globalFilter = ''; // Clear text filter when using predicate
+        console.log(`[setTxGridFilter] predicate filter applied: ${before} → ${window._txGridProps.data.length} rows`);
     } else if (filterValue === null || filterValue === undefined) {
+        // Clear filter — restore full dataset
         window._txGridFilterPredicate = null;
-        filteredData = allData;
-        console.log(`[setTxGridFilter] cleared → restored ${allData.length} rows`);
-    } else {
-        window._txGridFilterPredicate = null;
-        filteredData = allData;
-        newGlobalFilter = String(filterValue);
-        console.log(`[setTxGridFilter] globalFilter → "${newGlobalFilter}"`);
-    }
-
-    // ── PREFERRED PATH: Direct React state bridge (no stale-root problem) ───
-    if (window.__txGridSetData) {
-        console.log('[setTxGridFilter] → using direct bridge (__txGridSetData)');
-        if (window._txGridProps) {
-            window._txGridProps.data = filteredData;
-            window._txGridProps.globalFilter = newGlobalFilter;
+        if (window._txGridAllData) {
+            window._txGridProps.data = window._txGridAllData;
         }
-        window.__txGridSetData(filteredData);
-        window.__txGridSetGlobalFilter?.(newGlobalFilter);
-        return;
+        window._txGridProps.globalFilter = '';
+        console.log(`[setTxGridFilter] filter cleared — restored ${window._txGridProps.data.length} rows`);
+    } else {
+        // String/number: use as TanStack globalFilter (searches across columns)
+        window._txGridFilterPredicate = null;
+        if (window._txGridAllData) {
+            window._txGridProps.data = window._txGridAllData;
+        }
+        window._txGridProps.globalFilter = filterValue;
+        console.log(`[setTxGridFilter] globalFilter set to: "${filterValue}"`);
     }
 
-    // ── FALLBACK: Re-render via React root ───────────────────────────────────
-    if (!window._txGridRoot || !window._txGridProps) {
-        console.warn('[setTxGridFilter] ❌ Grid not mounted and no direct bridge available');
-        return;
-    }
-    console.log('[setTxGridFilter] → falling back to root.render()');
-    window._txGridProps.data = filteredData;
-    window._txGridProps.globalFilter = newGlobalFilter;
+    console.log('[setTxGridFilter] Re-rendering grid...');
     window._txGridRoot.render(
         <React.StrictMode>
             <ErrorBoundary fallbackMessage="Failed to render transactions grid">
