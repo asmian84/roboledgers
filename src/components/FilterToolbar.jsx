@@ -27,6 +27,12 @@ export function FilterToolbar({
     activePanel = null,      // 'utility' | 'report' | null — for TransactionsTable2
     activeFilter = null,     // string label of current filter (e.g. "Office Supplies") or null
     onClearFilter,           // () => void — called to clear the active filter
+    // ── Breadcrumb trail (drill-down stack) ──────────────────────────────────
+    // Array of { label: string, onNavigate: () => void } entries.
+    // Last entry = current view. Clicking an entry navigates back to that level.
+    // When provided, replaces the simple activeFilter pill.
+    drillPath = null,        // Array<{ label: string, onNavigate: () => void }> | null
+    onDrillBack,             // (index) => void — called when user clicks a breadcrumb
 }) {
     const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -79,24 +85,77 @@ export function FilterToolbar({
                     />
                 </div>
 
-                {/* Active Filter Pill — visible when a predicate filter is active */}
-                {activeFilter && (
+                {/* ── Breadcrumb trail / drill-down path ─────────────────────── */}
+                {/* Prefers drillPath (trail array) over legacy activeFilter (single label) */}
+                {(drillPath?.length > 0 || activeFilter) && (
                     <>
-                        <div className="w-px h-5 bg-[#e5e7eb]"></div>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-300 rounded-full text-[11px] font-semibold text-amber-800 max-w-[180px]">
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className="shrink-0 text-amber-500">
-                                <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                            </svg>
-                            <span className="truncate">{activeFilter}</span>
-                            <button
-                                onClick={() => onClearFilter?.()}
-                                className="ml-0.5 shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-200 text-amber-600 transition-colors"
-                                title="Clear filter — show all transactions"
-                            >
-                                <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                                    <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                                </svg>
-                            </button>
+                        <div className="w-px h-5 bg-[#e5e7eb] shrink-0"></div>
+                        <div className="flex items-center gap-0.5 min-w-0 overflow-hidden">
+                            {drillPath?.length > 0 ? (
+                                // ── Full breadcrumb trail ──────────────────────────────────
+                                <>
+                                    {/* Root crumb: always "All Transactions" */}
+                                    <button
+                                        onClick={() => onDrillBack?.(0)}
+                                        className="shrink-0 text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:underline px-1 py-0.5 rounded transition-colors"
+                                        title="Go back to all transactions"
+                                    >
+                                        All
+                                    </button>
+
+                                    {drillPath.map((crumb, idx) => {
+                                        const isLast = idx === drillPath.length - 1;
+                                        return (
+                                            <React.Fragment key={idx}>
+                                                {/* Separator */}
+                                                <i className="ph ph-caret-right text-[10px] text-gray-400 shrink-0"></i>
+
+                                                {isLast ? (
+                                                    // Current (active) crumb — not clickable, shows close button
+                                                    <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-300 rounded-full text-[11px] font-semibold text-amber-800 max-w-[160px] shrink-0">
+                                                        <span className="truncate">{crumb.label}</span>
+                                                        <button
+                                                            onClick={() => onClearFilter?.()}
+                                                            className="shrink-0 w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-amber-200 text-amber-600 transition-colors"
+                                                            title="Clear drill-down filter"
+                                                        >
+                                                            <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
+                                                                <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    // Ancestor crumb — clickable to navigate back
+                                                    <button
+                                                        onClick={() => onDrillBack?.(idx + 1)}
+                                                        className="shrink-0 text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:underline px-1 py-0.5 rounded transition-colors max-w-[120px] truncate"
+                                                        title={`Go back to: ${crumb.label}`}
+                                                    >
+                                                        {crumb.label}
+                                                    </button>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </>
+                            ) : (
+                                // ── Legacy single-filter pill (backward compat) ────────────
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-300 rounded-full text-[11px] font-semibold text-amber-800 max-w-[180px]">
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className="shrink-0 text-amber-500">
+                                        <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                                    </svg>
+                                    <span className="truncate">{activeFilter}</span>
+                                    <button
+                                        onClick={() => onClearFilter?.()}
+                                        className="ml-0.5 shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-200 text-amber-600 transition-colors"
+                                        title="Clear filter"
+                                    >
+                                        <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                                            <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </>
                 )}

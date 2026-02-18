@@ -1089,8 +1089,15 @@ export function TransactionsTable({
     // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
     const [activePanel, setActivePanel] = useState(null);
 
-    // FILTER LABEL: Track the label of the currently active predicate filter (null = no filter)
-    const [activeFilterLabel, setActiveFilterLabel] = useState(null);
+    // DRILL STACK: Multi-level breadcrumb trail for drill-down navigation.
+    // Each entry = { label: string, data: rows[], source: rows[] (the full set at that level) }
+    // - drillStack[0] = root (All Transactions)
+    // - drillStack[n] = nth drill level (e.g. Revenue → Rental Revenue)
+    // Empty array = no drill active (root view)
+    const [drillStack, setDrillStack] = useState([]);
+
+    // Legacy compat getter — the "current active filter label" for things that read it
+    const activeFilterLabel = drillStack.length > 0 ? drillStack[drillStack.length - 1].label : null;
 
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
@@ -1108,7 +1115,7 @@ export function TransactionsTable({
         window.__txGridSetData = (rows) => setData(rows || []);
         // Clear filter bridge — called by setTxGridFilter(null) and vanilla JS
         window.__txGridClearFilter = () => {
-            setActiveFilterLabel(null);
+            setDrillStack([]);
             window._txGridActiveFilter = null;
         };
         return () => {
@@ -1597,12 +1604,35 @@ export function TransactionsTable({
                         onToggleSettings={() => window.toggleSettings?.(true)}
                         isDetailMode={isDetailMode}  // Pass mode to show/hide panel toggles
                         activePanel={activePanel}     // Pass active panel for button highlighting
-                        activeFilter={activeFilterLabel}
+                        activeFilter={drillStack.length === 0 ? null : activeFilterLabel}
+                        drillPath={drillStack.length > 0 ? drillStack : null}
+                        onDrillBack={(idx) => {
+                            // idx=0 means navigate to root (all transactions)
+                            if (idx === 0 || idx >= drillStack.length) {
+                                // Navigate to root
+                                const rootData = drillStack[0]?.source || window._txGridAllData || data;
+                                window.__txGridSetData?.(rootData);
+                                window._txGridAllData = rootData;
+                                window._txGridActiveFilter = null;
+                                setDrillStack([]);
+                            } else {
+                                // Navigate to ancestor level idx (1-indexed in drillStack)
+                                const target = drillStack[idx - 1];
+                                if (target) {
+                                    window.__txGridSetData?.(target.data);
+                                    window._txGridAllData = target.source;
+                                    window._txGridActiveFilter = target.label;
+                                    setDrillStack(drillStack.slice(0, idx));
+                                }
+                            }
+                        }}
                         onClearFilter={() => {
-                            const source = window._txGridAllData || data;
-                            window.__txGridSetData?.(source);
-                            setActiveFilterLabel(null);
+                            // Clear all drill levels, restore root data
+                            const rootData = drillStack[0]?.source || window._txGridAllData || data;
+                            window.__txGridSetData?.(rootData);
+                            window._txGridAllData = rootData;
                             window._txGridActiveFilter = null;
+                            setDrillStack([]);
                         }}
                         onToggleReportPanel={() => {
                             const newPanel = activePanel === 'report' ? null : 'report';
@@ -1832,17 +1862,31 @@ export function TransactionsTable({
                             window._txGridActiveFilter = null;
                         }}
                         onFilterTransactions={(spec) => {
+                            // source = the current full unfiltered dataset at this level
                             const source = window._txGridAllData || data;
                             if (!window._txGridAllData) window._txGridAllData = source;
+
                             if (!spec) {
+                                // Clear all
                                 window.__txGridSetData?.(source);
-                                setActiveFilterLabel(null);
                                 window._txGridActiveFilter = null;
+                                setDrillStack([]);
                             } else if (typeof spec.filter === 'function') {
-                                window.__txGridSetData?.(source.filter(spec.filter));
-                                const label = spec.label || 'Filtered';
-                                setActiveFilterLabel(label);
+                                const filtered = source.filter(spec.filter);
+                                const label    = spec.label || 'Filtered';
+
+                                // Push a new level onto the drill stack
+                                // Each entry records: the label shown, the filtered rows, and the source
+                                setDrillStack(prev => [
+                                    ...prev,
+                                    { label, data: filtered, source }
+                                ]);
+
+                                window.__txGridSetData?.(filtered);
                                 window._txGridActiveFilter = label;
+
+                                // Update source pointer so next drill uses filtered as base
+                                window._txGridAllData = source;
                             }
                         }}
                     />
@@ -1852,13 +1896,41 @@ export function TransactionsTable({
                         reportType="trial-balance"
                         transactions={data}
                         selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
-                        onAccountClick={(accountCode) => {
-                            // Set category column filter
+                        onAccountClick={(accountCode, accountName) => {
+                            // Report mode drill: filter grid to this account's transactions
+                            // AND push to breadcrumb trail
+                            const source = window._txGridAllData || data;
+                            if (!window._txGridAllData) window._txGridAllData = source;
+
+                            const filtered = source.filter(tx =>
+                                tx.category === accountCode ||
+                                tx.gst_account === accountCode
+                            );
+                            const label = accountName
+                                ? `${accountCode} · ${accountName}`
+                                : accountCode;
+
+                            setDrillStack(prev => [...prev, {
+                                label,
+                                data: filtered,
+                                source,
+                            }]);
+
+                            window.__txGridSetData?.(filtered);
+                            window._txGridAllData = source;
+                            window._txGridActiveFilter = label;
+
+                            // Also set column filter so trial balance highlights the row
                             setColumnFilters([{ id: 'category', value: accountCode }]);
                         }}
                         onClearFilter={() => {
-                            // Clear category column filter
+                            // Clear both column filter and drill stack
                             setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
+                            const rootData = drillStack[0]?.source || window._txGridAllData || data;
+                            window.__txGridSetData?.(rootData);
+                            window._txGridAllData = rootData;
+                            window._txGridActiveFilter = null;
+                            setDrillStack([]);
                         }}
                     />
                 )}
