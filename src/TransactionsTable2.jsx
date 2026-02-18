@@ -1084,6 +1084,27 @@ export function TransactionsTable({
         setGlobalFilter(initialGlobalFilter || '');
     }, [initialGlobalFilter]);
 
+    // DIRECT BRIDGE: Register setData/setGlobalFilter on window so utility-bar and
+    // setTxGridFilter can drive the grid without going through the stale React root.
+    // This survives DOM re-renders because it's always the live closure.
+    useEffect(() => {
+        window.__txGridSetData        = (rows) => { setData(rows || []); };
+        window.__txGridSetGlobalFilter = (q)    => { setGlobalFilter(q || ''); };
+        window.__txGridClearFilters   = ()      => {
+            setGlobalFilter('');
+            setColumnFilters([]);
+        };
+        console.log('[TX_GRID] Direct bridge registered: __txGridSetData, __txGridSetGlobalFilter, __txGridClearFilters');
+        return () => {
+            // Only clear if we're the current instance
+            if (window.__txGridSetData === setData) {
+                delete window.__txGridSetData;
+                delete window.__txGridSetGlobalFilter;
+                delete window.__txGridClearFilters;
+            }
+        };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     // DETAIL MODE: Sidebar collapse detection
     const [isDetailMode, setIsDetailMode] = useState(() => {
         const sidebar = document.getElementById('sidebar');
@@ -1586,7 +1607,23 @@ export function TransactionsTable({
                 minWidth={350}
                 maxWidth={450}
             >
-                {activePanel === 'utility' && <UtilityBar transactions={data} />}
+                {activePanel === 'utility' && (
+                    <UtilityBar
+                        transactions={data}
+                        onFilterTransactions={(spec) => {
+                            if (!spec) {
+                                // Clear — restore full dataset
+                                const full = window._txGridAllData || data;
+                                window.__txGridSetData?.(full);
+                            } else if (typeof spec.filter === 'function') {
+                                // Apply predicate filter
+                                const source = window._txGridAllData || data;
+                                if (!window._txGridAllData) window._txGridAllData = source;
+                                window.__txGridSetData?.(source.filter(spec.filter));
+                            }
+                        }}
+                    />
+                )}
                 {activePanel === 'report' && (
                     <LiveReportPanel
                         reportType="trial-balance"
