@@ -905,6 +905,17 @@ window.RoboLedger = (function () {
                 if (metadata.needsReview !== undefined) tx.needsReview = metadata.needsReview;
                 if (metadata.explanation) tx.explanation = metadata.explanation;
 
+                // If this is a user-driven pick (no metadata override), mark as confirmed:
+                // - status → 'user_categorized' (exits Needs Review)
+                // - confidence → 1.0 (100% — the user decided)
+                // - category_source → 'user' (protects from recategorizeAll overwrite)
+                if (metadata.confidence === undefined) {
+                    tx.status = 'user_categorized';
+                    tx.confidence = 1.0;
+                    tx.category_confidence = 1.0;
+                    tx.category_source = 'user';
+                }
+
                 save();
 
                 // CONTINUOUS LEARNING: Capture user correction
