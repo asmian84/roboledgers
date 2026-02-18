@@ -285,13 +285,6 @@ SMART PARSING RULES:
     };
 
     transactions.push(tx);
-
-      date: isoDate,
-      desc: description.substring(0, 40) + (description.length > 40 ? '...' : ''),
-      debit: tx.debit,
-      credit: tx.credit,
-      balance: balance
-    });
   }
 }
 
