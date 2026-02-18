@@ -187,6 +187,22 @@ export function IncomeStatementReport() {
                 </div>
             )}
 
+            {/* Empty state */}
+            {!loading && !reportData && (
+                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow p-16 text-center">
+                    <i className="ph ph-upload-simple text-6xl text-gray-200 mb-5 block"></i>
+                    <p className="text-lg font-semibold text-gray-500 mb-1">Upload statements to get started</p>
+                    <p className="text-sm text-gray-400 mb-6">Import your bank statements to generate this report</p>
+                    <button
+                        onClick={() => window.__reportsGoBack?.()}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                    >
+                        <i className="ph ph-arrow-left text-base"></i>
+                        Back to Reports
+                    </button>
+                </div>
+            )}
+
             {/* Report Content */}
             {!loading && reportData && (
                 <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-lg p-8" style={{ fontFamily: 'Arial, sans-serif' }}>

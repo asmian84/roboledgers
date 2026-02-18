@@ -357,9 +357,16 @@ export function GSTReport() {
                 {/* Empty state */}
                 {!loading && !reportData && !error && (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <i className="ph ph-receipt text-5xl text-gray-200 mb-4"></i>
-                        <p className="text-gray-500 font-medium mb-1">No data yet</p>
-                        <p className="text-xs text-gray-400">Import transactions, then click <strong>Run</strong></p>
+                        <i className="ph ph-upload-simple text-5xl text-gray-200 mb-4 block"></i>
+                        <p className="text-gray-500 font-semibold mb-1">Upload statements to get started</p>
+                        <p className="text-xs text-gray-400 mb-5">Import your bank statements to generate this report</p>
+                        <button
+                            onClick={() => window.__reportsGoBack?.()}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                        >
+                            <i className="ph ph-arrow-left text-sm"></i>
+                            Back to Reports
+                        </button>
                     </div>
                 )}
 

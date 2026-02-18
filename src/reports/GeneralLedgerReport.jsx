@@ -71,7 +71,22 @@ export function GeneralLedgerReport() {
                 <ReportFilters onFilterChange={generateReport} />
             </div>
 
-            {!selectedCode && (
+            {!selectedCode && coaAccounts.length === 0 && (
+                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow p-16 text-center">
+                    <i className="ph ph-upload-simple text-6xl text-gray-200 mb-5 block"></i>
+                    <p className="text-lg font-semibold text-gray-500 mb-1">Upload statements to get started</p>
+                    <p className="text-sm text-gray-400 mb-6">Import your bank statements to generate this report</p>
+                    <button
+                        onClick={() => window.__reportsGoBack?.()}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                    >
+                        <i className="ph ph-arrow-left text-base"></i>
+                        Back to Reports
+                    </button>
+                </div>
+            )}
+
+            {!selectedCode && coaAccounts.length > 0 && (
                 <div className="max-w-7xl mx-auto bg-white rounded-lg shadow p-12 text-center">
                     <i className="ph ph-list-bullets text-6xl text-gray-300 mb-4"></i>
                     <p className="text-gray-500">Select an account above to view its ledger</p>
