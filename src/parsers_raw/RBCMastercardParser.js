@@ -17,7 +17,6 @@ RBC MASTERCARD FORMAT:
 
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
-        console.warn('⚡ [RBC-MC] Starting CALIBRATED extraction...');
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
@@ -115,7 +114,6 @@ RBC MASTERCARD FORMAT:
             transactions.push(this.finalizeTransaction(pending));
         }
 
-        console.log(`[RBC-MC] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 

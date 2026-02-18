@@ -27,6 +27,15 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
     // Reset GST drill when transaction changes
     useEffect(() => { setGstDrill(null); }, [transaction?.tx_id]);
 
+    // Load receipts from localStorage when transaction changes
+    useEffect(() => {
+        if (!transaction?.tx_id) { setReceipts([]); return; }
+        try {
+            const stored = localStorage.getItem(`rl_receipts_${transaction.tx_id}`);
+            setReceipts(stored ? JSON.parse(stored) : []);
+        } catch { setReceipts([]); }
+    }, [transaction?.tx_id]);
+
     // Auto-scroll to sidebar when opened
     useEffect(() => {
         if (isOpen && sidebarRef.current) {
@@ -93,10 +102,62 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
     };
 
     const handleUploadReceipt = (e) => {
-        const files = e.target.files;
-        if (files && files.length > 0) {
-            // TODO: Handle file upload
-        }
+        const files = Array.from(e.target.files || []);
+        if (!files.length || !transaction?.tx_id) return;
+
+        const readers = files.map(file => new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const dataUrl = ev.target.result;
+                const ext = file.name.split('.').pop().toLowerCase();
+                const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+                resolve({
+                    filename: file.name,
+                    type: ext === 'pdf' ? 'pdf' : (isImage ? ext : 'file'),
+                    url: dataUrl,
+                    // Thumbnail: use dataUrl for images, placeholder icon for PDF/other
+                    thumbnail: isImage ? dataUrl : null,
+                    size: file.size,
+                    uploadedAt: new Date().toISOString(),
+                });
+            };
+            reader.readAsDataURL(file);
+        }));
+
+        Promise.all(readers).then(newReceipts => {
+            setReceipts(prev => {
+                const updated = [...prev, ...newReceipts];
+                try {
+                    localStorage.setItem(`rl_receipts_${transaction.tx_id}`, JSON.stringify(updated));
+                } catch (err) {
+                    console.warn('[AuditSidebar] Could not persist receipts to localStorage:', err);
+                }
+                return updated;
+            });
+        });
+
+        // Reset input so same file can be re-uploaded if needed
+        e.target.value = '';
+    };
+
+    const handleDeleteReceipt = (idx) => {
+        setReceipts(prev => {
+            const updated = prev.filter((_, i) => i !== idx);
+            try {
+                localStorage.setItem(`rl_receipts_${transaction.tx_id}`, JSON.stringify(updated));
+            } catch { /* ignore */ }
+            return updated;
+        });
+    };
+
+    const handleViewReceiptInViewer = (receipt) => {
+        setViewerDocument({
+            url: receipt.url,
+            type: receipt.type,
+            name: receipt.filename,
+            page: 1,
+        });
+        setShowLeftPanel(true);
     };
 
     return (
@@ -573,9 +634,27 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                         borderRadius: '6px',
                                         overflow: 'hidden',
                                         cursor: 'pointer',
-                                        position: 'relative'
-                                    }}>
-                                        <img src={receipt.thumbnail} alt={receipt.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        position: 'relative',
+                                        background: '#f8fafc',
+                                        flexShrink: 0,
+                                    }}
+                                        onClick={() => handleViewReceiptInViewer(receipt)}
+                                        title={receipt.filename}
+                                    >
+                                        {receipt.thumbnail ? (
+                                            <img src={receipt.thumbnail} alt={receipt.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#94a3b8', gap: '4px', padding: '4px', textAlign: 'center' }}>
+                                                <i className={`ph ph-file-${receipt.type === 'pdf' ? 'pdf' : 'text'}`} style={{ fontSize: '28px', color: receipt.type === 'pdf' ? '#ef4444' : '#6b7280' }}></i>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', padding: '0 4px' }}>{receipt.filename}</span>
+                                            </div>
+                                        )}
+                                        {/* Delete button */}
+                                        <button
+                                            onClick={(ev) => { ev.stopPropagation(); handleDeleteReceipt(idx); }}
+                                            style={{ position: 'absolute', top: '2px', right: '2px', width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(239,68,68,0.85)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', lineHeight: 1 }}
+                                            title="Remove receipt"
+                                        >×</button>
                                     </div>
                                 ))}
                             </div>

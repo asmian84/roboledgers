@@ -1692,10 +1692,18 @@ window.RoboLedger = (function () {
                 const txsig = await generateTxSig(inputs);
 
                 // === POLARITY DETECTION (must happen before canonical object creation) ===
+                // Hoist isLiability/isLoanAsset so it's available for category correction below
+                const isLiabilityAcct = !!(metadata.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(metadata.name || ''));
+                // Loan accounts: ASSET accounts where receiving a payment = liability reduction (not revenue)
+                const acctRootForCat = (() => {
+                    const existingAcct = state.accounts.find(a => a.id === account_id);
+                    return existingAcct?.root || COA.get(existingAcct?.category || '')?.root || null;
+                })();
+                const isLoanAsset = acctRootForCat === 'ASSET' && /LOAN|MORTGAGE|RECEIVABLE|LINE OF CREDIT|LOC/i.test(metadata.name || '');
+
                 // If parser didn't provide polarity, detect it
                 if (!polarity) {
-                    const isLiability = metadata.brand || /VISA|MC|AMEX|MASTERCARD|CREDIT/i.test(metadata.name);
-                    if (isLiability) {
+                    if (isLiabilityAcct) {
                         // CREDIT CARD: positive amount = DEBIT (spent), negative = CREDIT (payment)
                         polarity = amount >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
                     } else {
@@ -1718,7 +1726,42 @@ window.RoboLedger = (function () {
                 }
 
                 // 3. Trigger Categorization Brain (Decision Layer)
-                const predicted_code = Brain.predict(clean_description); // Predict based on clean name
+                let predicted_code = Brain.predict(clean_description); // Predict based on clean name
+
+                // === ACCOUNT-TYPE CATEGORY GUARD ===
+                // The brain was trained mostly on chequing accounts where REVENUE codes are valid.
+                // For liability accounts (credit cards, lines of credit) and loan receivables,
+                // brain predictions must be validated against account type:
+                if (predicted_code) {
+                    const predictedRoot = COA.get(predicted_code)?.root;
+
+                    if (isLiabilityAcct) {
+                        if (polarity === Polarity.CREDIT) {
+                            // CREDIT on a credit card = payment received (chequing → card)
+                            // This is a clearing entry, not revenue. Force 9971.
+                            predicted_code = '9971'; // Credit card payment
+                        } else if (predictedRoot === 'REVENUE') {
+                            // DEBIT on a credit card = a charge/purchase — never revenue
+                            // Clear the brain prediction; let it fall to needs_review/9970
+                            predicted_code = null;
+                        }
+                        // EXPENSE and LIABILITY predictions on a credit card DEBIT are valid — keep them
+                    } else if (isLoanAsset) {
+                        if (polarity === Polarity.CREDIT) {
+                            // Credit to a loan receivable = repayment received — not revenue
+                            predicted_code = '9971'; // Use clearing account
+                        } else if (predictedRoot === 'REVENUE') {
+                            predicted_code = null; // Loan drawdown is not revenue
+                        }
+                    }
+                } else if (isLiabilityAcct && polarity === Polarity.CREDIT) {
+                    // No brain prediction, but it's a card payment — still force 9971
+                    const upperDesc2 = (raw_description || '').toUpperCase();
+                    if (/PAYMENT|THANK YOU|MERCI|PAIEMENT/i.test(upperDesc2)) {
+                        predicted_code = '9971';
+                    }
+                }
+
                 const category = predicted_code ? COA.get(predicted_code) : null;
 
                 // === PHASE 3: APPLY DESCRIPTION PARSER ===

@@ -10,9 +10,6 @@ class ScotiaCreditCardParser extends BaseBankParser {
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-SCOTIA-CC] Starting metadata extraction for Scotiabank CC...');
-        console.error('📄 [DEBUG-SCOTIA-CC] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
@@ -30,7 +27,6 @@ class ScotiaCreditCardParser extends BaseBankParser {
             accountType: 'CreditCard',
             bankName: 'Scotiabank'
         };
-        console.warn('🏁 [SCOTIA-CC] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         let currentYear = new Date().getFullYear();
 
@@ -106,7 +102,6 @@ class ScotiaCreditCardParser extends BaseBankParser {
             }
         }
 
-        console.log(`[SCOTIA-CC] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 

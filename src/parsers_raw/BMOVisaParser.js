@@ -19,14 +19,10 @@ BMO VISA FORMAT:
 
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
-        console.warn('⚡ [EXTREME-BMO-VISA] Starting metadata extraction for BMO Visa...');
-        console.error('📄 [DEBUG-BMO-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
-        console.log(`[BMO-VISA] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
 
@@ -47,7 +43,6 @@ BMO VISA FORMAT:
             bankCode: 'VISA',
             institution: 'VISA'
         };
-        console.warn('🏁 [BMO-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -110,7 +105,6 @@ BMO VISA FORMAT:
             }
         }
 
-        console.log(`[BMO-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     };
 

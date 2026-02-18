@@ -19,14 +19,10 @@ TD VISA FORMAT:
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-TD-VISA] Starting metadata extraction for TD Visa...');
-        console.error('📄 [DEBUG-TD-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
-        console.log(`[TD-VISA] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
 
@@ -38,7 +34,6 @@ TD VISA FORMAT:
         const maskedMatch = statementText.match(/(?:Account\s+Number[:\s]+)?([4-6]\d{3}\s+[X\d]{2,4}\s+[X\d]{4}\s+\d{4})/i);
         if (maskedMatch) {
             accountNumber = maskedMatch[1]; // Full masked format: "4520 70XX XXXX 7298"
-            console.log(`[TD-VISA] Extracted full masked card: ${accountNumber}`);
         } else {
             // Fallback: Try unformatted (no spaces)
             const unformattedMatch = statementText.match(/(?:Account\s+Number[:\s]+)?([4-6]\d{3}[X\d]{8}\d{4})/i);
@@ -46,7 +41,6 @@ TD VISA FORMAT:
                 const raw = unformattedMatch[1];
                 // Format as XXXX XXXX XXXX XXXX
                 accountNumber = raw.match(/.{1,4}/g).join(' ');
-                console.log(`[TD-VISA] Extracted and formatted: ${accountNumber}`);
             }
         }
 
@@ -66,7 +60,6 @@ TD VISA FORMAT:
             institution: 'VISA',
             openingBalance: openingBalance
         };
-        console.warn('🏁 [TD-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -108,7 +101,6 @@ TD VISA FORMAT:
             }
         }
 
-        console.log(`[TD-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 

@@ -67,9 +67,7 @@ SMART PARSING RULES:
 
     if (openingMatch) {
       openingBalance = parseFloat(openingMatch[1].replace(/,/g, ''));
-      console.log(`✅ [RBC] Robustly extracted opening balance: ${openingBalance}`);
     } else {
-      console.warn('⚠️ [RBC] Opening balance not found in text header.');
     }
 
     // 1.1 EXTRACT ACCOUNT INFO
@@ -117,7 +115,6 @@ SMART PARSING RULES:
     if (acctInfoMatch) {
       transit = acctInfoMatch[1];
       acctFromText = acctInfoMatch[2].replace(/[-\s]/g, '');
-      console.log(`✅ [RBC] Found Transit/Account: ${transit} / ${acctFromText}`);
 
       // Store in metadata for processing engine
       if (metadata) {
@@ -127,7 +124,6 @@ SMART PARSING RULES:
     } else if (anyTransitAcctMatch) {
       transit = anyTransitAcctMatch[1];
       acctFromText = anyTransitAcctMatch[2].replace(/[-\s]/g, '');
-      console.log(`✅ [RBC] Found via Scorched Earth: ${transit} / ${acctFromText}`);
       if (metadata) {
         metadata.transit = transit;
         metadata.accountNumber = acctFromText;
@@ -140,9 +136,6 @@ SMART PARSING RULES:
     const isSavings = text.includes('Savings Account') || text.includes('SAVINGS');
     const accountType = isSavings ? 'SAVINGS' : 'Chequing';
 
-    console.log(`[RBC Parser Debug] Raw Header Sample (First 100 chars): ${headerLines.substring(0, 100).replace(/\n/g, ' ')}`);
-    console.log(`[RBC Parser Debug] Extracted -> Transit: ${transit}, Account: ${acctFromText}`);
-    console.log('[RBC Parser Debug] Account Type:', accountType);
 
     if (window.ProcessingEngine) {
       window.ProcessingEngine.log('info', '[RBC Parser] Extraction Result', { transit, acct: acctFromText });
@@ -173,7 +166,6 @@ SMART PARSING RULES:
     const yearMatch = text.match(/,\s+(20\d{2})/);
     if (yearMatch) currentYear = parseInt(yearMatch[1]);
 
-    console.log(`[RBC] Starting Grid Parse.Initial Balance: ${currentCalculatedBalance} `);
 
     let pendingDescription = '';
     let pendingDate = null;
@@ -214,7 +206,6 @@ SMART PARSING RULES:
         }
 
         if (startMarkers.some(m => line.match(m))) {
-          console.log(`[RBC] ✅ Started parsing transactions`);
           insideTransactionBlock = true;
           continue; // Skip the marker line itself
         }
@@ -223,7 +214,6 @@ SMART PARSING RULES:
       // Stop Trigger: Summary lines  
       if (insideTransactionBlock) {
         if (endMarkers.some(m => line.match(m))) {
-          console.log(`[RBC] ✅ Finished parsing at closing balance`);
           insideTransactionBlock = false;
           break;
         }
@@ -271,7 +261,6 @@ SMART PARSING RULES:
         // Validation: Ensure amounts are reasonable (not concatenated)
         // If balance jumped by more than 10x the amount, likely a parsing error
         if (rowAmount > 1000000 || rowBalance > 10000000) {
-          console.warn(`[RBC] Suspicious amount detected: ${rowAmount}, balance: ${rowBalance}. Skipping row.`);
           pendingLineDesc += ' ' + content;
           continue;
         }
@@ -301,7 +290,6 @@ SMART PARSING RULES:
 
         // Validation
         if (rowAmount > 1000000) {
-          console.warn(`[RBC] Suspicious gap amount: ${rowAmount}. Skipping.`);
           pendingLineDesc += ' ' + content;
           continue;
         }
@@ -332,7 +320,6 @@ SMART PARSING RULES:
       // Try all permutations of Debit/Credit for gaps
       // Optimization: Limit to 2^12 (4096) to prevent freezing. If > 12, use Keyword Fallback.
       if (gaps.length > 12) {
-        console.warn(`⚠️[RBC] Gap batch too large(${gaps.length}), falling back to Keywords.`);
         return gaps.map(g => ({ ...g, isCredit: this.isCredit(g.description) }));
       }
 
@@ -358,7 +345,6 @@ SMART PARSING RULES:
       }
 
       // No solution found? Fallback to keywords
-      console.warn('⚠️ [RBC] Math solver failed to reconcile batch. Using keywords.');
       return gaps.map(g => ({ ...g, isCredit: this.isCredit(g.description) }));
     };
 
@@ -423,7 +409,6 @@ SMART PARSING RULES:
 
         // Sync to anchor balance if there's drift
         if (Math.abs(runningBalance - row.balance) > 0.05) {
-          console.warn(`⚠️[RBC] Balance drift: calc=${runningBalance.toFixed(2)}, anchor=${row.balance.toFixed(2)}. Syncing to anchor.`);
           runningBalance = row.balance;
         }
 
@@ -448,7 +433,6 @@ SMART PARSING RULES:
 
     // Handle Trailing Gaps (no closing anchor)
     if (gapBuffer.length > 0) {
-      console.warn('⚠️ [RBC] Trailing gaps found without closing anchor. Using keywords.');
       gapBuffer.forEach(g => {
         const isCredit = this.isCredit(g.description);
         if (isCredit) runningBalance += g.amount;
@@ -469,7 +453,6 @@ SMART PARSING RULES:
       });
     }
 
-    console.log(`[RBC] Grid Parse Complete via GapSolver.${transactions.length} rows.`);
     return {
       transactions,
       metadata: this.metadata,
@@ -530,10 +513,6 @@ SMART PARSING RULES:
         // Check if the search line is contained in (or contains) the metadata line
         // This handles cases where lines might be split differently
         if (normalizedMeta.includes(normalizedSearch) || normalizedSearch.includes(normalizedMeta)) {
-          console.log(`🎯[RBC - AUDIT] Exact match found for "${description.substring(0, 30)}...": `);
-          console.log(`   Search: "${normalizedSearch.substring(0, 50)}"`);
-          console.log(`   Found: "${normalizedMeta.substring(0, 50)}"`);
-          console.log(`   Y: ${lineMeta.y}, Page: ${lineMeta.page} `);
           auditData = {
             page: lineMeta.page,
             y: lineMeta.y,
@@ -640,7 +619,6 @@ SMART PARSING RULES:
     };
 
     // DEBUG: Log audit data for inspection
-    console.log(`[RBC - AUDIT] Final Audit for "${description.substring(0, 15)}...": `, auditData);
 
     return finalTxn;
   }

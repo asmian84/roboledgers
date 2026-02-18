@@ -16,9 +16,6 @@ CIBC VISA FORMAT:
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-CIBC-VISA] Starting metadata extraction for CIBC Visa...');
-        console.error('📄 [DEBUG-CIBC-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
                 // Extract balances using base helper
@@ -43,7 +40,6 @@ CIBC VISA FORMAT:
             bankCode: 'VISA',
             institution: 'VISA'
         };
-        console.warn('🏁 [CIBC-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -103,7 +99,6 @@ CIBC VISA FORMAT:
             }
         }
 
-        console.log(`[CIBC-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata , openingBalance, closingBalance, statementPeriod };
     }
 

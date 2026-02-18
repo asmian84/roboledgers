@@ -16,14 +16,10 @@ SCOTIABANK VISA FORMAT:
 
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
-        console.warn('⚡ [EXTREME-SCOTIA-VISA] Starting metadata extraction for Scotiabank Visa...');
-        console.error('📄 [DEBUG-SCOTIA-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
-        console.log(`[SCOTIA-VISA] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
 
@@ -48,7 +44,6 @@ SCOTIABANK VISA FORMAT:
             bankCode: 'VISA',
             institution: 'VISA'
         };
-        console.warn('🏁 [SCOTIA-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -115,7 +110,6 @@ SCOTIABANK VISA FORMAT:
             }
         }
 
-        console.log(`[SCOTIA-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     };
 

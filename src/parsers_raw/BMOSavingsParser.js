@@ -29,9 +29,6 @@ BMO CHEQUING FORMAT:
         const transactions = [];
 
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-BMO] Starting metadata extraction for BMO...');
-        console.error('📄 [DEBUG-BMO] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         // Extract year from statement
         const yearMatch = statementText.match(/20\d{2}/);
@@ -55,7 +52,6 @@ BMO CHEQUING FORMAT:
         const openingMatch = statementText.match(/Opening balance.*?([\d,]+\.\d{2})/i);
         if (openingMatch) {
             openingBalance = parseFloat(openingMatch[1].replace(/,/g, ''));
-            console.log(`[BMO] Extracted opening balance: ${openingBalance}`);
         }
 
         const parsedMetadata = {
@@ -71,7 +67,6 @@ BMO CHEQUING FORMAT:
             openingBalance: openingBalance
         };
 
-        console.warn('🏁 [BMO] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         // Date pattern: "Apr 01", "May 16", etc. (Flexible, no start anchor)
         const dateRegex = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})/i;
@@ -83,7 +78,6 @@ BMO CHEQUING FORMAT:
             'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
         };
 
-        console.log('[BMO] Starting parse with', lines.length, 'lines');
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
@@ -164,7 +158,6 @@ BMO CHEQUING FORMAT:
             }
         }
 
-        console.log('[BMO] Parsing complete. Found', transactions.length, 'transactions.');
         return { transactions, metadata: parsedMetadata };
     }
 

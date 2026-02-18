@@ -16,9 +16,6 @@ RBC VISA FORMAT:
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-RBC-VISA] Starting metadata extraction for RBC Visa...');
-        console.error('📄 [DEBUG-RBC-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         const transactions = [];
@@ -31,14 +28,12 @@ RBC VISA FORMAT:
         const maskedMatch = statementText.match(/([4-6]\d{3}[\s-]+[X\d]{4}[\s-]+[X\d]{4}[\s-]+\d{4})/i);
         if (maskedMatch) {
             accountNumber = maskedMatch[1].replace(/-/g, ' '); // Normalize to spaces
-            console.log(`[RBC-VISA] Extracted full masked card: ${accountNumber}`);
         } else {
             // Fallback: Try unformatted
             const unformattedMatch = statementText.match(/([4-6]\d{3}[X\d]{8}\d{4})/i);
             if (unformattedMatch) {
                 const raw = unformattedMatch[1];
                 accountNumber = raw.match(/.{1,4}/g).join(' ');
-                console.log(`[RBC-VISA] Extracted and formatted: ${accountNumber}`);
             }
         }
 
@@ -61,7 +56,6 @@ RBC VISA FORMAT:
             institution: 'VISA'
             // NO transit, NO institutionCode - these are for bank accounts only
         };
-        console.warn('🏁 [RBC-VISA] Extraction Phase Complete. Card:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -127,7 +121,6 @@ RBC VISA FORMAT:
                 }
             }
         }
-        console.log(`[RBC-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 

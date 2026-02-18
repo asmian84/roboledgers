@@ -19,15 +19,11 @@ CIBC CHEQUING FORMAT:
      */
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
-        console.log('⚡ CIBC Chequing: Starting regex-based parsing...');
 
         const lines = statementText.split('\n');
         const transactions = [];
 
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-CIBC] Starting metadata extraction for CIBC...');
-        console.error('📄 [DEBUG-CIBC] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         // EXTRACT METADATA (Institution, Transit, Account)
         // CIBC format: Account number 10-57618, Branch transit number 04729
@@ -45,12 +41,10 @@ CIBC CHEQUING FORMAT:
             _bank: 'CIBC',
             _tag: 'Savings'
         };
-        console.warn('🏁 [CIBC] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         // Extract year from statement
         const yearMatch = statementText.match(/20\d{2}/);
         this.currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
-        console.log(`[CIBC] Extracted year: ${this.currentYear}`);
 
         let currentDate = null;
         let pendingDescription = '';
@@ -61,7 +55,6 @@ CIBC CHEQUING FORMAT:
         // Date regex: "Apr 1", "May 15", etc.
         const dateRegex = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})/i;
 
-        console.log(`[CIBC] Starting parse with ${lines.length} lines, year: ${this.currentYear}`);
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -77,7 +70,6 @@ CIBC CHEQUING FORMAT:
                 const monthIndex = this.getMonthIndex(monthName);
                 if (lastMonth !== null && monthIndex < lastMonth && monthIndex <= 1) {
                     this.currentYear++;
-                    console.log(`[CIBC] Year rollover detected: ${this.currentYear}`);
                 }
                 lastMonth = monthIndex;
 
@@ -130,7 +122,6 @@ CIBC CHEQUING FORMAT:
             }
         }
 
-        console.log(`[CIBC] Parsing complete. Found ${transactions.length} transactions.`);
         return { transactions, metadata: parsedMetadata };
     }
 

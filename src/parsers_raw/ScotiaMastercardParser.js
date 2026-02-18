@@ -15,7 +15,6 @@ SCOTIA MASTERCARD FORMAT:
 
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
-        console.log('⚡ Scotia Mastercard: Starting regex-based parsing...');
 
         const lines = statementText.split('\n');
                 // Extract balances using base helper
@@ -90,7 +89,6 @@ SCOTIA MASTERCARD FORMAT:
             }
         }
 
-        console.log(`[SCOTIA-MC] Parsed ${transactions.length} transactions`);
         return {
             transactions,
             metadata: {

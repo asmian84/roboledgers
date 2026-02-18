@@ -16,14 +16,10 @@ BMO MASTERCARD FORMAT:
   async parse(statementText, metadata = null, lineMetadata = []) {
     this.lastLineMetadata = lineMetadata;
     // LOUD DIAGNOSTIC
-    console.warn('⚡ [EXTREME-BMO-MC] Starting metadata extraction for BMO Mastercard...');
-    console.error('📄 [DEBUG-BMO-MC] First 1000 characters (RED for visibility):');
-    console.log(statementText.substring(0, 1000));
 
     const lines = statementText.split('\n');
     // Extract balances using base helper
     const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
-    console.log(`[BMO-MC] Extracted opening balance: ${openingBalance}`);
 
     const transactions = [];
 
@@ -44,7 +40,6 @@ BMO MASTERCARD FORMAT:
       bankCode: 'MC',
       institution: 'MC'
     };
-    console.warn('🏁 [BMO-MC] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
     const yearMatch = statementText.match(/20\d{2}/);
     const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -106,7 +101,6 @@ BMO MASTERCARD FORMAT:
     }
 
 
-    console.log(`[BMO-MC] Parsed ${transactions.length} transactions`);
     return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
   };
 

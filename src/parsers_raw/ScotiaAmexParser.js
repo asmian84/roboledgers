@@ -15,14 +15,10 @@ SCOTIABANK AMEX FORMAT:
 
     async parse(statementText, metadata = null, lineMetadata = []) {
         this.lastLineMetadata = lineMetadata;
-        console.warn('⚡ [EXTREME-SCOTIA-AMEX] Starting metadata extraction for Scotiabank Amex...');
-        console.error('📄 [DEBUG-SCOTIA-AMEX] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
-        console.log(`[SCOTIA-AMEX] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
 
@@ -36,7 +32,6 @@ SCOTIABANK AMEX FORMAT:
             accountType: 'CreditCard',
             bankName: 'Scotiabank'
         };
-        console.warn('🏁 [SCOTIA-AMEX] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -103,7 +98,6 @@ SCOTIABANK AMEX FORMAT:
             }
         }
 
-        console.log(`[SCOTIA-AMEX] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     };
 

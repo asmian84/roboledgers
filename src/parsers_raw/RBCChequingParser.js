@@ -257,7 +257,6 @@ SMART PARSING RULES:
         // Validation: Ensure amounts are reasonable (not concatenated)
         // If balance jumped by more than 10x the amount, likely a parsing error
         if (rowAmount > 1000000 || rowBalance > 10000000) {
-          console.warn(`[RBC] Suspicious amount detected: ${rowAmount}, balance: ${rowBalance}. Skipping row.`);
           pendingLineDesc += ' ' + content;
           continue;
         }
@@ -287,7 +286,6 @@ SMART PARSING RULES:
 
         // Validation
         if (rowAmount > 1000000) {
-          console.warn(`[RBC] Suspicious gap amount: ${rowAmount}. Skipping.`);
           pendingLineDesc += ' ' + content;
           continue;
         }
@@ -318,7 +316,6 @@ SMART PARSING RULES:
       // Try all permutations of Debit/Credit for gaps
       // Optimization: Limit to 2^12 (4096) to prevent freezing. If > 12, use Keyword Fallback.
       if (gaps.length > 12) {
-        console.warn(`⚠️[RBC] Gap batch too large(${gaps.length}), falling back to Keywords.`);
         return gaps.map(g => ({ ...g, isCredit: this.isCredit(g.description) }));
       }
 
@@ -344,7 +341,6 @@ SMART PARSING RULES:
       }
 
       // No solution found? Fallback to keywords
-      console.warn('⚠️ [RBC] Math solver failed to reconcile batch. Using keywords.');
       return gaps.map(g => ({ ...g, isCredit: this.isCredit(g.description) }));
     };
 
@@ -438,7 +434,6 @@ SMART PARSING RULES:
 
     // Handle Trailing Gaps (no closing anchor)
     if (gapBuffer.length > 0) {
-      console.warn('⚠️ [RBC] Trailing gaps found without closing anchor. Using keywords.');
       gapBuffer.forEach(g => {
         const isCredit = this.isCredit(g.description);
         if (isCredit) runningBalance += g.amount;

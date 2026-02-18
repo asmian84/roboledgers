@@ -26,11 +26,14 @@ class ReportGenerator {
             const category = tx.category || UNCATEGORIZED_CODE;
 
             if (!accountBalances[category]) {
-                // Ensure category is string for COA lookup
-                const account = this.coa.get(String(category));
+                // Ensure category is string for COA lookup (try both string and numeric)
+                const account = this.coa.get(String(category)) || this.coa.get(parseInt(category));
+                const leadsheet = this.coa.getLeadsheet ? this.coa.getLeadsheet(category) : null;
                 accountBalances[category] = {
                     code: category,
-                    name: category === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name || 'Unknown'),
+                    name: category === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name || `Account ${category}`),
+                    leadsheet: leadsheet || '',
+                    root: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(category) : ''),
                     debit: 0,
                     credit: 0,
                     balance: 0
@@ -189,15 +192,30 @@ class ReportGenerator {
             return tx.polarity === 'CREDIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
         }, 0);
 
+        // Calculate opening balance: sum all transactions for this COA code BEFORE startDate
+        let openingBalance = 0;
+        if (startDate) {
+            const allTxsForCode = this.ledger.getAllTransactions
+                ? this.ledger.getAllTransactions().filter(tx => tx.category === coaCode)
+                : [];
+            allTxsForCode.forEach(tx => {
+                if (new Date(tx.date) < new Date(startDate)) {
+                    const amt = (tx.amount_cents || 0) / 100;
+                    if (tx.polarity === 'DEBIT') openingBalance += amt;
+                    else if (tx.polarity === 'CREDIT') openingBalance -= amt;
+                }
+            });
+        }
+
         return {
             account: {
                 code: coaCode,
-                name: account?.name || 'Unknown',
-                type: account?.root || 'Unknown'
+                name: account?.name || `Account ${coaCode}`,
+                type: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(coaCode) : 'EXPENSE')
             },
             transactions: enriched,
-            openingBalance: 0, // TODO: Calculate from transactions before startDate
-            closingBalance: runningBalance,
+            openingBalance,
+            closingBalance: openingBalance + runningBalance,
             totals: {
                 debit: totalDebit,
                 credit: totalCredit,
@@ -225,19 +243,20 @@ class ReportGenerator {
             const account = this.coa.get(tx.category);
             if (!account) return;
 
-            const amount = (tx.credit || 0) - (tx.debit || 0); // For income statement
+            // Use canonical schema: amount_cents + polarity
+            const absAmount = (tx.amount_cents || 0) / 100;
 
-            // REVENUE accounts (4000-4999)
+            // REVENUE accounts (4000-4999) — Credits = income earned
             if (account.root === 'REVENUE') {
-                this.addToCategory(revenue, tx.category, account.name, amount);
+                this.addToCategory(revenue, tx.category, account.name, absAmount);
             }
-            // COGS accounts (5000-5999) - Cost of Goods Sold
+            // COGS accounts (5000-5999) - Cost of Goods Sold — Debits = costs incurred
             else if (account.class === 'COGS') {
-                this.addToCategory(cogs, tx.category, account.name, amount);
+                this.addToCategory(cogs, tx.category, account.name, absAmount);
             }
-            // EXPENSE accounts (6000-9999)
+            // EXPENSE accounts (6000-9999) — Debits = expenses incurred
             else if (account.root === 'EXPENSE') {
-                this.addToCategory(expenses, tx.category, account.name, amount);
+                this.addToCategory(expenses, tx.category, account.name, absAmount);
             }
         });
 
@@ -275,21 +294,27 @@ class ReportGenerator {
         const liabilities = [];
         const equity = [];
 
-        // Aggregate by account type
+        // Aggregate by account type using canonical schema
         transactions.forEach(tx => {
             if (!tx.category) return;
 
             const account = this.coa.get(tx.category);
             if (!account) return;
 
-            const amount = (tx.debit || 0) - (tx.credit || 0);
+            const absAmount = (tx.amount_cents || 0) / 100;
 
             if (account.root === 'ASSET') {
-                this.addToCategory(assets, tx.category, account.name, amount);
+                // Assets: DEBIT increases (+), CREDIT decreases (-)
+                const signed = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
+                this.addToCategory(assets, tx.category, account.name, signed);
             } else if (account.root === 'LIABILITY') {
-                this.addToCategory(liabilities, tx.category, account.name, -amount); // Negative for liabilities
+                // Liabilities: CREDIT increases (+), DEBIT decreases (-)
+                const signed = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+                this.addToCategory(liabilities, tx.category, account.name, signed);
             } else if (account.root === 'EQUITY') {
-                this.addToCategory(equity, tx.category, account.name, -amount);
+                // Equity: CREDIT increases (+), DEBIT decreases (-)
+                const signed = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+                this.addToCategory(equity, tx.category, account.name, signed);
             }
         });
 
@@ -324,11 +349,11 @@ class ReportGenerator {
             if (!tx.category) return;
 
             if (!summary[tx.category]) {
-                const account = this.coa.get(tx.category);
+                const account = this.coa.get(String(tx.category)) || this.coa.get(parseInt(tx.category));
                 summary[tx.category] = {
                     code: tx.category,
-                    name: account?.name || 'Unknown',
-                    type: account?.root || 'Unknown',
+                    name: account?.name || `Account ${tx.category}`,
+                    type: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(tx.category) : 'EXPENSE'),
                     count: 0,
                     debit: 0,
                     credit: 0,
@@ -337,8 +362,12 @@ class ReportGenerator {
             }
 
             summary[tx.category].count++;
-            summary[tx.category].debit += tx.debit || 0;
-            summary[tx.category].credit += tx.credit || 0;
+            const amount = (tx.amount_cents || 0) / 100;
+            if (tx.polarity === 'DEBIT') {
+                summary[tx.category].debit += amount;
+            } else if (tx.polarity === 'CREDIT') {
+                summary[tx.category].credit += amount;
+            }
         });
 
         // Calculate net and sort
@@ -434,10 +463,12 @@ class ReportGenerator {
             // Check if transaction has tax amount
             const taxAmount = tx.tax_cents ? tx.tax_cents / 100 : 0;
 
-            // REVENUE accounts (4000-4999)  
+            // Use canonical schema: amount_cents
+            const amount = (tx.amount_cents || 0) / 100;
+
+            // REVENUE accounts (4000-4999)
             if (account.root === 'REVENUE') {
                 // GST collected on revenue
-                const amount = tx.credit || 0;
                 const gst = taxAmount || (amount * taxRate);
                 gstCollected += gst;
                 revenueTransactions.push({
@@ -451,7 +482,6 @@ class ReportGenerator {
             // EXPENSE accounts (5000-9999) or COGS class
             else if (account.root === 'EXPENSE' || account.class === 'COGS') {
                 // GST paid on expenses (ITC)
-                const amount = tx.debit || 0;
                 const gst = taxAmount || (amount * taxRate);
                 gstPaid += gst;
                 expenseTransactions.push({
@@ -507,9 +537,22 @@ class ReportGenerator {
         const liabilities = balanceSheet.totals.liabilities;
         const equity = balanceSheet.totals.equity;
 
-        // Calculate current assets/liabilities (simplified - would need account classification)
-        const currentAssets = assets; // TODO: Filter by current asset accounts
-        const currentLiabilities = liabilities; // TODO: Filter by current liability accounts
+        // Current assets: cash, receivables, inventory (codes 1000-1399)
+        // Current liabilities: AP, accrued liabilities, GST payable (codes 2000-2499)
+        const currentAssets = (() => {
+            const bs = this.generateBalanceSheet(balanceDate);
+            return (bs.assets || []).reduce((sum, a) => {
+                const n = parseInt(a.code || 0);
+                return (n >= 1000 && n <= 1399) ? sum + Math.abs(a.balance || 0) : sum;
+            }, 0);
+        })();
+        const currentLiabilities = (() => {
+            const bs = this.generateBalanceSheet(balanceDate);
+            return (bs.liabilities || []).reduce((sum, a) => {
+                const n = parseInt(a.code || 0);
+                return (n >= 2000 && n <= 2499) ? sum + Math.abs(a.balance || 0) : sum;
+            }, 0);
+        })();
 
         return {
             // Profitability Ratios

@@ -69,7 +69,6 @@ class BMOCreditCardParser extends BaseBankParser {
             });
         }
 
-        console.log(`[BMO-CC] Parsed ${transactions.length} transactions`);
         return {
             transactions,
             metadata: {
