@@ -460,6 +460,20 @@ export function UtilityBar({
     /** Fire a filter event — every drillable row calls this */
     const drill = (label, filterFn) => onFilterTransactions?.({ label, filter: filterFn });
 
+    // Shared helper: derive whether a transaction is GST Collected vs ITC using the same
+    // logic as the stats block — based on COA root + account type, not stored gst_type field
+    // (gst_type is only persisted when the toggle is explicitly clicked, so it may be absent)
+    const gstTypeOf = (tx) => {
+        const coaAcct    = window.RoboLedger?.COA?.get(tx.category);
+        const ledgerAcct = window.RoboLedger?.Accounts?.get(tx.account_id);
+        const isCCAcct   = !!(ledgerAcct?.brand || ledgerAcct?.cardNetwork ||
+                              (ledgerAcct?.accountType || '').toLowerCase() === 'creditcard');
+        // Revenue on a non-CC bank account = Collected; everything else = ITC
+        if (coaAcct?.root === 'REVENUE' && !isCCAcct) return 'collected';
+        if (!coaAcct && !isCCAcct && tx.polarity === 'CREDIT') return 'collected'; // uncat bank deposit
+        return 'itc';
+    };
+
     return (
         <div className="h-full overflow-y-auto bg-gray-50">
 
@@ -529,8 +543,7 @@ export function UtilityBar({
                     <div
                         className={`${DRILL_ROW} hover:bg-green-100`}
                         onClick={() => drill('GST Collected (2160)',
-                            tx => tx.gst_enabled && tx.tax_cents > 0 &&
-                                  (tx.gst_type === 'collected' || tx.gst_account === '2160'))}
+                            tx => tx.gst_enabled && (tx.tax_cents > 0) && gstTypeOf(tx) === 'collected')}
                     >
                         <span className="text-xs text-gray-600 group-hover:text-green-800">GST Collected</span>
                         <span className="text-sm font-bold font-mono text-green-700">{fmt(stats.gstCollected)}</span>
@@ -540,8 +553,7 @@ export function UtilityBar({
                     <div
                         className={`${DRILL_ROW} hover:bg-blue-50`}
                         onClick={() => drill('GST ITC / Paid (2150)',
-                            tx => tx.gst_enabled && tx.tax_cents > 0 &&
-                                  (tx.gst_type === 'itc' || tx.gst_account === '2150'))}
+                            tx => tx.gst_enabled && (tx.tax_cents > 0) && gstTypeOf(tx) === 'itc')}
                     >
                         <span className="text-xs text-gray-600 group-hover:text-blue-800">GST ITC (Paid)</span>
                         <span className="text-sm font-bold font-mono text-blue-700">{fmt(stats.gstPaid)}</span>
