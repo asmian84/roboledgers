@@ -1,275 +1,183 @@
 import React from 'react';
 
+// ── Quick-action cards ──────────────────────────────────────────────────────
+const QUICK_ACTIONS = [
+    {
+        icon: 'ph-upload-simple',
+        label: 'Import Statements',
+        desc: 'CSV or PDF — 20+ bank formats',
+        color: 'blue',
+        route: 'import',
+    },
+    {
+        icon: 'ph-rows',
+        label: 'Transactions',
+        desc: 'Categorize, review, export',
+        color: 'indigo',
+        route: 'import',   // same tab — transactions live there
+    },
+    {
+        icon: 'ph-chart-pie-slice',
+        label: 'Reports',
+        desc: 'TB, P&L, GST, Balance Sheet',
+        color: 'green',
+        route: 'reports',
+    },
+    {
+        icon: 'ph-gear-six',
+        label: 'Settings',
+        desc: 'COA, rules, preferences',
+        color: 'slate',
+        route: 'settings',
+    },
+];
+
+const COLOR = {
+    blue:   { bg: 'bg-blue-50',   border: 'border-blue-200',   icon: 'text-blue-600',   hover: 'hover:border-blue-400 hover:bg-blue-100' },
+    indigo: { bg: 'bg-indigo-50', border: 'border-indigo-200', icon: 'text-indigo-600', hover: 'hover:border-indigo-400 hover:bg-indigo-100' },
+    green:  { bg: 'bg-green-50',  border: 'border-green-200',  icon: 'text-green-600',  hover: 'hover:border-green-400 hover:bg-green-100' },
+    slate:  { bg: 'bg-slate-50',  border: 'border-slate-200',  icon: 'text-slate-500',  hover: 'hover:border-slate-400 hover:bg-slate-100' },
+};
+
+// ── Capability pills ────────────────────────────────────────────────────────
+const PILLS = [
+    { icon: 'ph-brain',        label: '100k+ vendor mappings' },
+    { icon: 'ph-lock-simple',  label: 'Client-side privacy' },
+    { icon: 'ph-arrows-clockwise', label: 'Adaptive learning' },
+    { icon: 'ph-scales',       label: 'Double-entry GAAP' },
+    { icon: 'ph-percent',      label: 'GST/HST reconciliation' },
+    { icon: 'ph-file-pdf',     label: 'PDF audit trail' },
+];
+
 const HomePage = () => {
+    const handleRoute = (route) => {
+        // Delegate to the vanilla-JS router in app.js
+        const navItem = document.querySelector(`[data-route="${route}"]`);
+        if (navItem) navItem.click();
+    };
+
+    // Pull live stats from RoboLedger global
+    const ledger      = window.RoboLedger?.Ledger;
+    const allTxns     = ledger?.getAll?.() || [];
+    const accounts    = window.RoboLedger?.Accounts?.getActive?.() || window.RoboLedger?.Accounts?.getAll?.() || [];
+    const uncatCount  = allTxns.filter(t => !t.category || String(t.category) === '9970').length;
+    const totalCount  = allTxns.length;
+    const accountCount = accounts.length;
+
     return (
-        <div className="min-h-screen bg-white">
-            {/* Hero Section */}
-            <div className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-white">
-                <div className="relative max-w-7xl mx-auto px-6 pt-20 pb-32">
-                    {/* Header  */}
-                    <div className="text-center mb-16">
-                        <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-6 py-2 mb-8">
-                            <i className="ph ph-sparkle text-blue-600"></i>
-                            <span className="text-sm font-semibold text-blue-700">Powered by Advanced ML + Hybrid Intelligence</span>
-                        </div>
+        <div className="min-h-screen bg-[#f8f9fb] p-8">
+            <div className="max-w-4xl mx-auto">
 
-                        <h1 className="text-6xl font-bold text-slate-900 mb-6">
-                            RoboLedger<span className="text-blue-600">.AI</span>
+                {/* ── Header ──────────────────────────────────────────────── */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-1">
+                        <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
+                            <i className="ph ph-robot text-white text-xl"></i>
+                        </div>
+                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                            RoboLedger<span className="text-blue-600 font-light">.ai</span>
                         </h1>
-
-                        <p className="text-xl text-slate-600 mb-12 max-w-4xl mx-auto leading-relaxed">
-                            Intelligent accounting automation with <span className="text-blue-600 font-semibold">100k+ vendor training</span>,
-                            <span className="text-blue-600 font-semibold"> adaptive learning</span>, and
-                            <span className="text-blue-600 font-semibold"> client-side privacy</span>
-                        </p>
-
-                        <div className="flex items-center justify-center gap-4">
-                            <button className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-                                <i className="ph ph-upload mr-2"></i>
-                                Start Categorizing
-                            </button>
-                            <button className="px-8 py-3 bg-white border-2 border-slate-300 text-slate-700 font-semibold rounded-lg hover:border-slate-400 transition-colors">
-                                <i className="ph ph-play-circle mr-2"></i>
-                                See How It Works
-                            </button>
-                        </div>
                     </div>
+                    <p className="text-[13px] text-slate-500 ml-12">
+                        Intelligent accounting automation — all processing happens in your browser.
+                    </p>
+                </div>
 
-                    {/* Lifecycle Diagram */}
-                    <div className="bg-white border-2 border-slate-200 rounded-2xl p-12 shadow-sm mb-20">
-                        <h2 className="text-3xl font-bold text-slate-900 mb-8 text-center">
-                            <i className="ph ph-flow-arrow text-blue-600 mr-3"></i>
-                            RoboLedger Lifecycle
-                        </h2>
+                {/* ── Live Stats ──────────────────────────────────────────── */}
+                {totalCount > 0 && (
+                    <div className="grid grid-cols-3 gap-4 mb-8">
+                        <StatTile
+                            value={totalCount.toLocaleString()}
+                            label="Transactions"
+                            icon="ph-receipt"
+                            color="text-blue-600"
+                        />
+                        <StatTile
+                            value={accountCount}
+                            label="Accounts"
+                            icon="ph-bank"
+                            color="text-indigo-600"
+                        />
+                        <StatTile
+                            value={uncatCount > 0 ? uncatCount.toLocaleString() : '✓ All done'}
+                            label={uncatCount > 0 ? 'Need review' : 'Categorized'}
+                            icon={uncatCount > 0 ? 'ph-warning-circle' : 'ph-check-circle'}
+                            color={uncatCount > 0 ? 'text-amber-500' : 'text-green-600'}
+                        />
+                    </div>
+                )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative">
-                            {/* Step 1 */}
-                            <div className="relative">
-                                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-                                    <div className="w-16 h-16 mx-auto mb-4 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                                        <i className="ph ph-file-arrow-up"></i>
-                                    </div>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-2">Import</h3>
-                                    <p className="text-sm text-slate-600">CSV, PDF, 20+ bank formats</p>
+                {/* ── Quick Actions ────────────────────────────────────────── */}
+                <div className="grid grid-cols-2 gap-3 mb-8">
+                    {QUICK_ACTIONS.map(({ icon, label, desc, color, route }) => {
+                        const c = COLOR[color];
+                        return (
+                            <button
+                                key={route + label}
+                                onClick={() => handleRoute(route)}
+                                className={`flex items-center gap-4 text-left px-5 py-4 rounded-xl border ${c.bg} ${c.border} ${c.hover} transition-all duration-150 group`}
+                            >
+                                <div className={`shrink-0 w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm border ${c.border}`}>
+                                    <i className={`${icon} ${c.icon} text-xl`}></i>
                                 </div>
-                                <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 text-slate-400 text-2xl">→</div>
-                            </div>
-
-                            {/* Step 2 */}
-                            <div className="relative">
-                                <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-                                    <div className="w-16 h-16 mx-auto mb-4 bg-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                                        <i className="ph ph-brain"></i>
-                                    </div>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-2">ML Match</h3>
-                                    <p className="text-sm text-slate-600">3-tier: Rules → Dictionary → Fuzzy</p>
+                                <div>
+                                    <div className="text-[13px] font-semibold text-slate-800 group-hover:text-slate-900">{label}</div>
+                                    <div className="text-[11px] text-slate-500 mt-0.5">{desc}</div>
                                 </div>
-                                <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 text-slate-400 text-2xl">→</div>
-                            </div>
+                                <i className="ph ph-caret-right text-slate-300 group-hover:text-slate-400 ml-auto text-[13px]"></i>
+                            </button>
+                        );
+                    })}
+                </div>
 
-                            {/* Step 3 */}
-                            <div className="relative">
-                                <div className="bg-pink-50 border-2 border-pink-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-                                    <div className="w-16 h-16 mx-auto mb-4 bg-pink-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                                        <i className="ph ph-arrows-clockwise"></i>
+                {/* ── Workflow ─────────────────────────────────────────────── */}
+                <div className="bg-white border border-slate-200 rounded-xl px-6 py-5 mb-6">
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-4">Workflow</p>
+                    <div className="flex items-center gap-0">
+                        {[
+                            { icon: 'ph-file-arrow-up', label: 'Import',   color: 'text-blue-500'   },
+                            { icon: 'ph-brain',          label: 'ML Match', color: 'text-purple-500' },
+                            { icon: 'ph-check-square',   label: 'Review',   color: 'text-amber-500'  },
+                            { icon: 'ph-scales',         label: 'Validate', color: 'text-green-500'  },
+                            { icon: 'ph-chart-line-up',  label: 'Report',   color: 'text-teal-500'   },
+                        ].map((step, i, arr) => (
+                            <React.Fragment key={step.label}>
+                                <div className="flex flex-col items-center gap-1.5 flex-1">
+                                    <div className={`w-9 h-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center ${step.color} text-lg`}>
+                                        <i className={step.icon}></i>
                                     </div>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-2">Learn</h3>
-                                    <p className="text-sm text-slate-600">User corrections boost confidence</p>
+                                    <span className="text-[11px] text-slate-500 font-medium">{step.label}</span>
                                 </div>
-                                <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 text-slate-400 text-2xl">→</div>
-                            </div>
-
-                            {/* Step 4 */}
-                            <div className="relative">
-                                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-                                    <div className="w-16 h-16 mx-auto mb-4 bg-green-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                                        <i className="ph ph-check-circle"></i>
-                                    </div>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-2">Validate</h3>
-                                    <p className="text-sm text-slate-600">Double-entry + GST reconciliation</p>
-                                </div>
-                                <div className="hidden md:block absolute top-1/2 -right-2 transform -translate-y-1/2 text-slate-400 text-2xl">→</div>
-                            </div>
-
-                            {/* Step 5 */}
-                            <div className="relative">
-                                <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-                                    <div className="w-16 h-16 mx-auto mb-4 bg-amber-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                                        <i className="ph ph-chart-line"></i>
-                                    </div>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-2">Report</h3>
-                                    <p className="text-sm text-slate-600">Trial balance, P&L, GST</p>
-                                </div>
-                            </div>
-                        </div>
+                                {i < arr.length - 1 && (
+                                    <i className="ph ph-caret-right text-slate-300 text-[11px] shrink-0 mb-4"></i>
+                                )}
+                            </React.Fragment>
+                        ))}
                     </div>
                 </div>
-            </div>
 
-            {/* Features Grid */}
-            <div className="max-w-7xl mx-auto px-6 pb-32 bg-gray-50">
-                <div className="text-center mb-16 pt-20">
-                    <h2 className="text-4xl font-bold text-slate-900 mb-4">
-                        Features
-                    </h2>
-                    <p className="text-lg text-slate-600">Production-grade ML + enterprise accounting in your browser</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* ML Features */}
-                    <FeatureCard
-                        icon="brain"
-                        iconColor="text-purple-400"
-                        title="33MB Training Dataset"
-                        description="100k+ vendor-to-COA mappings with confidence scores and alternative suggestions"
-                        tags={["ML", "Core"]}
-                    />
-
-                    <FeatureCard
-                        icon="arrows-clockwise"
-                        iconColor="text-blue-400"
-                        title="Adaptive Learning"
-                        description="User corrections boost confidence logarithmically. Your model improves with every transaction."
-                        tags={["ML", "Learning"]}
-                    />
-
-                    <FeatureCard
-                        icon="lightbulb"
-                        iconColor="text-yellow-400"
-                        title="Explainable AI"
-                        description="See exactly why each category was suggested with confidence scores and match reasoning"
-                        tags={["ML", "UX"]}
-                    />
-
-                    <FeatureCard
-                        icon="tree-structure"
-                        iconColor="text-green-400"
-                        title="3-Tier Matching"
-                        description="Rules (1.0) → Dictionary (0.6-1.0) → Fuzzy ML (0.7+). Graceful degradation built-in."
-                        tags={["Architecture"]}
-                    />
-
-                    <FeatureCard
-                        icon="shield-check"
-                        iconColor="text-emerald-400"
-                        title="Client-Side Privacy"
-                        description="All data stays in your browser. Zero server uploads. IndexedDB + optional encryption."
-                        tags={["Security", "Core"]}
-                    />
-
-                    <FeatureCard
-                        icon="book-open"
-                        iconColor="text-orange-400"
-                        title="Double-Entry Accounting"
-                        description="GAAP-compliant ledger with automatic debit/credit balancing and audit trails"
-                        tags={["Accounting"]}
-                    />
-
-                    {/* Backend Capabilities */}
-                    <FeatureCard
-                        icon="database"
-                        iconColor="text-cyan-400"
-                        title="Event Sourcing (Roadmap)"
-                        description="Immutable event log, time-travel debugging, and complete audit trail of all changes"
-                        tags={["Backend", "Future"]}
-                    />
-
-                    <FeatureCard
-                        icon="git-branch"
-                        iconColor="text-pink-400"
-                        title="Model Versioning"
-                        description="Snapshot, rollback, and A/B test ML models with golden dataset regression testing"
-                        tags={["ML", "DevOps"]}
-                    />
-
-                    <FeatureCard
-                        icon="chart-pie"
-                        iconColor="text-violet-400"
-                        title="ML Observability"
-                        description="Match rates by tier, confidence distributions, correction frequency analytics"
-                        tags={["ML", "Analytics"]}
-                    />
-
-                    <FeatureCard
-                        icon="lock"
-                        iconColor="text-red-400"
-                        title="Transparent Encryption"
-                        description="AES-256 client-side encryption with password-protected exports and secure backups"
-                        tags={["Security", "Future"]}
-                    />
-
-                    <FeatureCard
-                        icon="cloud-arrow-up"
-                        iconColor="text-sky-400"
-                        title="Cloud Backup (Roadmap)"
-                        description="Encrypted sync to Google Drive/Dropbox with point-in-time recovery"
-                        tags={["Backend", "Future"]}
-                    />
-
-                    <FeatureCard
-                        icon="users-three"
-                        iconColor="text-indigo-400"
-                        title="Multi-User (Future)"
-                        description="Real-time collaboration, approval workflows, and team learning with conflict resolution"
-                        tags={["Collaboration", "Future"]}
-                    />
-                </div>
-
-                {/* Stats Section */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-20">
-                    <StatCard number="100k+" label="Vendor Mappings" />
-                    <StatCard number="33MB" label="Training Data" />
-                    <StatCard number="20+" label="Bank Parsers" />
-                    <StatCard number="3-Tier" label="ML Architecture" />
-                </div>
-
-                {/* CTA */}
-                <div className="mt-32 text-center">
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-16">
-                        <h2 className="text-3xl font-bold text-slate-900 mb-6">
-                            Ready to Automate Your Accounting?
-                        </h2>
-                        <p className="text-lg text-slate-600 mb-8 max-w-2xl mx-auto">
-                            Join the future of intelligent bookkeeping. No credit card required.
-                        </p>
-                        <div className="flex items-center justify-center gap-4">
-                            <button className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-                                Get Started Free
-                            </button>
-                            <button className="px-8 py-3 bg-white border-2 border-slate-300 text-slate-700 font-semibold rounded-lg hover:border-slate-400 transition-colors">
-                                View Documentation
-                            </button>
+                {/* ── Capability Pills ─────────────────────────────────────── */}
+                <div className="flex flex-wrap gap-2">
+                    {PILLS.map(({ icon, label }) => (
+                        <div key={label} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] text-slate-500 font-medium">
+                            <i className={`${icon} text-slate-400 text-[12px]`}></i>
+                            {label}
                         </div>
-                    </div>
+                    ))}
                 </div>
+
             </div>
         </div>
     );
 };
 
-const FeatureCard = ({ icon, iconColor, title, description, tags }) => (
-    <div className="group bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-blue-300 hover:shadow-md transition-all">
-        <div className={`w-14 h-14 mb-4 bg-slate-100 rounded-xl flex items-center justify-center ${iconColor} text-3xl`}>
-            <i className={`ph ph-${icon}`}></i>
+const StatTile = ({ value, label, icon, color }) => (
+    <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center gap-3">
+        <i className={`${icon} ${color} text-2xl`}></i>
+        <div>
+            <div className={`text-xl font-bold ${color} leading-none`}>{value}</div>
+            <div className="text-[11px] text-slate-400 font-medium mt-0.5">{label}</div>
         </div>
-        <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
-        <p className="text-sm text-slate-600 mb-4 leading-relaxed">{description}</p>
-        <div className="flex gap-2 flex-wrap">
-            {tags.map((tag, idx) => (
-                <span key={idx} className="px-3 py-1 bg-blue-100 border border-blue-300 text-blue-700 text-xs font-semibold rounded-full">
-                    {tag}
-                </span>
-            ))}
-        </div>
-    </div>
-);
-
-const StatCard = ({ number, label }) => (
-    <div className="bg-white border-2 border-slate-200 rounded-xl p-8 text-center hover:border-blue-300 transition-all">
-        <div className="text-4xl font-bold text-blue-600 mb-2">
-            {number}
-        </div>
-        <div className="text-sm text-slate-600 font-semibold uppercase tracking-wider">{label}</div>
     </div>
 );
 
