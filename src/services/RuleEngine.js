@@ -306,16 +306,16 @@ class RuleEngine {
 
     importDefaultRules() {
         const defaultRules = [
-            // TELCO
-            { name: 'TELUS → Telephone & Internet (6400)',
+            // TELCO — COA 9100 Telephone & Internet (corrected from 6400 which is wrong)
+            { name: 'TELUS → Telephone & Internet (9100)',
               conditions: [{ field: 'description', operator: 'regex', value: 'TELUS[-\\s]?(MOBILITY|CUSTOMER|ACCOUNT)?' }],
-              action: { coa_code: '6400' }, logic: 'AND', priority: 9 },
-            { name: 'ROGERS / FIDO → Telephone & Internet (6400)',
+              action: { coa_code: '9100' }, logic: 'AND', priority: 9 },
+            { name: 'ROGERS / FIDO → Telephone & Internet (9100)',
               conditions: [{ field: 'description', operator: 'regex', value: 'ROGERS|FIDO WIRELESS' }],
-              action: { coa_code: '6400' }, logic: 'AND', priority: 9 },
-            { name: 'OPENPHONE → Telephone & Internet (6400)',
+              action: { coa_code: '9100' }, logic: 'AND', priority: 9 },
+            { name: 'OPENPHONE → Telephone & Internet (9100)',
               conditions: [{ field: 'description', operator: 'contains', value: 'OPENPHONE' }],
-              action: { coa_code: '6400' }, logic: 'AND', priority: 9 },
+              action: { coa_code: '9100' }, logic: 'AND', priority: 9 },
 
             // SOFTWARE
             { name: 'PRICELABS → Software (6800)',
@@ -368,31 +368,32 @@ class RuleEngine {
               conditions: [{ field: 'description', operator: 'regex', value: 'BANFF PLUMBING|BOW VALLEY.*PLUMBIN' }],
               action: { coa_code: '7300' }, logic: 'AND', priority: 9 },
 
-            // VEHICLE / GAS
-            { name: 'GAS STATIONS → Vehicle (8400)',
-              conditions: [{ field: 'description', operator: 'regex', value: 'ESSO|PETROCAN|PETRO-?CAN|SHELL|CO-?OP GAS|CHEVRON|CALG CO-?OP' }],
-              action: { coa_code: '8400' }, logic: 'AND', priority: 9 },
+            // VEHICLE / GAS — COA 7400 Fuel and Oil (CORRECTED: 8400 is Management Remuneration, NEVER fuel)
+            { name: 'GAS STATIONS → Fuel & Oil (7400)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'ESSO|PETROCAN|PETRO-?CAN|SHELL|CO-?OP GAS|CHEVRON|CALG CO-?OP|FAS GAS|CARDLOCK|ULTRAMAR|HUSKY' }],
+              action: { coa_code: '7400' }, logic: 'AND', priority: 9 },
 
-            // TRAVEL (corrected from 8100)
-            { name: 'AIRLINES → Travel (8500)',
+            // TRAVEL — COA 9200 Travel & Accommodations (corrected from 8500 which is wrong in this COA)
+            { name: 'AIRLINES → Travel (9200)',
               conditions: [{ field: 'description', operator: 'regex', value: 'WESTJET|PAC-WESTJET|WIFIONBOARD|AIR CANADA' }],
-              action: { coa_code: '8500' }, logic: 'AND', priority: 9 },
-            { name: 'HOTELS → Travel (8500)',
+              action: { coa_code: '9200' }, logic: 'AND', priority: 9 },
+            { name: 'HOTELS → Travel (9200)',
               conditions: [{ field: 'description', operator: 'regex', value: 'BANFF SPRINGS HOTEL|GEORGETOWN INN|MARRIOTT|HILTON' }],
-              action: { coa_code: '8500' }, logic: 'AND', priority: 8 },
+              action: { coa_code: '9200' }, logic: 'AND', priority: 8 },
 
-            // INSURANCE
-            { name: 'SECURITY NATIONAL → Insurance (7100)',
+            // INSURANCE — COA 7600 (CORRECTED: 7100 is Equipment Repairs in this COA, not Insurance)
+            { name: 'SECURITY NATIONAL → Insurance (7600)',
               conditions: [{ field: 'description', operator: 'contains', value: 'SECURITY NATIONAL INSUR' }],
-              action: { coa_code: '7100' }, logic: 'AND', priority: 9 },
-            { name: 'BLUE CROSS → Benefits (6500)',
-              conditions: [{ field: 'description', operator: 'regex', value: 'IP PLAN.*BLUE CROSS' }],
-              action: { coa_code: '6500' }, logic: 'AND', priority: 9 },
+              action: { coa_code: '7600' }, logic: 'AND', priority: 9 },
+            // Employee Benefits (Blue Cross group plan) — COA 6900
+            { name: 'BLUE CROSS → Employee Benefits (6900)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'IP PLAN.*BLUE CROSS|AB BLUE CROSS|ALBERTA BLUE CROSS' }],
+              action: { coa_code: '6900' }, logic: 'AND', priority: 9 },
 
-            // PROFESSIONAL
-            { name: 'ALLISON ASSOCIATES → Professional Fees (6100)',
+            // PROFESSIONAL — COA 8700 Professional Fees (CORRECTED: 6100 is Amortization — journal entry ONLY)
+            { name: 'ALLISON ASSOCIATES → Professional Fees (8700)',
               conditions: [{ field: 'description', operator: 'contains', value: 'ALLISON ASSOCIATES' }],
-              action: { coa_code: '6100' }, logic: 'AND', priority: 9 },
+              action: { coa_code: '8700' }, logic: 'AND', priority: 9 },
             { name: 'REAL ESTATE COUNCIL → Professional Dev (6900)',
               conditions: [{ field: 'description', operator: 'contains', value: 'REAL ESTATE COUNCIL' }],
               action: { coa_code: '6900' }, logic: 'AND', priority: 9 },
@@ -400,10 +401,10 @@ class RuleEngine {
               conditions: [{ field: 'description', operator: 'regex', value: 'REGISTRY|ALBERTA ?REGISTRY' }],
               action: { coa_code: '6900' }, logic: 'AND', priority: 8 },
 
-            // MEALS
-            { name: 'FAST FOOD → Meals & Entertainment (8100)',
-              conditions: [{ field: 'description', operator: 'regex', value: 'SUBWAY|MCDONALD|PIZZAHUT|TIM HORTON|STARBUCKS' }],
-              action: { coa_code: '8100' }, logic: 'AND', priority: 7 },
+            // MEALS — COA 6415 Meals & Entertainment (corrected from 8100 which is wrong in this COA)
+            { name: 'FAST FOOD → Meals & Entertainment (6415)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'SUBWAY|MCDONALD|PIZZAHUT|TIM HORTON|STARBUCKS|A&W|HARVEYS|WENDYS|BURGER KING' }],
+              action: { coa_code: '6415' }, logic: 'AND', priority: 7 },
 
             // OFFICE
             { name: 'ULINE → Office Supplies (8600)',
@@ -438,28 +439,40 @@ class RuleEngine {
               action: { coa_code: '9971' }, logic: 'AND', priority: 10 },
 
             // PAYROLL / EMPLOYEE EXPENSES
-            // PAY EMP-VENDOR and similar payroll lines on CHQ = salary/wages expense
-            { name: 'PAY EMP-VENDOR → Salaries & Wages (6000)',
+            // PAY EMP-VENDOR = owner/director management remuneration → 8400 (NOT 6000 Advertising)
+            // Flag for review so accountant can confirm owner vs employee split
+            { name: 'PAY EMP-VENDOR → Management Remuneration (8400)',
               conditions: [
-                  { field: 'description', operator: 'regex',  value: 'PAY\\s*EMP[-\\s]?VENDOR|PAYROLL|EMPLOYEE\\s*PAY' },
+                  { field: 'description', operator: 'regex',  value: 'PAY\\s*EMP[-\\s]?VENDOR' },
                   { field: 'polarity',    operator: 'equals', value: 'DEBIT' },
               ],
-              action: { coa_code: '6000' }, logic: 'AND', priority: 10 },
-            { name: 'Direct Deposit Payroll → Salaries (6000)',
+              action: { coa_code: '8400' }, logic: 'AND', priority: 10 },
+            // Employee payroll runs → 9800 Wages & Benefits
+            { name: 'Direct Deposit Payroll → Wages (9800)',
               conditions: [
                   { field: 'description', operator: 'regex',  value: '\\bPAYROLL\\b|SALARY\\s*DEPOSIT|WAGES\\s*DEPOSIT' },
                   { field: 'polarity',    operator: 'equals', value: 'DEBIT' },
               ],
-              action: { coa_code: '6000' }, logic: 'AND', priority: 9 },
+              action: { coa_code: '9800' }, logic: 'AND', priority: 9 },
 
             // BANK / SAVINGS INTEREST INCOME
-            // "Deposit interest", "Interest credited" on SAV/CHQ = interest income → 7100
-            { name: 'Deposit Interest → Interest Income (7100)',
+            // "Deposit interest", "Interest credited" on SAV/CHQ = interest income → 4860
+            // CORRECTED: 7100 is Equipment Repairs in this COA — deposit interest is REVENUE → 4860
+            { name: 'Deposit Interest → Interest Income (4860)',
               conditions: [
-                  { field: 'description', operator: 'regex',  value: 'DEPOSIT\\s*INTEREST|INTEREST\\s*CREDIT|INTEREST\\s*PAID|SAVINGS\\s*INTEREST' },
+                  { field: 'description', operator: 'regex',  value: 'DEPOSIT\\s*INTEREST|INTEREST\\s*CREDIT|INTEREST\\s*PAID|SAVINGS\\s*INTEREST|INT\\s*PAID' },
                   { field: 'polarity',    operator: 'equals', value: 'CREDIT' },
               ],
-              action: { coa_code: '7100' }, logic: 'AND', priority: 10 },
+              action: { coa_code: '4860' }, logic: 'AND', priority: 10 },
+
+            // PURCHASE INTEREST charged on CC balance = bank charge → 7700 (corrected from any expense)
+            { name: 'Purchase Interest Charge → Bank Charges (7700)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'PURCHASE\\s*INTEREST|INTEREST\\s*CHARG' },
+                  { field: 'polarity',    operator: 'equals', value: 'CREDIT' },
+                  { field: 'account_type',operator: 'equals', value: 'creditcard' },
+              ],
+              action: { coa_code: '7700' }, logic: 'AND', priority: 10 },
 
             // AMAZON PURCHASES — expense not revenue (CC charges)
             // Amazon.ca purchases on AMEX/VISA = supplies/office expense

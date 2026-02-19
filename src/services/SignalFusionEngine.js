@@ -32,6 +32,7 @@
  */
 
 import VendorNormalizer from './VendorNormalizer.js';
+import categorizationEngine from './CategorizationEngine.js';
 
 // ─── Import Categorization Brain (79,049 manually categorized transactions) ──
 // Vite resolves JSON imports statically at build time — zero runtime parsing cost.
@@ -61,6 +62,7 @@ const REVIEW_THRESHOLD = 0.60;  // >= this → auto-categorize, yellow dot
 // ─── Signal Weights ───────────────────────────────────────────────────────────
 
 const WEIGHTS = {
+    deterministic: 1.02,   // CategorizationEngine: 3-layer deterministic (vendor patterns → routing table → guards) — ABSOLUTE PRIORITY on HIGH confidence
     userRule:      1.00,
     refundMirror:  0.98,   // CC refund: mirrors same-vendor debit COA on same account (highest after userRule)
     contextBrain:  0.97,   // Human-verified SWIFT workpapers: (payee, account_type) → COA
@@ -80,18 +82,32 @@ const WEIGHTS = {
 // ─── Keyword Maps ─────────────────────────────────────────────────────────────
 
 const EXPENSE_KEYWORDS = {
-    '6400': ['telus', 'rogers', 'bell', 'fido', 'koodo', 'freedom mobile', 'internet', 'phone', 'mobile', 'cellular', 'openphone', 'shaw', 'videotron'],
-    '6500': ['blue cross', 'great west life', 'manulife', 'sunlife', 'employee benefit', 'group benefit', 'health plan'],
+    // ── CORRECTED keyword maps: accounts match the client COA ──────────────────
+    // 9100 Telephone & internet (NOT 6400 — that number is vacant or wrong in prior version)
+    '9100': ['telus', 'rogers', 'bell', 'fido', 'koodo', 'freedom mobile', 'internet', 'phone', 'mobile', 'cellular', 'openphone', 'shaw', 'videotron', 'starlink', 'xplornet'],
+    // 6900 Employee benefits (group plans, Blue Cross)
+    '6900': ['blue cross', 'great west life', 'manulife', 'sunlife', 'employee benefit', 'group benefit', 'health plan'],
+    // 6800 Software & subscriptions
     '6800': ['software', 'saas', 'subscription', 'pricelabs', 'igms', 'rankbreeze', 'minut', 'monday.com', 'adobe', 'github', 'dropbox', 'zoom', 'notion', 'slack', 'hostaway', 'guesty', 'rboy', 'norton', 'loom', 'trustindex', 'expertflyer', 'hostgator', 'wordpress'],
-    '6900': ['registry', 'licence', 'license', 'permit', 'real estate council', 'bcit', 'training', 'course', 'professional development', 'conference', 'dues', 'membership'],
-    '7100': ['insurance', 'intact', 'aviva', 'wawanesa', 'allstate', 'desjardins', 'security national insur'],
-    '7200': ['accounting', 'bookkeeping', 'quickbooks', 'freshbooks', 'wave', 'sage', 'payroll'],
+    // 6800 also covers registries / dues — but 6800 is Software; licensing/dues is actually 6800 or 8950 depending on COA
+    // Registries/licensing correctly go to 6800 (software/licensing) in this client's COA
+    '8950': ['registry', 'licence', 'license', 'permit', 'real estate council', 'bcit', 'training', 'course', 'professional development', 'conference', 'dues', 'membership'],
+    // 7600 Insurance (corrected from 7100 — which is Equipment Rental in this COA)
+    '7600': ['insurance', 'intact', 'aviva', 'wawanesa', 'allstate', 'desjardins', 'security national insur'],
+    // 8700 Professional fees (accounting, bookkeeping)
+    '8700': ['accounting', 'bookkeeping', 'quickbooks', 'freshbooks', 'wave', 'sage', 'allison associates'],
+    // 7300 Repairs & maintenance (property)
     '7300': ['repair', 'maintenance', 'plumbing', 'electrical', 'hvac', 'furnace', 'cleaning', 'janitorial', 'home depot', 'rona', 'home hardware', 'eecol', 'locksmith', 'pest control', 'landscaping', 'snow removal'],
-    '8100': ['restaurant', 'starbucks', 'tim horton', 'mcdonald', 'dining', 'pizza', 'sushi', 'cafe', 'coffee', 'bistro', 'grizzly paw', 'jameson', 'kilkenny', '7-eleven'],
-    '8400': ['esso', 'petro-canada', 'petrocan', 'shell', 'co-op gas', 'chevron', 'husky', 'ultramar', 'fuel', 'gas station'],
-    '8500': ['westjet', 'air canada', 'air transat', 'swoop', 'hotel', 'marriott', 'hilton', 'westin', 'best western', 'parks canada', 'alpine helicopters', 'wifionboard', 'uber', 'lyft', 'taxi'],
+    // 6415 Meals & entertainment (corrected from 8100)
+    '6415': ['restaurant', 'starbucks', 'tim horton', 'mcdonald', 'dining', 'pizza', 'sushi', 'cafe', 'coffee', 'bistro', 'grizzly paw', 'jameson', 'kilkenny', '7-eleven'],
+    // 7400 Fuel & oil (CORRECTED from 8400 — 8400 is Management Remuneration, NEVER fuel)
+    '7400': ['esso', 'petro-canada', 'petrocan', 'shell', 'co-op gas', 'chevron', 'husky', 'ultramar', 'fuel', 'gas station', 'fas gas', 'cardlock'],
+    // 9200 Travel & accommodations (corrected from 8500)
+    '9200': ['westjet', 'air canada', 'air transat', 'swoop', 'hotel', 'marriott', 'hilton', 'westin', 'best western', 'parks canada', 'alpine helicopters', 'wifionboard', 'uber', 'lyft', 'taxi'],
+    // 8600 Office supplies
     '8600': ['staples', 'office depot', 'amazon', 'costco', 'walmart', 'london drugs', 'uline', 'memory express', 'supplies', 'toiletries', 'otterbox', 'alibaba'],
-    '8700': ['bank fee', 'service charge', 'monthly fee', 'interac fee', 'wire fee', 'nsf fee', 'overdraft', 'atm fee'],
+    // 7700 Bank charges & interest
+    '7700': ['bank fee', 'service charge', 'monthly fee', 'interac fee', 'wire fee', 'nsf fee', 'overdraft', 'atm fee'],
 };
 
 const REVENUE_KEYWORDS = {
@@ -147,8 +163,28 @@ class SignalFusionEngine {
     categorize(tx, userRules = [], ruleEngine = null) {
         const enriched = this.enrichTransaction(tx);
 
+        // ── Deterministic pre-check: 3-layer CategorizationEngine ────────────────
+        // If HIGH confidence: bypass fusion entirely and return immediately.
+        // If MEDIUM or guard-blocked: add as highest-weight signal, then fuse normally.
+        // If null or LOW: run fusion unconstrained.
+        const deterministicResult = this._signalDeterministic(enriched);
+        if (deterministicResult?.shortCircuit) {
+            // HIGH confidence deterministic result — no fusion needed
+            return {
+                coa_code:    deterministicResult.coa,
+                confidence:  deterministicResult.confidence,
+                method:      'deterministic',
+                signals:     [deterministicResult],
+                explanation: deterministicResult.note,
+                needsReview: deterministicResult.needsReview || false,
+                guard_blocked: deterministicResult.guard_blocked || false,
+                flag:        deterministicResult.flag || null,
+            };
+        }
+
         // Fire all signals simultaneously
         const fired = [
+            deterministicResult,                    // CategorizationEngine: 3-layer deterministic (highest weight)
             this._signalUserRule(enriched, userRules, ruleEngine),
             this._signalRefundMirror(enriched),     // CC refunds: mirror same vendor's debit COA; cash back → 7700
             this._signalContextBrain(enriched),     // Context brain: human SWIFT workpapers (account-type-aware)
@@ -263,6 +299,76 @@ class SignalFusionEngine {
      */
     updateTransactionList(transactions) {
         this.allTransactions = transactions;
+    }
+
+    // ─── Signal: Deterministic (CategorizationEngine — 3 layers) ────────────
+    //
+    // Runs BEFORE all other signals. Returns:
+    //   - shortCircuit: true  → HIGH confidence match: caller bypasses fusion entirely
+    //   - shortCircuit: false → MEDIUM/guard-blocked: add to fusion pool as weight-1.02 signal
+    //   - null                → no pattern matched: run fusion unconstrained
+    //
+    // The CategorizationEngine knows the client's COA, Canadian vendor patterns, routing
+    // table, and account guards. It NEVER routes fuel to 8400 or interest to 7100.
+
+    _signalDeterministic(tx) {
+        try {
+            // Derive industry from account metadata if available
+            const acct     = window.RoboLedger?.Accounts?.get(tx.account_id);
+            const industry = acct?.industry || window.RoboLedger?.firm?.industry || 'SHORT_TERM_RENTAL';
+            const isCCAcct = tx._isCCAcct || false;
+
+            const det = categorizationEngine.categorize(tx, { industry, isCCAcct });
+            if (!det || !det.coa_code) return null;
+
+            // Guard-blocked results: no usable coa — return as signal with null coa
+            // (forces fusion to flag as needs_review rather than picking a wrong account)
+            if (det.guard_blocked && !det.coa_code) {
+                return {
+                    type:         'deterministic',
+                    coa:          null,
+                    confidence:   det.conf_score || 0.99,
+                    weight:       WEIGHTS.deterministic,
+                    note:         `[Guard Blocked] ${det.routing_logic || det.flag}`,
+                    shortCircuit: false,
+                    needsReview:  true,
+                    guard_blocked: true,
+                    flag:         det.flag,
+                };
+            }
+
+            // MEDIUM or LOW confidence with a coa — add to fusion pool as high-weight signal
+            if (det.confidence === 'MEDIUM' || det.confidence === 'LOW') {
+                return {
+                    type:         'deterministic',
+                    coa:          det.coa_code,
+                    confidence:   det.conf_score || 0.78,
+                    weight:       WEIGHTS.deterministic,
+                    note:         `[Deterministic:${det.confidence}] ${det.vendor_type} → ${det.coa_code} | ${det.routing_logic}`,
+                    shortCircuit: false,
+                    needsReview:  det.needs_review || false,
+                    guard_blocked: false,
+                    flag:         det.flag || null,
+                };
+            }
+
+            // HIGH confidence — short-circuit: bypass fusion entirely
+            return {
+                type:         'deterministic',
+                coa:          det.coa_code,
+                confidence:   det.conf_score || 0.95,
+                weight:       WEIGHTS.deterministic,
+                note:         `[Deterministic:HIGH] ${det.vendor_type} → ${det.coa_code} | ${det.routing_logic}`,
+                shortCircuit: true,
+                needsReview:  det.needs_review || false,
+                guard_blocked: det.guard_blocked || false,
+                flag:         det.flag || null,
+            };
+
+        } catch (err) {
+            console.warn('[SignalFusion] CategorizationEngine error (non-fatal):', err.message);
+            return null;
+        }
     }
 
     // ─── Signal: User Rule ───────────────────────────────────────────────────
