@@ -62,6 +62,10 @@
     // Multi-Client State
     activeClientId: null,     // null = legacy/demo mode (no client selected)
     activeClientName: '',
+
+    // Multi-Accountant State (Admin Layer)
+    activeAccountantId: null,    // null = Admin view (all accountants)
+    activeAccountantName: '',
   };
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
@@ -1570,6 +1574,23 @@
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── MULTI-ACCOUNTANT RESTORE ─────────────────────────────────────────────
+    const savedActiveAccountant = localStorage.getItem('roboledger_active_accountant');
+    if (savedActiveAccountant) {
+      const savedAccountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+      const savedAccountant  = savedAccountants.find(a => a.id === savedActiveAccountant);
+      if (savedAccountant) {
+        UI_STATE.activeAccountantId   = savedActiveAccountant;
+        UI_STATE.activeAccountantName = savedAccountant.name;
+        console.log(`[ACCOUNTANT] Restored: ${savedAccountant.name} (${savedActiveAccountant})`);
+        setTimeout(() => { if (window.updateAccountantSwitcherUI) window.updateAccountantSwitcherUI(savedAccountant); }, 0);
+      } else {
+        localStorage.removeItem('roboledger_active_accountant');
+        console.warn('[ACCOUNTANT] Stale active_accountant reference cleared');
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     setupNav();
     setupActions();
 
@@ -1609,31 +1630,105 @@
 
     UI_STATE.currentRoute = route;
 
-    // Update breadcrumbs
+    // ACCOUNTANT LAYER: clear drill-down state when navigating back to admin top
+    if (route === 'accountants') {
+      UI_STATE.activeAccountantId   = null;
+      UI_STATE.activeAccountantName = '';
+      localStorage.removeItem('roboledger_active_accountant');
+      if (window.updateAccountantSwitcherUI) window.updateAccountantSwitcherUI(null);
+    }
+
+    // Update breadcrumbs — Multi-tier: Admin > Accountant > Client > Page
     if (route === 'home') {
-      UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin',   route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: 'Home', active: true },
+        ];
+      } else if (UI_STATE.activeAccountantId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: 'Home', active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
+      }
+    } else if (route === 'accountants') {
+      UI_STATE.breadcrumbs = [{ label: 'Admin', active: true }];
+    } else if (route === 'clients') {
+      if (UI_STATE.activeAccountantId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Clients', active: true }];
+      }
     } else if (route === 'import') {
-      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: 'Transactions', active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
+      }
     } else if (route === 'coa') {
-      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: 'Chart of Accounts', active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
+      }
     } else {
       const label = route.charAt(0).toUpperCase() + route.slice(1);
-      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: label, active: true },
+        ];
+      } else if (UI_STATE.activeAccountantId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: label, active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
+      }
     }
 
     // Render breadcrumbs to DOM
     const bcContainer = document.getElementById('breadcrumb');
     if (bcContainer) {
       bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
-        const isLast = i === UI_STATE.breadcrumbs.length - 1;
-        const isHome = bc.label.toLowerCase() === 'home';
-        const bcRoute = isHome ? 'home' : (bc.label === 'Transactions' ? 'import' : bc.label.toLowerCase());
+        const isLast  = i === UI_STATE.breadcrumbs.length - 1;
+        const isHome  = bc.label.toLowerCase() === 'home';
+        const isAdmin = bc.label === 'Admin';
+        const bcRoute = bc.route
+          ? bc.route
+          : isHome ? 'home'
+          : (bc.label === 'Transactions' ? 'import'
+          : (bc.label === 'Chart of Accounts' ? 'coa'
+          : bc.label.toLowerCase()));
 
         return `
           <div class="breadcrumb-item ${isLast ? 'active' : ''}"
                style="cursor: ${isLast ? 'default' : 'pointer'};"
                onclick="${isLast ? '' : `window.navigateTo('${bcRoute}');`}">
-            ${isHome ? '<i class="ph ph-house" style="margin-right: 5px; font-size: 13px;"></i>' : ''}
+            ${isHome  ? '<i class="ph ph-house" style="margin-right:5px;font-size:13px;"></i>' : ''}
+            ${isAdmin ? '<i class="ph ph-shield-check" style="margin-right:5px;font-size:13px;"></i>' : ''}
             <span>${bc.label}</span>
           </div>
           ${isLast ? '' : '<span class="breadcrumb-separator"><i class="ph ph-caret-right"></i></span>'}
@@ -2595,15 +2690,21 @@
     const bcContainer = document.getElementById('breadcrumb');
     if (bcContainer) {
       bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
-        const isLast = i === UI_STATE.breadcrumbs.length - 1;
-        const isHome = bc.label.toLowerCase() === 'home';
-        const route = isHome ? 'home' : 'import';
-
+        const isLast  = i === UI_STATE.breadcrumbs.length - 1;
+        const isHome  = bc.label.toLowerCase() === 'home';
+        const isAdmin = bc.label === 'Admin';
+        const bcRoute = bc.route
+          ? bc.route
+          : isHome ? 'home'
+          : (bc.label === 'Transactions' ? 'import'
+          : (bc.label === 'Chart of Accounts' ? 'coa'
+          : bc.label.toLowerCase()));
         return `
           <div class="breadcrumb-item ${isLast ? 'active' : ''}"
                style="cursor: ${isLast ? 'default' : 'pointer'};"
-               onclick="${isLast ? '' : `window.navigateTo('${route}');`}">
-            ${isHome ? '<i class="ph ph-house" style="margin-right: 5px; font-size: 13px;"></i>' : ''}
+               onclick="${isLast ? '' : `window.navigateTo('${bcRoute}');`}">
+            ${isHome  ? '<i class="ph ph-house" style="margin-right:5px;font-size:13px;"></i>' : ''}
+            ${isAdmin ? '<i class="ph ph-shield-check" style="margin-right:5px;font-size:13px;"></i>' : ''}
             <span>${bc.label}</span>
           </div>
           ${isLast ? '' : '<span class="breadcrumb-separator"><i class="ph ph-caret-right"></i></span>'}
@@ -2653,6 +2754,7 @@
       case 'coa': return renderCOAPage();
       case 'reports': return renderReportsPage();
       case 'roadmap': return renderRoadmapPage();
+      case 'accountants': return renderAccountantsPage();
       case 'clients': return renderClientsPage();
       case 'home': renderHome(); return ''; // renderHome() manages stage directly
       default: return renderPlaceholder(UI_STATE.currentRoute.toUpperCase());
@@ -2661,7 +2763,11 @@
 
   // ─── CLIENTS PAGE ────────────────────────────────────────────────────────────
   function renderClientsPage() {
-    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    let clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    // ACCOUNTANT LAYER: filter when drilling into an accountant
+    if (UI_STATE.activeAccountantId) {
+      clients = clients.filter(c => c.accountantId === UI_STATE.activeAccountantId);
+    }
     const totalTx = clients.reduce((s, c) => s + (c.txCount || 0), 0);
     const thisYear = new Date().getFullYear();
 
@@ -2798,9 +2904,13 @@
               <i class="ph ph-buildings"></i>
             </div>
             <div>
+              ${UI_STATE.activeAccountantId ? `<div style="font-size:11px;color:#8b5cf6;font-weight:600;margin-bottom:2px;cursor:pointer;" onclick="window.navigateTo('accountants')"><i class="ph ph-caret-left" style="font-size:10px;"></i> Accountants</div>` : ''}
               <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Client Registry</h1>
               <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">
-                ${clients.length} client${clients.length !== 1 ? 's' : ''} · Multi-client workspace
+                ${clients.length} client${clients.length !== 1 ? 's' : ''} ·
+                ${UI_STATE.activeAccountantId
+                  ? `<span style="color:#8b5cf6;font-weight:600;">${UI_STATE.activeAccountantName}</span>`
+                  : 'Multi-client workspace'}
               </p>
             </div>
           </div>
@@ -2958,6 +3068,7 @@
             <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Accent Colour</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${colorSwatches}</div>
             <input type="hidden" id="client-color-input" value="${selectedColor}" />
+          ${UI_STATE.activeAccountantId ? `<input type="hidden" id="client-form-accountant-id" value="${UI_STATE.activeAccountantId}" />` : ''}
           </div>
         </div>
 
@@ -3029,6 +3140,7 @@
         currency:      getField('client-form-currency', 'CAD'),
         gstNumber:     getField('client-form-gst', '').trim(),
         color:         getField('client-color-input', '#3b82f6'),
+        accountantId:  getField('client-form-accountant-id', '') || null,
         created:       today,
         lastActive:    today,
         txCount:       0,
@@ -3119,6 +3231,371 @@
     localStorage.setItem('roboledger_clients', JSON.stringify(updated));
     console.log(`[CLIENT] Deleted: ${client.name} (${clientId})`);
     window.navigateTo('clients');
+  };
+
+  // ─── ACCOUNTANT LAYER ────────────────────────────────────────────────────────
+
+  function renderAccountantsPage() {
+    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const clients     = JSON.parse(localStorage.getItem('roboledger_clients')     || '[]');
+
+    const provinceColors = {
+      BC: '#3b82f6', AB: '#f59e0b', ON: '#10b981', QC: '#8b5cf6',
+      MB: '#06b6d4', SK: '#f97316', NS: '#ec4899', NB: '#14b8a6',
+      PE: '#84cc16', NL: '#6366f1', NT: '#a78bfa', YT: '#fb923c', NU: '#94a3b8',
+    };
+
+    if (!accountants.length) {
+      return `
+        <div style="padding:32px 28px;max-width:900px;margin:0 auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;">
+            <div>
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Accountant Registry</h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">0 accountants · Admin workspace</p>
+            </div>
+            <button onclick="window.openCreateAccountantModal()"
+                    style="background:#8b5cf6;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:0.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;">
+              <i class="ph ph-plus"></i> New Accountant
+            </button>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;text-align:center;">
+            <div style="width:72px;height:72px;border-radius:16px;background:rgba(139,92,246,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+              <i class="ph ph-user-circle" style="font-size:36px;color:#8b5cf6;"></i>
+            </div>
+            <h3 style="margin:0 0 8px;font-size:1rem;font-weight:700;color:var(--text-primary,#0f172a);">No accountants yet</h3>
+            <p style="margin:0 0 24px;font-size:0.85rem;color:var(--text-tertiary,#94a3b8);max-width:320px;">
+              Add your first accountant or firm to start managing clients under them.
+            </p>
+            <button onclick="window.openCreateAccountantModal()"
+                    style="background:#8b5cf6;color:white;border:none;border-radius:8px;padding:10px 22px;font-size:0.85rem;font-weight:600;cursor:pointer;">
+              Add First Accountant
+            </button>
+          </div>
+        </div>`;
+    }
+
+    const cards = accountants.map(acc => {
+      const accClients    = clients.filter(c => c.accountantId === acc.id);
+      const totalTx       = accClients.reduce((sum, c) => {
+        try {
+          const d = JSON.parse(localStorage.getItem('roboledger_v5_data_' + c.id) || '{}');
+          return sum + Object.keys(d.transactions || {}).length;
+        } catch { return sum; }
+      }, 0);
+      const accentColor   = acc.color || '#8b5cf6';
+      const initials      = (acc.name || '?').slice(0, 2).toUpperCase();
+      const provColor     = provinceColors[acc.province] || '#94a3b8';
+      const lastActive    = acc.lastActive
+        ? new Date(acc.lastActive).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+        : '—';
+
+      return `
+        <div style="background:var(--surface-primary,#fff);border-radius:14px;border:1px solid var(--border-primary,#e2e8f0);overflow:hidden;display:flex;flex-direction:column;transition:box-shadow 0.15s;">
+          <div style="height:4px;background:${accentColor};"></div>
+          <div style="padding:18px 18px 14px;flex:1;">
+            <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
+              <div style="width:40px;height:40px;border-radius:10px;background:${accentColor};color:white;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                ${initials}
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:700;font-size:0.92rem;color:var(--text-primary,#0f172a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${acc.name}</div>
+                ${acc.ownerName ? `<div style="font-size:0.78rem;color:var(--text-secondary,#475569);margin-top:1px;">${acc.ownerName}</div>` : ''}
+                <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">
+                  ${acc.province ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${provColor}22;color:${provColor};letter-spacing:0.5px;">${acc.province}</span>` : ''}
+                  ${acc.licenseNumber ? `<span style="font-size:10px;color:var(--text-tertiary,#94a3b8);">Lic# ${acc.licenseNumber}</span>` : ''}
+                </div>
+              </div>
+            </div>
+            ${acc.email ? `<div style="font-size:0.78rem;color:var(--text-secondary,#475569);margin-bottom:10px;display:flex;align-items:center;gap:5px;"><i class="ph ph-envelope" style="font-size:12px;color:#94a3b8;"></i>${acc.email}</div>` : ''}
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px;background:var(--surface-secondary,#f8fafc);border-radius:8px;">
+              <div style="text-align:center;">
+                <div style="font-size:1.1rem;font-weight:700;color:${accentColor};">${accClients.length}</div>
+                <div style="font-size:0.68rem;color:var(--text-tertiary,#94a3b8);margin-top:1px;">Clients</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">${totalTx.toLocaleString()}</div>
+                <div style="font-size:0.68rem;color:var(--text-tertiary,#94a3b8);margin-top:1px;">Transactions</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:0.78rem;font-weight:600;color:var(--text-secondary,#475569);">${lastActive}</div>
+                <div style="font-size:0.68rem;color:var(--text-tertiary,#94a3b8);margin-top:1px;">Last Active</div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:10px 14px;border-top:1px solid var(--border-primary,#e2e8f0);display:flex;gap:6px;align-items:center;">
+            <button onclick="window.openEditAccountantModal('${acc.id}')"
+                    title="Edit"
+                    style="padding:6px 10px;border-radius:7px;border:1px solid var(--border-primary,#e2e8f0);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary,#475569);display:flex;align-items:center;gap:4px;">
+              <i class="ph ph-pencil"></i>
+            </button>
+            <button onclick="window.deleteAccountant('${acc.id}')"
+                    title="Delete"
+                    style="padding:6px 10px;border-radius:7px;border:1px solid #fecaca;background:transparent;cursor:pointer;font-size:12px;color:#ef4444;display:flex;align-items:center;gap:4px;">
+              <i class="ph ph-trash"></i>
+            </button>
+            <button onclick="window.switchAccountant('${acc.id}')"
+                    style="margin-left:auto;padding:7px 14px;border-radius:7px;background:${accentColor};color:white;border:none;cursor:pointer;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:5px;">
+              Open <i class="ph ph-arrow-right"></i>
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="padding:32px 28px;max-width:1100px;margin:0 auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Accountant Registry</h1>
+            <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">${accountants.length} accountant${accountants.length !== 1 ? 's' : ''} · Admin workspace</p>
+          </div>
+          <button onclick="window.openCreateAccountantModal()"
+                  style="background:#8b5cf6;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:0.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-plus"></i> New Accountant
+          </button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;">
+          ${cards}
+        </div>
+      </div>`;
+  }
+
+  window.openCreateAccountantModal = function(existingId) {
+    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const existing    = existingId ? accountants.find(a => a.id === existingId) : null;
+    const title       = existing ? 'Edit Accountant' : 'New Accountant';
+
+    const COLORS = ['#8b5cf6','#6d28d9','#3b82f6','#10b981','#f59e0b','#ef4444','#ec4899','#0ea5e9'];
+    const currentColor = existing?.color || '#8b5cf6';
+
+    const swatches = COLORS.map(c => `
+      <div onclick="document.getElementById('acc-color-input').value='${c}';document.querySelectorAll('.acc-color-swatch').forEach(s=>s.style.outline='none');this.style.outline='3px solid #1e293b';"
+           class="acc-color-swatch"
+           style="width:24px;height:24px;border-radius:6px;background:${c};cursor:pointer;transition:outline 0.1s;outline:${c === currentColor ? '3px solid #1e293b' : 'none'};">
+      </div>`).join('');
+
+    const provinces = ['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT'];
+    const provOptions = provinces.map(p =>
+      `<option value="${p}" ${existing?.province === p ? 'selected' : ''}>${p}</option>`
+    ).join('');
+
+    const html = `
+      <div id="create-accountant-modal-overlay"
+           style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:var(--surface-primary,#fff);border-radius:16px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border-primary,#e2e8f0);display:flex;align-items:center;justify-content:space-between;">
+            <h2 style="margin:0;font-size:1rem;font-weight:700;color:var(--text-primary,#0f172a);">${title}</h2>
+            <button onclick="document.getElementById('create-accountant-modal-overlay').remove()"
+                    style="background:none;border:none;cursor:pointer;color:var(--text-tertiary,#94a3b8);font-size:20px;line-height:1;padding:0;">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+          <div style="padding:20px 24px;">
+            <div style="margin-bottom:14px;">
+              <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Firm / Practice Name *</label>
+              <input id="acc-form-name" type="text" placeholder="e.g. Downtown Accounting" value="${existing?.name || ''}"
+                     style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+            </div>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Owner / Principal Name</label>
+              <input id="acc-form-owner" type="text" placeholder="e.g. Jane Smith CPA" value="${existing?.ownerName || ''}"
+                     style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+              <div>
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Email</label>
+                <input id="acc-form-email" type="email" placeholder="firm@example.com" value="${existing?.email || ''}"
+                       style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+              </div>
+              <div>
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Phone</label>
+                <input id="acc-form-phone" type="tel" placeholder="(604) 555-0123" value="${existing?.phone || ''}"
+                       style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+              <div>
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Province</label>
+                <select id="acc-form-province"
+                        style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);">
+                  <option value="">— Select —</option>
+                  ${provOptions}
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">CPA License #</label>
+                <input id="acc-form-license" type="text" placeholder="e.g. BC-12345" value="${existing?.licenseNumber || ''}"
+                       style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+              </div>
+            </div>
+            <div style="margin-bottom:20px;">
+              <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:8px;">Accent Color</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">${swatches}</div>
+              <input type="hidden" id="acc-color-input" value="${currentColor}" />
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button onclick="document.getElementById('create-accountant-modal-overlay').remove()"
+                      style="padding:9px 18px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);background:transparent;cursor:pointer;font-size:0.875rem;color:var(--text-secondary,#475569);font-weight:500;">
+                Cancel
+              </button>
+              <button onclick="window._submitAccountantModal('${existingId || ''}')"
+                      style="padding:9px 18px;border-radius:8px;background:#8b5cf6;color:white;border:none;cursor:pointer;font-size:0.875rem;font-weight:600;">
+                ${existing ? 'Save Changes' : 'Create Accountant'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+    setTimeout(() => document.getElementById('acc-form-name')?.focus(), 50);
+  };
+
+  window.openEditAccountantModal = function(id) {
+    window.openCreateAccountantModal(id);
+  };
+
+  window._submitAccountantModal = function(existingId) {
+    const getVal = id => (document.getElementById(id)?.value || '').trim();
+    const name   = getVal('acc-form-name');
+    if (!name) { alert('Firm / Practice Name is required.'); return; }
+
+    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const now         = new Date().toISOString();
+
+    if (existingId) {
+      const idx = accountants.findIndex(a => a.id === existingId);
+      if (idx === -1) return;
+      accountants[idx] = {
+        ...accountants[idx],
+        name,
+        ownerName:     getVal('acc-form-owner'),
+        email:         getVal('acc-form-email'),
+        phone:         getVal('acc-form-phone'),
+        province:      getVal('acc-form-province'),
+        licenseNumber: getVal('acc-form-license'),
+        color:         getVal('acc-color-input') || '#8b5cf6',
+        lastActive:    now,
+      };
+      if (UI_STATE.activeAccountantId === existingId) {
+        UI_STATE.activeAccountantName = name;
+        window.updateAccountantSwitcherUI(accountants[idx]);
+      }
+    } else {
+      const nextNum = accountants.length + 1;
+      const newAcc  = {
+        id:            'ACC-' + nextNum,
+        name,
+        ownerName:     getVal('acc-form-owner'),
+        email:         getVal('acc-form-email'),
+        phone:         getVal('acc-form-phone'),
+        province:      getVal('acc-form-province'),
+        licenseNumber: getVal('acc-form-license'),
+        color:         getVal('acc-color-input') || '#8b5cf6',
+        created:       now,
+        lastActive:    now,
+      };
+      accountants.push(newAcc);
+      console.log(`[ACCOUNTANT] Created: ${newAcc.name} (${newAcc.id})`);
+    }
+
+    localStorage.setItem('roboledger_accountants', JSON.stringify(accountants));
+    document.getElementById('create-accountant-modal-overlay')?.remove();
+    window.navigateTo('accountants');
+  };
+
+  window.switchAccountant = function(accountantId) {
+    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const acc         = accountants.find(a => a.id === accountantId);
+    if (!acc) return;
+
+    UI_STATE.activeAccountantId   = accountantId;
+    UI_STATE.activeAccountantName = acc.name;
+
+    // Clear any active client when switching accountants
+    UI_STATE.activeClientId   = null;
+    UI_STATE.activeClientName = '';
+    localStorage.removeItem('roboledger_active_client');
+    window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
+    window.updateClientSwitcherUI(null);
+
+    localStorage.setItem('roboledger_active_accountant', accountantId);
+
+    // Update lastActive
+    const idx = accountants.findIndex(a => a.id === accountantId);
+    if (idx !== -1) {
+      accountants[idx].lastActive = new Date().toISOString();
+      localStorage.setItem('roboledger_accountants', JSON.stringify(accountants));
+    }
+
+    window.updateAccountantSwitcherUI(acc);
+    console.log(`[ACCOUNTANT] Switched to: ${acc.name}`);
+    window.navigateTo('clients');
+  };
+
+  window.updateAccountantSwitcherUI = function(accountant) {
+    const avatarEl = document.getElementById('accountant-avatar');
+    const nameEl   = document.getElementById('accountant-name-display');
+    if (!avatarEl || !nameEl) return;
+
+    if (!accountant) {
+      avatarEl.style.background = '#6d28d9';
+      avatarEl.innerHTML        = '<i class="ph ph-shield-check" style="font-size:11px;"></i>';
+      nameEl.textContent        = 'Admin';
+      nameEl.style.color        = 'rgba(255,255,255,0.45)';
+    } else {
+      const color    = accountant.color || '#8b5cf6';
+      const initials = (accountant.name || '?').slice(0, 2).toUpperCase();
+      avatarEl.style.background  = color;
+      avatarEl.innerHTML         = initials;
+      avatarEl.style.fontSize    = '9px';
+      nameEl.textContent         = accountant.name;
+      nameEl.style.color         = 'rgba(255,255,255,0.85)';
+    }
+  };
+
+  window.deleteAccountant = function(accountantId) {
+    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const acc         = accountants.find(a => a.id === accountantId);
+    if (!acc) return;
+
+    const clients     = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const ownedClients = clients.filter(c => c.accountantId === accountantId);
+    const clientCount  = ownedClients.length;
+
+    const msg = clientCount > 0
+      ? `Delete "${acc.name}"?\n\nThis will also permanently delete ${clientCount} client${clientCount !== 1 ? 's' : ''} and all their transactions. This cannot be undone.`
+      : `Delete "${acc.name}"?\n\nThis cannot be undone.`;
+
+    if (!confirm(msg)) return;
+
+    // Cascade: delete all owned clients' ledger data
+    ownedClients.forEach(c => {
+      localStorage.removeItem('roboledger_v5_data_' + c.id);
+    });
+
+    // Remove clients from registry
+    const remainingClients = clients.filter(c => c.accountantId !== accountantId);
+    localStorage.setItem('roboledger_clients', JSON.stringify(remainingClients));
+
+    // Remove accountant
+    const remaining = accountants.filter(a => a.id !== accountantId);
+    localStorage.setItem('roboledger_accountants', JSON.stringify(remaining));
+
+    // Clear active state if this was the active accountant
+    if (UI_STATE.activeAccountantId === accountantId) {
+      UI_STATE.activeAccountantId   = null;
+      UI_STATE.activeAccountantName = '';
+      UI_STATE.activeClientId       = null;
+      UI_STATE.activeClientName     = '';
+      localStorage.removeItem('roboledger_active_accountant');
+      localStorage.removeItem('roboledger_active_client');
+      window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
+      window.updateClientSwitcherUI(null);
+      window.updateAccountantSwitcherUI(null);
+    }
+
+    console.log(`[ACCOUNTANT] Deleted: ${acc.name} (${accountantId}), cascade-deleted ${clientCount} clients`);
+    window.navigateTo('accountants');
   };
 
   // ─── ROADMAP PAGE ────────────────────────────────────────────────────────────

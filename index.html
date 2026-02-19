@@ -87,6 +87,25 @@
                 </button>
             </div>
 
+            <!-- Accountant Context Bar — Admin Layer -->
+            <div id="accountant-context-bar" style="padding:6px 12px 2px;border-bottom:1px solid rgba(255,255,255,0.05);">
+                <div id="accountant-switcher-trigger"
+                     onclick="window.navigateTo('accountants')"
+                     style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:7px;background:rgba(255,255,255,0.03);"
+                     onmouseenter="this.style.background='rgba(255,255,255,0.08)'"
+                     onmouseleave="this.style.background='rgba(255,255,255,0.03)'">
+                    <div id="accountant-avatar"
+                         style="width:22px;height:22px;border-radius:5px;background:#6d28d9;color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="ph ph-shield-check" style="font-size:11px;"></i>
+                    </div>
+                    <div id="accountant-name-display"
+                         style="font-size:11px;font-weight:500;color:rgba(255,255,255,0.45);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        Admin
+                    </div>
+                    <i class="ph ph-caret-right" style="font-size:10px;color:rgba(255,255,255,0.2);flex-shrink:0;"></i>
+                </div>
+            </div>
+
             <!-- Client Context Bar — Multi-Client Shell -->
             <div id="client-context-bar" style="padding:6px 12px 10px;border-bottom:1px solid rgba(255,255,255,0.08);">
                 <div id="client-switcher-trigger"
@@ -111,6 +130,10 @@
                     <div class="nav-item active" data-route="home">
                         <i class="ph ph-house nav-icon"></i>
                         <span class="nav-label">Home</span>
+                    </div>
+                    <div class="nav-item" data-route="accountants">
+                        <i class="ph ph-user-circle nav-icon"></i>
+                        <span class="nav-label">Accountants</span>
                     </div>
                     <div class="nav-item" data-route="clients">
                         <i class="ph ph-buildings nav-icon"></i>
