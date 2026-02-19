@@ -2691,47 +2691,49 @@
       },
 
       // ── PHASE 1: STABILIZATION ─────────────────────────────────────────────
-      // (from Antigravity SDLC Phase 0 — the gate before building new features)
       {
         id: 'p1',
         label: 'Phase 1 — Stabilization',
-        period: 'Weeks 1–2 · Gate: All blockers cleared before proceeding',
+        period: 'Weeks 1–2 · Gate: all blockers cleared before proceeding',
         accentColor: '#dc2626',
         headerBg: '#fef2f2',
         progressColor: '#dc2626',
         icon: 'ph-shield-warning',
         iconBg: '#fee2e2',
         items: [
-          { status: 'todo', tag: 'Blocker', label: 'Grid disappears on account switch', detail: 'TanStack grid loses its DOM node when switching between accounts in the account switcher. Must re-init cleanly. Priority #1 — happens in production.' },
-          { status: 'todo', tag: 'Blocker', label: 'ALL mode account metadata broken', detail: 'When viewing all accounts combined, the 2-line description and masked card number in the account metadata panel display incorrectly. Aggregation logic needs fix.' },
-          { status: 'todo', tag: 'Blocker', label: 'Balance calculation verification', detail: 'Audit aggregate math: running balance, account-level totals, reconciliation check. Verify all match across grid / utility bar / reports — no silent discrepancies.' },
-          { status: 'todo', tag: 'Blocker', label: 'Grid persistence on page refresh', detail: 'Loaded transactions must survive a full page refresh via localStorage recovery. Currently inconsistent — some sessions lose data on reload.' },
+          { status: 'todo', tag: 'Blocker', group: 'Bug Fixes', label: 'Grid disappears on account switch', detail: 'TanStack grid loses its DOM node when switching accounts in the account switcher. Must re-init cleanly. Priority #1 — reproduces in production every time.' },
+          { status: 'todo', tag: 'Blocker', group: 'Bug Fixes', label: 'ALL mode account metadata broken', detail: 'When viewing all accounts combined, the 2-line description and masked card number in the Account Metadata panel display incorrectly. Aggregation logic needs a fix.' },
+          { status: 'todo', tag: 'Blocker', group: 'Bug Fixes', label: 'Balance calculation audit', detail: 'Verify running balance, account-level totals, and reconciliation numbers match across the grid, utility bar stat tiles, and all reports — no silent discrepancies.' },
+          { status: 'todo', tag: 'Blocker', group: 'Bug Fixes', label: 'Grid persistence on page refresh', detail: 'Loaded transactions must survive a full page refresh via localStorage recovery. Currently inconsistent — some sessions lose all data on reload.' },
         ]
       },
 
-      // ── PHASE 2: CORE FEATURES ─────────────────────────────────────────────
+      // ── PHASE 2: MULTI-CLIENT CORE ─────────────────────────────────────────
       {
         id: 'p2',
         label: 'Phase 2 — Multi-Client Core',
-        period: 'Weeks 3–8 · Alpha release after this phase',
+        period: 'Weeks 3–8 · Alpha after this · Internal only',
         accentColor: '#b45309',
         headerBg: '#fffbeb',
         progressColor: '#d97706',
         icon: 'ph-buildings',
         iconBg: '#fef3c7',
         items: [
-          { status: 'todo', tag: 'Critical', label: 'Client Registry — Multi-Client Shell', detail: 'Firm dashboard with client list, create/select/archive. Navigation: Firm → Client → FY → Account → Transactions. This is the architectural foundation — everything else sits on it.' },
-          { status: 'todo', tag: 'Critical', label: 'Scoped Ledger per Client (client_id everywhere)', detail: 'All transactions, accounts, statements, and reports filtered by active client_id. Zero data bleed between clients. Single most important architectural change.' },
-          { status: 'todo', tag: 'Critical', label: 'IndexedDB Persistence (replace localStorage)', detail: '50MB+ per origin, survives browser wipe, binary PDF blob support. SQLite via WASM (wa-sqlite) — one .db file per client. localStorage is a 5MB dead end.' },
-          { status: 'todo', tag: 'Critical', label: 'Fiscal Year Management UI', detail: 'Per-client: open FY, set start/end dates, view/switch between years, FY-scoped reports. Year-end rollover carries retained earnings forward automatically.' },
-          { status: 'todo', tag: 'Critical', label: 'Industry Profile on Client Creation', detail: 'Drives COA default mappings, signal boost table, GST applicability, T4A flag. Profiles: SHORT_TERM_RENTAL, PROFESSIONAL_SERVICES, RETAIL, CONSTRUCTION, RESTAURANT, REAL_ESTATE, E_COMMERCE.' },
-          { status: 'todo', tag: 'Critical', label: 'Period Locking', detail: 'Finalized FY gets locked — no edits to locked periods. Standard professional accounting requirement. Prevents retroactive changes after client sign-off.' },
-          { status: 'todo', tag: 'High', label: 'Cash Flow Statement', detail: 'Indirect method: Net Income ± operating working capital changes ± investing ± financing = Net Change in Cash. Required for complete financial package.' },
-          { status: 'todo', tag: 'High', label: 'Bank Reconciliation Module', detail: 'Side-by-side: book balance (GL) vs bank statement balance. Outstanding cheques + deposits-in-transit list. Reconciliation sign-off. Audit-defensible output.' },
-          { status: 'todo', tag: 'High', label: 'Adjusting Journal Entries (AJEs)', detail: 'Dr/Cr entry screen with COA picker. AJEs flow through to Trial Balance and all reports. Reversal option. Year-end: accruals, depreciation, prepaid amortization.' },
-          { status: 'todo', tag: 'High', label: 'Comparative Reports (P&L + BS)', detail: 'Current vs prior year side-by-side in Income Statement and Balance Sheet. Variance columns in $ and %.' },
-          { status: 'todo', tag: 'High', label: 'Undo / Redo', detail: 'Ctrl+Z / Ctrl+Y for category changes, GST toggle, flag changes. Session-scoped action stack. Required before real accountant use — mistakes happen.' },
-          { status: 'todo', tag: 'High', label: 'Backup / Restore + Import Merge', detail: 'Full ledger backup as downloadable .json or .db. Restore from file. Import merge: detect and skip duplicate transactions when re-importing a statement already in the ledger.' },
+          // Architecture sub-group
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Client Registry — Multi-Client Shell', detail: 'Firm dashboard with client list, create/select/archive. Navigation: Firm → Client → FY → Account → Transactions. The architectural foundation — everything else sits on it.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Scoped Ledger per Client (client_id everywhere)', detail: 'All transactions, accounts, statements, and reports filtered by active client_id. Zero data bleed between clients. Single most important architectural change.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'IndexedDB Persistence (replace localStorage)', detail: '50MB+/origin, survives browser wipe, binary PDF blob support. SQLite via WASM (wa-sqlite) — one .db file per client. localStorage is a 5MB dead end.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Fiscal Year Management UI', detail: 'Per-client: open FY, set start/end dates, view/switch between years, FY-scoped reports. Year-end rollover carries retained earnings forward automatically.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Industry Profile on Client Creation', detail: 'Drives COA default mappings, signal boost table, GST applicability, T4A flag. Profiles: SHORT_TERM_RENTAL, PROFESSIONAL_SERVICES, RETAIL, CONSTRUCTION, RESTAURANT, REAL_ESTATE, E_COMMERCE.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Period Locking', detail: 'Finalized FY gets locked — no edits allowed. Standard professional accounting requirement. Prevents retroactive changes after client sign-off.' },
+          // Reports sub-group
+          { status: 'todo', tag: 'High', group: 'Reports', label: 'Cash Flow Statement', detail: 'Indirect method: Net Income ± operating WC changes ± investing ± financing = Net Change in Cash. Required for a complete financial package.' },
+          { status: 'todo', tag: 'High', group: 'Reports', label: 'Bank Reconciliation Module', detail: 'Side-by-side: book balance (GL) vs bank statement balance. Outstanding cheques + deposits-in-transit list. Reconciliation sign-off. Audit-defensible.' },
+          { status: 'todo', tag: 'High', group: 'Reports', label: 'Adjusting Journal Entries (AJEs)', detail: 'Dr/Cr entry screen with COA picker. AJEs flow through to Trial Balance and all reports. Reversal option. Year-end: accruals, depreciation, prepaid amortization.' },
+          { status: 'todo', tag: 'High', group: 'Reports', label: 'Comparative Reports (P&L + BS)', detail: 'Current vs prior year side-by-side in Income Statement and Balance Sheet. Variance columns in $ and %.' },
+          // Data integrity sub-group
+          { status: 'todo', tag: 'High', group: 'Data Integrity', label: 'Undo / Redo', detail: 'Ctrl+Z / Ctrl+Y for category changes, GST toggle, flag changes. Session-scoped action stack. Required before any real accountant use — mistakes happen constantly.' },
+          { status: 'todo', tag: 'High', group: 'Data Integrity', label: 'Backup / Restore + Import Merge', detail: 'Full ledger backup as downloadable .json or .db. Restore from file. Import merge: detect and skip duplicate transactions when re-importing a statement already loaded.' },
         ]
       },
 
@@ -2739,22 +2741,25 @@
       {
         id: 'p3',
         label: 'Phase 3 — CRA Compliance & Professional Output',
-        period: 'Weeks 9–14 · Beta release after this phase',
+        period: 'Weeks 9–14 · Beta after this · 10–20 accountants',
         accentColor: '#0369a1',
         headerBg: '#f0f9ff',
         progressColor: '#0284c7',
         icon: 'ph-seal-check',
         iconBg: '#e0f2fe',
         items: [
-          { status: 'todo', tag: 'High', label: 'CaseWare Full Working Paper Export', detail: 'TB + JE + AJE + Financial Statements + Notes in CaseWare-compatible ZIP package. Full year-end deliverable from one download.' },
-          { status: 'todo', tag: 'High', label: 'HST-34 Auto-Fill', detail: 'GST Report data flows into CRA HST-34 line items (101 Sales, 105 Collected, 106 ITC, 109 Net). Export printable PDF or CRA NETFILE XML. Quarterly + annual.' },
-          { status: 'todo', tag: 'High', label: 'T4A Generation', detail: 'Flag vendors as T4A recipients. Year-end slips auto-generated with Box 020 (fees for services) and Box 048 (contractor payments). CRA XML export.' },
-          { status: 'todo', tag: 'High', label: 'AR/AP Aging Report', detail: '30/60/90/90+ day aging buckets by vendor/customer. Outstanding balance summary. Collector-ready printable format.' },
-          { status: 'todo', tag: 'Medium', label: 'More Parsers', detail: 'National Bank (6th major bank), Tangerine, Simplii, EQ Bank, Desjardins. Covers ~98% of Canadian client bank accounts.' },
-          { status: 'todo', tag: 'Medium', label: 'FX / USD Transaction Support', detail: 'FX Rate column, Foreign Amount column in grid. CAD equivalent calculated at transaction date. USD bank accounts (BMO US, RBC US, etc.) treated correctly. Required for any client with cross-border spend.' },
-          { status: 'todo', tag: 'Medium', label: 'Extended Grid Columns', detail: 'Match Status (reconciled/unmatched), Split Indicator (transaction split across accounts), Confidence Score visible in grid, Attachments count badge.' },
-          { status: 'todo', tag: 'Medium', label: 'Duplicate Detection', detail: 'Flag transactions with same date + amount + description within a configurable window. Surfaces in Needs Review. Prevents double-counting when statements overlap.' },
-          { status: 'todo', tag: 'Medium', label: 'In-App Onboarding + Tooltips', detail: 'First-run walkthrough for new users. Contextual tooltips on key UI elements. Empty-state guides for each section. Accountant-specific quick-start guide.' },
+          // CRA compliance sub-group
+          { status: 'todo', tag: 'High', group: 'CRA Compliance', label: 'CaseWare Full Working Paper Export', detail: 'TB + JE + AJE + Financial Statements + Notes in CaseWare-compatible ZIP. Full year-end deliverable from one download.' },
+          { status: 'todo', tag: 'High', group: 'CRA Compliance', label: 'HST-34 Auto-Fill', detail: 'GST Report data flows into CRA HST-34 lines: 101 Sales, 105 Collected, 106 ITC, 109 Net. Export as printable PDF or CRA NETFILE XML. Quarterly + annual.' },
+          { status: 'todo', tag: 'High', group: 'CRA Compliance', label: 'T4A Generation', detail: 'Flag vendors as T4A recipients. Year-end slips auto-generated with Box 020 (fees for services) and Box 048 (contractor payments). CRA XML export.' },
+          { status: 'todo', tag: 'High', group: 'CRA Compliance', label: 'AR/AP Aging Report', detail: '30/60/90/90+ day aging buckets by vendor/customer. Outstanding balance summary. Collector-ready printable format.' },
+          // Parser expansion sub-group
+          { status: 'todo', tag: 'Medium', group: 'Parser Expansion', label: 'More Parsers', detail: 'National Bank (6th major bank), Tangerine, Simplii, EQ Bank, Desjardins. Covers ~98% of Canadian client bank accounts.' },
+          { status: 'todo', tag: 'Medium', group: 'Parser Expansion', label: 'FX / USD Transaction Support', detail: 'FX Rate + Foreign Amount columns in grid. CAD equivalent at transaction date. USD bank accounts (BMO US, RBC US) treated correctly. Required for any client with cross-border spend.' },
+          // Grid sub-group
+          { status: 'todo', tag: 'Medium', group: 'Grid & UX', label: 'Extended Grid Columns', detail: 'Match Status (reconciled/unmatched), Split Indicator, Confidence Score visible in grid, Attachments count badge.' },
+          { status: 'todo', tag: 'Medium', group: 'Grid & UX', label: 'Duplicate Detection', detail: 'Flag transactions with same date + amount + description within a configurable window. Surfaces in Needs Review tile. Prevents double-counting when statements overlap.' },
+          { status: 'todo', tag: 'Medium', group: 'Grid & UX', label: 'In-App Onboarding + Tooltips', detail: 'First-run walkthrough for new users. Contextual tooltips on key UI elements. Empty-state guides. Accountant-specific quick-start guide.' },
         ]
       },
 
@@ -2762,20 +2767,24 @@
       {
         id: 'p4',
         label: 'Phase 4 — Operational Intelligence',
-        period: 'Weeks 15–20 · Firm competitive advantage',
+        period: 'Weeks 15–20 · Public launch after this',
         accentColor: '#6d28d9',
         headerBg: '#f5f3ff',
         progressColor: '#7c3aed',
         icon: 'ph-chart-line-up',
         iconBg: '#ede9fe',
         items: [
-          { status: 'todo', tag: 'Medium', label: 'Budget vs Actual', detail: 'Import budget from Excel or enter per COA/period. Variance report: actual vs budget in $ and %, monthly view. Flags over-budget accounts.' },
-          { status: 'todo', tag: 'Medium', label: 'CFO Dashboard per Client', detail: 'Burn rate, cash runway, quick ratio, current ratio, DSO, DPO, gross margin at a glance. One-page printable for client meetings.' },
-          { status: 'todo', tag: 'Medium', label: 'Anomaly Detection Engine', detail: 'Duplicate tx alerts (same amount + vendor, within 7 days), new high-value payee alerts, amount spikes (3× rolling avg), GST inconsistency flags. All surfaced in UB Needs Review tile.' },
-          { status: 'todo', tag: 'Medium', label: 'Vendor Intelligence DB (Firm-Level)', detail: 'Shared vendor → COA mapping across all 400 clients. Firm rules override client rules override system defaults. Dramatically improves first-import accuracy for new clients.' },
-          { status: 'todo', tag: 'Medium', label: 'More Financial Ratios', detail: 'EBITDA margin, gross margin %, working capital, interest coverage, DSO (Days Sales Outstanding), DPO (Days Payable Outstanding). CFO-grade metrics.' },
-          { status: 'todo', tag: 'Medium', label: 'QBO / Xero Export', detail: 'QuickBooks Online bank feed CSV/IIF or REST API import. Xero Statement CSV or REST API. For clients already on QBO/Xero who need catch-up bookkeeping from RoboLedger.' },
-          { status: 'todo', tag: 'Medium', label: 'Testing & QA Gate (80% coverage)', detail: '80%+ test coverage on categorization engine, parser outputs, COA calculations, GST math. User acceptance testing with 3–5 real accountants before beta launch.' },
+          // Intelligence sub-group
+          { status: 'todo', tag: 'Medium', group: 'Intelligence', label: 'Anomaly Detection Engine', detail: 'Duplicate tx alerts (same amount + vendor, within 7 days), new high-value payee alerts, amount spikes (3× rolling avg), GST inconsistency flags. All surfaced in UB Needs Review.' },
+          { status: 'todo', tag: 'Medium', group: 'Intelligence', label: 'Vendor Intelligence DB (Firm-Level)', detail: 'Shared vendor → COA mapping across 400 clients. Firm rules override client rules override system defaults. Dramatically improves first-import accuracy for new clients.' },
+          // Reports sub-group
+          { status: 'todo', tag: 'Medium', group: 'Reports & Dashboards', label: 'Budget vs Actual', detail: 'Import budget from Excel or enter per COA/period. Monthly variance report: actual vs budget in $ and %. Flags over-budget accounts.' },
+          { status: 'todo', tag: 'Medium', group: 'Reports & Dashboards', label: 'CFO Dashboard per Client', detail: 'Burn rate, cash runway, quick ratio, current ratio, DSO, DPO, gross margin at a glance. One-page printable for client meetings.' },
+          { status: 'todo', tag: 'Medium', group: 'Reports & Dashboards', label: 'More Financial Ratios', detail: 'EBITDA margin, gross margin %, working capital, interest coverage, DSO (Days Sales Outstanding), DPO (Days Payable Outstanding). CFO-grade metrics.' },
+          // Export sub-group
+          { status: 'todo', tag: 'Medium', group: 'Export', label: 'QBO / Xero Export', detail: 'QuickBooks Online bank feed CSV/IIF or REST API. Xero Statement CSV or REST API. For clients on QBO/Xero who need catch-up bookkeeping from RoboLedger.' },
+          // QA gate sub-group
+          { status: 'todo', tag: 'Medium', group: 'QA Gate', label: 'Testing & QA (80% coverage)', detail: '80%+ test coverage on categorization engine, parser outputs, COA calculations, GST math. UAT with 3–5 real accountants who have never seen the software — before public launch.' },
         ]
       },
 
@@ -2790,13 +2799,13 @@
         icon: 'ph-globe',
         iconBg: '#f1f5f9',
         items: [
-          { status: 'todo', tag: 'Future', label: 'Client Portal (Tier 2)', detail: 'Read-only client view with annotation, receipt upload, transaction flagging. Email magic link auth. Year-end digital sign-off. Accountant controls all — client annotates, never overrides.' },
-          { status: 'todo', tag: 'Future', label: 'Investment Bookkeeping (ACB)', detail: 'T1 Schedule 3 capital gains tracking. Questrade/Wealthsimple/TD Direct/RBC Direct CSV parsers. DRIP handling. Annual ACB report per security.' },
-          { status: 'todo', tag: 'Future', label: 'Crypto Bookkeeping', detail: 'Coinbase/Kraken/Bitbuy/Newton CSV + on-chain wallet history. ACB per coin. Staking income classification. Annual gain/loss report. CRA property treatment (2022 guidance).' },
-          { status: 'todo', tag: 'Future', label: 'Live Bank Feed (Tier 3)', detail: 'Flinks/Inverite Canadian bank feed API. Webhook receiver slots into same parser pipeline, real-time. Bill C-37 compliant (Canada open banking 2026–2027). First target: firm operating account.' },
-          { status: 'todo', tag: 'Future', label: 'CRA Letter Analysis (AI)', detail: 'Upload CRA letter PDF → AI identifies type (HST audit, assessment, clearance), extracts figures, cross-references client ledger, drafts response letter. Accountant reviews and sends.' },
-          { status: 'todo', tag: 'Future', label: 'AI Memo / Narrative Generator', detail: 'Year-end plain-English financial summary from P&L + BS + ratios. "Revenue increased 12%..." Accountant edits and signs off. CPD-quality client letter output.' },
-          { status: 'todo', tag: 'Future', label: 'Multi-Firm SaaS', detail: 'Tenant isolation per accounting firm. Firm onboarding + subscription billing. RoboLedger as a product sold to other accounting firms beyond Swift Accounting.' },
+          { status: 'todo', tag: 'Future', group: 'Client Platform', label: 'Client Portal (Tier 2)', detail: 'Read-only client view with annotation, receipt upload, transaction flagging. Email magic link auth. Year-end digital sign-off. Accountant controls all — client annotates, never overrides.' },
+          { status: 'todo', tag: 'Future', group: 'Client Platform', label: 'Live Bank Feed (Tier 3)', detail: 'Flinks/Inverite Canadian bank feed API. Webhook receiver slots into same parser pipeline, real-time. Bill C-37 compliant (Canada open banking 2026–2027). First target: firm operating account.' },
+          { status: 'todo', tag: 'Future', group: 'Investments & Crypto', label: 'Investment Bookkeeping (ACB)', detail: 'T1 Schedule 3 capital gains tracking. Questrade/Wealthsimple/TD Direct/RBC Direct CSV parsers. DRIP handling. Annual ACB report per security.' },
+          { status: 'todo', tag: 'Future', group: 'Investments & Crypto', label: 'Crypto Bookkeeping', detail: 'Coinbase/Kraken/Bitbuy/Newton CSV + on-chain wallet history. ACB per coin. Staking income (T1 Line 13000). Annual gain/loss report. CRA property treatment.' },
+          { status: 'todo', tag: 'Future', group: 'AI Layer', label: 'CRA Letter Analysis (AI)', detail: 'Upload CRA letter PDF → AI identifies type (HST audit, assessment, clearance), extracts figures, cross-references client ledger, drafts response letter. Accountant reviews + sends.' },
+          { status: 'todo', tag: 'Future', group: 'AI Layer', label: 'AI Memo / Narrative Generator', detail: 'Year-end plain-English financial summary from P&L + BS + ratios. Accountant edits and signs off. CPD-quality client letter output.' },
+          { status: 'todo', tag: 'Future', group: 'SaaS', label: 'Multi-Firm SaaS', detail: 'Tenant isolation per accounting firm. Firm onboarding + subscription billing. RoboLedger as a product sold to other accounting firms beyond Swift Accounting.' },
         ]
       },
 
@@ -2811,17 +2820,24 @@
         icon: 'ph-wrench',
         iconBg: '#f1f5f9',
         items: [
-          { status: 'todo', tag: 'Debt', label: 'TD-1: Dual-Layer Architecture', detail: 'TypeScript core (src/core/) is architecturally correct but never called at runtime. Vanilla JS (app.js, ledger.core.js) is the real engine. Decision: commit to JS runtime, delete dead TS after multi-client shell ships.' },
-          { status: 'todo', tag: 'Debt', label: 'TD-2: localStorage Ceiling', detail: '~5MB limit, wiped on browser clear, no binary blob support. Fix: Migrate to IndexedDB / SQLite via WASM (wa-sqlite) in Phase 2.' },
-          { status: 'todo', tag: 'Debt', label: 'TD-3: Monolithic app.js (4,200+ lines)', detail: 'UI, state, events, parsing, reporting all in one file. Merge conflicts are constant. Fix: decompose progressively into WorkspaceManager, LedgerController, AccountManager, ReportEngine.' },
-          { status: 'todo', tag: 'Debt', label: 'TD-4: ScoringEngine Mocked', detail: 'src/brain/scoring.ts returns 0 for all 5 dimensions — has never been real. Fix: bridge to window.RoboLedger.SignalFusionEngine, or port SignalFusionEngine to TS.' },
-          { status: 'done', tag: 'Fixed', label: 'TD-5: Dead Dependencies Cleaned', detail: 'Tabulator CSS and AG-Grid CSS fragments referenced but never installed. Removed from imports, npm pruned.' },
-          { status: 'done', tag: 'Fixed', label: 'TD-6: PDF Highlight Y-Coord Fixed', detail: 'DocumentViewer.jsx now uses page.getViewport({ scale: 1.0 }).height as the unscaled reference for correct Y-axis inversion on PDF highlight boxes.' },
+          { status: 'todo', tag: 'Debt', group: 'Architecture', label: 'TD-1: Dual-Layer Architecture', detail: 'TypeScript core (src/core/) never called at runtime. Vanilla JS (app.js, ledger.core.js) is the real engine. Commit to JS runtime; delete dead TS after multi-client shell ships.' },
+          { status: 'todo', tag: 'Debt', group: 'Architecture', label: 'TD-2: localStorage Ceiling', detail: '~5MB limit, wiped on browser clear, no binary blob support. Fix: migrate to IndexedDB / SQLite via WASM (wa-sqlite) in Phase 2.' },
+          { status: 'todo', tag: 'Debt', group: 'Architecture', label: 'TD-3: Monolithic app.js (4,200+ lines)', detail: 'UI, state, events, parsing, reporting all in one file. Fix: decompose progressively → WorkspaceManager, LedgerController, AccountManager, ReportEngine.' },
+          { status: 'todo', tag: 'Debt', group: 'Architecture', label: 'TD-4: ScoringEngine Mocked', detail: 'src/brain/scoring.ts returns 0 for all 5 dimensions — never been real. Fix: bridge scoring.ts → window.RoboLedger.SignalFusionEngine, or port SignalFusion to TS.' },
+          { status: 'done', tag: 'Fixed', group: 'Resolved', label: 'TD-5: Dead Dependencies Cleaned', detail: 'Tabulator CSS and AG-Grid CSS fragments referenced but not installed. Removed from imports. npm pruned.' },
+          { status: 'done', tag: 'Fixed', group: 'Resolved', label: 'TD-6: PDF Highlight Y-Coord Fixed', detail: 'DocumentViewer.jsx now uses page.getViewport({ scale: 1.0 }).height as the unscaled reference for correct Y-axis inversion on PDF highlight boxes.' },
         ]
       },
     ];
 
-    // Compute totals
+    // ── Assign global sequential point numbers to todo/in-progress items only ──
+    let pointCounter = 0;
+    phases.forEach(ph => ph.items.forEach(item => {
+      if (item.status !== 'done') item._pt = ++pointCounter;
+    }));
+    const totalPoints = pointCounter;
+
+    // Compute totals (all items including done)
     let totalItems = 0, doneItems = 0, inProgressItems = 0;
     phases.forEach(ph => ph.items.forEach(item => {
       totalItems++;
@@ -2834,6 +2850,7 @@
     // Tag badge styling
     const tagStyle = (tag) => {
       const map = {
+        'Blocker':  'background:#fee2e2;color:#991b1b;',
         'Critical': 'background:#fee2e2;color:#991b1b;',
         'High':     'background:#fff7ed;color:#9a3412;',
         'Medium':   'background:#fefce8;color:#854d0e;',
@@ -2841,7 +2858,7 @@
         'Debt':     'background:#f1f5f9;color:#475569;',
         'Fixed':    'background:#f0fdf4;color:#166534;',
       };
-      return (map[tag] || 'background:#f1f5f9;color:#64748b;') + 'font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;';
+      return (map[tag] || 'background:#f1f5f9;color:#64748b;') + 'font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;letter-spacing:0.2px;';
     };
 
     const filterBtns = ['all', 'done', 'todo'].map(f => {
@@ -2864,34 +2881,59 @@
       });
       if (visibleItems.length === 0) return '';
 
-      const phDone = ph.items.filter(i => i.status === 'done').length;
+      const phDone  = ph.items.filter(i => i.status === 'done').length;
       const phTotal = ph.items.length;
-      const phPct = Math.round((phDone / phTotal) * 100);
+      const phPct   = Math.round((phDone / phTotal) * 100);
 
+      // Group items by their sub-group label if present
+      let currentGroup = null;
       const rows = visibleItems.map(item => {
-        const isDone = item.status === 'done';
+        const isDone   = item.status === 'done';
         const isInProg = item.status === 'in-progress';
-        const checkIcon = isDone
-          ? `<i class="ph ph-check-circle-fill" style="color:#16a34a;font-size:16px;flex-shrink:0;margin-top:1px;"></i>`
-          : isInProg
-          ? `<i class="ph ph-arrows-clockwise" style="color:#d97706;font-size:16px;flex-shrink:0;margin-top:1px;"></i>`
-          : `<i class="ph ph-circle" style="color:#cbd5e1;font-size:16px;flex-shrink:0;margin-top:1px;"></i>`;
 
-        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:6px;
+        const checkIcon = isDone
+          ? `<i class="ph ph-check-circle-fill" style="color:#16a34a;font-size:15px;flex-shrink:0;margin-top:2px;"></i>`
+          : isInProg
+          ? `<i class="ph ph-arrows-clockwise" style="color:#d97706;font-size:15px;flex-shrink:0;margin-top:2px;"></i>`
+          : `<i class="ph ph-circle" style="color:#cbd5e1;font-size:15px;flex-shrink:0;margin-top:2px;"></i>`;
+
+        // Point number badge (only for non-done items)
+        const ptBadge = !isDone && item._pt
+          ? `<span style="display:inline-flex;align-items:center;justify-content:center;
+               width:22px;height:22px;border-radius:50%;flex-shrink:0;
+               background:${ph.accentColor};color:white;
+               font-size:10px;font-weight:800;font-family:monospace;margin-top:1px;">${item._pt}</span>`
+          : '';
+
+        // Sub-group divider
+        let groupHtml = '';
+        if (item.group && item.group !== currentGroup) {
+          currentGroup = item.group;
+          groupHtml = `<div style="font-size:10px;font-weight:700;color:var(--text-tertiary,#94a3b8);
+              text-transform:uppercase;letter-spacing:0.6px;padding:10px 0 4px 0;
+              border-top:1px solid var(--border-subtle,#f1f5f9);margin-top:4px;">${item.group}</div>`;
+        }
+
+        return groupHtml + `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:6px;
             background:${isDone ? '#f8fffe' : 'var(--bg-primary,white)'};
             border:1px solid ${isDone ? '#d1fae5' : 'var(--border-subtle,#f1f5f9)'};
             margin-bottom:4px;">
-          ${checkIcon}
+          ${isDone ? checkIcon : ptBadge || checkIcon}
           <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px;">
-              <span style="font-size:13px;font-weight:600;color:${isDone ? '#166534' : 'var(--text-primary,#0f172a)'};
-                ${isDone ? 'text-decoration:none;' : ''}">${item.label}</span>
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:2px;">
+              <span style="font-size:13px;font-weight:600;color:${isDone ? '#166534' : 'var(--text-primary,#0f172a)'};">${item.label}</span>
               ${item.tag ? `<span style="${tagStyle(item.tag)}">${item.tag}</span>` : ''}
             </div>
             <div style="font-size:11.5px;color:var(--text-tertiary,#94a3b8);line-height:1.5;">${item.detail}</div>
           </div>
         </div>`;
       }).join('');
+
+      // Phase point range label (e.g. "Points 1–4")
+      const phTodoItems = ph.items.filter(i => i.status !== 'done' && i._pt);
+      const ptRange = phTodoItems.length
+        ? `Points ${phTodoItems[0]._pt}–${phTodoItems[phTodoItems.length - 1]._pt}`
+        : '';
 
       return `<div style="margin-bottom:16px;background:var(--bg-primary,white);border-radius:10px;
           border:1px solid var(--border-color,#e2e8f0);overflow:hidden;
@@ -2904,7 +2946,7 @@
           </div>
           <div style="flex:1;min-width:0;">
             <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${ph.label}</div>
-            <div style="font-size:11px;color:var(--text-tertiary,#94a3b8);margin-top:1px;">${ph.period}</div>
+            <div style="font-size:11px;color:var(--text-tertiary,#94a3b8);margin-top:1px;">${ph.period}${ptRange ? ' · <strong style="color:'+ph.accentColor+'">'+ptRange+'</strong>' : ''}</div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
             <div style="font-size:14px;font-weight:700;color:${ph.accentColor};">${phDone}<span style="font-size:11px;font-weight:500;color:var(--text-tertiary,#94a3b8);">/${phTotal}</span></div>
