@@ -52,6 +52,14 @@ const VENDOR_PATTERNS = [
   { type: 'FUEL', conf: 'HIGH',   re: /\bFLYING\s*J\b/i },
   { type: 'FUEL', conf: 'HIGH',   re: /CARDLOCK(?!\s*SERVICES?)|CARD\s*LOCK\s*FUEL/i },
   { type: 'FUEL', conf: 'HIGH',   re: /CHINIKI\s*GAS\b|\bSPEEDWAY\s*FUEL\b|\bSUNOCO\b/i },
+  // Training data: SAFEWAY GAS BAR (185x), FILL N' GO GAS (122x), COSTCO GAS (139x), TSUU T'INA (86x), HERITAGE POINTE GAS (45x), DALHOUSIE HUSKY (35x), HI HO GAS (39x)
+  { type: 'FUEL', conf: 'HIGH',   re: /SAFEWAY\s*GAS\s*BAR|SAFEWAY\s*GAS/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /FILL\s*N'?\s*GO\s*GAS|FILL\s*AND\s*GO\s*GAS/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /COSTCO\s*GAS|COSTCO\s*FUEL/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /TSUU\s*T'?INA\s*NATION\s*GAS|TSUU\s*TINA\s*GAS/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /HERITAGE\s*POINTE\s*GAS/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /HI\s*HO\s*GAS|HIHO\s*GAS/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /DALHOUSIE\s*STATION\s*(?:GAS|FUEL|HUSKY)/i },
   { type: 'FUEL', conf: 'MEDIUM', re: /(?:GAS|FUEL|PETROL|DIESEL|GASOLINE)\s*(BAR|STATION|STOP|MART)|\b(?:FILLING|SERVICE)\s*STATION\b/i },
   // Circle K only as fuel if "gas" or "fuel" appears too — otherwise it's a convenience store
   { type: 'FUEL', conf: 'MEDIUM', re: /CIRCLE\s*K.*(?:GAS|FUEL)|(?:GAS|FUEL).*CIRCLE\s*K/i },
@@ -82,7 +90,7 @@ const VENDOR_PATTERNS = [
   // ── INSURANCE ─────────────────────────────────────────────────────────────
   { type: 'INSURANCE', conf: 'HIGH', re: /\bWAWANESA\b/i },
   { type: 'INSURANCE', conf: 'HIGH', re: /\bINTACT\s*(INSUR(ANCE)?)?\b/i },
-  { type: 'INSURANCE', conf: 'HIGH', re: /\bCO-?OPERATORS\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bCO-?OPERATORS\b|\bCOOPERATORS\s*CSI\b/i },
   { type: 'INSURANCE', conf: 'HIGH', re: /\bAVIVA\b/i },
   { type: 'INSURANCE', conf: 'HIGH', re: /\bDESJARDINS\s*INS/i },
   { type: 'INSURANCE', conf: 'HIGH', re: /\bECONOMICAL\b|\bDEFINITY\b/i },
@@ -91,6 +99,16 @@ const VENDOR_PATTERNS = [
   { type: 'INSURANCE', conf: 'HIGH', re: /\bMANULIFE\b|\bGREAT.WEST\s*LIFE\b|\bCANADA\s*LIFE\b|\bSUN\s*LIFE\b/i },
   { type: 'INSURANCE', conf: 'HIGH', re: /\bSECURITY\s*NATIONAL\s*INSUR/i },
   { type: 'INSURANCE', conf: 'HIGH', re: /\bSMI\s*SASKATOON\b/i },
+  // Training: PRIMMUM INSURANCE (76x), SQUARE ONE INSURANCE (61x), RBC LIFE INSURANCE (52x)
+  // BCAA-INSURANCE (48x), CERTAS INSURANCE (44x), DIRECT DEBIT INSURANCE (40x+)
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bPRIMMUM\s*INSUR(ANCE)?\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bSQUARE\s*ONE\s*INSUR(ANCE)?\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bRBC\s*(?:LIFE\s*)?INSUR(ANCE)?\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bBCAA.?INSUR(ANCE)?\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bCERTAS\s*(INSUR(ANCE)?)?\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /DIRECT\s*DEBIT\s*INSUR(ANCE)?|DIRECT\s*DEBIT.*INS\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bBMO\s*INSUR(ANCE)?\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bSASKATCHEWAN\s*MUTUAL\s*INSUR\b/i },
   { type: 'INSURANCE', conf: 'MEDIUM', re: /INSUR(ANCE)?\s*(PREMIUM|PMT|PAYMENT)|POLICY\s*(PAYMENT|PREMIUM)/i },
 
   // ── PAYROLL SERVICE PROVIDERS ──────────────────────────────────────────────
@@ -179,13 +197,104 @@ const VENDOR_PATTERNS = [
   { type: 'MEALS', conf: 'HIGH',   re: /\bPIZZA\s*(HUT|NOVA|DELIGHT)|\bDOMINO'?S\b|\bLITTLE\s*CAESAR|\bBOSTON\s*PIZZA\b/i },
   { type: 'MEALS', conf: 'HIGH',   re: /\bEARLS?\b|\bCACTUS\s*CLUB\b|\bTHE\s*KEG\b|\bMILESTONES\b|\bDENNY'?S\b|\bIHOP\b/i },
   { type: 'MEALS', conf: 'HIGH',   re: /\bGRIZZLY\s*PAW\b|\bJAMESON\b.*(?:BAR|PUB)|\bKILKENNY\b|\bACE\s*LIQUOR\b/i },
+  // Training data: ROSSO COFFEE (200x+), PHIL & SEBASTIAN (180x+), MUCHO BURRITO (161x+), SIERRA CAFE (130x+)
+  // GRAVITY ESPRESSO (90x+), MOTI MAHAL (88x+), PARAMOUNT FINE FOODS (72x+), 350 BAKEHOUSE (65x+)
+  // COMMUNITY NATURAL FOODS (50x), AMARANTH WHOLE FOODS (45x), MONOGRAM COFFEE (40x+)
+  // NOTE: SAVE ON FOODS (957x) is in scan data as 6415 but likely a personal grocery account — NOT added
+  // NOTE: SKIPTHEDISHES (2158x) coded as 9200 Travel in scan — added as FOOD_DELIVERY type below
+  { type: 'MEALS', conf: 'HIGH',   re: /\bROSSO\s*COFFEE\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bPHIL\s*(?:&|AND)\s*SEBASTIAN\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bMUCHO\s*BURRITO\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bSIERRA\s*CAFE\b|\bSIERRA\s*CAFÉ\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bGRAVITY\s*ESPRESSO\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bMOTI\s*MAHAL\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bPARAMOUNT\s*FINE\s*FOODS\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\b350\s*BAKEHOUSE\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bCOMMUNITY\s*NATURAL\s*FOODS\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bAMARANTH\s*WHOLE\s*FOODS\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bMONOGRAM\s*COFFEE\b|SQ\s*\*MONOGRAM\b/i },
   { type: 'MEALS', conf: 'MEDIUM', re: /RESTAURANT|BISTRO|BRASSERIE|TAVERN|\bCAFE\b|\bCAFÉ\b|\bDINING\b|\bPUB\b/i },
+
+  // ── SOFTWARE / SaaS (capitalized or expensed depending on threshold) ──────
+  // Training: ADOBE INC (172x→1857), ADOBE CREATIVE CLOUD (63x), ADOBE ACROPRO SUBS (58x)
+  // GOOGLE *GOOGLE STORAGE (159x→1857), GOOGLE *GSUITE_* (multiple→1857), GOOGLE*DOMAINS (49x)
+  // JANE SOFTWARE (81x→1857) — clinic management system
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bADOBE\s*(?:INC\.?|CREATIVE\s*CLOUD|ACROPRO|ACROBAT|\*ACROBAT|\*ACROPRO|\*CREATIVE)\b/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /GOOGLE\s*\*(?:GOOGLE\s*STORAGE|GSUITE|GOOGLE\s*ONE|APPS?\s*FOR\s*BUS|WORKSPACE)|GOOGLE\s*WORKSPACE/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /GOOGLE\s*\*?DOMAINS?|GOOGLE\s*DOMAIN/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bJANE\s*SOFTWARE\b|JANE\.APP/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bSAGE\s*(CANADA|ONLINE|ACCOUNTING|PAYROLL|50|200|BUSINESS|SOFTWARE)\b/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bQUICKBOOKS\b|\bINTUIT\s*(CANADA|ONLINE|PAYROLL|QB|QUICKBOOKS)?\b/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bDROPBOX\b/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bZOOM\s*(?:US|VIDEO|COM|PHONE)?\b|PAYPAL\s*\*ZOOMVIDEOCO/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bMICROSOFT\s*(?:365|OFFICE|M365|AZURE|DYNAMICS|BUSINESS)\b|MSFT\s*\*/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bGITHUB\b(?!\s*FOREIGN\s*CURRENCY)/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bSLACK\b(?:\s*TECHNOLOGIES)?\b/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bHUBSPOT\b/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bASANA\b|\bNOTION\b|\bCLICKUP\b|\bMONDAY\.COM\b|\bBASECAMP\b/i },
+
+  // ── SUBSCRIPTIONS / MEMBERSHIPS (SaaS billed monthly, 6800) ─────────────
+  // Training: OPENAI *CHATGPT (78x→6800), PELOTON* MEMBERSHIP (91x→6800), SQUARESPACE (156x→7752/6800)
+  // CALENDLY (38x→6800), FOLLOWUPBOSS (57x→6800), CONVERTKIT (74x→6800), TEAMWORK (39x→6800)
+  // AUDIBLE (business audiobooks → 6800), AMAZON PRIME (6800)
+  // NOTE: SQUARESPACE also appears as 7752 foreign currency — if paid in USD flag for review
+  // NOTE: LIBERATED SYNDICATION (191x→7752) = podcast hosting, USD — flag for FX review
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /OPENAI\s*\*(?:CHATGPT|API)|CHATGPT\s*SUBSCR/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bMIDJOURNEY\s*(?:INC\.?)?\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bPELOTON\s*\*?\s*MEMBERSHIP\b|\bPELOTON\s*INTERACTIVE\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bSQUARESPACE\s*(?:INC\.?)?\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bCALENDLY\s*(?:LLC\.?)?\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bFOLLOWUPBOSS\b|FOLLOW\s*UP\s*BOSS/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bCONVERTKIT\b(?:\s*EMAIL)?\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bTEAMWORK\s*(?:COM\.?|PROJECT)?\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bAUDIBLE\b(?:\s*CA)?\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /AMAZON\s*\.?CA?\s*PRIME\s*MEMBER|\bAMAZON\s*PRIME\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bLIBERATED\s*SYNDICATION\b|LIBSYN\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /DNH\s*\*MEDIA\s*TEMPLE|\bMEDIA\s*TEMPLE\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bSIERRA\s*INTERACTIVE\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bKEEPER\s*SECURITY\s*(?:COM\.?)?\b|KEEPERSECURITY\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bGODADDY\b(?:\.COM\s*CANADA)?\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bVIVINT\s*(?:CANADA)?\b/i },
+
+  // ── VEHICLE RENTAL (→ 9200 Travel, not 8720 Rent) ─────────────────────────
+  // Training: AVIS RENT A CAR (139x→8720 WRONG, should be 9200), BUDGET RENT-A-CAR (23x)
+  // THRIFTY CAR RENTAL (11x), ENTERPRISE RENT-A-CAR (8x), ALAMO RENT-A-CAR (8x)
+  // THERENTALGUYS.CA (24x), DRIVING FORCE VEHICLE (15x)
+  // NOTE: car rental is TRAVEL (9200) not RENT (8720) — added before RENT pattern
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bAVIS\s*RENT\b|\bAVIS\s*CAR\b|\bAVIS\s*VEHICLE\b/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bBUDGET\s*RENT.?A.?CAR\b|\bBUDGET\s*RENTAL\b/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bTHRIFTY\s*(?:CAR\s*)?RENTAL\b/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bENTERPRISE\s*RENT.?A.?CAR\b|\bENTERPRISE\s*(?:CAR\s*)?RENTAL\b/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bALAMO\s*RENT.?A.?CAR\b|\bALAMO\s*(?:CAR\s*)?RENTAL\b/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bTHERENTALGUYS\b|\bRENTAL\s*GUYS\b/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bDRIVING\s*FORCE\s*VEHICLE\b/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bNATIONAL\s*CAR\s*RENTAL\b|\bNATIONAL\s*RENT.?A.?CAR\b/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bHERTZ\s*(?:CAR\s*)?RENTAL\b|\bHERTZ\s*#\d/i },
+  { type: 'VEHICLE_RENTAL', conf: 'HIGH', re: /\bDOLLAR\s*(?:CAR\s*)?RENTAL\b/i },
+
+  // ── SECURITY SYSTEMS ──────────────────────────────────────────────────────
+  // Training: UNITED SECURITYALARM (33x→8850), WILSONS SECURITY (12x→8850)
+  // ADT SECURITY SVCS CDA (3x→8850), KEEPERSECURITY.COM (3x→6800 not 8850)
+  // NOTE: KEEPERSECURITY is password manager software → handled as SUBSCRIPTION above
+  { type: 'SECURITY_SYS', conf: 'HIGH', re: /\bUNITED\s*SECURITY\s*ALARM\b|\bUNITED\s*SECURITYALARM\b/i },
+  { type: 'SECURITY_SYS', conf: 'HIGH', re: /\bWILSONS\s*SECURITY\b|\bWILSON\s*SECURITY\b/i },
+  { type: 'SECURITY_SYS', conf: 'HIGH', re: /\bADT\s*SECURITY\b|\bADT\s*SVCS\b/i },
+  { type: 'SECURITY_SYS', conf: 'MEDIUM', re: /\bSECURITY\s*(?:SYSTEM|MONITORING|ALARM|SURVEILLANCE)\b/i },
+
+  // ── FOOD DELIVERY APPS (→ 6415 Meals, same as restaurant) ────────────────
+  // Training: SKIPTHEDISHES (2158x→9200 in scan, but logically = food delivery = 6415 Meals)
+  // UBER EATS treated separately from UBER TRIP (travel)
+  { type: 'FOOD_DELIVERY', conf: 'HIGH', re: /\bSKIPTHEDISHES\b|\bSKIP\s*THE\s*DISHES\b/i },
+  { type: 'FOOD_DELIVERY', conf: 'HIGH', re: /UBER\s*(?:EATS|DELIVERY|FOOD)/i },
+  { type: 'FOOD_DELIVERY', conf: 'HIGH', re: /\bDOORDASH\b|\bFOODORA\b|\bINSTACART\b/i },
 
   // ── EQUIPMENT RENTAL ─────────────────────────────────────────────────────
   { type: 'EQUIP_RENTAL', conf: 'HIGH', re: /\bHERTZ\s*EQUIP|\bSUNBELT\s*(RENTAL|EQUIP)|\bUNITED\s*RENTAL|\bHERC\s*RENTAL|\bBATTLEFORDS\s*RENTAL\b/i },
 
   // ── SUBCONTRACTORS ────────────────────────────────────────────────────────
   { type: 'SUBCONTRACTOR', conf: 'HIGH',   re: /\bFIVERR\b|\bUPWORK\b|\bFREELANCER\.COM\b|\b99DESIGNS\b/i },
+  // Training: VIRTUAL GURUS (virtual assistant staffing firm)
+  { type: 'SUBCONTRACTOR', conf: 'HIGH',   re: /\bVIRTUAL\s*GURUS\b/i },
   { type: 'SUBCONTRACTOR', conf: 'MEDIUM', re: /SUBCONTRACT|SUB-?CONTRACT|TRADE\s*CONTRACTOR/i },
 
   // ── ADVERTISING ───────────────────────────────────────────────────────────
@@ -214,6 +323,8 @@ const VENDOR_PATTERNS = [
   { type: 'TRAVEL', conf: 'HIGH', re: /\bALPINE\s*HELICOPTERS?\b/i },
   { type: 'TRAVEL', conf: 'HIGH', re: /\bMARRIOTT\b|\bHILTON\b|\bWESTIN\b|\bBEST\s*WESTERN\b|\bHOLIDAY\s*INN\b/i },
   { type: 'TRAVEL', conf: 'HIGH', re: /\bBANFF\s*SPRINGS\s*HOTEL\b|\bGEORGETOWN\s*INN\b/i },
+  // Training: UBER CANADA / UBERTRIP (325x+133x→9200) — rideshare = travel. UBER EATS handled as FOOD_DELIVERY
+  { type: 'TRAVEL', conf: 'HIGH', re: /UBER\s*(?:CANADA|TRIP|RIDE|CAR|BV|TECHNOLOGIES)(?!\s*(?:EATS|DELIVERY|FOOD))/i },
   // Airbnb on a CC card = travel/accommodation. On CHQ/SAV = rental revenue (handled by polarity/account type)
   { type: 'TRAVEL',  conf: 'MEDIUM', re: /\bAIRBNB\b(?!.*PAYOUT)/i },
 
@@ -286,6 +397,11 @@ const ROUTING_TABLE = {
   TRANSFER:           { cogs: null,   overhead: null,   bs: '1000',            defaultCOGS: false, gifi: '1001', logic: 'BS only — bank-to-bank transfer, no P&L impact' },
   ETRANSFER:          { cogs: null,   overhead: null,   bs: null,              defaultCOGS: false, gifi: null,   logic: 'LOW confidence — could be rental income (4900) or transfer (BS). Review polarity and account type.' },
   MEALS:              { cogs: null,   overhead: '6415', bs: null,              defaultCOGS: false, gifi: '8520', logic: 'Meals & entertainment → 6415 (50% non-deductible CRA ITA 67.1)' },
+  FOOD_DELIVERY:      { cogs: null,   overhead: '6415', bs: null,              defaultCOGS: false, gifi: '8520', logic: 'Food delivery apps (SkipTheDishes, Uber Eats) → 6415 Meals & entertainment' },
+  SOFTWARE_SAAS:      { cogs: null,   overhead: '1857', bs: null,              defaultCOGS: false, gifi: '8811', logic: 'Software/SaaS subscriptions → 1857 (or 6800 Dues if low-value)' },
+  SUBSCRIPTION:       { cogs: null,   overhead: '6800', bs: null,              defaultCOGS: false, gifi: '8811', logic: 'Online subscriptions and memberships → 6800' },
+  VEHICLE_RENTAL:     { cogs: null,   overhead: '9200', bs: null,              defaultCOGS: false, gifi: '9270', logic: 'Car rental → 9200 Travel (NOT 8720 Rent — different expense class)' },
+  SECURITY_SYS:       { cogs: null,   overhead: '8850', bs: null,              defaultCOGS: false, gifi: '8810', logic: 'Security system monitoring/alarm → 8850' },
   EQUIP_RENTAL:       { cogs: '5310', overhead: '7000', bs: null,              defaultCOGS: true,  gifi: '9270', logic: 'Job-site equipment → 5310 COGS; office equipment → 7000' },
   SUBCONTRACTOR:      { cogs: '5360', overhead: '8950', bs: null,              defaultCOGS: true,  gifi: '8590', logic: 'Client-project sub → 5360 COGS; internal → 8950 Subcontracting' },
   ADVERTISING:        { cogs: null,   overhead: '6000', bs: null,              defaultCOGS: false, gifi: '8520', logic: 'Always overhead — advertising and promotion' },
