@@ -2632,14 +2632,24 @@
   }
 
   // ─── ROADMAP PAGE ────────────────────────────────────────────────────────────
+  // Merged from: Mega Game Plan (Feb 2026) + Antigravity SDLC review
   function renderRoadmapPage() {
     if (!window._roadmapState) window._roadmapState = { filter: 'all' };
     const S = window._roadmapState;
 
+    // ── RELEASE MILESTONES (shown in header timeline) ──────────────────────────
+    const milestones = [
+      { label: 'Alpha',  gate: 'After Phase 1', audience: 'Internal only' },
+      { label: 'Beta',   gate: 'After Phase 2', audience: '10–20 friendly accountants' },
+      { label: 'Launch', gate: 'After Phase 4', audience: 'Public · 400 clients' },
+    ];
+
+    // ── PHASES ─────────────────────────────────────────────────────────────────
     const phases = [
+      // ── COMPLETED ──────────────────────────────────────────────────────────
       {
         id: 'p0',
-        label: 'Phase 0 — Foundation',
+        label: 'Phase 0 — What We Built',
         period: 'Completed · Feb 2026',
         accentColor: '#16a34a',
         headerBg: '#f0fdf4',
@@ -2647,125 +2657,166 @@
         icon: 'ph-check-circle',
         iconBg: '#dcfce7',
         items: [
-          { status: 'done', label: '26 Bank PDF Parsers', detail: 'RBC (4), BMO (6), TD (3), Scotia (6), CIBC (3), HSBC, ATB, Amex — all Canadian majors' },
-          { status: 'done', label: 'Amex Audit Parity — all parsers', detail: 'parser_ref, statementId, lineNumber, pdfLocation, audit.rawText on every transaction' },
-          { status: 'done', label: 'SignalFusion Categorization Engine', detail: '9-signal weighted architecture — vendor type, CC polarity, refund mirror, training brain' },
-          { status: 'done', label: 'CategorizationEngine 3-layer deterministic', detail: 'VENDOR_PATTERNS → ROUTING_TABLE → ACCOUNT_GUARDS · ATM withdrawal routing to 9970' },
-          { status: 'done', label: 'CC Polarity Enforcement', detail: '3-layer guard — CC charges never routed to revenue accounts' },
-          { status: 'done', label: 'Refund / Contra-Expense Signal', detail: 'Automatic contra-expense routing for CC refunds, cashback, rebates' },
-          { status: 'done', label: 'COA Engine', detail: 'Full ASSET/LIABILITY/EQUITY/REVENUE/EXPENSE hierarchy, root type lookups' },
-          { status: 'done', label: 'GST Auto-Calculation', detail: 'Province-aware (AB, BC, ON, QC), gst_enabled per tx, tax_cents, gst_account routing' },
-          { status: 'done', label: 'Transaction Grid', detail: 'Virtualized TanStack grid, 10k+ rows smooth, inline edit, bulk actions, filter toolbar' },
-          { status: 'done', label: 'Utility Bar Full Drill-Down', detail: '3-level breadcrumb: All › Category › Payee · All stat rows drillable (Uncategorized, Needs Review, In/Out, Revenue/Expenses)' },
-          { status: 'done', label: 'Audit Sidebar + DocumentViewer', detail: 'parser_ref, raw text, PDF highlight on source line, Account Metadata, GST drill' },
-          { status: 'done', label: 'Trial Balance', detail: 'CaseWare standard with prior year compare, equity + retained earnings synthesis, GST section' },
+          // Parser infrastructure
+          { status: 'done', label: '26 Bank PDF Parsers', detail: 'RBC (4), BMO (6), TD (3), Scotia (6), CIBC (3), HSBC, ATB, Amex — all major Canadian banks' },
+          { status: 'done', label: 'Amex Audit Parity — all parsers', detail: 'parser_ref, statementId, lineNumber, pdfLocation, audit.rawText emitted on every transaction from every parser' },
+          // Categorization
+          { status: 'done', label: 'SignalFusion Engine (9-signal)', detail: 'Weighted categorization: vendor type, CC polarity, refund mirror, amount bracket, frequency, training brain' },
+          { status: 'done', label: 'CategorizationEngine 3-layer deterministic', detail: 'VENDOR_PATTERNS → ROUTING_TABLE → ACCOUNT_GUARDS · ATM withdrawals routed to 9970 with ATM_OWNER_DRAW flag' },
+          { status: 'done', label: 'CC Polarity Enforcement', detail: '3-layer guard — credit card charges never routed to revenue accounts under any signal combination' },
+          { status: 'done', label: 'Refund / Contra-Expense Routing', detail: 'CC refunds, cashback, rebates auto-routed as contra-expenses to mirror original purchase account' },
+          { status: 'done', label: 'Training Brain', detail: 'Accountant corrections on SWIFT workpapers feed back into signal weights for higher first-import accuracy on next client' },
+          // COA + GST
+          { status: 'done', label: 'COA Engine', detail: 'Full ASSET/LIABILITY/EQUITY/REVENUE/EXPENSE hierarchy, root type resolution, GIFI code mapping' },
+          { status: 'done', label: 'GST Auto-Calculation', detail: 'Province-aware (AB 5%, BC 12%, ON 13%, QC 14.975%), gst_enabled toggle per transaction, tax_cents + gst_account routing' },
+          // UI
+          { status: 'done', label: 'Transaction Grid (TanStack)', detail: 'Virtualized, 10k+ rows smooth, inline category edit, bulk actions, filter toolbar, breadcrumb navigation' },
+          { status: 'done', label: 'Utility Bar Full Drill-Down', detail: '3-level: All › Category › Payee — all stat tiles drillable: Uncategorized, Needs Review, In/Out, Revenue/Expenses' },
+          { status: 'done', label: 'Audit Sidebar + PDF DocumentViewer', detail: 'parser_ref trace, raw bank text, PDF highlight on exact source line, Account Metadata panel, GST drill' },
+          { status: 'done', label: 'Bulk Action Bar', detail: '3 inline bulk operations: recategorize selection, toggle GST, flag for review' },
+          { status: 'done', label: 'Settings Drawer', detail: 'Theme/density/font size, province selector, GST registration config, collapsible nav' },
+          // Reports
+          { status: 'done', label: 'Trial Balance', detail: 'CaseWare standard, prior year import + side-by-side compare, equity + retained earnings synthesis, GST section' },
           { status: 'done', label: 'Income Statement', detail: 'GAAP — Revenue, COGS, Gross Profit, Operating Expenses, Net Income' },
-          { status: 'done', label: 'Balance Sheet', detail: 'GAAP — Assets, Liabilities, Equity with year-end retained earnings' },
-          { status: 'done', label: 'General Ledger Report', detail: 'Per-account transaction detail, net amount column, running balance, closing balance' },
-          { status: 'done', label: 'General Journal Report', detail: 'All entries chronological, net signed amount (credits red), account code + name columns' },
-          { status: 'done', label: 'COA Summary Report', detail: 'Category breakdown with transaction counts and amounts per COA account' },
-          { status: 'done', label: 'GST Report (full drill-down)', detail: 'Collected / ITC Paid / Net GST per period · individual transaction drill · CRA-format' },
-          { status: 'done', label: 'Financial Ratios Report', detail: 'Current ratio, quick ratio, debt-to-equity and more' },
-          { status: 'done', label: 'CaseWare ZIP Export', detail: 'TB in CaseWare Working Papers format + Prior Year Import for side-by-side comparison' },
-          { status: 'done', label: 'XLSX / CSV Export', detail: 'Any filtered grid selection exported to Excel or CSV' },
-          { status: 'done', label: 'Settings Drawer', detail: 'Theme/density/font, province selector, GST configuration' },
-          { status: 'done', label: 'Bulk Action Bar', detail: '3 inline bulk actions (recategorize, toggle GST, flag for review) on multi-select' },
-          { status: 'done', label: 'Ghost Account Elimination', detail: 'No phantom accounts — all accounts reconcile to imported statements' },
-          { status: 'done', label: 'Training Brain', detail: 'SWIFT workpapers corrections feed back into signal weights for improved future categorization' },
+          { status: 'done', label: 'Balance Sheet', detail: 'GAAP — Assets, Liabilities, Equity with year-end retained earnings roll-forward' },
+          { status: 'done', label: 'General Ledger Report', detail: 'Per-account transaction detail, net signed amount column, running balance, closing balance card' },
+          { status: 'done', label: 'General Journal Report', detail: 'All entries chronological, net signed amount (credits in red), COA account code + name' },
+          { status: 'done', label: 'COA Summary Report', detail: 'Category breakdown by root type with transaction counts and totals per account' },
+          { status: 'done', label: 'GST Report (full drill-down)', detail: 'Collected / ITC Paid / Net payable per period, individual transaction drill, CRA-format layout' },
+          { status: 'done', label: 'Financial Ratios Report', detail: 'Current ratio, quick ratio, debt-to-equity, gross margin — balance sheet derived' },
+          // Export
+          { status: 'done', label: 'CaseWare ZIP Export', detail: 'Trial Balance in CaseWare Working Papers format, downloadable ZIP, prior year import' },
+          { status: 'done', label: 'XLSX / CSV Export', detail: 'Any filtered grid view exported to Excel or CSV in one click' },
         ]
       },
+
+      // ── PHASE 1: STABILIZATION ─────────────────────────────────────────────
+      // (from Antigravity SDLC Phase 0 — the gate before building new features)
       {
         id: 'p1',
-        label: 'Phase 1 — Professional Foundation',
-        period: 'Target: Mar–Apr 2026 · Critical',
+        label: 'Phase 1 — Stabilization',
+        period: 'Weeks 1–2 · Gate: All blockers cleared before proceeding',
         accentColor: '#dc2626',
         headerBg: '#fef2f2',
         progressColor: '#dc2626',
-        icon: 'ph-buildings',
+        icon: 'ph-shield-warning',
         iconBg: '#fee2e2',
         items: [
-          { status: 'todo', tag: 'Critical', label: 'Multi-Client Shell — Client Registry', detail: 'Firm dashboard with client list, create/select/archive. Navigation: Firm → Client → FY → Account → Transactions. Foundation everything else sits on.' },
-          { status: 'todo', tag: 'Critical', label: 'Scoped Ledger per Client (client_id everywhere)', detail: 'All transactions, accounts, statements, reports filtered by active client. No data bleeds between clients.' },
-          { status: 'todo', tag: 'Critical', label: 'IndexedDB Persistence (replace localStorage)', detail: '50MB+ per origin, persistent across sessions, binary PDF blob support. SQLite via WASM (wa-sqlite) — one .db per client.' },
-          { status: 'todo', tag: 'Critical', label: 'Fiscal Year Management UI', detail: 'Per client: open FY, set start/end dates, view/switch between years. FY-scoped reports. Year-end rollover (retained earnings carry forward).' },
-          { status: 'todo', tag: 'Critical', label: 'Industry Profile Selection', detail: 'Sets default COA mappings, signal boost table, GST applicability, T4A flag on client creation. SHORT_TERM_RENTAL, PROFESSIONAL_SERVICES, RETAIL, CONSTRUCTION, RESTAURANT, REAL_ESTATE, E_COMMERCE.' },
-          { status: 'todo', tag: 'Critical', label: 'Period Locking', detail: 'Finalize a FY → lock it. No changes to locked periods. Required for professional accounting standards.' },
-          { status: 'todo', tag: 'High', label: 'Cash Flow Statement', detail: 'Indirect method: Net Income ± operating WC changes ± investing activities ± financing activities = Net Change in Cash.' },
-          { status: 'todo', tag: 'High', label: 'Bank Reconciliation Module', detail: 'Side-by-side: book balance (GL) vs bank statement balance. Outstanding items list. Reconciliation sign-off. Audit-defensible.' },
-          { status: 'todo', tag: 'High', label: 'Adjusting Journal Entries (AJEs)', detail: 'Dr/Cr entry screen with COA picker. AJEs appear in Trial Balance. Reversal option. Year-end accruals, depreciation, prepaid amortization.' },
-          { status: 'todo', tag: 'High', label: 'Comparative Reports', detail: 'Current vs prior year side-by-side in P&L and Balance Sheet. Variance in $ and %.' },
+          { status: 'todo', tag: 'Blocker', label: 'Grid disappears on account switch', detail: 'TanStack grid loses its DOM node when switching between accounts in the account switcher. Must re-init cleanly. Priority #1 — happens in production.' },
+          { status: 'todo', tag: 'Blocker', label: 'ALL mode account metadata broken', detail: 'When viewing all accounts combined, the 2-line description and masked card number in the account metadata panel display incorrectly. Aggregation logic needs fix.' },
+          { status: 'todo', tag: 'Blocker', label: 'Balance calculation verification', detail: 'Audit aggregate math: running balance, account-level totals, reconciliation check. Verify all match across grid / utility bar / reports — no silent discrepancies.' },
+          { status: 'todo', tag: 'Blocker', label: 'Grid persistence on page refresh', detail: 'Loaded transactions must survive a full page refresh via localStorage recovery. Currently inconsistent — some sessions lose data on reload.' },
         ]
       },
+
+      // ── PHASE 2: CORE FEATURES ─────────────────────────────────────────────
       {
         id: 'p2',
-        label: 'Phase 2 — Professional Output',
-        period: 'Target: Apr–Aug 2026 · CRA Compliance',
+        label: 'Phase 2 — Multi-Client Core',
+        period: 'Weeks 3–8 · Alpha release after this phase',
         accentColor: '#b45309',
         headerBg: '#fffbeb',
         progressColor: '#d97706',
-        icon: 'ph-file-text',
+        icon: 'ph-buildings',
         iconBg: '#fef3c7',
         items: [
-          { status: 'todo', tag: 'High', label: 'CaseWare Full Working Paper Export', detail: 'TB + JE + AJE + Financial Statements + Notes in CaseWare-compatible ZIP. Full package download.' },
-          { status: 'todo', tag: 'Medium', label: 'More Parsers', detail: 'National Bank (6th major bank), Tangerine, Simplii, EQ Bank, Desjardins. Covers ~98% of Canadian client base.' },
-          { status: 'todo', tag: 'Medium', label: 'HST-34 Auto-Fill', detail: 'From GST Report → auto-populate CRA HST-34 fields. Export as printable PDF or CRA NETFILE XML. Quarterly + annual.' },
-          { status: 'todo', tag: 'Medium', label: 'T4A Generation', detail: 'Flag vendors as T4A recipients. Year-end T4A slips auto-generated. CRA XML export. Box 020 (fees for services) and Box 048 (independent contractors).' },
-          { status: 'todo', tag: 'Medium', label: 'AR/AP Aging Report', detail: '30/60/90+ day aging buckets. Outstanding balance by vendor/customer. Collector-ready format.' },
+          { status: 'todo', tag: 'Critical', label: 'Client Registry — Multi-Client Shell', detail: 'Firm dashboard with client list, create/select/archive. Navigation: Firm → Client → FY → Account → Transactions. This is the architectural foundation — everything else sits on it.' },
+          { status: 'todo', tag: 'Critical', label: 'Scoped Ledger per Client (client_id everywhere)', detail: 'All transactions, accounts, statements, and reports filtered by active client_id. Zero data bleed between clients. Single most important architectural change.' },
+          { status: 'todo', tag: 'Critical', label: 'IndexedDB Persistence (replace localStorage)', detail: '50MB+ per origin, survives browser wipe, binary PDF blob support. SQLite via WASM (wa-sqlite) — one .db file per client. localStorage is a 5MB dead end.' },
+          { status: 'todo', tag: 'Critical', label: 'Fiscal Year Management UI', detail: 'Per-client: open FY, set start/end dates, view/switch between years, FY-scoped reports. Year-end rollover carries retained earnings forward automatically.' },
+          { status: 'todo', tag: 'Critical', label: 'Industry Profile on Client Creation', detail: 'Drives COA default mappings, signal boost table, GST applicability, T4A flag. Profiles: SHORT_TERM_RENTAL, PROFESSIONAL_SERVICES, RETAIL, CONSTRUCTION, RESTAURANT, REAL_ESTATE, E_COMMERCE.' },
+          { status: 'todo', tag: 'Critical', label: 'Period Locking', detail: 'Finalized FY gets locked — no edits to locked periods. Standard professional accounting requirement. Prevents retroactive changes after client sign-off.' },
+          { status: 'todo', tag: 'High', label: 'Cash Flow Statement', detail: 'Indirect method: Net Income ± operating working capital changes ± investing ± financing = Net Change in Cash. Required for complete financial package.' },
+          { status: 'todo', tag: 'High', label: 'Bank Reconciliation Module', detail: 'Side-by-side: book balance (GL) vs bank statement balance. Outstanding cheques + deposits-in-transit list. Reconciliation sign-off. Audit-defensible output.' },
+          { status: 'todo', tag: 'High', label: 'Adjusting Journal Entries (AJEs)', detail: 'Dr/Cr entry screen with COA picker. AJEs flow through to Trial Balance and all reports. Reversal option. Year-end: accruals, depreciation, prepaid amortization.' },
+          { status: 'todo', tag: 'High', label: 'Comparative Reports (P&L + BS)', detail: 'Current vs prior year side-by-side in Income Statement and Balance Sheet. Variance columns in $ and %.' },
+          { status: 'todo', tag: 'High', label: 'Undo / Redo', detail: 'Ctrl+Z / Ctrl+Y for category changes, GST toggle, flag changes. Session-scoped action stack. Required before real accountant use — mistakes happen.' },
+          { status: 'todo', tag: 'High', label: 'Backup / Restore + Import Merge', detail: 'Full ledger backup as downloadable .json or .db. Restore from file. Import merge: detect and skip duplicate transactions when re-importing a statement already in the ledger.' },
         ]
       },
+
+      // ── PHASE 3: CRA COMPLIANCE + PROFESSIONAL OUTPUT ──────────────────────
       {
-        id: 'p2b',
-        label: 'Phase 2B — Operational Intelligence',
-        period: 'Target: May–Aug 2026 · Firm Advantage',
+        id: 'p3',
+        label: 'Phase 3 — CRA Compliance & Professional Output',
+        period: 'Weeks 9–14 · Beta release after this phase',
         accentColor: '#0369a1',
         headerBg: '#f0f9ff',
         progressColor: '#0284c7',
-        icon: 'ph-chart-line-up',
+        icon: 'ph-seal-check',
         iconBg: '#e0f2fe',
         items: [
-          { status: 'todo', tag: 'Medium', label: 'Budget vs Actual', detail: 'Import budget from Excel or enter per COA/period. Variance report: actual vs budget, $ and %, monthly.' },
-          { status: 'todo', tag: 'Medium', label: 'CFO Dashboard per Client', detail: 'Burn rate, runway, quick ratio, current ratio, DSO, DPO at a glance. One-page printable for client meetings.' },
-          { status: 'todo', tag: 'Medium', label: 'Anomaly Detection', detail: 'Duplicate tx alerts, new-payee high-value alerts, amount spikes (3× avg), GST inconsistency flags. Surfaced in UB Needs Review.' },
-          { status: 'todo', tag: 'Medium', label: 'Vendor Intelligence DB (Firm-Level)', detail: 'Shared vendor → COA DB across all 400 clients. Firm-wide rules override client-level rules. Significantly improves first-import accuracy for new clients.' },
-          { status: 'todo', tag: 'Medium', label: 'More Financial Ratios', detail: 'DSO, DPO, EBITDA margin, gross margin %, working capital, interest coverage. CFO-grade metrics.' },
+          { status: 'todo', tag: 'High', label: 'CaseWare Full Working Paper Export', detail: 'TB + JE + AJE + Financial Statements + Notes in CaseWare-compatible ZIP package. Full year-end deliverable from one download.' },
+          { status: 'todo', tag: 'High', label: 'HST-34 Auto-Fill', detail: 'GST Report data flows into CRA HST-34 line items (101 Sales, 105 Collected, 106 ITC, 109 Net). Export printable PDF or CRA NETFILE XML. Quarterly + annual.' },
+          { status: 'todo', tag: 'High', label: 'T4A Generation', detail: 'Flag vendors as T4A recipients. Year-end slips auto-generated with Box 020 (fees for services) and Box 048 (contractor payments). CRA XML export.' },
+          { status: 'todo', tag: 'High', label: 'AR/AP Aging Report', detail: '30/60/90/90+ day aging buckets by vendor/customer. Outstanding balance summary. Collector-ready printable format.' },
+          { status: 'todo', tag: 'Medium', label: 'More Parsers', detail: 'National Bank (6th major bank), Tangerine, Simplii, EQ Bank, Desjardins. Covers ~98% of Canadian client bank accounts.' },
+          { status: 'todo', tag: 'Medium', label: 'FX / USD Transaction Support', detail: 'FX Rate column, Foreign Amount column in grid. CAD equivalent calculated at transaction date. USD bank accounts (BMO US, RBC US, etc.) treated correctly. Required for any client with cross-border spend.' },
+          { status: 'todo', tag: 'Medium', label: 'Extended Grid Columns', detail: 'Match Status (reconciled/unmatched), Split Indicator (transaction split across accounts), Confidence Score visible in grid, Attachments count badge.' },
+          { status: 'todo', tag: 'Medium', label: 'Duplicate Detection', detail: 'Flag transactions with same date + amount + description within a configurable window. Surfaces in Needs Review. Prevents double-counting when statements overlap.' },
+          { status: 'todo', tag: 'Medium', label: 'In-App Onboarding + Tooltips', detail: 'First-run walkthrough for new users. Contextual tooltips on key UI elements. Empty-state guides for each section. Accountant-specific quick-start guide.' },
         ]
       },
+
+      // ── PHASE 4: OPERATIONAL INTELLIGENCE ─────────────────────────────────
       {
-        id: 'p3',
-        label: 'Phase 3 — Platform Scale',
-        period: 'Target: 2027+ · Multi-Firm SaaS',
+        id: 'p4',
+        label: 'Phase 4 — Operational Intelligence',
+        period: 'Weeks 15–20 · Firm competitive advantage',
         accentColor: '#6d28d9',
         headerBg: '#f5f3ff',
         progressColor: '#7c3aed',
-        icon: 'ph-globe',
+        icon: 'ph-chart-line-up',
         iconBg: '#ede9fe',
         items: [
-          { status: 'todo', tag: 'Future', label: 'Client Portal (Tier 2)', detail: 'Read-only client view with annotation, receipt upload, flagging. Email magic link auth. Year-end sign-off. Accountant controls, client annotates but never overrides.' },
-          { status: 'todo', tag: 'Future', label: 'Investment Bookkeeping (ACB)', detail: 'T1 Schedule 3 capital gains tracking. Questrade/Wealthsimple/TD Direct/RBC Direct CSV parsers. DRIP handling. Annual ACB report per security.' },
-          { status: 'todo', tag: 'Future', label: 'Crypto Bookkeeping', detail: 'Coinbase/Kraken/Bitbuy/Newton CSV parsers. On-chain wallet history. ACB per coin. Staking income classification. Annual crypto gain/loss report.' },
-          { status: 'todo', tag: 'Future', label: 'Live Bank Feed (Tier 3)', detail: 'Flinks/Inverite Canadian bank feed API. Webhook receiver → same parser pipeline, real-time. Bill C-37 compliant (Canada open banking 2026-2027).' },
-          { status: 'todo', tag: 'Future', label: 'CRA Letter Analysis (AI)', detail: 'PDF upload → AI identifies type, extracts figures, cross-references client ledger, drafts response. Accountant reviews and sends. High-value differentiator.' },
-          { status: 'todo', tag: 'Future', label: 'AI Memo / Narrative Generator', detail: 'Year-end plain-English financial summary from P&L + BS + ratios. Accountant edits and signs off. CPD-quality client letter output.' },
-          { status: 'todo', tag: 'Future', label: 'QuickBooks Online / Xero Export', detail: 'QBO bank feed import CSV/IIF or REST API. Xero Statement CSV or REST API. For clients already on QBO/Xero needing catch-up bookkeeping.' },
-          { status: 'todo', tag: 'Future', label: 'Multi-Firm SaaS', detail: 'Tenant isolation per accounting firm. Firm onboarding flow. Subscription billing. RoboLedger as a product sold to other accounting firms.' },
+          { status: 'todo', tag: 'Medium', label: 'Budget vs Actual', detail: 'Import budget from Excel or enter per COA/period. Variance report: actual vs budget in $ and %, monthly view. Flags over-budget accounts.' },
+          { status: 'todo', tag: 'Medium', label: 'CFO Dashboard per Client', detail: 'Burn rate, cash runway, quick ratio, current ratio, DSO, DPO, gross margin at a glance. One-page printable for client meetings.' },
+          { status: 'todo', tag: 'Medium', label: 'Anomaly Detection Engine', detail: 'Duplicate tx alerts (same amount + vendor, within 7 days), new high-value payee alerts, amount spikes (3× rolling avg), GST inconsistency flags. All surfaced in UB Needs Review tile.' },
+          { status: 'todo', tag: 'Medium', label: 'Vendor Intelligence DB (Firm-Level)', detail: 'Shared vendor → COA mapping across all 400 clients. Firm rules override client rules override system defaults. Dramatically improves first-import accuracy for new clients.' },
+          { status: 'todo', tag: 'Medium', label: 'More Financial Ratios', detail: 'EBITDA margin, gross margin %, working capital, interest coverage, DSO (Days Sales Outstanding), DPO (Days Payable Outstanding). CFO-grade metrics.' },
+          { status: 'todo', tag: 'Medium', label: 'QBO / Xero Export', detail: 'QuickBooks Online bank feed CSV/IIF or REST API import. Xero Statement CSV or REST API. For clients already on QBO/Xero who need catch-up bookkeeping from RoboLedger.' },
+          { status: 'todo', tag: 'Medium', label: 'Testing & QA Gate (80% coverage)', detail: '80%+ test coverage on categorization engine, parser outputs, COA calculations, GST math. User acceptance testing with 3–5 real accountants before beta launch.' },
         ]
       },
+
+      // ── PHASE 5: PLATFORM SCALE ────────────────────────────────────────────
       {
-        id: 'td',
-        label: 'Technical Debt Register',
-        period: 'Ongoing',
+        id: 'p5',
+        label: 'Phase 5 — Platform Scale',
+        period: '2027+ · Tier 2 & 3 · Multi-Firm SaaS',
         accentColor: '#475569',
         headerBg: '#f8fafc',
         progressColor: '#64748b',
+        icon: 'ph-globe',
+        iconBg: '#f1f5f9',
+        items: [
+          { status: 'todo', tag: 'Future', label: 'Client Portal (Tier 2)', detail: 'Read-only client view with annotation, receipt upload, transaction flagging. Email magic link auth. Year-end digital sign-off. Accountant controls all — client annotates, never overrides.' },
+          { status: 'todo', tag: 'Future', label: 'Investment Bookkeeping (ACB)', detail: 'T1 Schedule 3 capital gains tracking. Questrade/Wealthsimple/TD Direct/RBC Direct CSV parsers. DRIP handling. Annual ACB report per security.' },
+          { status: 'todo', tag: 'Future', label: 'Crypto Bookkeeping', detail: 'Coinbase/Kraken/Bitbuy/Newton CSV + on-chain wallet history. ACB per coin. Staking income classification. Annual gain/loss report. CRA property treatment (2022 guidance).' },
+          { status: 'todo', tag: 'Future', label: 'Live Bank Feed (Tier 3)', detail: 'Flinks/Inverite Canadian bank feed API. Webhook receiver slots into same parser pipeline, real-time. Bill C-37 compliant (Canada open banking 2026–2027). First target: firm operating account.' },
+          { status: 'todo', tag: 'Future', label: 'CRA Letter Analysis (AI)', detail: 'Upload CRA letter PDF → AI identifies type (HST audit, assessment, clearance), extracts figures, cross-references client ledger, drafts response letter. Accountant reviews and sends.' },
+          { status: 'todo', tag: 'Future', label: 'AI Memo / Narrative Generator', detail: 'Year-end plain-English financial summary from P&L + BS + ratios. "Revenue increased 12%..." Accountant edits and signs off. CPD-quality client letter output.' },
+          { status: 'todo', tag: 'Future', label: 'Multi-Firm SaaS', detail: 'Tenant isolation per accounting firm. Firm onboarding + subscription billing. RoboLedger as a product sold to other accounting firms beyond Swift Accounting.' },
+        ]
+      },
+
+      // ── TECHNICAL DEBT ────────────────────────────────────────────────────
+      {
+        id: 'td',
+        label: 'Technical Debt Register',
+        period: 'Addressed progressively alongside phases',
+        accentColor: '#475569',
+        headerBg: '#f8fafc',
+        progressColor: '#94a3b8',
         icon: 'ph-wrench',
         iconBg: '#f1f5f9',
         items: [
-          { status: 'todo', tag: 'Debt', label: 'TD-1: Dual-Layer Architecture', detail: 'TypeScript core (src/core/) never called. Vanilla JS layer is the real runtime. Decision: commit to JS runtime, delete dead TS code after multi-client shell is built cleanly.' },
-          { status: 'todo', tag: 'Debt', label: 'TD-2: localStorage Ceiling (~5MB)', detail: 'Lost on browser wipe, no binary support for PDF blobs. Fix: Migrate to IndexedDB / SQLite via WASM (wa-sqlite).' },
-          { status: 'todo', tag: 'Debt', label: 'TD-3: Monolithic app.js (4,200+ lines)', detail: 'Handles UI, state, events, parsing, reporting all in one file. Fix: Decompose progressively — extract WorkspaceManager, LedgerController, AccountManager.' },
-          { status: 'todo', tag: 'Debt', label: 'TD-4: ScoringEngine Mocked', detail: 'src/brain/scoring.ts returns 0 for all 5 dimensions. Fix: Bridge to call window.RoboLedger.SignalFusionEngine, or port SignalFusionEngine to TS.' },
-          { status: 'done', tag: 'Fixed', label: 'TD-5: Dead Dependencies Cleaned', detail: 'Tabulator CSS, AG-Grid CSS fragments removed. npm pruned.' },
-          { status: 'done', tag: 'Fixed', label: 'TD-6: PDF Highlight Y-Coord Fixed', detail: 'DocumentViewer.jsx uses page.getViewport({ scale: 1.0 }).height as unscaled reference for correct Y-inversion.' },
+          { status: 'todo', tag: 'Debt', label: 'TD-1: Dual-Layer Architecture', detail: 'TypeScript core (src/core/) is architecturally correct but never called at runtime. Vanilla JS (app.js, ledger.core.js) is the real engine. Decision: commit to JS runtime, delete dead TS after multi-client shell ships.' },
+          { status: 'todo', tag: 'Debt', label: 'TD-2: localStorage Ceiling', detail: '~5MB limit, wiped on browser clear, no binary blob support. Fix: Migrate to IndexedDB / SQLite via WASM (wa-sqlite) in Phase 2.' },
+          { status: 'todo', tag: 'Debt', label: 'TD-3: Monolithic app.js (4,200+ lines)', detail: 'UI, state, events, parsing, reporting all in one file. Merge conflicts are constant. Fix: decompose progressively into WorkspaceManager, LedgerController, AccountManager, ReportEngine.' },
+          { status: 'todo', tag: 'Debt', label: 'TD-4: ScoringEngine Mocked', detail: 'src/brain/scoring.ts returns 0 for all 5 dimensions — has never been real. Fix: bridge to window.RoboLedger.SignalFusionEngine, or port SignalFusionEngine to TS.' },
+          { status: 'done', tag: 'Fixed', label: 'TD-5: Dead Dependencies Cleaned', detail: 'Tabulator CSS and AG-Grid CSS fragments referenced but never installed. Removed from imports, npm pruned.' },
+          { status: 'done', tag: 'Fixed', label: 'TD-6: PDF Highlight Y-Coord Fixed', detail: 'DocumentViewer.jsx now uses page.getViewport({ scale: 1.0 }).height as the unscaled reference for correct Y-axis inversion on PDF highlight boxes.' },
         ]
       },
     ];
@@ -2924,16 +2975,17 @@
           </div>
         </div>
 
-        <!-- Vision Summary -->
+        <!-- Vision + Release Strategy -->
         <div style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 18px;margin-bottom:20px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
             <i class="ph ph-target" style="font-size:15px;color:var(--primary-color,#2563eb);"></i>
             <span style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);text-transform:uppercase;letter-spacing:0.4px;">Goal</span>
           </div>
-          <p style="font-size:13px;color:var(--text-primary,#0f172a);line-height:1.6;margin:0 0 10px 0;">
-            The operating system for accounting firms — 95% automation, 5% human oversight. 400 clients, one platform, audit-ready output.
+          <p style="font-size:13px;color:var(--text-primary,#0f172a);line-height:1.6;margin:0 0 12px 0;">
+            The operating system for accounting firms — 95% automation, 5% human oversight. 400 clients, one platform, CRA-ready output.
           </p>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;border-top:1px solid var(--border-color,#e2e8f0);padding-top:10px;">
+          <!-- Tier breakdown -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;border-top:1px solid var(--border-color,#e2e8f0);padding-top:10px;margin-bottom:12px;">
             <div>
               <div style="font-size:10px;font-weight:700;color:var(--primary-color,#2563eb);text-transform:uppercase;margin-bottom:3px;">Tier 1 · Now</div>
               <div style="font-size:11px;color:var(--text-secondary,#475569);">Drop PDFs → Auto-categorize → 8 reports → CaseWare export</div>
@@ -2945,6 +2997,22 @@
             <div>
               <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;margin-bottom:3px;">Tier 3 · Long-Term</div>
               <div style="font-size:11px;color:var(--text-secondary,#475569);">Live bank feed (Flinks) · CRA letter analysis · Real-time bookkeeping</div>
+            </div>
+          </div>
+          <!-- Release milestones -->
+          <div style="border-top:1px solid var(--border-color,#e2e8f0);padding-top:10px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Release Strategy</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+              ${milestones.map((m, i) => {
+                const colors = ['#2563eb','#d97706','#16a34a'];
+                const bgs    = ['#eff6ff','#fffbeb','#f0fdf4'];
+                const borders = ['#bfdbfe','#fde68a','#bbf7d0'];
+                return `<div style="background:${bgs[i]};border:1px solid ${borders[i]};border-radius:6px;padding:8px 10px;">
+                  <div style="font-size:12px;font-weight:800;color:${colors[i]};margin-bottom:2px;">${m.label}</div>
+                  <div style="font-size:10px;color:var(--text-tertiary,#94a3b8);margin-bottom:2px;">${m.gate}</div>
+                  <div style="font-size:11px;font-weight:600;color:var(--text-secondary,#475569);">${m.audience}</div>
+                </div>`;
+              }).join('')}
             </div>
           </div>
         </div>
