@@ -36,6 +36,10 @@ SMART PARSING RULES:
         const _statementId = 'SCOTIASAV-' + _statementYear + _statementMonth;
         let _seqNum = 0;
 
+        // ── Store on this so processTransaction (a method) can access it ─────
+        this._auditStatementId = _statementId;
+        this._auditSeqNum = 0;
+
         // ── Audit helper — call this when building each transaction ──────────
         const _makeAuditRef = (rawLine, lineMetadata) => {
             _seqNum++;
@@ -266,6 +270,13 @@ SMART PARSING RULES:
       description = description.replace(/^(CHQ\s+\d+)(\s+)/i, '$1,$2');
     }
 
+    // ── Audit identity (uses state set by parseWithRegex) ─────────────────
+    const _stmtId  = this._auditStatementId || 'SCOTIASAV-UNK';
+    const _seqN    = ++this._auditSeqNum;
+    const _auditResult = typeof this.buildAuditData === 'function'
+        ? this.buildAuditData(fullLine, this.constructor.name, { statementId: _stmtId, lineNumber: _seqN })
+        : { pdfLocation: null, audit: null };
+
     const tx = {
       date: isoDate,
       description: description,
@@ -279,7 +290,9 @@ SMART PARSING RULES:
       _brand: 'Scotiabank',
       _bank: 'Scotiabank',
       _tag: 'Savings',
-      audit: meta ? { page: meta.page, y: meta.y, height: meta.height } : null,
+      parser_ref: _stmtId + '-' + String(_seqN).padStart(3, '0'),
+      pdfLocation: _auditResult.pdfLocation || (meta ? { page: meta.page || 1, top: meta.y || 0, left: 0, width: 500, height: meta.height || 12 } : null),
+      audit: _auditResult.audit || (meta ? { page: meta.page, y: meta.y, height: meta.height } : null),
       rawText: this.cleanRawText(fullLine), // Capture full uncleaned multi-line string
       refCode: refCode
     };

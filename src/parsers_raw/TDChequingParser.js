@@ -133,6 +133,17 @@ SMART PARSING RULES:
                                 lineIndex: idx
                             };
                         }
+                        // ── Audit identity parity (business format path) ──────────────
+                        if (!extracted.parser_ref) {
+                            const _stId = this._getStmtId(statementText);
+                            const _seqN = ++this._txSeq;
+                            extracted.parser_ref = _stId + '-' + String(_seqN).padStart(3, '0');
+                            const _ar = typeof this.buildAuditData === 'function'
+                                ? this.buildAuditData(trimmed, this.constructor.name, { statementId: _stId, lineNumber: _seqN })
+                                : { pdfLocation: null, audit: null };
+                            if (!extracted.pdfLocation) extracted.pdfLocation = _ar.pdfLocation;
+                            if (!extracted.audit) extracted.audit = _ar.audit;
+                        }
                         transactions.push(extracted);
                     }
                 }

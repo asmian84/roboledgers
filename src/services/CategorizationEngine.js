@@ -215,6 +215,22 @@ const VENDOR_PATTERNS = [
   { type: 'ACCOUNTING', conf: 'MEDIUM', re: /\bCPA\b|\bCHARTERED\s*PROF|\bACCOUNT.*FIRM\b|\bTAX\s*PREP(ARATION)?\b|\bBOOKKEEP\b/i },
   { type: 'ACCOUNTING', conf: 'HIGH',   re: /\bALLISON\s*ASSOCIATES\b/i },
 
+  // ── ATM / CASH WITHDRAWALS (owner draws — not regular business expenses) ───
+  // Business rule: only the company owner draws cash from ATMs.
+  // → Route to 9970 (Uncategorized) with FLAG_FOR_REVIEW so accountant can split
+  //   between shareholder draw (2650 loan back OR 8400 mgmt remuneration) and
+  //   legitimate petty-cash reimbursements.
+  // Patterns: "ATM WITHDRAWAL", "CASH WITHDRAWAL", "ABM WITHDRAWAL", "INTERAC ATM",
+  //           "PTX ATM", "WHITE LABEL ATM", bank-branded ATM withdrawals.
+  // Note: "OTHER BANK ABM WITHDRAWAL" (551x in scan) was previously routed 7700 (bank fee)
+  //       but represents cash draws, not fees. Fee variant is just "ATM FEE" (handled below).
+  { type: 'ATM_WITHDRAWAL', conf: 'HIGH', re: /ATM\s*WITHDRAWAL|CASH\s*WITHDRAWAL|ABM\s*WITHDRAWAL/i },
+  { type: 'ATM_WITHDRAWAL', conf: 'HIGH', re: /INTERAC\s*ATM|INTERAC\s*CASH\b/i },
+  { type: 'ATM_WITHDRAWAL', conf: 'HIGH', re: /\bATM\s*WD\b|\bATM\s*DEBIT\b|\bATM\s*CASH\b/i },
+  { type: 'ATM_WITHDRAWAL', conf: 'HIGH', re: /WHITE\s*LABEL\s*ATM|GENERIC\s*ATM/i },
+  // Bank-branded ATM cash (RBC, TD, BMO, Scotia, CIBC, ATB, etc.)
+  { type: 'ATM_WITHDRAWAL', conf: 'HIGH', re: /\b(?:RBC|TD|BMO|SCOTIABANK|CIBC|ATB|HSBC|TANGERINE|EQ\s*BANK)\s*(?:ATM|ABM)\b/i },
+
   // ── BANK FEES / CHARGES ───────────────────────────────────────────────────
   // Scan confirmed: PURCHASE INTEREST (2937x→7700), CASH ADVANCE INTEREST (913x→7700)
   // OTHER BANK ABM WITHDRAWAL (551x→7700), OVERDRAFT INTEREST (333x→7700)
@@ -505,6 +521,7 @@ const ROUTING_TABLE = {
   COURIER:            { cogs: '5700', overhead: '6550', bs: null,              defaultCOGS: false, gifi: '8550', logic: 'Product freight → 5700 COGS; document courier → 6550' },
   OFFICE_SVC:         { cogs: null,   overhead: '8500', bs: null,              defaultCOGS: false, gifi: '9270', logic: 'Office services (shredding, records mgmt) → miscellaneous' },
   RENT:               { cogs: null,   overhead: '8720', bs: null,              defaultCOGS: false, gifi: '8810', logic: 'Rent/lease → 8720 (equipment lease → 7000)' },
+  ATM_WITHDRAWAL:     { cogs: null,   overhead: null,   bs: null,              defaultCOGS: false, gifi: null,   logic: 'ATM/cash withdrawal — owner draw. Route to 9970 and FLAG_FOR_REVIEW. Accountant splits: shareholder draw (2650/8400) vs petty-cash reimbursement.' },
   BANK_FEE:           { cogs: null,   overhead: '7700', bs: null,              defaultCOGS: false, gifi: '8710', logic: 'Always overhead — interest and bank charges' },
   INTEREST_INCOME:    { cogs: null,   overhead: null,   bs: null,   rev: '4860', defaultCOGS: false, gifi: '8710', logic: 'Deposit interest = INCOME → 4860 Interest income' },
   CASHBACK:           { cogs: null,   overhead: '7700', bs: null,              defaultCOGS: false, gifi: '8710', logic: 'Cash back/reward = contra bank charge → 7700' },
@@ -754,6 +771,26 @@ class CategorizationEngine {
         needs_review:   true,
         guard_blocked:  false,
         flag:           null,
+      };
+    }
+
+    // ATM_WITHDRAWAL: owner cash draw — route to 9970 (uncategorized) for accountant review.
+    // The accountant will split between:
+    //   - Shareholder draw / loan (2650 Shareholder Loan, or 8400 Mgmt Remuneration)
+    //   - Petty cash reimbursement (if receipts are provided)
+    // We deliberately do NOT auto-assign 2650 because that account is MANUAL_ONLY guarded.
+    if (vendorType === 'ATM_WITHDRAWAL') {
+      return {
+        coa_code:        '9970',   // Uncategorized — needs accountant review
+        vendor_type:     vendorType,
+        confidence:      'HIGH',   // We're certain this is an ATM withdrawal
+        conf_score:      0.95,
+        method:          'deterministic',
+        matched_pattern: matchedPattern,
+        routing_logic:   'ATM/cash withdrawal — only owner draws cash. Accountant must split: shareholder draw (2650/8400) vs petty-cash reimbursement with receipts.',
+        needs_review:    true,
+        guard_blocked:   false,
+        flag:            'ATM_OWNER_DRAW',
       };
     }
 
