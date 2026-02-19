@@ -3138,7 +3138,8 @@
 
   function getAccountWorkspaceHeaderHTML() {
     const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
-    const accounts = window.RoboLedger.Accounts.getAll();
+    const accounts = (window.RoboLedger.Accounts.getActive?.() || window.RoboLedger.Accounts.getAll())
+      .slice().sort((a, b) => (a.ref || a.name || '').localeCompare(b.ref || b.name || ''));
     const allTxns = window.RoboLedger.Ledger.getAll(); // MOVED UP: declare before use
 
     // CRITICAL: Don't render header at all if no transactions exist (empty grid)
@@ -3297,7 +3298,8 @@
   }
 
   function getFilterToolbarHTML() {
-    const accounts = window.RoboLedger.Accounts.getAll();
+    const accounts = (window.RoboLedger.Accounts.getActive?.() || window.RoboLedger.Accounts.getAll())
+      .slice().sort((a, b) => (a.ref || a.name || '').localeCompare(b.ref || b.name || ''));
     const refPrefix = UI_STATE.refPrefix || 'CHQ1';
 
     return `

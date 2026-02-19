@@ -357,7 +357,8 @@ window.ubDrillAccount = function(accountId, accountRef) {
 
 window.updateUtilityBar = function () {
     const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
-    const accounts = window.RoboLedger?.Accounts?.getAll() || [];
+    const accounts = (window.RoboLedger?.Accounts?.getActive?.() || window.RoboLedger?.Accounts?.getAll() || [])
+        .slice().sort((a, b) => (a.ref || a.name || '').localeCompare(b.ref || b.name || ''));
 
     console.log(`[UB] updateUtilityBar() called — ${allTxns.length} txns, ${accounts.length} accounts`);
     if (allTxns.length === 0) { console.log('[UB] No transactions — skipping render'); return; }
@@ -533,6 +534,7 @@ window.updateUtilityBar = function () {
     const badgesContainer = document.getElementById('util-account-badges');
     if (!badgesContainer) return;
 
+    // accounts is already getActive() + sorted; filter is belt-and-suspenders
     const activeAccounts = accounts.filter(acc =>
         allTxns.some(t => t.account_id === acc.id)
     );
