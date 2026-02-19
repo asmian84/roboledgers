@@ -327,7 +327,7 @@ window.RoboLedger = (function () {
                 state.transactions = parsed.transactions || {};
                 state.sigIndex = parsed.sigIndex || {};
                 state.accounts = parsed.accounts || [];
-                state.coa = parsed.coa || DEFAULT_COA_TEMPLATE;
+                state.coa = parsed.coa || {};
 
                 console.log(`[LEDGER] Loaded ${Object.keys(state.transactions).length} transactions from storage`);
 
@@ -363,7 +363,7 @@ window.RoboLedger = (function () {
         state.transactions = {};
         state.sigIndex = {};
         state.accounts = [];
-        state.coa = DEFAULT_COA_TEMPLATE;
+        state.coa = {};
         if (!saved) {
             console.log(`[LEDGER] No data at key: ${key} — starting fresh`);
             return;
@@ -373,7 +373,7 @@ window.RoboLedger = (function () {
             state.transactions = parsed.transactions || {};
             state.sigIndex     = parsed.sigIndex     || {};
             state.accounts     = parsed.accounts     || [];
-            state.coa          = parsed.coa          || DEFAULT_COA_TEMPLATE;
+            state.coa          = parsed.coa          || {};
             if (window.RuleEngine?.updateTransactionContext) {
                 window.RuleEngine.updateTransactionContext(Object.values(state.transactions));
             }
