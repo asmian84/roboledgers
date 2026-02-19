@@ -34,13 +34,18 @@ const VENDOR_PATTERNS = [
   { type: 'GOV_REMIT_ITAX',    conf: 'HIGH',   re: /INCOME\s*TAX\s*(INSTAL|INSTALLMENT|PAYMENT)|TAX\s*INSTAL|COMMERCIAL\s*TAXES?\s*TXINS|FEDERAL\s*TAX\s*INSTAL|PROV.*TAX\s*INSTAL/i },
   { type: 'GOV_REMIT',         conf: 'HIGH',   re: /RECEIVER\s*GEN(ERAL)?|CANADA\s*REVENUE\s*AGENCY|CRA\s*(PAYMENT|REMIT|INST)|REVENUE\s*CANADA/i },
   { type: 'GOV_WCB',           conf: 'HIGH',   re: /\bWCB\b|WORKERS\s*COMP(ENSATION)?|\bWSIB\b|\bWORKSAFE\b|WORKPLACE\s*SAFETY/i },
+  // WORKERS COMPENSATION confirmed 10x in scan
+  { type: 'GOV_WCB',           conf: 'HIGH',   re: /WORKERS\s*COMPENSATION\s*(?:CALGARY|BOARD|AB|BC|ON|SK|MB)/i },
   { type: 'GOV_PROV',          conf: 'MEDIUM', re: /PROV(INCIAL)?\s*TREAS|MINISTER\s*OF\s*FINANCE|PROVINCIAL\s*TAX|AB\s*FINANCE|ATSE\s*LEARNING/i },
 
   // ── FUEL (gas stations) ────────────────────────────────────────────────────
+  // Named stations (scan confirmed: SHELL 1182x, PETRO-CANADA 828x, CO-OP 193x+, COSTCO GAS 179x+)
   { type: 'FUEL', conf: 'HIGH',   re: /\bFAS\s*GAS\b/i },
   { type: 'FUEL', conf: 'HIGH',   re: /CO-?OP\s*GAS\b|CALG\s*CO-?OP\s*GAS|CO-?OP\s*FUEL/i },
   { type: 'FUEL', conf: 'HIGH',   re: /PETRO-?CAN(ADA)?|PETROCAN/i },
   { type: 'FUEL', conf: 'HIGH',   re: /\bESSO\b|\bIMPERIAL\s*OIL\b/i },
+  // SHELL alone 1182x in scan (format: "SHELL C80113 _F", "SHELL CALGARY AB", "SHELL FLYING J")
+  { type: 'FUEL', conf: 'HIGH',   re: /\bSHELL\s*(?:C\d+|OIL|FLYING|CALGARY|AIRDRIE|VERNON|KELOWNA|COCHRANE|EDMONTON|\d)|\bSHELL\s*C\d/i },
   { type: 'FUEL', conf: 'HIGH',   re: /\bSHELL\b.*(?:GAS|FUEL|STATION|CARDLOCK)|(?:GAS|FUEL|STATION|CARDLOCK).*\bSHELL\b/i },
   { type: 'FUEL', conf: 'HIGH',   re: /\bHUSKY\b.*(?:GAS|FUEL|STATION|CARDLOCK)|(?:GAS|FUEL|STATION).*\bHUSKY\b/i },
   { type: 'FUEL', conf: 'HIGH',   re: /\bCHEVRON\b.*(?:GAS|FUEL|STATION)|(?:GAS|FUEL).*\bCHEVRON\b/i },
@@ -52,7 +57,10 @@ const VENDOR_PATTERNS = [
   { type: 'FUEL', conf: 'HIGH',   re: /\bFLYING\s*J\b/i },
   { type: 'FUEL', conf: 'HIGH',   re: /CARDLOCK(?!\s*SERVICES?)|CARD\s*LOCK\s*FUEL/i },
   { type: 'FUEL', conf: 'HIGH',   re: /CHINIKI\s*GAS\b|\bSPEEDWAY\s*FUEL\b|\bSUNOCO\b/i },
-  // Training data: SAFEWAY GAS BAR (185x), FILL N' GO GAS (122x), COSTCO GAS (139x), TSUU T'INA (86x), HERITAGE POINTE GAS (45x), DALHOUSIE HUSKY (35x), HI HO GAS (39x)
+  // Training data: SAFEWAY GAS BAR (185x), FILL N' GO GAS (122x), COSTCO GAS (179x+), TSUU T'INA (139x+)
+  // BARRY BEECROFT FUEL DIST (192x — Penticton bulk fuel distributor), SHELL FLYING J (139x)
+  { type: 'FUEL', conf: 'HIGH',   re: /BARRY\s*BEECROFT\s*FUEL/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /SHELL\s*FLYING\s*J/i },
   { type: 'FUEL', conf: 'HIGH',   re: /SAFEWAY\s*GAS\s*BAR|SAFEWAY\s*GAS/i },
   { type: 'FUEL', conf: 'HIGH',   re: /FILL\s*N'?\s*GO\s*GAS|FILL\s*AND\s*GO\s*GAS/i },
   { type: 'FUEL', conf: 'HIGH',   re: /COSTCO\s*GAS|COSTCO\s*FUEL/i },
@@ -132,9 +140,35 @@ const VENDOR_PATTERNS = [
   { type: 'BLDG_SUPPLY', conf: 'HIGH', re: /\bCANMORE\s*(HOME|PAINT|HARDWARE)\b|\bBANFF\s*HARDWARE\b/i },
   { type: 'BLDG_SUPPLY', conf: 'HIGH', re: /\bEECOL\s*ELECTRIC\b/i },
 
+  // ── EQUIPMENT PURCHASES / CAPITAL (→ 1768 Equipment BS) ─────────────────
+  // Training: CALMONT EQUIPMENT (59x→1768), ARN'S EQUIPMENT (72x combined→1768)
+  // MEC MOUNTAIN EQUIPMENT CO-OP (53x+→1768), CERVUS EQUIPMENT (16x→1768)
+  // KMS TOOLS & EQUIPMENT (14x→1768), ARMOUR EQUIPMENT SALES (14x→1768)
+  // CONAKER EQUIPMENT (14x→1768), CROWN FOOD EQUIPMENT (6x→1768)
+  // NOTE: Equipment purchases >$1,500 typically capital (1768); <$1,500 → 8900 shop supplies
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /\bCALMONT\s*EQUIPMENT\b/i },
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /ARN'?S\s*EQUIPMENT\b|\bARNS\s*EQUIPMENT\b/i },
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /\bMEC\s*MOUNTAIN\s*EQUIPMENT\b|\bMOUNTAIN\s*EQUIPMENT\s*CO-?OP\b|\bMOUNTAIN\s*EQUIPMENT\s*COMPAN\b/i },
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /\bCERVUS\s*EQUIPMENT\b/i },
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /\bKMS\s*TOOLS\s*(?:\$|&)?\s*EQUIPMENT\b/i },
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /\bARMOUR\s*EQUIPMENT\s*SALES\b/i },
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /\bCONAKER\s*EQUIPMENT\b/i },
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /\bCROWN\s*FOOD\s*EQUIPMENT\b|\bHOBART\s*FOOD\s*EQUIPMENT\b|\bRUSSELL\s*FOOD\s*EQUIPMENT\b/i },
+  { type: 'EQUIP_PURCHASE', conf: 'HIGH', re: /\bHAMMER\s*EQUIPMENT\b|\bDEL\s*EQUIPMENT\b/i },
+  // Cooper Equipment Rentals = equipment RENTAL not purchase — handled by EQUIP_RENTAL below
+
   // ── INDUSTRIAL / SHOP SUPPLIES ────────────────────────────────────────────
+  // Training: MARK'S WORK WEARHOUSE (30x+→9750 in scan, but it's PPE/workwear = 8900/5335 shop supplies)
+  // PRINCESS AUTO (93x→8700 in scan, but it's tools/hardware = 8900 shop supplies or 5335 COGS)
+  // CARLSON BODY SHOP SUPPLY (24x→8900), ABC SUPPLY CO. (10x→8700)
   { type: 'INDUSTRIAL_SUPPLY', conf: 'HIGH', re: /\bACKLANDS[-\s]GRAINGER\b|\bGRAINGER\b/i },
   { type: 'INDUSTRIAL_SUPPLY', conf: 'HIGH', re: /\bFASCO\b|\bFASTENAL\b|\bMSC\s*INDUSTRIAL\b/i },
+  { type: 'INDUSTRIAL_SUPPLY', conf: 'HIGH', re: /\bMARK'?S\s*WORK\s*WEARHOUSE\b/i },
+  { type: 'INDUSTRIAL_SUPPLY', conf: 'HIGH', re: /\bPRINCESS\s*AUTO\b/i },
+  { type: 'INDUSTRIAL_SUPPLY', conf: 'HIGH', re: /\bCARLSON\s*BODY\s*SHOP\s*SUPPLY\b/i },
+  { type: 'INDUSTRIAL_SUPPLY', conf: 'HIGH', re: /\bABC\s*SUPPLY\s*CO\b/i },
+  { type: 'INDUSTRIAL_SUPPLY', conf: 'HIGH', re: /\bBOLT\s*SUPPLY\s*HOUSE\b|\bWWG\s*\/\s*TOTALINE\b/i },
+  { type: 'INDUSTRIAL_SUPPLY', conf: 'HIGH', re: /\bWORK\s*AUTHORITY\b/i },
 
   // ── VEHICLE REPAIR / MAINTENANCE ──────────────────────────────────────────
   { type: 'VEHICLE_REPAIR', conf: 'HIGH', re: /\bCANADIAN\s*TIRE\b.*AUTO|\bCT\s*AUTO\b/i },
@@ -152,18 +186,48 @@ const VENDOR_PATTERNS = [
   { type: 'VEHICLE_INSUR', conf: 'HIGH', re: /VEHICLE\s*(INSUR|REGISTR|LICEN)|MOTOR\s*VEHICLE\s*REGISTR/i },
 
   // ── LEGAL FEES ────────────────────────────────────────────────────────────
+  // Scan: RELIANCE LEGAL GROUP LLP (3x→7890), SHAWN MALIK LEGAL FEES (8x→7890)
+  { type: 'LEGAL', conf: 'HIGH',   re: /\bRELIANCE\s*LEGAL\s*GROUP\b|\bSHAWN\s*MALIK\s*LEGAL\b/i },
   { type: 'LEGAL', conf: 'MEDIUM', re: /\w+\s*(?:LAW\s*FIRM|\bLLP\b|\bPLC\b)|\bBARRISTERS?\b|\bSOLICITOR\b|\bNOTARY\b|\bLEGAL\s*FEES?\b/i },
 
   // ── ACCOUNTING / PROFESSIONAL FEES ────────────────────────────────────────
+  // Training: CALGARY AGGREGATE RECYCLI (529x→8700 — aggregate/concrete supplier, actually BLDG_SUPPLY)
+  // SIEGBERT STEEL (114x→8700), LUX WINDOWS & GLASS (91x→8700), CYCLONE DIAMOND PRODUCTS (87x→8700)
+  // HUSQVARNA CONSTRUCTION PRODUCTS (83x→8700), A-APOLLO WINDOWS & DOORS (68x→8700)
+  // NOTE: 8700 in scan is used as catch-all for "professional and financial services" category
+  //       Many of these are actually building supplies (BLDG_SUPPLY) or industrial (INDUSTRIAL_SUPPLY)
+  // PAYPAL *ZOOMVIDEOCO (71x→8700) = Zoom = SOFTWARE_SAAS (already handled)
+  // Genuine professional fees: VIRTUAL GURUS (51x), CORTEX BUSINESS SOLUTION (12x→8700)
+  // FIGMA (12x→8700 = design software = SOFTWARE_SAAS), INVOICE2GO (14x→8700 = billing software)
+  // AMAZON WEB SERVICES (29x→8700 = cloud hosting = SOFTWARE_SAAS)
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bFIGMA\b/i },           // design tool
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bINVOICE2GO\b/i },      // invoicing software
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bAMAZON\s*WEB\s*SERVICES\b|\bAWS\b(?:\s*AMAZON)?\b/i },
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bCORTEX\s*BUSINESS\s*SOLUTION\b/i },
+  // Building-supply style vendors miscategorized as "professional" in source data:
+  { type: 'BLDG_SUPPLY',   conf: 'HIGH', re: /\bCALGARY\s*AGGREGATE\s*RECYCL\b/i },  // aggregate/gravel
+  { type: 'BLDG_SUPPLY',   conf: 'HIGH', re: /\bSIEGBERT\s*STEEL\b/i },
+  { type: 'BLDG_SUPPLY',   conf: 'HIGH', re: /\bLUX\s*WINDOWS\s*(?:&|AND)\s*GLASS\b/i },
+  { type: 'BLDG_SUPPLY',   conf: 'HIGH', re: /\bA-APOLLO\s*WINDOWS\b|\bA\s*APOLLO\s*WINDOWS\b/i },
+  { type: 'BLDG_SUPPLY',   conf: 'HIGH', re: /\bCYCLONE\s*DIAMOND\s*PRODUCTS\b/i },
+  { type: 'BLDG_SUPPLY',   conf: 'HIGH', re: /\bHUSQVARNA\s*CONSTRUCTION\b/i },
+  { type: 'BLDG_SUPPLY',   conf: 'HIGH', re: /\bZYTECH\s*BLDG\s*SYSTEM\b/i },
   { type: 'ACCOUNTING', conf: 'MEDIUM', re: /\bCPA\b|\bCHARTERED\s*PROF|\bACCOUNT.*FIRM\b|\bTAX\s*PREP(ARATION)?\b|\bBOOKKEEP\b/i },
   { type: 'ACCOUNTING', conf: 'HIGH',   re: /\bALLISON\s*ASSOCIATES\b/i },
 
   // ── BANK FEES / CHARGES ───────────────────────────────────────────────────
+  // Scan confirmed: PURCHASE INTEREST (2937x→7700), CASH ADVANCE INTEREST (913x→7700)
+  // OTHER BANK ABM WITHDRAWAL (551x→7700), OVERDRAFT INTEREST (333x→7700)
+  // INTEREST CHARGES-PURCH (127x→7700), OTHER BANK FEES (105x→7700), CASH INTEREST (62x→7700)
+  // LOAN INTEREST (23x→7700), RETAIL INTEREST (27x→7700), INTEREST CHARGES (14x→7700)
   { type: 'BANK_FEE', conf: 'HIGH', re: /SERVICE\s*CHARGE|MONTHLY\s*(FEE|CHARGE)|ACCOUNT\s*(FEE|MAINTENANCE)|MAINT(ENANCE)?\s*FEE/i },
   { type: 'BANK_FEE', conf: 'HIGH', re: /\bNSF\s*FEE\b|\bOVERDRAFT\s*(FEE|CHARGE|INTEREST)\b/i },
   { type: 'BANK_FEE', conf: 'HIGH', re: /\bATM\s*FEE\b|\bINTERAC\s*FEE\b|\bWIRE\s*FEE\b/i },
   { type: 'BANK_FEE', conf: 'HIGH', re: /\bOFI\b|\bONLINE\s*BANKING\s*FEE\b/i },
-  { type: 'BANK_FEE', conf: 'HIGH', re: /PURCHASE\s*INTEREST|INTEREST\s*(CHARGE|CHARGED)/i },
+  { type: 'BANK_FEE', conf: 'HIGH', re: /PURCHASE\s*INTEREST|INTEREST\s*(CHARGE[SD]?|CHARGES-PURCH|CHARGES-C)/i },
+  { type: 'BANK_FEE', conf: 'HIGH', re: /CASH\s*ADVANCE\s*INTEREST|RETAIL\s*INTEREST/i },
+  { type: 'BANK_FEE', conf: 'HIGH', re: /OTHER\s*BANK\s*(FEE|ABM\s*WITHDRAWAL|FEES)/i },
+  { type: 'BANK_FEE', conf: 'HIGH', re: /\bLOAN\s*INTEREST\b|\bCASH\s*INTEREST\b/i },
   // Deposit interest (CREDIT on savings) = interest INCOME, not bank fee
   { type: 'INTEREST_INCOME', conf: 'HIGH', re: /DEPOSIT\s*INTEREST|INTEREST\s*(CREDIT(ED)?|EARNED|PAID|INCOME)|SAVINGS\s*INTEREST|INT\s*PAID/i },
   // Cash back / rewards = contra income, not bank charge
@@ -213,6 +277,18 @@ const VENDOR_PATTERNS = [
   { type: 'MEALS', conf: 'HIGH',   re: /\bCOMMUNITY\s*NATURAL\s*FOODS\b/i },
   { type: 'MEALS', conf: 'HIGH',   re: /\bAMARANTH\s*WHOLE\s*FOODS\b/i },
   { type: 'MEALS', conf: 'HIGH',   re: /\bMONOGRAM\s*COFFEE\b|SQ\s*\*MONOGRAM\b/i },
+  // Additional from scan: CINNAMON INDIAN CUISINE (59x), THRIFTY FOODS (57x — grocery chain = meals context)
+  // PHILOSAFY COFFEE (43x), DEVILLE COFFEE (37x), PLATFORM CAFE (40x), THE DAIRY LANE CAFE (39x)
+  // NASH RESTAURANT (34x), LA JAWAB INDIAN (40x), ALI BABA KABOB (40x), MADRAS MAPLE CAFE (48x)
+  // PAWS PET FOOD (37x — skip, likely personal), BLUSH LANE ORGANIC (26x — specialty grocery, skip)
+  { type: 'MEALS', conf: 'HIGH',   re: /\bCINNAMON\s*INDIAN\s*CUISINE\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bPHILOSAFY\s*COFFEE\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bDEVILLE\s*COFFEE\b|SQ\s*\*DEVILLE\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bPLATFORM\s*CAFE\b|SQ\s*\*PLATFORM\s*CAFE\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bTHE\s*DAIRY\s*LANE\s*CAFE\b|\bDAIRY\s*LANE\s*CAFE\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bTHE\s*NASH\s*RESTAURANT\b|\bNASH\s*RESTAURANT\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bLA\s*JAWAB\b|\bALI\s*BABA\s*KABOB\b/i },
+  { type: 'MEALS', conf: 'HIGH',   re: /\bMADRAS\s*MAPLE\s*CAFE\b/i },
   { type: 'MEALS', conf: 'MEDIUM', re: /RESTAURANT|BISTRO|BRASSERIE|TAVERN|\bCAFE\b|\bCAFÉ\b|\bDINING\b|\bPUB\b/i },
 
   // ── SOFTWARE / SaaS (capitalized or expensed depending on threshold) ──────
@@ -232,6 +308,12 @@ const VENDOR_PATTERNS = [
   { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bSLACK\b(?:\s*TECHNOLOGIES)?\b/i },
   { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bHUBSPOT\b/i },
   { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bASANA\b|\bNOTION\b|\bCLICKUP\b|\bMONDAY\.COM\b|\bBASECAMP\b/i },
+  // Scan: FRESHBOOKS (25x→7752 = USD billed, still software), 2NDSITE FRESHBOOKS same
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bFRESHBOOKS\b|2NDSITE\s*FRESHBOOKS\b/i },
+  // LOOKA LOGO MAKER (12x→7752 = design/branding software)
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bLOOKA\s*LOGO\s*MAKER\b|\bLOOKA\b/i },
+  // BLENDER MARKET (13x→7752 = 3D asset marketplace = software)
+  { type: 'SOFTWARE_SAAS', conf: 'HIGH', re: /\bBLENDER\s*MARKET\b/i },
 
   // ── SUBSCRIPTIONS / MEMBERSHIPS (SaaS billed monthly, 6800) ─────────────
   // Training: OPENAI *CHATGPT (78x→6800), PELOTON* MEMBERSHIP (91x→6800), SQUARESPACE (156x→7752/6800)
@@ -255,6 +337,20 @@ const VENDOR_PATTERNS = [
   { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bKEEPER\s*SECURITY\s*(?:COM\.?)?\b|KEEPERSECURITY\b/i },
   { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bGODADDY\b(?:\.COM\s*CANADA)?\b/i },
   { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bVIVINT\s*(?:CANADA)?\b/i },
+  // Additional from scan: LOOM (3x→6800), PATREON (10x→6800), COSMOLEX (7x→6800 legal practice mgmt)
+  // UPTODATE (4x→6800 — medical reference subscription), GAIA SUBSCRIPTION (16x→6800)
+  // ASANA.COM (7x→6800), PIRATE SHIP POSTAGE (7x→6800 — shipping label service)
+  // APPLE.COM/BILL (5x→6800 — iCloud/app subscriptions), MICROSOFT*365 (4x→6800)
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bLOOM\b(?:\s*SUBSCRIPTION)?\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bPATREON\s*\*?\s*MEMBERSHIP\b|\bPATREON\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bCOSMOLEX\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bUPTODATE\s*SUBSCRIPTION\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bGAIA\s*SUBSCRIPTION\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bPIRATE\s*SHIP\s*(?:\*\s*)?POSTAGE\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bAPPLE\.COM\/BILL\b|\bAPL\s*\*\s*ITUNES\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /MICROSOFT\s*\*?365|MSFT\s*\*?M365|MSBILL\.INFO/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bSPOTIFY\b/i },
+  { type: 'SUBSCRIPTION', conf: 'HIGH', re: /\bDISCORD\s*\*?\s*NITRO/i },
 
   // ── VEHICLE RENTAL (→ 9200 Travel, not 8720 Rent) ─────────────────────────
   // Training: AVIS RENT A CAR (139x→8720 WRONG, should be 9200), BUDGET RENT-A-CAR (23x)
@@ -289,7 +385,14 @@ const VENDOR_PATTERNS = [
   { type: 'FOOD_DELIVERY', conf: 'HIGH', re: /\bDOORDASH\b|\bFOODORA\b|\bINSTACART\b/i },
 
   // ── EQUIPMENT RENTAL ─────────────────────────────────────────────────────
+  // Training: MODU-LOC FENCE RENTALS (10x→8720), ROGERS RENT ALL LTD (74x→8720), WEST EQUIPMENT RENTALS (4x→7000)
+  // COOPER EQUIPMENT RENTA (4x→1768 — but it's rentals), CRC RENTS (7x→8720)
   { type: 'EQUIP_RENTAL', conf: 'HIGH', re: /\bHERTZ\s*EQUIP|\bSUNBELT\s*(RENTAL|EQUIP)|\bUNITED\s*RENTAL|\bHERC\s*RENTAL|\bBATTLEFORDS\s*RENTAL\b/i },
+  { type: 'EQUIP_RENTAL', conf: 'HIGH', re: /\bMODU-?LOC\s*FENCE\s*RENTAL\b/i },
+  { type: 'EQUIP_RENTAL', conf: 'HIGH', re: /\bROGERS\s*RENT.?ALL\b|\bROGERS\s*RENTALL\b/i },
+  { type: 'EQUIP_RENTAL', conf: 'HIGH', re: /\bCOOPER\s*EQUIPMENT\s*RENT/i },
+  { type: 'EQUIP_RENTAL', conf: 'HIGH', re: /\bCRC\s*RENTS\b|\bWEST\s*EQUIPMENT\s*RENTALS\b/i },
+  { type: 'EQUIP_RENTAL', conf: 'HIGH', re: /\bAFFORDABLE\s*AUTO\s*RENTAL\b/i },
 
   // ── SUBCONTRACTORS ────────────────────────────────────────────────────────
   { type: 'SUBCONTRACTOR', conf: 'HIGH',   re: /\bFIVERR\b|\bUPWORK\b|\bFREELANCER\.COM\b|\b99DESIGNS\b/i },
@@ -298,24 +401,38 @@ const VENDOR_PATTERNS = [
   { type: 'SUBCONTRACTOR', conf: 'MEDIUM', re: /SUBCONTRACT|SUB-?CONTRACT|TRADE\s*CONTRACTOR/i },
 
   // ── ADVERTISING ───────────────────────────────────────────────────────────
+  // Scan: PATTISON OUTDOOR ADVERT (4x→6000), CALGARY OUTDOOR ADVERTISING (47x→8700 miscat→6000)
+  // INDEED (25x→8700 job ads→6000), HIILITE CREATIVE GROUP (47x→8700 marketing agency→6000)
+  // VISTAPRINT (18x→8700 print marketing→6000)
   { type: 'ADVERTISING', conf: 'HIGH', re: /\bFACEBOOK\s*ADS?\b|\bMETA\s*ADS?\b|\bINSTAGRAM\s*ADS?\b/i },
   { type: 'ADVERTISING', conf: 'HIGH', re: /\bGOOGLE\s*ADS?\b|\bGOOGLE\s*ADWORDS\b/i },
-  { type: 'ADVERTISING', conf: 'HIGH', re: /\bINDEED\b|\bKIJIJI\b|\bYELLOW\s*PAGES?\b|\bCANPAGES\b/i },
-  { type: 'ADVERTISING', conf: 'HIGH', re: /\bVISTAPRINT\b|\bMOO\.COM\b|\bQR-CODE-GENERATOR\b/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bINDEED\b(?:\s*TEL)?\b|\bKIJIJI\b|\bYELLOW\s*PAGES?\b|\bCANPAGES\b/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bVISTAPRINT\b|VISTAPR\s*\*VISTAPRINT\b|\bMOO\.COM\b|\bQR-CODE-GENERATOR\b/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bPATTISON\s*OUTDOOR\b/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bCALGARY\s*OUTDOOR\s*ADVERTIS\b/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bHIILITE\s*CREATIVE\s*GROUP\b/i },
 
   // ── OFFICE SUPPLIES ───────────────────────────────────────────────────────
   { type: 'OFFICE_SUPPLY', conf: 'HIGH', re: /\bSTAPLES\b|\bBUREAU\s*EN\s*GROS\b|\bGRAND\s*&\s*TOY\b/i },
   { type: 'OFFICE_SUPPLY', conf: 'HIGH', re: /\bULINE\b/i },
 
   // ── COURIER / SHIPPING ────────────────────────────────────────────────────
+  // Scan: FREIGHTCOM INC. (105x→5700 Freight COGS), ACE COURIER SERVICES (3x→6550)
   { type: 'COURIER', conf: 'HIGH', re: /\bCANADA\s*POST\b|\bPOSTES\s*CANADA\b/i },
   { type: 'COURIER', conf: 'HIGH', re: /\bPUROLATOR\b|\bFEDEX\b|\bUPS\b(?!\s*(?:CANADA|STORE))|\bDHL\b|\bCANPAR\b/i },
+  { type: 'COURIER', conf: 'HIGH', re: /\bFREIGHTCOM\s*INC\b|\bFREIGHTCOM\b/i },
+  { type: 'COURIER', conf: 'HIGH', re: /\bACE\s*COURIER\s*SERVICES\b/i },
 
   // ── RENT ─────────────────────────────────────────────────────────────────
   { type: 'RENT', conf: 'MEDIUM', re: /^RENT\b|MONTHLY\s*RENT|LEASE\s*PMT|OFFICE\s*RENT/i },
 
   // ── TRAINING / COURSES ────────────────────────────────────────────────────
+  // Training scan: UDEMY (39x→9250), EWORKPLACE TRAINING (3x→9250)
+  // NOTE: Golf courses (KANANASKIS 39x, WOODSIDE 22x) coded 9250 in scan — likely client entertainment
+  //       Golf = Meals & Entertainment 6415 (50% non-deductible), not training 9250
   { type: 'TRAINING', conf: 'HIGH',   re: /\bYOUPRENEUR\b|\bVSF\s*LONDON\b|\bPARAGON\s*TESTING\b/i },
+  { type: 'TRAINING', conf: 'HIGH',   re: /\bUDEMY\b(?:\s*(?::|ONLINE|\.COM))?\b/i },
+  { type: 'TRAINING', conf: 'HIGH',   re: /\bEWORKPLACE\s*TRAINING\b/i },
   { type: 'TRAINING', conf: 'MEDIUM', re: /TRAINING|COURSE|SEMINAR|WORKSHOP|SAFETY\s*TRAIN|\bH2S\b|FIRST\s*AID|\bCERTIFICATE\b/i },
 
   // ── TRAVEL ────────────────────────────────────────────────────────────────
@@ -398,6 +515,7 @@ const ROUTING_TABLE = {
   ETRANSFER:          { cogs: null,   overhead: null,   bs: null,              defaultCOGS: false, gifi: null,   logic: 'LOW confidence — could be rental income (4900) or transfer (BS). Review polarity and account type.' },
   MEALS:              { cogs: null,   overhead: '6415', bs: null,              defaultCOGS: false, gifi: '8520', logic: 'Meals & entertainment → 6415 (50% non-deductible CRA ITA 67.1)' },
   FOOD_DELIVERY:      { cogs: null,   overhead: '6415', bs: null,              defaultCOGS: false, gifi: '8520', logic: 'Food delivery apps (SkipTheDishes, Uber Eats) → 6415 Meals & entertainment' },
+  EQUIP_PURCHASE:     { cogs: null,   overhead: null,   bs: '1768',            defaultCOGS: false, gifi: '1740', logic: 'Equipment purchase → 1768 BS (needs capitalization threshold review >$1,500/unit)' },
   SOFTWARE_SAAS:      { cogs: null,   overhead: '1857', bs: null,              defaultCOGS: false, gifi: '8811', logic: 'Software/SaaS subscriptions → 1857 (or 6800 Dues if low-value)' },
   SUBSCRIPTION:       { cogs: null,   overhead: '6800', bs: null,              defaultCOGS: false, gifi: '8811', logic: 'Online subscriptions and memberships → 6800' },
   VEHICLE_RENTAL:     { cogs: null,   overhead: '9200', bs: null,              defaultCOGS: false, gifi: '9270', logic: 'Car rental → 9200 Travel (NOT 8720 Rent — different expense class)' },
@@ -512,6 +630,11 @@ const ACCOUNT_GUARDS = {
   '1500': { risk: 'HIGH', rule: 'MANUAL_ONLY', description: 'Capital asset — requires capitalization threshold review.' },
   '1600': { risk: 'HIGH', rule: 'MANUAL_ONLY', description: 'Buildings — capital asset, manual only.' },
   '1760': { risk: 'HIGH', rule: 'MANUAL_ONLY', description: 'Office equipment — capital asset, manual only.' },
+  '1768': {
+    risk: 'MEDIUM',
+    rule: 'FLAG_FOR_REVIEW',
+    description: '1768 Equipment — capitalization threshold review required. Items >$1,500 are capital assets; below → 8900 shop supplies.',
+  },
   '1800': { risk: 'HIGH', rule: 'MANUAL_ONLY', description: 'Vehicles — capital asset, manual only.' },
   '1855': { risk: 'HIGH', rule: 'MANUAL_ONLY', description: 'Computer equipment — capital asset, manual only.' },
 
