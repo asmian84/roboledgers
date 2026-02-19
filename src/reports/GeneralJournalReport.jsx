@@ -86,13 +86,14 @@ export function GeneralJournalReport() {
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Source</th>
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Account</th>
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Description</th>
-                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Debit</th>
-                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Credit</th>
+                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Amount</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {reportData.transactions.map((tx, i) => {
                                     const amount = (tx.amount_cents || 0) / 100;
+                                    const isCredit = tx.polarity === 'CREDIT';
+                                    const net = isCredit ? -amount : amount;
                                     return (
                                         <tr key={tx.tx_id || i} className="hover:bg-gray-50">
                                             <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-600">{tx.date}</td>
@@ -102,11 +103,8 @@ export function GeneralJournalReport() {
                                                 <span className="ml-1.5 text-gray-900">{tx.account_name}</span>
                                             </td>
                                             <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{tx.description || tx.raw_description}</td>
-                                            <td className="px-4 py-3 text-right text-sm tabular-nums font-mono">
-                                                {tx.polarity === 'DEBIT' ? fmt(amount) : '—'}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-sm tabular-nums font-mono">
-                                                {tx.polarity === 'CREDIT' ? fmt(amount) : '—'}
+                                            <td className={`px-4 py-3 text-right text-sm tabular-nums font-mono ${isCredit ? 'text-red-600' : 'text-gray-900'}`}>
+                                                {fmt(net)}
                                             </td>
                                         </tr>
                                     );

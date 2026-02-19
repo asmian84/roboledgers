@@ -2625,10 +2625,349 @@
       case 'import': return renderTransactionsRestored();
       case 'coa': return renderCOAPage();
       case 'reports': return renderReportsPage();
+      case 'roadmap': return renderRoadmapPage();
       case 'home': renderHome(); return ''; // renderHome() manages stage directly
       default: return renderPlaceholder(UI_STATE.currentRoute.toUpperCase());
     }
   }
+
+  // ─── ROADMAP PAGE ────────────────────────────────────────────────────────────
+  function renderRoadmapPage() {
+    if (!window._roadmapState) window._roadmapState = { filter: 'all' };
+    const S = window._roadmapState;
+
+    const phases = [
+      {
+        id: 'p0',
+        label: 'Phase 0 — Foundation',
+        period: 'Completed · Feb 2026',
+        accentColor: '#16a34a',
+        headerBg: '#f0fdf4',
+        progressColor: '#16a34a',
+        icon: 'ph-check-circle',
+        iconBg: '#dcfce7',
+        items: [
+          { status: 'done', label: '26 Bank PDF Parsers', detail: 'RBC (4), BMO (6), TD (3), Scotia (6), CIBC (3), HSBC, ATB, Amex — all Canadian majors' },
+          { status: 'done', label: 'Amex Audit Parity — all parsers', detail: 'parser_ref, statementId, lineNumber, pdfLocation, audit.rawText on every transaction' },
+          { status: 'done', label: 'SignalFusion Categorization Engine', detail: '9-signal weighted architecture — vendor type, CC polarity, refund mirror, training brain' },
+          { status: 'done', label: 'CategorizationEngine 3-layer deterministic', detail: 'VENDOR_PATTERNS → ROUTING_TABLE → ACCOUNT_GUARDS · ATM withdrawal routing to 9970' },
+          { status: 'done', label: 'CC Polarity Enforcement', detail: '3-layer guard — CC charges never routed to revenue accounts' },
+          { status: 'done', label: 'Refund / Contra-Expense Signal', detail: 'Automatic contra-expense routing for CC refunds, cashback, rebates' },
+          { status: 'done', label: 'COA Engine', detail: 'Full ASSET/LIABILITY/EQUITY/REVENUE/EXPENSE hierarchy, root type lookups' },
+          { status: 'done', label: 'GST Auto-Calculation', detail: 'Province-aware (AB, BC, ON, QC), gst_enabled per tx, tax_cents, gst_account routing' },
+          { status: 'done', label: 'Transaction Grid', detail: 'Virtualized TanStack grid, 10k+ rows smooth, inline edit, bulk actions, filter toolbar' },
+          { status: 'done', label: 'Utility Bar Full Drill-Down', detail: '3-level breadcrumb: All › Category › Payee · All stat rows drillable (Uncategorized, Needs Review, In/Out, Revenue/Expenses)' },
+          { status: 'done', label: 'Audit Sidebar + DocumentViewer', detail: 'parser_ref, raw text, PDF highlight on source line, Account Metadata, GST drill' },
+          { status: 'done', label: 'Trial Balance', detail: 'CaseWare standard with prior year compare, equity + retained earnings synthesis, GST section' },
+          { status: 'done', label: 'Income Statement', detail: 'GAAP — Revenue, COGS, Gross Profit, Operating Expenses, Net Income' },
+          { status: 'done', label: 'Balance Sheet', detail: 'GAAP — Assets, Liabilities, Equity with year-end retained earnings' },
+          { status: 'done', label: 'General Ledger Report', detail: 'Per-account transaction detail, net amount column, running balance, closing balance' },
+          { status: 'done', label: 'General Journal Report', detail: 'All entries chronological, net signed amount (credits red), account code + name columns' },
+          { status: 'done', label: 'COA Summary Report', detail: 'Category breakdown with transaction counts and amounts per COA account' },
+          { status: 'done', label: 'GST Report (full drill-down)', detail: 'Collected / ITC Paid / Net GST per period · individual transaction drill · CRA-format' },
+          { status: 'done', label: 'Financial Ratios Report', detail: 'Current ratio, quick ratio, debt-to-equity and more' },
+          { status: 'done', label: 'CaseWare ZIP Export', detail: 'TB in CaseWare Working Papers format + Prior Year Import for side-by-side comparison' },
+          { status: 'done', label: 'XLSX / CSV Export', detail: 'Any filtered grid selection exported to Excel or CSV' },
+          { status: 'done', label: 'Settings Drawer', detail: 'Theme/density/font, province selector, GST configuration' },
+          { status: 'done', label: 'Bulk Action Bar', detail: '3 inline bulk actions (recategorize, toggle GST, flag for review) on multi-select' },
+          { status: 'done', label: 'Ghost Account Elimination', detail: 'No phantom accounts — all accounts reconcile to imported statements' },
+          { status: 'done', label: 'Training Brain', detail: 'SWIFT workpapers corrections feed back into signal weights for improved future categorization' },
+        ]
+      },
+      {
+        id: 'p1',
+        label: 'Phase 1 — Professional Foundation',
+        period: 'Target: Mar–Apr 2026 · Critical',
+        accentColor: '#dc2626',
+        headerBg: '#fef2f2',
+        progressColor: '#dc2626',
+        icon: 'ph-buildings',
+        iconBg: '#fee2e2',
+        items: [
+          { status: 'todo', tag: 'Critical', label: 'Multi-Client Shell — Client Registry', detail: 'Firm dashboard with client list, create/select/archive. Navigation: Firm → Client → FY → Account → Transactions. Foundation everything else sits on.' },
+          { status: 'todo', tag: 'Critical', label: 'Scoped Ledger per Client (client_id everywhere)', detail: 'All transactions, accounts, statements, reports filtered by active client. No data bleeds between clients.' },
+          { status: 'todo', tag: 'Critical', label: 'IndexedDB Persistence (replace localStorage)', detail: '50MB+ per origin, persistent across sessions, binary PDF blob support. SQLite via WASM (wa-sqlite) — one .db per client.' },
+          { status: 'todo', tag: 'Critical', label: 'Fiscal Year Management UI', detail: 'Per client: open FY, set start/end dates, view/switch between years. FY-scoped reports. Year-end rollover (retained earnings carry forward).' },
+          { status: 'todo', tag: 'Critical', label: 'Industry Profile Selection', detail: 'Sets default COA mappings, signal boost table, GST applicability, T4A flag on client creation. SHORT_TERM_RENTAL, PROFESSIONAL_SERVICES, RETAIL, CONSTRUCTION, RESTAURANT, REAL_ESTATE, E_COMMERCE.' },
+          { status: 'todo', tag: 'Critical', label: 'Period Locking', detail: 'Finalize a FY → lock it. No changes to locked periods. Required for professional accounting standards.' },
+          { status: 'todo', tag: 'High', label: 'Cash Flow Statement', detail: 'Indirect method: Net Income ± operating WC changes ± investing activities ± financing activities = Net Change in Cash.' },
+          { status: 'todo', tag: 'High', label: 'Bank Reconciliation Module', detail: 'Side-by-side: book balance (GL) vs bank statement balance. Outstanding items list. Reconciliation sign-off. Audit-defensible.' },
+          { status: 'todo', tag: 'High', label: 'Adjusting Journal Entries (AJEs)', detail: 'Dr/Cr entry screen with COA picker. AJEs appear in Trial Balance. Reversal option. Year-end accruals, depreciation, prepaid amortization.' },
+          { status: 'todo', tag: 'High', label: 'Comparative Reports', detail: 'Current vs prior year side-by-side in P&L and Balance Sheet. Variance in $ and %.' },
+        ]
+      },
+      {
+        id: 'p2',
+        label: 'Phase 2 — Professional Output',
+        period: 'Target: Apr–Aug 2026 · CRA Compliance',
+        accentColor: '#b45309',
+        headerBg: '#fffbeb',
+        progressColor: '#d97706',
+        icon: 'ph-file-text',
+        iconBg: '#fef3c7',
+        items: [
+          { status: 'todo', tag: 'High', label: 'CaseWare Full Working Paper Export', detail: 'TB + JE + AJE + Financial Statements + Notes in CaseWare-compatible ZIP. Full package download.' },
+          { status: 'todo', tag: 'Medium', label: 'More Parsers', detail: 'National Bank (6th major bank), Tangerine, Simplii, EQ Bank, Desjardins. Covers ~98% of Canadian client base.' },
+          { status: 'todo', tag: 'Medium', label: 'HST-34 Auto-Fill', detail: 'From GST Report → auto-populate CRA HST-34 fields. Export as printable PDF or CRA NETFILE XML. Quarterly + annual.' },
+          { status: 'todo', tag: 'Medium', label: 'T4A Generation', detail: 'Flag vendors as T4A recipients. Year-end T4A slips auto-generated. CRA XML export. Box 020 (fees for services) and Box 048 (independent contractors).' },
+          { status: 'todo', tag: 'Medium', label: 'AR/AP Aging Report', detail: '30/60/90+ day aging buckets. Outstanding balance by vendor/customer. Collector-ready format.' },
+        ]
+      },
+      {
+        id: 'p2b',
+        label: 'Phase 2B — Operational Intelligence',
+        period: 'Target: May–Aug 2026 · Firm Advantage',
+        accentColor: '#0369a1',
+        headerBg: '#f0f9ff',
+        progressColor: '#0284c7',
+        icon: 'ph-chart-line-up',
+        iconBg: '#e0f2fe',
+        items: [
+          { status: 'todo', tag: 'Medium', label: 'Budget vs Actual', detail: 'Import budget from Excel or enter per COA/period. Variance report: actual vs budget, $ and %, monthly.' },
+          { status: 'todo', tag: 'Medium', label: 'CFO Dashboard per Client', detail: 'Burn rate, runway, quick ratio, current ratio, DSO, DPO at a glance. One-page printable for client meetings.' },
+          { status: 'todo', tag: 'Medium', label: 'Anomaly Detection', detail: 'Duplicate tx alerts, new-payee high-value alerts, amount spikes (3× avg), GST inconsistency flags. Surfaced in UB Needs Review.' },
+          { status: 'todo', tag: 'Medium', label: 'Vendor Intelligence DB (Firm-Level)', detail: 'Shared vendor → COA DB across all 400 clients. Firm-wide rules override client-level rules. Significantly improves first-import accuracy for new clients.' },
+          { status: 'todo', tag: 'Medium', label: 'More Financial Ratios', detail: 'DSO, DPO, EBITDA margin, gross margin %, working capital, interest coverage. CFO-grade metrics.' },
+        ]
+      },
+      {
+        id: 'p3',
+        label: 'Phase 3 — Platform Scale',
+        period: 'Target: 2027+ · Multi-Firm SaaS',
+        accentColor: '#6d28d9',
+        headerBg: '#f5f3ff',
+        progressColor: '#7c3aed',
+        icon: 'ph-globe',
+        iconBg: '#ede9fe',
+        items: [
+          { status: 'todo', tag: 'Future', label: 'Client Portal (Tier 2)', detail: 'Read-only client view with annotation, receipt upload, flagging. Email magic link auth. Year-end sign-off. Accountant controls, client annotates but never overrides.' },
+          { status: 'todo', tag: 'Future', label: 'Investment Bookkeeping (ACB)', detail: 'T1 Schedule 3 capital gains tracking. Questrade/Wealthsimple/TD Direct/RBC Direct CSV parsers. DRIP handling. Annual ACB report per security.' },
+          { status: 'todo', tag: 'Future', label: 'Crypto Bookkeeping', detail: 'Coinbase/Kraken/Bitbuy/Newton CSV parsers. On-chain wallet history. ACB per coin. Staking income classification. Annual crypto gain/loss report.' },
+          { status: 'todo', tag: 'Future', label: 'Live Bank Feed (Tier 3)', detail: 'Flinks/Inverite Canadian bank feed API. Webhook receiver → same parser pipeline, real-time. Bill C-37 compliant (Canada open banking 2026-2027).' },
+          { status: 'todo', tag: 'Future', label: 'CRA Letter Analysis (AI)', detail: 'PDF upload → AI identifies type, extracts figures, cross-references client ledger, drafts response. Accountant reviews and sends. High-value differentiator.' },
+          { status: 'todo', tag: 'Future', label: 'AI Memo / Narrative Generator', detail: 'Year-end plain-English financial summary from P&L + BS + ratios. Accountant edits and signs off. CPD-quality client letter output.' },
+          { status: 'todo', tag: 'Future', label: 'QuickBooks Online / Xero Export', detail: 'QBO bank feed import CSV/IIF or REST API. Xero Statement CSV or REST API. For clients already on QBO/Xero needing catch-up bookkeeping.' },
+          { status: 'todo', tag: 'Future', label: 'Multi-Firm SaaS', detail: 'Tenant isolation per accounting firm. Firm onboarding flow. Subscription billing. RoboLedger as a product sold to other accounting firms.' },
+        ]
+      },
+      {
+        id: 'td',
+        label: 'Technical Debt Register',
+        period: 'Ongoing',
+        accentColor: '#475569',
+        headerBg: '#f8fafc',
+        progressColor: '#64748b',
+        icon: 'ph-wrench',
+        iconBg: '#f1f5f9',
+        items: [
+          { status: 'todo', tag: 'Debt', label: 'TD-1: Dual-Layer Architecture', detail: 'TypeScript core (src/core/) never called. Vanilla JS layer is the real runtime. Decision: commit to JS runtime, delete dead TS code after multi-client shell is built cleanly.' },
+          { status: 'todo', tag: 'Debt', label: 'TD-2: localStorage Ceiling (~5MB)', detail: 'Lost on browser wipe, no binary support for PDF blobs. Fix: Migrate to IndexedDB / SQLite via WASM (wa-sqlite).' },
+          { status: 'todo', tag: 'Debt', label: 'TD-3: Monolithic app.js (4,200+ lines)', detail: 'Handles UI, state, events, parsing, reporting all in one file. Fix: Decompose progressively — extract WorkspaceManager, LedgerController, AccountManager.' },
+          { status: 'todo', tag: 'Debt', label: 'TD-4: ScoringEngine Mocked', detail: 'src/brain/scoring.ts returns 0 for all 5 dimensions. Fix: Bridge to call window.RoboLedger.SignalFusionEngine, or port SignalFusionEngine to TS.' },
+          { status: 'done', tag: 'Fixed', label: 'TD-5: Dead Dependencies Cleaned', detail: 'Tabulator CSS, AG-Grid CSS fragments removed. npm pruned.' },
+          { status: 'done', tag: 'Fixed', label: 'TD-6: PDF Highlight Y-Coord Fixed', detail: 'DocumentViewer.jsx uses page.getViewport({ scale: 1.0 }).height as unscaled reference for correct Y-inversion.' },
+        ]
+      },
+    ];
+
+    // Compute totals
+    let totalItems = 0, doneItems = 0, inProgressItems = 0;
+    phases.forEach(ph => ph.items.forEach(item => {
+      totalItems++;
+      if (item.status === 'done') doneItems++;
+      if (item.status === 'in-progress') inProgressItems++;
+    }));
+    const pctDone = Math.round((doneItems / totalItems) * 100);
+    const remaining = totalItems - doneItems - inProgressItems;
+
+    // Tag badge styling
+    const tagStyle = (tag) => {
+      const map = {
+        'Critical': 'background:#fee2e2;color:#991b1b;',
+        'High':     'background:#fff7ed;color:#9a3412;',
+        'Medium':   'background:#fefce8;color:#854d0e;',
+        'Future':   'background:#f5f3ff;color:#5b21b6;',
+        'Debt':     'background:#f1f5f9;color:#475569;',
+        'Fixed':    'background:#f0fdf4;color:#166534;',
+      };
+      return (map[tag] || 'background:#f1f5f9;color:#64748b;') + 'font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;';
+    };
+
+    const filterBtns = ['all', 'done', 'todo'].map(f => {
+      const active = S.filter === f;
+      const labels = { all: 'All items', done: 'Completed', todo: 'Upcoming' };
+      return `<button onclick="window._roadmapSetFilter('${f}')"
+        style="padding:5px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;
+          border:1px solid ${active ? 'var(--primary-color,#2563eb)' : 'var(--border-color,#e2e8f0)'};
+          background:${active ? 'var(--primary-color,#2563eb)' : 'var(--bg-primary,white)'};
+          color:${active ? 'white' : 'var(--text-secondary,#475569)'};
+          transition:all 0.15s;">${labels[f]}</button>`;
+    }).join('');
+
+    const phaseHtml = phases.map(ph => {
+      const visibleItems = ph.items.filter(item => {
+        if (S.filter === 'all') return true;
+        if (S.filter === 'done') return item.status === 'done';
+        if (S.filter === 'todo') return item.status === 'todo' || item.status === 'in-progress';
+        return true;
+      });
+      if (visibleItems.length === 0) return '';
+
+      const phDone = ph.items.filter(i => i.status === 'done').length;
+      const phTotal = ph.items.length;
+      const phPct = Math.round((phDone / phTotal) * 100);
+
+      const rows = visibleItems.map(item => {
+        const isDone = item.status === 'done';
+        const isInProg = item.status === 'in-progress';
+        const checkIcon = isDone
+          ? `<i class="ph ph-check-circle-fill" style="color:#16a34a;font-size:16px;flex-shrink:0;margin-top:1px;"></i>`
+          : isInProg
+          ? `<i class="ph ph-arrows-clockwise" style="color:#d97706;font-size:16px;flex-shrink:0;margin-top:1px;"></i>`
+          : `<i class="ph ph-circle" style="color:#cbd5e1;font-size:16px;flex-shrink:0;margin-top:1px;"></i>`;
+
+        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:6px;
+            background:${isDone ? '#f8fffe' : 'var(--bg-primary,white)'};
+            border:1px solid ${isDone ? '#d1fae5' : 'var(--border-subtle,#f1f5f9)'};
+            margin-bottom:4px;">
+          ${checkIcon}
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px;">
+              <span style="font-size:13px;font-weight:600;color:${isDone ? '#166534' : 'var(--text-primary,#0f172a)'};
+                ${isDone ? 'text-decoration:none;' : ''}">${item.label}</span>
+              ${item.tag ? `<span style="${tagStyle(item.tag)}">${item.tag}</span>` : ''}
+            </div>
+            <div style="font-size:11.5px;color:var(--text-tertiary,#94a3b8);line-height:1.5;">${item.detail}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div style="margin-bottom:16px;background:var(--bg-primary,white);border-radius:10px;
+          border:1px solid var(--border-color,#e2e8f0);overflow:hidden;
+          box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+        <div style="background:${ph.headerBg};padding:14px 18px;border-bottom:1px solid var(--border-color,#e2e8f0);
+            display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:${ph.iconBg};border-radius:8px;
+              display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="ph ${ph.icon}" style="font-size:18px;color:${ph.accentColor};"></i>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${ph.label}</div>
+            <div style="font-size:11px;color:var(--text-tertiary,#94a3b8);margin-top:1px;">${ph.period}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:14px;font-weight:700;color:${ph.accentColor};">${phDone}<span style="font-size:11px;font-weight:500;color:var(--text-tertiary,#94a3b8);">/${phTotal}</span></div>
+            <div style="background:var(--bg-tertiary,#f1f5f9);border-radius:99px;height:4px;width:60px;margin-top:4px;overflow:hidden;">
+              <div style="height:100%;width:${phPct}%;background:${ph.progressColor};border-radius:99px;"></div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;">
+          ${rows}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="ai-brain-page" style="padding:24px 28px;max-width:960px;">
+
+        <!-- Page Header (matches site std-page-header style) -->
+        <div class="std-page-header">
+          <div class="header-brand">
+            <div style="width:44px;height:44px;background:var(--primary-color,#2563eb);color:white;border-radius:12px;
+                display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">
+              <i class="ph ph-map-trifold"></i>
+            </div>
+            <div>
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Roadmap</h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">Swift Accounting · Branch: hungry-villani · Last updated Feb 18, 2026</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span style="background:var(--primary-subtle,#eff6ff);color:var(--primary-color,#2563eb);
+                font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid #bfdbfe;letter-spacing:0.3px;">WIP TRACKER</span>
+          </div>
+        </div>
+
+        <!-- Stat Cards -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+          <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 16px;">
+            <div style="font-size:24px;font-weight:800;color:var(--text-primary,#0f172a);">${totalItems}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Total Items</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #d1fae5;border-radius:8px;padding:14px 16px;">
+            <div style="font-size:24px;font-weight:800;color:#16a34a;">${doneItems}</div>
+            <div style="font-size:11px;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Completed</div>
+          </div>
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;">
+            <div style="font-size:24px;font-weight:800;color:#d97706;">${inProgressItems}</div>
+            <div style="font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">In Progress</div>
+          </div>
+          <div style="background:var(--primary-subtle,#eff6ff);border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;">
+            <div style="font-size:24px;font-weight:800;color:var(--primary-color,#2563eb);">${remaining}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--primary-color,#2563eb);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Remaining</div>
+          </div>
+        </div>
+
+        <!-- Progress + Filters -->
+        <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:16px 18px;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:12px;font-weight:700;color:var(--text-secondary,#475569);text-transform:uppercase;letter-spacing:0.4px;">Overall Progress</span>
+            <span style="font-size:13px;font-weight:700;color:var(--primary-color,#2563eb);">${pctDone}%</span>
+          </div>
+          <div style="background:var(--bg-tertiary,#f1f5f9);border-radius:99px;height:6px;overflow:hidden;margin-bottom:14px;">
+            <div style="height:100%;width:${pctDone}%;background:var(--primary-color,#2563eb);border-radius:99px;transition:width 0.4s ease;"></div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <span style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.3px;margin-right:4px;">Show:</span>
+            ${filterBtns}
+          </div>
+        </div>
+
+        <!-- Vision Summary -->
+        <div style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <i class="ph ph-target" style="font-size:15px;color:var(--primary-color,#2563eb);"></i>
+            <span style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);text-transform:uppercase;letter-spacing:0.4px;">Goal</span>
+          </div>
+          <p style="font-size:13px;color:var(--text-primary,#0f172a);line-height:1.6;margin:0 0 10px 0;">
+            The operating system for accounting firms — 95% automation, 5% human oversight. 400 clients, one platform, audit-ready output.
+          </p>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;border-top:1px solid var(--border-color,#e2e8f0);padding-top:10px;">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--primary-color,#2563eb);text-transform:uppercase;margin-bottom:3px;">Tier 1 · Now</div>
+              <div style="font-size:11px;color:var(--text-secondary,#475569);">Drop PDFs → Auto-categorize → 8 reports → CaseWare export</div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#d97706;text-transform:uppercase;margin-bottom:3px;">Tier 2 · Mid-Term</div>
+              <div style="font-size:11px;color:var(--text-secondary,#475569);">Client portal · See your books · Flag transactions · Upload receipts</div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;margin-bottom:3px;">Tier 3 · Long-Term</div>
+              <div style="font-size:11px;color:var(--text-secondary,#475569);">Live bank feed (Flinks) · CRA letter analysis · Real-time bookkeeping</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phase Cards -->
+        ${phaseHtml}
+
+        <div style="text-align:center;padding:16px 0;font-size:11px;color:var(--text-tertiary,#94a3b8);">
+          RoboLedger · Branch: hungry-villani · Swift Accounting and Business Solutions Ltd. · February 2026
+        </div>
+
+      </div>
+    `;
+  }
+
+  // Roadmap filter handler — must be global for inline onclick
+  window._roadmapSetFilter = function(filter) {
+    if (!window._roadmapState) window._roadmapState = { filter: 'all' };
+    window._roadmapState.filter = filter;
+    const stage = document.getElementById('app-stage');
+    if (stage) stage.innerHTML = `<div class="fade-in">${renderRoadmapPage()}</div>`;
+  };
+  // ─── END ROADMAP PAGE ─────────────────────────────────────────────────────────
 
   function renderCOAPage() {
     const categories = [

@@ -112,18 +112,10 @@ export function GeneralLedgerReport() {
                     </div>
 
                     {/* Summary */}
-                    <div className="grid grid-cols-4 gap-4 p-6 border-b border-gray-200 bg-gray-50">
+                    <div className="grid grid-cols-2 gap-4 p-6 border-b border-gray-200 bg-gray-50">
                         <div className="text-center">
-                            <p className="text-xs text-gray-500 uppercase font-semibold">Total Debit</p>
-                            <p className="text-lg font-bold font-mono">{fmt(reportData.totals.debit)}</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xs text-gray-500 uppercase font-semibold">Total Credit</p>
-                            <p className="text-lg font-bold font-mono">{fmt(reportData.totals.credit)}</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xs text-gray-500 uppercase font-semibold">Net</p>
-                            <p className="text-lg font-bold font-mono">{fmt(reportData.totals.net)}</p>
+                            <p className="text-xs text-gray-500 uppercase font-semibold">Net Activity</p>
+                            <p className={`text-lg font-bold font-mono ${reportData.totals.net < 0 ? 'text-red-600' : 'text-gray-900'}`}>{fmt(reportData.totals.net)}</p>
                         </div>
                         <div className="text-center">
                             <p className="text-xs text-gray-500 uppercase font-semibold">Closing Balance</p>
@@ -138,23 +130,21 @@ export function GeneralLedgerReport() {
                                 <tr>
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Date</th>
                                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Description</th>
-                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Debit</th>
-                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Credit</th>
+                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Amount</th>
                                     <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Balance</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {reportData.transactions.map((tx, i) => {
                                     const amount = (tx.amount_cents || 0) / 100;
+                                    const isCredit = tx.polarity === 'CREDIT';
+                                    const net = isCredit ? -amount : amount;
                                     return (
                                         <tr key={tx.tx_id || i} className="hover:bg-gray-50">
                                             <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-600">{tx.date}</td>
                                             <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{tx.description || tx.raw_description}</td>
-                                            <td className="px-4 py-3 text-right text-sm tabular-nums font-mono">
-                                                {tx.polarity === 'DEBIT' ? fmt(amount) : '—'}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-sm tabular-nums font-mono">
-                                                {tx.polarity === 'CREDIT' ? fmt(amount) : '—'}
+                                            <td className={`px-4 py-3 text-right text-sm tabular-nums font-mono ${isCredit ? 'text-red-600' : 'text-gray-900'}`}>
+                                                {fmt(net)}
                                             </td>
                                             <td className="px-4 py-3 text-right text-sm tabular-nums font-mono font-semibold">
                                                 {fmt(tx.balance)}
