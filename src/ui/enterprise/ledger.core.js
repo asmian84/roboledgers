@@ -345,13 +345,43 @@ window.RoboLedger = (function () {
     }
 
     function save() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            version: LEDGER_VERSION, // Include version for validation
+        // Client-aware save: write to per-client key when a client is active
+        const clientId = window.UI_STATE?.activeClientId;
+        const key = clientId ? ('roboledger_v5_data_' + clientId) : STORAGE_KEY;
+        localStorage.setItem(key, JSON.stringify({
+            version: LEDGER_VERSION,
             transactions: state.transactions,
             sigIndex: state.sigIndex,
             accounts: state.accounts,
             coa: state.coa
         }));
+    }
+
+    // Client-aware load by arbitrary key (called by app.js switchClient / init restore)
+    function loadFromKey(key) {
+        const saved = localStorage.getItem(key);
+        state.transactions = {};
+        state.sigIndex = {};
+        state.accounts = [];
+        state.coa = DEFAULT_COA_TEMPLATE;
+        if (!saved) {
+            console.log(`[LEDGER] No data at key: ${key} — starting fresh`);
+            return;
+        }
+        try {
+            const parsed = JSON.parse(saved);
+            state.transactions = parsed.transactions || {};
+            state.sigIndex     = parsed.sigIndex     || {};
+            state.accounts     = parsed.accounts     || [];
+            state.coa          = parsed.coa          || DEFAULT_COA_TEMPLATE;
+            if (window.RuleEngine?.updateTransactionContext) {
+                window.RuleEngine.updateTransactionContext(Object.values(state.transactions));
+            }
+            console.log(`[LEDGER] Loaded ${Object.keys(state.transactions).length} txns from key: ${key}`);
+        } catch (e) {
+            console.error('[LEDGER] Failed to load from key:', key, e);
+            localStorage.removeItem(key);
+        }
     }
 
     // --- CRYPTO (txsig) ---
@@ -1018,6 +1048,9 @@ window.RoboLedger = (function () {
                 transactions: state.transactions,
                 sigIndex: state.sigIndex
             };
+        },
+        loadFromKey: function (key) {
+            loadFromKey(key);
         }
     };
 

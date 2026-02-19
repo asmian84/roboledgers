@@ -58,6 +58,10 @@
 
     // Transaction Filter State (for drill-down)
     activeFilter: null, // { type, label, filter: function }
+
+    // Multi-Client State
+    activeClientId: null,     // null = legacy/demo mode (no client selected)
+    activeClientName: '',
   };
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
@@ -1525,23 +1529,46 @@
 
   function init() {
     // STATE VERSION CHECK: Prevent cache hallucination
+    // Multi-client aware: only check legacy key if no client is active
     const STATE_VERSION = '5.2.0';
-    const savedData = localStorage.getItem('roboledger_v5_data');
+    const savedActiveClient = localStorage.getItem('roboledger_active_client');
 
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        if (parsed.version && parsed.version !== STATE_VERSION) {
-          console.warn(`[STATE] Version mismatch: saved=${parsed.version}, current=${STATE_VERSION}`);
-          console.warn('[STATE] Clearing incompatible cache to prevent bugs');
-          localStorage.clear();
-          window.RoboLedger.Ledger.reset();
+    if (!savedActiveClient) {
+      // Legacy / demo mode: check the shared roboledger_v5_data key
+      const savedData = localStorage.getItem('roboledger_v5_data');
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          if (parsed.version && parsed.version !== STATE_VERSION) {
+            console.warn(`[STATE] Version mismatch: saved=${parsed.version}, current=${STATE_VERSION}`);
+            localStorage.removeItem('roboledger_v5_data'); // Targeted removal — preserve client keys
+            window.RoboLedger.Ledger.reset();
+          }
+        } catch (e) {
+          console.error('[STATE] Corrupt legacy localStorage — removing legacy key only', e);
+          localStorage.removeItem('roboledger_v5_data');
         }
-      } catch (e) {
-        console.error('[STATE] Corrupt localStorage detected, clearing', e);
-        localStorage.clear();
       }
     }
+
+    // ── MULTI-CLIENT RESTORE ──────────────────────────────────────────────────
+    if (savedActiveClient) {
+      const savedClients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+      const savedClient  = savedClients.find(c => c.id === savedActiveClient);
+      if (savedClient) {
+        window.RoboLedger.Ledger.loadFromKey('roboledger_v5_data_' + savedActiveClient);
+        UI_STATE.activeClientId   = savedActiveClient;
+        UI_STATE.activeClientName = savedClient.name;
+        console.log(`[CLIENT] Restored active client: ${savedClient.name} (${savedActiveClient})`);
+        // Update sidebar after DOM is ready
+        setTimeout(() => window.updateClientSwitcherUI(savedClient), 0);
+      } else {
+        // Client no longer exists — clear stale reference
+        localStorage.removeItem('roboledger_active_client');
+        console.warn('[CLIENT] Stale active_client reference cleared');
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     setupNav();
     setupActions();
@@ -2626,10 +2653,473 @@
       case 'coa': return renderCOAPage();
       case 'reports': return renderReportsPage();
       case 'roadmap': return renderRoadmapPage();
+      case 'clients': return renderClientsPage();
       case 'home': renderHome(); return ''; // renderHome() manages stage directly
       default: return renderPlaceholder(UI_STATE.currentRoute.toUpperCase());
     }
   }
+
+  // ─── CLIENTS PAGE ────────────────────────────────────────────────────────────
+  function renderClientsPage() {
+    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const totalTx = clients.reduce((s, c) => s + (c.txCount || 0), 0);
+    const thisYear = new Date().getFullYear();
+
+    const industryColors = {
+      PROFESSIONAL_SERVICES: { bg: '#eff6ff', color: '#2563eb' },
+      SHORT_TERM_RENTAL:     { bg: '#f0fdf4', color: '#16a34a' },
+      RETAIL:                { bg: '#fef3c7', color: '#d97706' },
+      CONSTRUCTION:          { bg: '#fff7ed', color: '#ea580c' },
+      RESTAURANT:            { bg: '#fdf4ff', color: '#9333ea' },
+      REAL_ESTATE:           { bg: '#f0fdfa', color: '#0d9488' },
+      E_COMMERCE:            { bg: '#faf5ff', color: '#7c3aed' },
+      OTHER:                 { bg: '#f8fafc', color: '#64748b' },
+    };
+    const industryLabels = {
+      PROFESSIONAL_SERVICES: 'Professional Services',
+      SHORT_TERM_RENTAL:     'Short-Term Rental',
+      RETAIL:                'Retail',
+      CONSTRUCTION:          'Construction',
+      RESTAURANT:            'Restaurant',
+      REAL_ESTATE:           'Real Estate',
+      E_COMMERCE:            'E-Commerce',
+      OTHER:                 'Other',
+    };
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const clientCardHTML = (client) => {
+      const initials = (client.name || '?')
+        .split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+      const iStyle = industryColors[client.industry] || industryColors.OTHER;
+      const iLabel = industryLabels[client.industry] || 'Other';
+      const isActive = UI_STATE.activeClientId === client.id;
+      const fyLabel = client.fiscalYearEnd ? MONTH_NAMES[(client.fiscalYearEnd - 1) % 12] : 'Dec';
+      const accentColor = client.color || '#3b82f6';
+      const ringStyle = isActive
+        ? `box-shadow:0 0 0 2px ${accentColor},0 4px 16px rgba(0,0,0,0.1);`
+        : 'box-shadow:0 1px 4px rgba(0,0,0,0.06);';
+
+      return `
+        <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);
+            border-radius:12px;overflow:hidden;transition:box-shadow 0.15s,transform 0.12s;${ringStyle}"
+             onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)'"
+             onmouseleave="this.style.transform='';this.style.boxShadow='${ringStyle.replace('box-shadow:','').replace(';','')}'">
+          <!-- Color bar -->
+          <div style="height:4px;background:${accentColor};"></div>
+          <div style="padding:16px 18px;">
+            <!-- Header row -->
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+              <div style="width:40px;height:40px;border-radius:10px;background:${accentColor};
+                  color:white;font-size:14px;font-weight:700;display:flex;align-items:center;
+                  justify-content:center;flex-shrink:0;letter-spacing:-0.5px;">${initials}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${client.name}</div>
+                ${client.legalName ? `<div style="font-size:11px;color:var(--text-tertiary,#94a3b8);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${client.legalName}</div>` : ''}
+              </div>
+              ${isActive ? `<span style="background:#dcfce7;color:#16a34a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:0.3px;flex-shrink:0;">ACTIVE</span>` : ''}
+            </div>
+            <!-- Industry badge -->
+            <div style="margin-bottom:12px;">
+              <span style="background:${iStyle.bg};color:${iStyle.color};font-size:11px;font-weight:600;padding:3px 8px;border-radius:5px;">${iLabel}</span>
+              ${client.province ? `<span style="background:var(--bg-tertiary,#f1f5f9);color:var(--text-secondary,#475569);font-size:11px;font-weight:600;padding:3px 8px;border-radius:5px;margin-left:6px;">${client.province}</span>` : ''}
+            </div>
+            <!-- Stats row -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+              <div style="text-align:center;padding:8px 4px;background:var(--bg-secondary,#f8fafc);border-radius:6px;">
+                <div style="font-size:16px;font-weight:700;color:var(--text-primary,#0f172a);">${(client.txCount || 0).toLocaleString()}</div>
+                <div style="font-size:10px;color:var(--text-tertiary,#94a3b8);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Transactions</div>
+              </div>
+              <div style="text-align:center;padding:8px 4px;background:var(--bg-secondary,#f8fafc);border-radius:6px;">
+                <div style="font-size:16px;font-weight:700;color:var(--text-primary,#0f172a);">${client.accountCount || 0}</div>
+                <div style="font-size:10px;color:var(--text-tertiary,#94a3b8);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Accounts</div>
+              </div>
+              <div style="text-align:center;padding:8px 4px;background:var(--bg-secondary,#f8fafc);border-radius:6px;">
+                <div style="font-size:16px;font-weight:700;color:var(--text-primary,#0f172a);">${fyLabel}</div>
+                <div style="font-size:10px;color:var(--text-tertiary,#94a3b8);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">FY End</div>
+              </div>
+            </div>
+            <!-- Footer row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:11px;color:var(--text-tertiary,#94a3b8);">
+                ${client.lastActive ? `Last active ${client.lastActive}` : `Created ${client.created || ''}`}
+              </span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button onclick="event.stopPropagation();window.openEditClientModal('${client.id}')"
+                    title="Edit client"
+                    style="background:transparent;border:1px solid var(--border-color,#e2e8f0);color:var(--text-secondary,#475569);
+                    font-size:13px;padding:4px 8px;border-radius:6px;cursor:pointer;line-height:1;">
+                  <i class="ph ph-pencil"></i>
+                </button>
+                ${!isActive ? `<button onclick="event.stopPropagation();window.deleteClient('${client.id}')"
+                    title="Delete client"
+                    style="background:transparent;border:1px solid #fecaca;color:#dc2626;
+                    font-size:13px;padding:4px 8px;border-radius:6px;cursor:pointer;line-height:1;">
+                  <i class="ph ph-trash"></i>
+                </button>` : ''}
+                <button onclick="window.switchClient('${client.id}')"
+                    style="background:${accentColor};color:white;border:none;
+                    font-size:12px;font-weight:600;padding:6px 13px;border-radius:6px;cursor:pointer;
+                    display:flex;align-items:center;gap:5px;">
+                  Open <i class="ph ph-arrow-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    const emptyStateHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--text-tertiary,#94a3b8);">
+        <div style="width:64px;height:64px;background:var(--bg-tertiary,#f1f5f9);border-radius:16px;
+            display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;">
+          <i class="ph ph-buildings" style="color:var(--text-tertiary,#94a3b8);"></i>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--text-primary,#0f172a);margin-bottom:6px;">No clients yet</div>
+        <div style="font-size:13px;color:var(--text-secondary,#475569);margin-bottom:24px;max-width:320px;margin-left:auto;margin-right:auto;">
+          Create your first client to start tracking their financials separately.
+        </div>
+        <button onclick="window.openCreateClientModal()"
+            style="background:#2563eb;color:white;border:none;padding:10px 22px;
+            border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;
+            align-items:center;gap:8px;">
+          <i class="ph ph-plus"></i> Create First Client
+        </button>
+      </div>
+    `;
+
+    return `
+      <div class="ai-brain-page" style="padding:24px 28px;max-width:1100px;">
+        <!-- Page Header -->
+        <div class="std-page-header">
+          <div class="header-brand">
+            <div class="icon-box" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+              <i class="ph ph-buildings"></i>
+            </div>
+            <div>
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Client Registry</h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">
+                ${clients.length} client${clients.length !== 1 ? 's' : ''} · Multi-client workspace
+              </p>
+            </div>
+          </div>
+          <button onclick="window.openCreateClientModal()"
+              class="btn-restored"
+              style="background:#16a34a;border:none;color:white;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-plus"></i> New Client
+          </button>
+        </div>
+
+        <!-- Stat Row -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;">
+          <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 16px;">
+            <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${clients.length}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Total Clients</div>
+          </div>
+          <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 16px;">
+            <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${totalTx.toLocaleString()}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Total Transactions</div>
+          </div>
+          <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 16px;">
+            <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${thisYear}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Active Fiscal Year</div>
+          </div>
+        </div>
+
+        <!-- Client Grid or Empty State -->
+        ${clients.length === 0
+          ? emptyStateHTML
+          : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
+               ${clients.map(clientCardHTML).join('')}
+             </div>`
+        }
+      </div>
+    `;
+  }
+
+  // ─── CLIENT MODAL ─────────────────────────────────────────────────────────────
+  window.openCreateClientModal = function(existingId) {
+    const existing = document.getElementById('client-modal-overlay');
+    if (existing) existing.remove();
+
+    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const editClient = existingId ? clients.find(c => c.id === existingId) : null;
+    const isEdit = !!editClient;
+    const v = (field, fallback) => editClient ? (editClient[field] !== undefined ? editClient[field] : fallback) : fallback;
+
+    const INDUSTRIES = [
+      { value: 'PROFESSIONAL_SERVICES', label: 'Professional Services' },
+      { value: 'SHORT_TERM_RENTAL',     label: 'Short-Term Rental' },
+      { value: 'RETAIL',               label: 'Retail' },
+      { value: 'CONSTRUCTION',         label: 'Construction' },
+      { value: 'RESTAURANT',           label: 'Restaurant' },
+      { value: 'REAL_ESTATE',          label: 'Real Estate' },
+      { value: 'E_COMMERCE',           label: 'E-Commerce' },
+      { value: 'OTHER',                label: 'Other' },
+    ];
+    const PROVINCES = ['AB','BC','MB','NB','NL','NT','NS','NU','ON','PE','QC','SK','YT'];
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const COLORS = ['#3b82f6','#8b5cf6','#16a34a','#dc2626','#d97706','#0d9488','#db2777','#64748b'];
+    const selectedColor = v('color', '#3b82f6');
+
+    const colorSwatches = COLORS.map(c => `
+      <div onclick="document.getElementById('client-color-input').value='${c}';
+           document.querySelectorAll('.client-color-swatch').forEach(s=>{s.style.outline='';s.style.transform='';});
+           this.style.outline='3px solid #0f172a';this.style.transform='scale(1.15)';"
+           class="client-color-swatch"
+           style="width:26px;height:26px;border-radius:7px;background:${c};cursor:pointer;
+           outline:${selectedColor === c ? '3px solid #0f172a' : 'none'};
+           outline-offset:2px;transition:outline 0.1s,transform 0.1s;
+           transform:${selectedColor === c ? 'scale(1.15)' : 'scale(1)'};"></div>
+    `).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'client-modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.65);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:white;border-radius:16px;padding:32px;width:520px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);">
+        <!-- Modal Header -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">
+            <i class="ph ph-buildings"></i>
+          </div>
+          <div>
+            <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:#0f172a;">${isEdit ? 'Edit Client' : 'New Client'}</h2>
+            <p style="margin:2px 0 0;font-size:0.8rem;color:#64748b;">${isEdit ? 'Update client information' : 'Add a new client to your registry'}</p>
+          </div>
+          <button onclick="document.getElementById('client-modal-overlay').remove()"
+              style="margin-left:auto;background:transparent;border:none;font-size:22px;color:#94a3b8;cursor:pointer;padding:4px;line-height:1;border-radius:6px;"
+              onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">×</button>
+        </div>
+
+        <!-- Form -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+              Client / Business Name <span style="color:#dc2626;">*</span>
+            </label>
+            <input id="client-form-name" type="text" value="${v('name','')}"
+                placeholder="e.g. Smith Consulting Inc."
+                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;transition:border 0.15s;"
+                onfocus="this.style.border='1.5px solid #3b82f6'"
+                onblur="this.style.border='1.5px solid #e2e8f0'" />
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+              Legal Name <span style="font-weight:400;color:#94a3b8;">(optional)</span>
+            </label>
+            <input id="client-form-legal" type="text" value="${v('legalName','')}"
+                placeholder="Registered legal entity name"
+                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Industry</label>
+              <select id="client-form-industry"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                ${INDUSTRIES.map(i => `<option value="${i.value}" ${v('industry','PROFESSIONAL_SERVICES') === i.value ? 'selected' : ''}>${i.label}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Province</label>
+              <select id="client-form-province"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                ${PROVINCES.map(p => `<option value="${p}" ${v('province','ON') === p ? 'selected' : ''}>${p}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Fiscal Year End</label>
+              <select id="client-form-fy"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                ${MONTHS.map((m, i) => `<option value="${i+1}" ${v('fiscalYearEnd',12) == i+1 ? 'selected' : ''}>${m}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Currency</label>
+              <select id="client-form-currency"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                <option value="CAD" ${v('currency','CAD') === 'CAD' ? 'selected' : ''}>CAD — Canadian Dollar</option>
+                <option value="USD" ${v('currency','CAD') === 'USD' ? 'selected' : ''}>USD — US Dollar</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+              GST/HST Number <span style="font-weight:400;color:#94a3b8;">(optional)</span>
+            </label>
+            <input id="client-form-gst" type="text" value="${v('gstNumber','')}"
+                placeholder="123456789RT0001"
+                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Accent Colour</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${colorSwatches}</div>
+            <input type="hidden" id="client-color-input" value="${selectedColor}" />
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px;padding-top:20px;border-top:1px solid #e2e8f0;">
+          <button onclick="document.getElementById('client-modal-overlay').remove()"
+              style="padding:9px 18px;border:1.5px solid #e2e8f0;background:white;color:#475569;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+            Cancel
+          </button>
+          <button onclick="window._submitClientModal(${isEdit ? `'${existingId}'` : 'null'})"
+              style="padding:9px 20px;background:#16a34a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-check"></i> ${isEdit ? 'Save Changes' : 'Create Client'}
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    setTimeout(() => { const n = document.getElementById('client-form-name'); if (n) n.focus(); }, 60);
+  };
+
+  window.openEditClientModal = function(clientId) {
+    window.openCreateClientModal(clientId);
+  };
+
+  // ─── CLIENT FORM SUBMIT ───────────────────────────────────────────────────────
+  window._submitClientModal = function(existingId) {
+    const name = (document.getElementById('client-form-name')?.value || '').trim();
+    if (!name) {
+      const inp = document.getElementById('client-form-name');
+      if (inp) { inp.style.border = '1.5px solid #dc2626'; inp.focus(); }
+      return;
+    }
+    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const today = new Date().toISOString().split('T')[0];
+    const getField = (id, fallback) => {
+      const el = document.getElementById(id);
+      return el ? (el.value || fallback) : fallback;
+    };
+
+    if (existingId && existingId !== 'null') {
+      const idx = clients.findIndex(c => c.id === existingId);
+      if (idx === -1) return;
+      clients[idx].name          = name;
+      clients[idx].legalName     = getField('client-form-legal', '').trim();
+      clients[idx].industry      = getField('client-form-industry', 'PROFESSIONAL_SERVICES');
+      clients[idx].province      = getField('client-form-province', 'ON');
+      clients[idx].fiscalYearEnd = parseInt(getField('client-form-fy', '12'), 10);
+      clients[idx].currency      = getField('client-form-currency', 'CAD');
+      clients[idx].gstNumber     = getField('client-form-gst', '').trim();
+      clients[idx].color         = getField('client-color-input', '#3b82f6');
+      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+      if (UI_STATE.activeClientId === existingId) {
+        UI_STATE.activeClientName = name;
+        window.updateClientSwitcherUI(clients[idx]);
+      }
+    } else {
+      const maxId = clients.reduce((max, c) => {
+        const n = parseInt((c.id || '').replace('CLIENT-', ''), 10) || 0;
+        return Math.max(max, n);
+      }, 0);
+      const newClient = {
+        id:            'CLIENT-' + (maxId + 1),
+        name,
+        legalName:     getField('client-form-legal', '').trim(),
+        industry:      getField('client-form-industry', 'PROFESSIONAL_SERVICES'),
+        province:      getField('client-form-province', 'ON'),
+        fiscalYearEnd: parseInt(getField('client-form-fy', '12'), 10),
+        currency:      getField('client-form-currency', 'CAD'),
+        gstNumber:     getField('client-form-gst', '').trim(),
+        color:         getField('client-color-input', '#3b82f6'),
+        created:       today,
+        lastActive:    today,
+        txCount:       0,
+        accountCount:  0,
+      };
+      clients.push(newClient);
+      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+    }
+    const overlay = document.getElementById('client-modal-overlay');
+    if (overlay) overlay.remove();
+    window.navigateTo('clients');
+  };
+
+  // ─── CLIENT SWITCHER ──────────────────────────────────────────────────────────
+  window.switchClient = function(clientId) {
+    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const client = clients.find(c => c.id === clientId);
+    if (!client) { console.error('[CLIENT] Unknown client id:', clientId); return; }
+
+    console.log(`[CLIENT] Switching to: ${client.name} (${clientId})`);
+
+    // 1. Save current client's ledger data first
+    if (UI_STATE.activeClientId) {
+      const raw   = window.RoboLedger.Ledger.getRawState();
+      const accts = window.RoboLedger.Accounts.getAll();
+      localStorage.setItem('roboledger_v5_data_' + UI_STATE.activeClientId, JSON.stringify({
+        version: '2.0.0',
+        transactions: raw.transactions,
+        sigIndex:     raw.sigIndex,
+        accounts:     accts,
+      }));
+      console.log(`[CLIENT] Saved ledger for ${UI_STATE.activeClientId}`);
+    }
+
+    // 2. Load new client's ledger data
+    window.RoboLedger.Ledger.loadFromKey('roboledger_v5_data_' + clientId);
+
+    // 3. Update global state
+    UI_STATE.activeClientId   = clientId;
+    UI_STATE.activeClientName = client.name;
+    UI_STATE.selectedAccount  = 'ALL';
+    localStorage.setItem('roboledger_active_client', clientId);
+
+    // 4. Update cached counts on client registry entry
+    const idx = clients.findIndex(c => c.id === clientId);
+    if (idx !== -1) {
+      clients[idx].lastActive   = new Date().toISOString().split('T')[0];
+      clients[idx].txCount      = Object.keys(window.RoboLedger.Ledger.getRawState().transactions).length;
+      clients[idx].accountCount = window.RoboLedger.Accounts.getAll().length;
+      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+    }
+
+    // 5. Update sidebar UI + navigate home
+    window.updateClientSwitcherUI(client);
+    window.navigateTo('home');
+    console.log(`[CLIENT] Switch complete → ${client.name}`);
+  };
+
+  window.updateClientSwitcherUI = function(client) {
+    const avatar      = document.getElementById('client-avatar');
+    const nameDisplay = document.getElementById('client-name-display');
+    if (!client) {
+      if (avatar)      { avatar.textContent = '--'; avatar.style.background = '#475569'; }
+      if (nameDisplay)   nameDisplay.textContent = 'Select Client';
+      return;
+    }
+    const initials = (client.name || '?')
+      .split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+    if (avatar)      { avatar.textContent = initials; avatar.style.background = client.color || '#3b82f6'; }
+    if (nameDisplay)   nameDisplay.textContent = client.name;
+  };
+
+  window.deleteClient = function(clientId) {
+    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return;
+    if (!confirm(`Delete "${client.name}"?\n\nThis will permanently delete all transactions and accounts for this client. This cannot be undone.`)) return;
+
+    if (UI_STATE.activeClientId === clientId) {
+      UI_STATE.activeClientId   = null;
+      UI_STATE.activeClientName = '';
+      localStorage.removeItem('roboledger_active_client');
+      window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
+      window.updateClientSwitcherUI(null);
+    }
+    localStorage.removeItem('roboledger_v5_data_' + clientId);
+    const updated = clients.filter(c => c.id !== clientId);
+    localStorage.setItem('roboledger_clients', JSON.stringify(updated));
+    console.log(`[CLIENT] Deleted: ${client.name} (${clientId})`);
+    window.navigateTo('clients');
+  };
 
   // ─── ROADMAP PAGE ────────────────────────────────────────────────────────────
   // Merged from: Mega Game Plan (Feb 2026) + Antigravity SDLC review
@@ -2720,7 +3210,7 @@
         iconBg: '#fef3c7',
         items: [
           // Architecture sub-group
-          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Client Registry — Multi-Client Shell', detail: 'Firm dashboard with client list, create/select/archive. Navigation: Firm → Client → FY → Account → Transactions. The architectural foundation — everything else sits on it.' },
+          { status: 'in-progress', tag: 'Critical', group: 'Architecture', label: 'Client Registry — Multi-Client Shell', detail: 'Firm dashboard with client list, create/select/archive. Navigation: Firm → Client → FY → Account → Transactions. The architectural foundation — everything else sits on it.' },
           { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Scoped Ledger per Client (client_id everywhere)', detail: 'All transactions, accounts, statements, and reports filtered by active client_id. Zero data bleed between clients. Single most important architectural change.' },
           { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'IndexedDB Persistence (replace localStorage)', detail: '50MB+/origin, survives browser wipe, binary PDF blob support. SQLite via WASM (wa-sqlite) — one .db file per client. localStorage is a 5MB dead end.' },
           { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Fiscal Year Management UI', detail: 'Per-client: open FY, set start/end dates, view/switch between years, FY-scoped reports. Year-end rollover carries retained earnings forward automatically.' },
