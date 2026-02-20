@@ -1622,11 +1622,19 @@
     }
 
     render();
+    setTimeout(() => { if (window.updateSidebarState) window.updateSidebarState(); }, 0);
   }
 
-  // Navigation function for routing between pages  
+  // Navigation function for routing between pages
   window.navigateTo = function (route) {
     console.log(`[NAVIGATE] → ${route}`);
+
+    // Guard: client-only routes require an active client — redirect to portal
+    const _CLIENT_ROUTES = ['import', 'coa', 'reports', 'dashboard'];
+    if (_CLIENT_ROUTES.includes(route) && !UI_STATE.activeClientId) {
+      console.log(`[NAVIGATE] Blocked ${route} — no active client. Showing portal.`);
+      route = 'home';
+    }
 
     UI_STATE.currentRoute = route;
 
@@ -2685,6 +2693,7 @@
     document.querySelectorAll('.nav-item').forEach(item => {
       item.classList.toggle('active', item.dataset.route === UI_STATE.currentRoute);
     });
+    if (window.updateSidebarState) window.updateSidebarState();
 
     // 2. Breadcrumbs (Functional Active Routing)
     const bcContainer = document.getElementById('top-breadcrumb');
@@ -3202,6 +3211,9 @@
   };
 
   window.updateClientSwitcherUI = function(client) {
+    // Sync sidebar disabled state whenever client context changes
+    if (window.updateSidebarState) window.updateSidebarState();
+
     // Update top bar trigger label
     const labelEl = document.getElementById('top-client-label');
     if (labelEl) labelEl.textContent = client ? client.name : 'Select client';
@@ -3210,6 +3222,24 @@
     if (document.getElementById('context-drawer')?.classList.contains('open')) {
       window._renderDrawerRight(_drawerState.selectedFirmId);
     }
+  };
+
+  // ─── SIDEBAR STATE GATING ─────────────────────────────────────────────────
+  // Disables client-only nav items when no client is active. Idempotent.
+  window.updateSidebarState = function() {
+    const CLIENT_NAV_ROUTES = ['import', 'dashboard', 'reports', 'coa'];
+    const hasClient = !!UI_STATE.activeClientId;
+    CLIENT_NAV_ROUTES.forEach(route => {
+      const el = document.querySelector(`.nav-item[data-route="${route}"]`);
+      if (!el) return;
+      if (hasClient) {
+        el.classList.remove('disabled');
+        el.removeAttribute('title');
+      } else {
+        el.classList.add('disabled');
+        el.setAttribute('title', 'Select a client first');
+      }
+    });
   };
 
   window.deleteClient = function(clientId) {
@@ -4381,9 +4411,278 @@
     }
   };
 
+  // ─── ACCOUNTANT PORTAL ───────────────────────────────────────────────────────
+  // Renders the no-client landing page. Reads all client ledger data directly
+  // from localStorage without switching context (no loadFromKey calls).
+  function renderAccountantPortal() {
+    // ── 1. CLIENT LIST ──────────────────────────────────────────────────────
+    let clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    if (UI_STATE.activeAccountantId) {
+      clients = clients.filter(c => c.accountantId === UI_STATE.activeAccountantId);
+    }
+
+    // ── 2. LOCAL LABEL MAPS (local constants — cannot share with renderClientsPage) ─
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const industryLabels = {
+      PROFESSIONAL_SERVICES: 'Professional Services',
+      SHORT_TERM_RENTAL:     'Short-Term Rental',
+      RETAIL:                'Retail',
+      CONSTRUCTION:          'Construction',
+      RESTAURANT:            'Restaurant',
+      REAL_ESTATE:           'Real Estate',
+      E_COMMERCE:            'E-Commerce',
+      OTHER:                 'Other',
+    };
+    const industryColors = {
+      PROFESSIONAL_SERVICES: { bg: '#eff6ff', color: '#2563eb' },
+      SHORT_TERM_RENTAL:     { bg: '#f0fdf4', color: '#16a34a' },
+      RETAIL:                { bg: '#fef3c7', color: '#d97706' },
+      CONSTRUCTION:          { bg: '#fff7ed', color: '#ea580c' },
+      RESTAURANT:            { bg: '#fdf4ff', color: '#9333ea' },
+      REAL_ESTATE:           { bg: '#f0fdfa', color: '#0d9488' },
+      E_COMMERCE:            { bg: '#faf5ff', color: '#7c3aed' },
+      OTHER:                 { bg: '#f8fafc', color: '#64748b' },
+    };
+
+    // ── 3. PER-CLIENT STATS (read localStorage directly, no context switch) ─
+    const today = new Date();
+
+    const computeStats = (client) => {
+      let ledger = {};
+      try {
+        const raw = localStorage.getItem('roboledger_v5_data_' + client.id);
+        if (raw) ledger = JSON.parse(raw);
+      } catch (e) {
+        console.warn('[PORTAL] Could not parse ledger for', client.id, e);
+      }
+      const txList   = Object.values(ledger.transactions || {});
+      const accounts = ledger.accounts || [];
+      const txCount  = txList.length;
+      const acctCount = accounts.length;
+
+      const uncatCount = txList.filter(t => {
+        const cat = (t.category || '').trim();
+        return !cat || cat === 'UNCATEGORIZED';
+      }).length;
+
+      const reviewCount = txList.filter(t =>
+        t.needsReview === true || t.status === 'needs_review'
+      ).length;
+
+      let daysSince = null;
+      if (txList.length > 0) {
+        const dates = txList.map(t => t.date ? new Date(t.date) : null).filter(Boolean);
+        if (dates.length > 0) {
+          const mostRecent = new Date(Math.max(...dates.map(d => d.getTime())));
+          daysSince = Math.floor((today - mostRecent) / 86400000);
+        }
+      }
+      if (daysSince === null && client.lastActive) {
+        daysSince = Math.floor((today - new Date(client.lastActive)) / 86400000);
+      }
+
+      const hasDiscrepancy = accounts.some(a => {
+        if (!(a.openingBalance || 0)) return false;
+        return txList.filter(t => t.account_id === a.id).length === 0;
+      });
+
+      let health = 'good';
+      if (reviewCount > 0 || (txCount > 0 && uncatCount / txCount > 0.3) || daysSince > 60) {
+        health = 'urgent';
+      } else if (uncatCount > 0 || daysSince > 30) {
+        health = 'attention';
+      }
+
+      return { txCount, acctCount, uncatCount, reviewCount, daysSince, hasDiscrepancy, health };
+    };
+
+    const clientStats = clients.map(c => ({ client: c, stats: computeStats(c) }));
+
+    // ── 4. SUMMARY AGGREGATES ───────────────────────────────────────────────
+    const totalTxns      = clientStats.reduce((s, { stats }) => s + stats.txCount, 0);
+    const totalUncat     = clientStats.reduce((s, { stats }) => s + stats.uncatCount, 0);
+    const urgentCount    = clientStats.filter(({ stats }) => stats.health === 'urgent').length;
+    const attentionCount = clientStats.filter(({ stats }) => stats.health !== 'good').length;
+
+    // ── 5. HEALTH BADGE ─────────────────────────────────────────────────────
+    const healthBadge = (health) => {
+      const cfg = {
+        good:      { dot: '#16a34a', bg: '#dcfce7', color: '#15803d', label: 'Good' },
+        attention: { dot: '#d97706', bg: '#fef3c7', color: '#b45309', label: 'Attention' },
+        urgent:    { dot: '#dc2626', bg: '#fee2e2', color: '#b91c1c', label: 'Urgent' },
+      }[health] || { dot: '#94a3b8', bg: '#f1f5f9', color: '#64748b', label: '—' };
+      return `<span class="portal-health-badge" style="background:${cfg.bg};color:${cfg.color};">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+                     background:${cfg.dot};margin-right:5px;flex-shrink:0;"></span>${cfg.label}</span>`;
+    };
+
+    // ── 6. SUMMARY STRIP ────────────────────────────────────────────────────
+    const summaryStrip = `
+      <div class="portal-summary-strip">
+        <div class="portal-summary-cell">
+          <div class="portal-summary-value">${clientStats.length}</div>
+          <div class="portal-summary-label">Clients</div>
+        </div>
+        <div class="portal-summary-divider"></div>
+        <div class="portal-summary-cell">
+          <div class="portal-summary-value">${totalTxns.toLocaleString()}</div>
+          <div class="portal-summary-label">Total Transactions</div>
+          <div class="portal-summary-sub" style="${totalUncat > 0 ? 'color:#d97706;' : 'color:#16a34a;'}">
+            ${totalUncat > 0 ? `${totalUncat.toLocaleString()} uncategorized` : 'All categorized ✓'}
+          </div>
+        </div>
+        <div class="portal-summary-divider"></div>
+        <div class="portal-summary-cell">
+          <div class="portal-summary-value" style="color:${attentionCount > 0 ? '#d97706' : '#16a34a'};">
+            ${attentionCount}
+          </div>
+          <div class="portal-summary-label">Need Attention</div>
+          ${urgentCount > 0 ? `<div class="portal-summary-sub" style="color:#dc2626;">${urgentCount} urgent</div>` : ''}
+        </div>
+      </div>`;
+
+    // ── 7. CLIENT CARD ──────────────────────────────────────────────────────
+    const clientCard = ({ client, stats }) => {
+      const color    = client.color || '#3b82f6';
+      const initials = (client.name || '?').split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+      const iLabel   = industryLabels[client.industry] || 'Other';
+      const iStyle   = industryColors[client.industry] || industryColors.OTHER;
+      const fyLabel  = client.fiscalYearEnd ? MONTH_NAMES[(client.fiscalYearEnd - 1) % 12] : '—';
+      const stripe   = { good: '#16a34a', attention: '#f59e0b', urgent: '#dc2626' }[stats.health] || '#94a3b8';
+
+      const dayLabel = stats.daysSince === null ? 'No imports yet'
+        : stats.daysSince === 0 ? 'Imported today'
+        : `${stats.daysSince}d since last import`;
+
+      const catLine = stats.uncatCount === 0
+        ? `<span style="color:#16a34a;font-size:11px;">✓ All categorized</span>`
+        : `<span style="color:#d97706;font-size:11px;">⚠ ${stats.uncatCount} uncategorized</span>`;
+
+      return `
+        <div class="portal-client-card" style="border-top:3px solid ${stripe};">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <div style="width:36px;height:36px;border-radius:9px;background:${color};color:white;
+                        font-size:13px;font-weight:700;display:flex;align-items:center;
+                        justify-content:center;flex-shrink:0;">${initials}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);
+                          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${client.name}</div>
+              <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap;">
+                <span style="background:${iStyle.bg};color:${iStyle.color};font-size:10px;
+                             font-weight:600;padding:1px 6px;border-radius:4px;">${iLabel}</span>
+                ${client.province ? `<span style="background:#f1f5f9;color:#475569;font-size:10px;
+                             font-weight:600;padding:1px 6px;border-radius:4px;">${client.province}</span>` : ''}
+              </div>
+            </div>
+            ${healthBadge(stats.health)}
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px;">
+            <div style="text-align:center;padding:5px 3px;background:var(--bg-secondary,#f8fafc);border-radius:5px;">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${stats.txCount.toLocaleString()}</div>
+              <div style="font-size:9px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Txns</div>
+            </div>
+            <div style="text-align:center;padding:5px 3px;background:var(--bg-secondary,#f8fafc);border-radius:5px;">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${stats.acctCount}</div>
+              <div style="font-size:9px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Accts</div>
+            </div>
+            <div style="text-align:center;padding:5px 3px;background:var(--bg-secondary,#f8fafc);border-radius:5px;">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${fyLabel}</div>
+              <div style="font-size:9px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">FY End</div>
+            </div>
+          </div>
+
+          <div style="padding:7px 9px;background:var(--bg-secondary,#f8fafc);border-radius:6px;margin-bottom:10px;">
+            ${catLine}
+            ${stats.reviewCount > 0 ? `<div style="font-size:11px;color:#dc2626;margin-top:2px;">▶ ${stats.reviewCount} need review</div>` : ''}
+            ${stats.hasDiscrepancy ? `<div style="font-size:11px;color:#9333ea;margin-top:2px;">― Balance discrepancy</div>` : ''}
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">
+              <i class="ph ph-clock" style="font-size:10px;"></i> ${dayLabel}
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <button onclick="event.stopPropagation();window.openEditClientModal('${client.id}')"
+                    title="Edit" style="background:transparent;border:1px solid var(--border-color,#e2e8f0);
+                    color:var(--text-secondary,#475569);font-size:12px;padding:4px 9px;border-radius:5px;cursor:pointer;">
+              <i class="ph ph-pencil"></i>
+            </button>
+            <button onclick="window.switchClient('${client.id}')"
+                    style="background:${color};color:white;border:none;font-size:12px;font-weight:600;
+                    padding:6px 14px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+              Open <i class="ph ph-arrow-right"></i>
+            </button>
+          </div>
+        </div>`;
+    };
+
+    // ── 8. EMPTY STATE ──────────────────────────────────────────────────────
+    const emptyState = `
+      <div style="text-align:center;padding:80px 20px;">
+        <div style="width:60px;height:60px;background:#f1f5f9;border-radius:14px;
+                    display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;">
+          <i class="ph ph-buildings" style="color:#94a3b8;"></i>
+        </div>
+        <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:6px;">No clients yet</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:20px;">Create your first client to get started.</div>
+        <button onclick="window.openCreateClientModal()"
+                style="background:#2563eb;color:white;border:none;padding:10px 22px;border-radius:8px;
+                font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;">
+          <i class="ph ph-plus"></i> Create First Client
+        </button>
+      </div>`;
+
+    // ── 9. ASSEMBLE ─────────────────────────────────────────────────────────
+    const contextLabel = UI_STATE.activeAccountantId
+      ? `<span style="color:#8b5cf6;font-weight:600;">${UI_STATE.activeAccountantName}</span>`
+      : `<span style="color:#94a3b8;">All firms · Admin workspace</span>`;
+
+    return `
+      <div class="ai-brain-page" style="padding:24px 28px;max-width:1200px;">
+        <div class="std-page-header">
+          <div class="header-brand">
+            <div class="icon-box" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+              <i class="ph ph-user-circle-gear"></i>
+            </div>
+            <div>
+              ${UI_STATE.activeAccountantId ? `
+                <div style="font-size:11px;color:#8b5cf6;font-weight:600;margin-bottom:2px;cursor:pointer;"
+                     onclick="window.openContextDrawer()">
+                  <i class="ph ph-caret-left" style="font-size:10px;"></i> Accountants
+                </div>` : ''}
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">
+                Accountant Portal
+              </h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">${contextLabel}</p>
+            </div>
+          </div>
+          <button onclick="window.openCreateClientModal()" class="btn-restored"
+                  style="background:#16a34a;border:none;color:white;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-plus"></i> New Client
+          </button>
+        </div>
+        ${clientStats.length > 0 ? summaryStrip : ''}
+        ${clientStats.length === 0
+          ? emptyState
+          : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;">
+               ${clientStats.map(clientCard).join('')}
+             </div>`}
+      </div>`;
+  }
+
   function renderHome() {
     const stage = document.getElementById('app-stage');
     if (!stage) return;
+
+    // ── PORTAL BRANCH: no client selected → show accountant portal ──────────
+    if (!UI_STATE.activeClientId) {
+      const existingContainer = document.getElementById('home-container');
+      if (existingContainer) existingContainer.remove(); // clear any stale React mount
+      stage.innerHTML = `<div class="fade-in" style="overflow-y:auto;height:100%;">${renderAccountantPortal()}</div>`;
+      return;
+    }
+
+    // ── CLIENT BRANCH: client active → existing React home page ─────────────
 
     // If the container already exists and React is mounted, just re-render in place
     if (document.getElementById('home-container') && window.mountHomePage) {

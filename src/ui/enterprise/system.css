@@ -4577,3 +4577,104 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
     color: #1d4ed8;
     flex-shrink: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ACCOUNTANT PORTAL (v5.3)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Disabled nav items — no client active */
+.nav-item.disabled {
+    opacity: 0.32;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+.nav-item.disabled:hover {
+    color: #8888a4;
+    background: transparent;
+}
+.sidebar.collapsed .nav-item.disabled {
+    opacity: 0.32;
+}
+
+/* Portal summary strip */
+.portal-summary-strip {
+    display: flex;
+    align-items: stretch;
+    background: var(--bg-primary, #ffffff);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 10px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.06));
+}
+.portal-summary-cell {
+    flex: 1;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.portal-summary-divider {
+    width: 1px;
+    background: var(--border-color, #e2e8f0);
+    margin: 12px 0;
+    flex-shrink: 0;
+}
+.portal-summary-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--text-primary, #0f172a);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.portal-summary-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-tertiary, #94a3b8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.portal-summary-sub {
+    font-size: 0.7rem;
+    color: var(--text-secondary, #475569);
+    margin-top: 3px;
+}
+
+/* Health badge pill */
+.portal-health-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    letter-spacing: 0.2px;
+}
+
+/* Portal client card */
+.portal-client-card {
+    background: var(--bg-primary, #ffffff);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 10px;
+    padding: 16px;
+    transition: box-shadow 0.15s, transform 0.12s;
+    box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,0.06));
+}
+.portal-client-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+}
+
+/* Responsive summary strip */
+@media (max-width: 600px) {
+    .portal-summary-strip {
+        flex-direction: column;
+    }
+    .portal-summary-divider {
+        width: auto;
+        height: 1px;
+        margin: 0 12px;
+    }
+}
