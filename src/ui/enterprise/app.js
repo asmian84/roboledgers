@@ -559,8 +559,9 @@
 
   // Desktop sidebar collapse toggle
   window.toggleSidebar = () => {
-    const sidebar = document.getElementById('sidebar');
-    const toggleBtn = document.getElementById('sidebar-toggle');
+    const sidebar   = document.getElementById('sidebar');
+    // Button is now in the top context bar (moved from sidebar-brand in v5.3)
+    const toggleBtn = document.getElementById('top-sidebar-toggle');
 
     if (sidebar) {
       sidebar.classList.toggle('collapsed');
@@ -579,13 +580,14 @@
         setTimeout(() => window.updateUtilityBar(), 100);
       }
 
-      // Update button icon and title
-      if (isCollapsed) {
-        toggleBtn.innerHTML = '<i class="ph ph-caret-right"></i>';
-        toggleBtn.title = 'Exit Detail Mode';
-      } else {
-        toggleBtn.innerHTML = '<i class="ph ph-caret-left"></i>';
-        toggleBtn.title = 'Enter Detail Mode';
+      // Update top-bar button icon to reflect state
+      if (toggleBtn) {
+        toggleBtn.innerHTML = isCollapsed
+          ? '<i class="ph ph-sidebar-simple" style="font-size:18px;"></i>'
+          : '<i class="ph ph-list" style="font-size:18px;"></i>';
+        toggleBtn.title = isCollapsed ? 'Show sidebar' : 'Hide sidebar';
+        // Remove pulse once user has interacted with the button
+        toggleBtn.classList.remove('has-data-pulse');
       }
     }
   };
@@ -1174,6 +1176,15 @@
     console.log(`[WORKSPACE] ═══ UNIFIED UPDATE for: ${selectedAccount} ═══`);
 
     const allTxns = window.RoboLedger.Ledger.getAll();
+
+    // Pulse the sidebar toggle button when there are transactions loaded
+    // (gives the user a visual hint that they can collapse the sidebar for more space)
+    if (allTxns.length > 0) {
+      const btn = document.getElementById('top-sidebar-toggle');
+      if (btn && !btn.classList.contains('has-data-pulse')) {
+        btn.classList.add('has-data-pulse');
+      }
+    }
     const filteredTxns = selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === selectedAccount);
     console.log(`[WORKSPACE] Filtered: ${filteredTxns.length} of ${allTxns.length} transactions`);
 

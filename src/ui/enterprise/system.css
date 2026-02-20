@@ -4578,6 +4578,24 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
     flex-shrink: 0;
 }
 
+/* ─── SIDEBAR TOGGLE PULSE (top bar, shown when transactions are loaded) ─── */
+@keyframes sidebar-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55); }
+    60%  { box-shadow: 0 0 0 7px rgba(99, 102, 241, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+#top-sidebar-toggle.has-data-pulse {
+    animation: sidebar-pulse 1.8s ease-out infinite;
+    background: rgba(99, 102, 241, 0.08);
+    border-radius: 8px;
+    color: #6366f1;
+}
+#top-sidebar-toggle.has-data-pulse:hover {
+    animation: none;
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    ACCOUNTANT PORTAL (v5.3)
    ═══════════════════════════════════════════════════════════════════════ */
