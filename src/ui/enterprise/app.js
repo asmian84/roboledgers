@@ -1710,7 +1710,7 @@
     }
 
     // Render breadcrumbs to DOM
-    const bcContainer = document.getElementById('breadcrumb');
+    const bcContainer = document.getElementById('top-breadcrumb');
     if (bcContainer) {
       bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
         const isLast  = i === UI_STATE.breadcrumbs.length - 1;
@@ -2687,7 +2687,7 @@
     });
 
     // 2. Breadcrumbs (Functional Active Routing)
-    const bcContainer = document.getElementById('breadcrumb');
+    const bcContainer = document.getElementById('top-breadcrumb');
     if (bcContainer) {
       bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
         const isLast  = i === UI_STATE.breadcrumbs.length - 1;
@@ -2754,8 +2754,8 @@
       case 'coa': return renderCOAPage();
       case 'reports': return renderReportsPage();
       case 'roadmap': return renderRoadmapPage();
-      case 'accountants': return renderAccountantsPage();
-      case 'clients': return renderClientsPage();
+      case 'accountants': setTimeout(() => window.openContextDrawer(), 0); return '';
+      case 'clients':     setTimeout(() => window.openContextDrawer(), 0); return '';
       case 'home': renderHome(); return ''; // renderHome() manages stage directly
       default: return renderPlaceholder(UI_STATE.currentRoute.toUpperCase());
     }
@@ -2904,7 +2904,7 @@
               <i class="ph ph-buildings"></i>
             </div>
             <div>
-              ${UI_STATE.activeAccountantId ? `<div style="font-size:11px;color:#8b5cf6;font-weight:600;margin-bottom:2px;cursor:pointer;" onclick="window.navigateTo('accountants')"><i class="ph ph-caret-left" style="font-size:10px;"></i> Accountants</div>` : ''}
+              ${UI_STATE.activeAccountantId ? `<div style="font-size:11px;color:#8b5cf6;font-weight:600;margin-bottom:2px;cursor:pointer;" onclick="window.openContextDrawer()"><i class="ph ph-caret-left" style="font-size:10px;"></i> Accountants</div>` : ''}
               <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Client Registry</h1>
               <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">
                 ${clients.length} client${clients.length !== 1 ? 's' : ''} ·
@@ -3151,7 +3151,9 @@
     }
     const overlay = document.getElementById('client-modal-overlay');
     if (overlay) overlay.remove();
-    window.navigateTo('clients');
+    // Re-open drawer so user sees the new client in the list
+    _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
+    setTimeout(() => window.openContextDrawer(), 50);
   };
 
   // ─── CLIENT SWITCHER ──────────────────────────────────────────────────────────
@@ -3200,17 +3202,14 @@
   };
 
   window.updateClientSwitcherUI = function(client) {
-    const avatar      = document.getElementById('client-avatar');
-    const nameDisplay = document.getElementById('client-name-display');
-    if (!client) {
-      if (avatar)      { avatar.textContent = '--'; avatar.style.background = '#475569'; }
-      if (nameDisplay)   nameDisplay.textContent = 'Select Client';
-      return;
+    // Update top bar trigger label
+    const labelEl = document.getElementById('top-client-label');
+    if (labelEl) labelEl.textContent = client ? client.name : 'Select client';
+
+    // Update drawer if it's open (re-render right panel with new active state)
+    if (document.getElementById('context-drawer')?.classList.contains('open')) {
+      window._renderDrawerRight(_drawerState.selectedFirmId);
     }
-    const initials = (client.name || '?')
-      .split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
-    if (avatar)      { avatar.textContent = initials; avatar.style.background = client.color || '#3b82f6'; }
-    if (nameDisplay)   nameDisplay.textContent = client.name;
   };
 
   window.deleteClient = function(clientId) {
@@ -3230,7 +3229,8 @@
     const updated = clients.filter(c => c.id !== clientId);
     localStorage.setItem('roboledger_clients', JSON.stringify(updated));
     console.log(`[CLIENT] Deleted: ${client.name} (${clientId})`);
-    window.navigateTo('clients');
+    _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
+    setTimeout(() => window.openContextDrawer(), 50);
   };
 
   // ─── ACCOUNTANT LAYER ────────────────────────────────────────────────────────
@@ -3500,7 +3500,8 @@
 
     localStorage.setItem('roboledger_accountants', JSON.stringify(accountants));
     document.getElementById('create-accountant-modal-overlay')?.remove();
-    window.navigateTo('accountants');
+    _drawerState.selectedFirmId = null;
+    setTimeout(() => window.openContextDrawer(), 50);
   };
 
   window.switchAccountant = function(accountantId) {
@@ -3529,27 +3530,21 @@
 
     window.updateAccountantSwitcherUI(acc);
     console.log(`[ACCOUNTANT] Switched to: ${acc.name}`);
-    window.navigateTo('clients');
+    // Open context drawer to the firm's client list instead of navigating to a page
+    _drawerState.selectedFirmId = accountantId;
+    setTimeout(() => window.openContextDrawer(), 50);
   };
 
   window.updateAccountantSwitcherUI = function(accountant) {
-    const avatarEl = document.getElementById('accountant-avatar');
-    const nameEl   = document.getElementById('accountant-name-display');
-    if (!avatarEl || !nameEl) return;
-
-    if (!accountant) {
-      avatarEl.style.background = '#6d28d9';
-      avatarEl.innerHTML        = '<i class="ph ph-shield-check" style="font-size:11px;"></i>';
-      nameEl.textContent        = 'Admin';
-      nameEl.style.color        = 'rgba(255,255,255,0.45)';
-    } else {
-      const color    = accountant.color || '#8b5cf6';
-      const initials = (accountant.name || '?').slice(0, 2).toUpperCase();
-      avatarEl.style.background  = color;
-      avatarEl.innerHTML         = initials;
-      avatarEl.style.fontSize    = '9px';
-      nameEl.textContent         = accountant.name;
-      nameEl.style.color         = 'rgba(255,255,255,0.85)';
+    // Tint the top bar drawer trigger icon to the firm's accent colour
+    const triggerBtn = document.getElementById('top-drawer-trigger');
+    if (triggerBtn) {
+      const color = accountant?.color || '#6d28d9';
+      triggerBtn.style.borderColor = color + '55';
+    }
+    // Re-render drawer left panel if open
+    if (document.getElementById('context-drawer')?.classList.contains('open')) {
+      window._renderDrawerLeft();
     }
   };
 
@@ -3595,7 +3590,197 @@
     }
 
     console.log(`[ACCOUNTANT] Deleted: ${acc.name} (${accountantId}), cascade-deleted ${clientCount} clients`);
-    window.navigateTo('accountants');
+    _drawerState.selectedFirmId = null;
+    setTimeout(() => window.openContextDrawer(), 50);
+  };
+
+  // ─── CONTEXT DRAWER ──────────────────────────────────────────────────────────
+  // Two-panel slide-in: Firms (left) × Clients (right). No page navigation needed.
+
+  let _drawerState = { selectedFirmId: null };
+
+  window.openContextDrawer = function() {
+    // Seed selection from active state
+    _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
+
+    // Create overlay if absent
+    if (!document.getElementById('context-drawer-overlay')) {
+      const overlay = document.createElement('div');
+      overlay.id = 'context-drawer-overlay';
+      overlay.onclick = window.closeContextDrawer;
+      document.body.appendChild(overlay);
+
+      const drawer = document.createElement('div');
+      drawer.id = 'context-drawer';
+      drawer.innerHTML = `
+        <div id="context-drawer-header">
+          <h2><i class="ph ph-buildings" style="margin-right:7px;color:#8b5cf6;"></i>Switch Context</h2>
+          <button onclick="window.closeContextDrawer()"
+                  style="background:none;border:none;cursor:pointer;font-size:20px;color:#94a3b8;line-height:1;padding:0;">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+        <div id="context-drawer-panels">
+          <div id="context-drawer-left"></div>
+          <div id="context-drawer-right"></div>
+        </div>`;
+      document.body.appendChild(drawer);
+
+      // Keyboard close
+      document.addEventListener('keydown', function _escDrawer(e) {
+        if (e.key === 'Escape') { window.closeContextDrawer(); document.removeEventListener('keydown', _escDrawer); }
+      });
+    }
+
+    // Render panels then open
+    window._renderDrawerLeft();
+    window._renderDrawerRight(_drawerState.selectedFirmId);
+    requestAnimationFrame(() => {
+      document.getElementById('context-drawer-overlay').classList.add('open');
+      document.getElementById('context-drawer').classList.add('open');
+    });
+  };
+
+  window.closeContextDrawer = function() {
+    const overlay = document.getElementById('context-drawer-overlay');
+    const drawer  = document.getElementById('context-drawer');
+    if (overlay) overlay.classList.remove('open');
+    if (drawer)  drawer.classList.remove('open');
+  };
+
+  window._renderDrawerLeft = function() {
+    const container   = document.getElementById('context-drawer-left');
+    if (!container) return;
+    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const clients     = JSON.parse(localStorage.getItem('roboledger_clients')     || '[]');
+
+    const adminSelected = !_drawerState.selectedFirmId;
+
+    let html = `
+      <div style="padding:10px 14px 6px;font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;">FIRMS</div>
+      <div class="drawer-firm-item ${adminSelected ? 'selected' : ''}"
+           onclick="window._drawerSelectFirm(null)"
+           style="${adminSelected ? 'border-left:3px solid #6d28d9;background:#ede9fe;' : ''}">
+        <div class="drawer-firm-avatar" style="background:#6d28d9;font-size:11px;">
+          <i class="ph ph-shield-check"></i>
+        </div>
+        <span class="drawer-firm-name" style="${adminSelected ? 'color:#6d28d9;' : ''}">Admin</span>
+        <span class="drawer-firm-count">${clients.filter(c => !c.accountantId).length}</span>
+      </div>`;
+
+    accountants.forEach(acc => {
+      const count    = clients.filter(c => c.accountantId === acc.id).length;
+      const color    = acc.color || '#8b5cf6';
+      const initials = (acc.name || '?').slice(0, 2).toUpperCase();
+      const sel      = _drawerState.selectedFirmId === acc.id;
+      html += `
+        <div class="drawer-firm-item ${sel ? 'selected' : ''}"
+             onclick="window._drawerSelectFirm('${acc.id}')"
+             style="${sel ? `border-left:3px solid ${color};background:${color}18;` : ''}">
+          <div class="drawer-firm-avatar" style="background:${color};">${initials}</div>
+          <span class="drawer-firm-name" style="${sel ? `color:${color};` : ''}">${acc.name}</span>
+          <span class="drawer-firm-count">${count}</span>
+        </div>`;
+    });
+
+    html += `
+      <div style="margin-top:auto;padding:14px;">
+        <button onclick="window.closeContextDrawer();setTimeout(()=>window.openCreateAccountantModal(),50);"
+                style="width:100%;padding:8px;border-radius:8px;border:1px dashed #cbd5e1;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:#64748b;display:flex;align-items:center;justify-content:center;gap:5px;">
+          <i class="ph ph-plus"></i> New Firm
+        </button>
+      </div>`;
+
+    container.innerHTML = html;
+  };
+
+  window._renderDrawerRight = function(accountantId) {
+    const container = document.getElementById('context-drawer-right');
+    if (!container) return;
+    const allClients  = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const acc         = accountantId ? accountants.find(a => a.id === accountantId) : null;
+
+    const filtered = accountantId
+      ? allClients.filter(c => c.accountantId === accountantId)
+      : allClients.filter(c => !c.accountantId);
+
+    const firmName = acc ? acc.name : 'Admin — Unassigned';
+    const firmColor = acc?.color || '#6d28d9';
+
+    let header = `
+      <div style="padding:14px 18px 10px;border-bottom:1px solid #f1f5f9;flex-shrink:0;">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;margin-bottom:2px;">CLIENTS</div>
+        <div style="font-size:0.88rem;font-weight:700;color:#0f172a;">${firmName}</div>
+      </div>`;
+
+    let body = '';
+    if (!filtered.length) {
+      body = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;">
+          <div style="width:48px;height:48px;border-radius:12px;background:${firmColor}14;display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+            <i class="ph ph-buildings" style="font-size:24px;color:${firmColor};"></i>
+          </div>
+          <div style="font-size:0.85rem;font-weight:700;color:#1e293b;margin-bottom:6px;">No clients yet</div>
+          <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:18px;">Add a client to get started</div>
+        </div>`;
+    } else {
+      body = filtered.map(client => {
+        const color    = client.color || '#3b82f6';
+        const initials = (client.name || '?').split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+        const isActive = client.id === UI_STATE.activeClientId;
+        const txCount  = (() => {
+          try { const d = JSON.parse(localStorage.getItem('roboledger_v5_data_' + client.id) || '{}'); return Object.keys(d.transactions || {}).length; } catch { return 0; }
+        })();
+        return `
+          <div class="drawer-client-item ${isActive ? 'active-client' : ''}"
+               onclick="window._drawerPickClient('${accountantId || ''}','${client.id}')">
+            <div class="drawer-client-avatar" style="background:${color};">${initials}</div>
+            <div style="flex:1;min-width:0;">
+              <div class="drawer-client-name">${client.name}</div>
+              <div class="drawer-client-meta">${client.industry || ''} ${txCount ? '· ' + txCount.toLocaleString() + ' txns' : ''}</div>
+            </div>
+            ${isActive ? '<span class="drawer-client-active-badge">Active</span>' : ''}
+          </div>`;
+      }).join('');
+    }
+
+    const footer = `
+      <div style="padding:12px 16px;border-top:1px solid #f1f5f9;flex-shrink:0;margin-top:auto;">
+        <button onclick="window.closeContextDrawer();setTimeout(()=>window.openCreateClientModal(),50);"
+                style="width:100%;padding:8px;border-radius:8px;border:1px dashed #cbd5e1;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:#64748b;display:flex;align-items:center;justify-content:center;gap:5px;">
+          <i class="ph ph-plus"></i> New Client
+        </button>
+      </div>`;
+
+    container.innerHTML = header + `<div style="flex:1;overflow-y:auto;">` + body + `</div>` + footer;
+  };
+
+  window._drawerSelectFirm = function(accountantId) {
+    _drawerState.selectedFirmId = accountantId;
+    window._renderDrawerLeft();
+    window._renderDrawerRight(accountantId);
+  };
+
+  window._drawerPickClient = function(accountantId, clientId) {
+    // If switching to a different firm, set accountant context first
+    if (accountantId && accountantId !== UI_STATE.activeAccountantId) {
+      const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+      const acc = accountants.find(a => a.id === accountantId);
+      if (acc) {
+        UI_STATE.activeAccountantId   = accountantId;
+        UI_STATE.activeAccountantName = acc.name;
+        localStorage.setItem('roboledger_active_accountant', accountantId);
+        window.updateAccountantSwitcherUI(acc);
+      }
+    } else if (!accountantId && UI_STATE.activeAccountantId) {
+      UI_STATE.activeAccountantId   = null;
+      UI_STATE.activeAccountantName = '';
+      localStorage.removeItem('roboledger_active_accountant');
+      window.updateAccountantSwitcherUI(null);
+    }
+    window.closeContextDrawer();
+    window.switchClient(clientId);
   };
 
   // ─── ROADMAP PAGE ────────────────────────────────────────────────────────────

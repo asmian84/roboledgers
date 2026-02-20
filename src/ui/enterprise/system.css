@@ -4280,3 +4280,300 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
     transform: rotate(180deg);
     /* Flip to right-facing arrow */
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TOP CONTEXT BAR — Breadcrumb + Context Drawer trigger (v5.3)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+#top-context-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 44px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    display: flex;
+    align-items: center;
+    padding: 0 16px 0 0;
+    gap: 0;
+    z-index: 200;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+#top-sidebar-toggle {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 18px;
+    border-right: 1px solid #f1f5f9;
+    transition: background 0.15s, color 0.15s;
+}
+#top-sidebar-toggle:hover {
+    background: #f8fafc;
+    color: #0f172a;
+}
+
+.top-breadcrumb-trail {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 13px;
+    color: #64748b;
+    overflow: hidden;
+    padding: 0 12px;
+    min-width: 0;
+}
+.top-breadcrumb-trail .breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 5px;
+    transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
+}
+.top-breadcrumb-trail .breadcrumb-item:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+.top-breadcrumb-trail .breadcrumb-item.active {
+    color: #0f172a;
+    font-weight: 600;
+    cursor: default;
+}
+.top-breadcrumb-trail .breadcrumb-item.active:hover {
+    background: none;
+}
+.top-breadcrumb-trail .breadcrumb-separator {
+    color: #cbd5e1;
+    font-size: 11px;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+#top-drawer-trigger {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+    max-width: 220px;
+}
+#top-drawer-trigger:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+#top-client-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+}
+
+/* ── Layout adjustments for top bar ──────────────────────── */
+.app-layout {
+    padding-top: 44px;
+}
+.sidebar {
+    top: 44px !important;
+    height: calc(100vh - 44px) !important;
+}
+/* Keep utility bar aligned too */
+.utility-bar {
+    top: 44px !important;
+    height: calc(100vh - 44px) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CONTEXT DRAWER — Two-panel slide-in (Firms left, Clients right)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+#context-drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    top: 44px;
+    background: rgba(15, 23, 42, 0.4);
+    z-index: 5000;
+}
+#context-drawer-overlay.open {
+    display: block;
+}
+
+#context-drawer {
+    position: fixed;
+    top: 44px;
+    right: -720px;
+    width: 680px;
+    max-width: 95vw;
+    height: calc(100vh - 44px);
+    background: #fff;
+    box-shadow: -8px 0 40px rgba(0,0,0,0.15);
+    z-index: 5001;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #e2e8f0;
+    transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+#context-drawer.open {
+    right: 0;
+}
+
+#context-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+#context-drawer-header h2 {
+    margin: 0;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+#context-drawer-panels {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+#context-drawer-left {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid #e2e8f0;
+    overflow-y: auto;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+}
+
+#context-drawer-right {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.drawer-firm-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.12s;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.drawer-firm-item:hover {
+    background: #f1f5f9;
+}
+.drawer-firm-item.selected {
+    background: #ede9fe;
+    border-left: 3px solid #8b5cf6;
+}
+.drawer-firm-item.selected .drawer-firm-name {
+    color: #6d28d9;
+    font-weight: 700;
+}
+.drawer-firm-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.drawer-firm-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+.drawer-firm-count {
+    font-size: 11px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.drawer-client-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    cursor: pointer;
+    transition: background 0.12s;
+    border-bottom: 1px solid #f1f5f9;
+}
+.drawer-client-item:hover {
+    background: #f8fafc;
+}
+.drawer-client-item.active-client {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+}
+.drawer-client-item.active-client .drawer-client-name {
+    color: #1d4ed8;
+    font-weight: 700;
+}
+.drawer-client-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.drawer-client-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+.drawer-client-meta {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 1px;
+}
+.drawer-client-active-badge {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    flex-shrink: 0;
+}
