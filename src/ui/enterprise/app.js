@@ -510,32 +510,8 @@
         // Retroactively fix any CC refunds/cashback mis-categorized as revenue
         window.fixCCRefunds?.();
 
-        // Run auto-categorization — awaits RuleEngine.ready so we never race the
-        // async vendor_training.json fetch. No setTimeout guessing needed.
-        (async () => {
-          if (!window.RuleEngine) {
-            console.warn('[IMPORT] RuleEngine not loaded — categorization skipped');
-            return;
-          }
-          // Wait for SignalFusionEngine to be fully initialized (FuzzyMatcher fetch)
-          await window.RuleEngine.ready;
-
-          const allTxns = window.RoboLedger.Ledger.getAll();
-          // Include 9970 fallback transactions — they were unmatched during ledger.core.js parse
-          const uncategorized = allTxns.filter(tx =>
-            !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW' || tx.category === '9970'
-          );
-
-          console.log(`[IMPORT] Auto-categorizing ${uncategorized.length} of ${allTxns.length} transactions...`);
-          if (uncategorized.length === 0) {
-            console.log('[IMPORT] All transactions already categorized ✓');
-            return;
-          }
-
-          const result = window.RuleEngine.bulkCategorize(uncategorized);
-          console.log(`[IMPORT] Auto-cat complete: ${result.categorized} categorized, ${result.flagged} flagged for review, ${result.skipped} skipped`);
-          if (result.categorized > 0 && window.updateWorkspace) window.updateWorkspace();
-        })();
+        // Auto-categorize all uncategorized transactions (waits for RuleEngine.ready)
+        window._runAutoCatOnExisting();
 
         // Seed GST data for all newly imported transactions
         window.initGSTOnTransactions?.();
@@ -1518,6 +1494,29 @@
     window.applyGridSettings();
   };
 
+  // ─── AUTO-CAT HELPER: run on any existing uncategorized transactions ────────
+  // Called after client restore (init) and after switchClient.
+  // Waits for RuleEngine.ready so there's no race with the async FuzzyMatcher fetch.
+  window._runAutoCatOnExisting = async function() {
+    if (!window.RuleEngine) return;
+    await window.RuleEngine.ready;
+
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    const uncategorized = allTxns.filter(tx =>
+      !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW' || tx.category === '9970'
+    );
+    if (uncategorized.length === 0) return;
+
+    console.log(`[AUTO-CAT] Running on ${uncategorized.length} uncategorized of ${allTxns.length} total...`);
+    const result = window.RuleEngine.bulkCategorize(uncategorized);
+    console.log(`[AUTO-CAT] Done: ${result.categorized} categorized, ${result.flagged} flagged, ${result.skipped} skipped`);
+
+    if (result.categorized > 0) {
+      if (window.initGSTOnTransactions) window.initGSTOnTransactions(true);
+      if (window.updateWorkspace) window.updateWorkspace();
+    }
+  };
+
   function init() {
     // STATE VERSION CHECK: Prevent cache hallucination
     // Multi-client aware: only check legacy key if no client is active
@@ -1603,6 +1602,10 @@
 
     render();
     setTimeout(() => { if (window.updateSidebarState) window.updateSidebarState(); }, 0);
+
+    // Auto-categorize any uncategorized transactions from the restored client
+    // (covers data imported before the RuleEngine.ready fix was in place)
+    window._runAutoCatOnExisting();
   }
 
   // Navigation function for routing between pages
@@ -3198,6 +3201,9 @@
     const clientTxns = window.RoboLedger.Ledger.getAll();
     window.navigateTo(clientTxns.length > 0 ? 'import' : 'home');
     console.log(`[CLIENT] Switch complete → ${client.name} (${clientTxns.length} txns)`);
+
+    // Auto-categorize any uncategorized transactions in this client's ledger
+    window._runAutoCatOnExisting();
   };
 
   window.updateClientSwitcherUI = function(client) {
