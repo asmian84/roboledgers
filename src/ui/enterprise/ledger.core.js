@@ -771,15 +771,18 @@ window.RoboLedger = (function () {
 
             if (matches && testPasses) {
                 const coaEntry = state.coa[rule.category];
-                return {
+                const result = {
                     gl_account_code: rule.category,
                     gl_account_name: coaEntry ? coaEntry.name : 'Unknown',
                     confidence: rule.confidence,
                     status: rule.status
                 };
+                console.log(`[LEDGER AUTO-CAT] "${desc.slice(0, 45)}" → ${result.gl_account_code} "${result.gl_account_name}" (conf: ${result.confidence})`);
+                return result;
             }
         }
 
+        console.log(`[LEDGER AUTO-CAT] "${desc.slice(0, 45)}" → no rule match (needs_review)`);
         return { status: 'needs_review', confidence: 0 };
     }
 

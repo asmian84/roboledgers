@@ -26,6 +26,10 @@ class RuleEngine {
         this._fuzzyReady    = false;
         this.fusionEngine   = null;
 
+        // Promise that resolves when fusionEngine is ready (after async FuzzyMatcher fetch)
+        // Callers can await window.RuleEngine.ready before calling bulkCategorize()
+        this.ready = new Promise(resolve => { this._resolveReady = resolve; });
+
         this.initializeFuzzyMatcher();
 
         if (this.rules.length === 0) {
@@ -46,6 +50,7 @@ class RuleEngine {
 
             // Spin up the fusion engine now that fuzzyMatcher is ready
             this._initFusionEngine();
+            this._resolveReady(); // Signal that categorization is ready
 
             this._fuzzyReady = true;
             const stats = this.fuzzyMatcher.getStats();
@@ -53,6 +58,7 @@ class RuleEngine {
         } catch (e) {
             console.warn('[RULE_ENGINE] FuzzyMatcher load failed, fusion will run without it:', e);
             this._initFusionEngine(); // still init fusion without fuzzy
+            this._resolveReady(); // Signal ready even without fuzzy matcher
             this._fuzzyReady = true;
         }
     }
@@ -67,7 +73,7 @@ class RuleEngine {
             allTransactions:  [], // populated by calling updateTransactionContext()
         });
 
-        console.log('[RULE_ENGINE] SignalFusionEngine initialized');
+        console.log('[RULE_ENGINE] ✅ fusionEngine ready — categorization active');
     }
 
     /**
@@ -161,12 +167,15 @@ class RuleEngine {
      */
     applyRules(transaction, _rules = null, _skipSave = false) {
         if (!this.fusionEngine) {
-            console.warn('[RULE_ENGINE] Fusion engine not ready yet');
+            console.warn('[RULE_ENGINE] applyRules called but fusionEngine not ready — tx:', transaction?.tx_id);
             return null;
         }
 
         const activeRules = _rules || this.getEnabledRules();
         const result      = this.fusionEngine.categorize(transaction, activeRules, this);
+
+        // Debug: log every categorization decision
+        console.log(`[RULE_ENGINE] "${(transaction.description || transaction.raw_description || '').slice(0, 45)}" → ${result.coa_code || 'NO MATCH'} (conf: ${result.confidence?.toFixed(2)}, method: ${result.method})`);
 
         // Update rule match stats if a user rule won
         if (result.ruleId && !_skipSave) {

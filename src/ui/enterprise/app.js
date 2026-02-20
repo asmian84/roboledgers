@@ -510,22 +510,32 @@
         // Retroactively fix any CC refunds/cashback mis-categorized as revenue
         window.fixCCRefunds?.();
 
-        // Run auto-categorization on all imported transactions.
-        // Guarantees categorization fires even if ledger.core.js raced ahead of RuleEngine
-        // module load. Retries once after 1.5s in case FuzzyMatcher fetch was still pending.
-        const _runAutoCat = () => {
-          if (!window.RuleEngine) return;
-          const allTxns = window.RoboLedger.Ledger.getAll();
-          const uncategorized = allTxns.filter(tx => !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW');
-          if (uncategorized.length > 0) {
-            console.log(`[IMPORT] Auto-categorizing ${uncategorized.length} uncategorized transactions...`);
-            const result = window.RuleEngine.bulkCategorize(uncategorized);
-            if (result.categorized > 0 && window.updateWorkspace) window.updateWorkspace();
+        // Run auto-categorization — awaits RuleEngine.ready so we never race the
+        // async vendor_training.json fetch. No setTimeout guessing needed.
+        (async () => {
+          if (!window.RuleEngine) {
+            console.warn('[IMPORT] RuleEngine not loaded — categorization skipped');
+            return;
           }
-        };
-        _runAutoCat();
-        // Retry after 1.5s — covers the case where FuzzyMatcher async fetch was still in flight
-        setTimeout(_runAutoCat, 1500);
+          // Wait for SignalFusionEngine to be fully initialized (FuzzyMatcher fetch)
+          await window.RuleEngine.ready;
+
+          const allTxns = window.RoboLedger.Ledger.getAll();
+          // Include 9970 fallback transactions — they were unmatched during ledger.core.js parse
+          const uncategorized = allTxns.filter(tx =>
+            !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW' || tx.category === '9970'
+          );
+
+          console.log(`[IMPORT] Auto-categorizing ${uncategorized.length} of ${allTxns.length} transactions...`);
+          if (uncategorized.length === 0) {
+            console.log('[IMPORT] All transactions already categorized ✓');
+            return;
+          }
+
+          const result = window.RuleEngine.bulkCategorize(uncategorized);
+          console.log(`[IMPORT] Auto-cat complete: ${result.categorized} categorized, ${result.flagged} flagged for review, ${result.skipped} skipped`);
+          if (result.categorized > 0 && window.updateWorkspace) window.updateWorkspace();
+        })();
 
         // Seed GST data for all newly imported transactions
         window.initGSTOnTransactions?.();
@@ -3272,6 +3282,40 @@
 
     // Refresh portal
     if (window.renderHome) window.navigateTo('home');
+  };
+
+  // ─── CLEAR ACTIVE CLIENT GRID (quick reset for testing / re-import) ─────────
+  window.clearGrid = function() {
+    if (!UI_STATE.activeClientId) {
+      if (window.showToast) window.showToast('No active client — nothing to clear', 'warning');
+      return;
+    }
+    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const client  = clients.find(c => c.id === UI_STATE.activeClientId);
+    const name    = client ? client.name : 'this client';
+
+    const txCount = window.RoboLedger.Ledger.getAll().length;
+    if (!confirm(`Clear all ${txCount} transactions for ${name}?\n\nAll accounts and transaction data will be deleted. The client profile is kept.\n\nThis cannot be undone.`)) return;
+
+    // Wipe localStorage
+    localStorage.removeItem('roboledger_v5_data_' + UI_STATE.activeClientId);
+
+    // Reset registry counts
+    const idx = clients.findIndex(c => c.id === UI_STATE.activeClientId);
+    if (idx !== -1) {
+      clients[idx].txCount      = 0;
+      clients[idx].accountCount = 0;
+      clients[idx].lastActive   = null;
+      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+    }
+
+    // Reset in-memory ledger
+    window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
+    UI_STATE.selectedAccount = 'ALL';
+
+    console.log(`[CLIENT] Grid cleared for active client: ${name}`);
+    if (window.showToast) window.showToast(`Grid cleared for ${name}`, 'success');
+    window.navigateTo('import'); // Back to upload screen
   };
 
   // ─── ACCOUNTANT LAYER ────────────────────────────────────────────────────────
