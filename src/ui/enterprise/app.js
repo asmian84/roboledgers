@@ -3046,9 +3046,15 @@
         </div>
 
         <!-- Actions -->
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px;padding-top:20px;border-top:1px solid #e2e8f0;">
+        <div style="display:flex;gap:10px;align-items:center;margin-top:24px;padding-top:20px;border-top:1px solid #e2e8f0;">
+          ${isEdit ? `
+          <button onclick="document.getElementById('client-modal-overlay').remove();window.clearClientLedger('${existingId}')"
+              title="Delete all transactions and accounts — keeps client profile"
+              style="padding:9px 14px;border:1.5px solid #fecaca;background:white;color:#dc2626;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;margin-right:auto;">
+            <i class="ph ph-trash"></i> Clear Ledger
+          </button>` : ''}
           <button onclick="document.getElementById('client-modal-overlay').remove()"
-              style="padding:9px 18px;border:1.5px solid #e2e8f0;background:white;color:#475569;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+              style="padding:9px 18px;border:1.5px solid #e2e8f0;background:white;color:#475569;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;${isEdit ? '' : 'margin-left:auto;'}">
             Cancel
           </button>
           <button onclick="window._submitClientModal(${isEdit ? `'${existingId}'` : 'null'})"
@@ -3226,6 +3232,46 @@
     console.log(`[CLIENT] Deleted: ${client.name} (${clientId})`);
     _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
     setTimeout(() => window.openContextDrawer(), 50);
+  };
+
+  // ─── CLEAR CLIENT LEDGER (wipe data, keep client profile) ───────────────────
+  window.clearClientLedger = function(clientId) {
+    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const client  = clients.find(c => c.id === clientId);
+    if (!client) return;
+
+    const txCount = (() => {
+      try {
+        const d = JSON.parse(localStorage.getItem('roboledger_v5_data_' + clientId) || '{}');
+        return Object.keys(d.transactions || {}).length;
+      } catch { return 0; }
+    })();
+
+    if (!confirm(`Clear all data for "${client.name}"?\n\n${txCount} transactions and all accounts will be deleted.\nThe client profile (name, settings) will be kept.\n\nThis cannot be undone.`)) return;
+
+    // Wipe ledger data from localStorage
+    localStorage.removeItem('roboledger_v5_data_' + clientId);
+
+    // Reset counts on client registry entry
+    const idx = clients.findIndex(c => c.id === clientId);
+    if (idx !== -1) {
+      clients[idx].txCount      = 0;
+      clients[idx].accountCount = 0;
+      clients[idx].lastActive   = null;
+      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+    }
+
+    // If this is the active client, reset the in-memory ledger too
+    if (UI_STATE.activeClientId === clientId) {
+      window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__'); // clears in-memory state
+      UI_STATE.selectedAccount = 'ALL';
+    }
+
+    console.log(`[CLIENT] Ledger cleared for: ${client.name} (${clientId})`);
+    if (window.showToast) window.showToast(`Ledger cleared for ${client.name}`, 'success');
+
+    // Refresh portal
+    if (window.renderHome) window.navigateTo('home');
   };
 
   // ─── ACCOUNTANT LAYER ────────────────────────────────────────────────────────
@@ -4566,15 +4612,22 @@
             </div>
           </div>
 
-          <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:6px;">
             <button onclick="event.stopPropagation();window.openEditClientModal('${client.id}')"
-                    title="Edit" style="background:transparent;border:1px solid var(--border-color,#e2e8f0);
-                    color:var(--text-secondary,#475569);font-size:12px;padding:4px 9px;border-radius:5px;cursor:pointer;">
+                    title="Edit client profile"
+                    style="background:transparent;border:1px solid var(--border-color,#e2e8f0);
+                    color:var(--text-secondary,#475569);font-size:12px;padding:5px 9px;border-radius:5px;cursor:pointer;">
               <i class="ph ph-pencil"></i>
+            </button>
+            <button onclick="event.stopPropagation();window.clearClientLedger('${client.id}')"
+                    title="Clear all transaction data (keep profile)"
+                    style="background:transparent;border:1px solid #fecaca;
+                    color:#dc2626;font-size:12px;padding:5px 9px;border-radius:5px;cursor:pointer;">
+              <i class="ph ph-trash"></i>
             </button>
             <button onclick="window.switchClient('${client.id}')"
                     style="background:${color};color:white;border:none;font-size:12px;font-weight:600;
-                    padding:6px 14px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:5px;">
+                    padding:6px 14px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:5px;margin-left:auto;">
               Open <i class="ph ph-arrow-right"></i>
             </button>
           </div>
