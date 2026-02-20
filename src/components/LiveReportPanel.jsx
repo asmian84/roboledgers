@@ -253,8 +253,7 @@ export function LiveReportPanel({
                             <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
                                 <th className="text-left py-1.5 px-2 font-semibold text-gray-500 uppercase text-[9px] tracking-wider" style={{ width: '44px' }}>Code</th>
                                 <th className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase text-[9px] tracking-wider">Account</th>
-                                <th className="text-right py-1.5 px-2 font-semibold text-gray-500 uppercase text-[9px] tracking-wider" style={{ width: '72px' }}>Debit</th>
-                                <th className="text-right py-1.5 px-2 font-semibold text-gray-500 uppercase text-[9px] tracking-wider" style={{ width: '72px' }}>Credit</th>
+                                <th className="text-right py-1.5 px-2 font-semibold text-gray-500 uppercase text-[9px] tracking-wider" style={{ width: '100px' }}>Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -278,7 +277,7 @@ export function LiveReportPanel({
                                     <React.Fragment key={rootType}>
                                         {/* Section header */}
                                         <tr>
-                                            <td colSpan="4" className="py-1.5 px-2" style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                            <td colSpan="3" className="py-1.5 px-2" style={{ borderBottom: '1px solid #f3f4f6' }}>
                                                 <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: ROOT_COLORS[rootType] }}>
                                                     {ROOT_LABELS[rootType]}
                                                 </span>
@@ -320,14 +319,19 @@ export function LiveReportPanel({
                                                         </span>
                                                     )}
                                                 </td>
-                                                {/* DEBIT column — actual debit total */}
-                                                <td className="py-1.5 px-2 text-right font-mono tabular-nums text-gray-700" style={{ width: '72px' }}>
-                                                    {account.debit > 0 ? fmt(account.debit) : '—'}
-                                                </td>
-                                                {/* CREDIT column — actual credit total */}
-                                                <td className="py-1.5 px-2 text-right font-mono tabular-nums text-gray-700" style={{ width: '72px' }}>
-                                                    {account.credit > 0 ? fmt(account.credit) : '—'}
-                                                </td>
+                                                {/* Net amount — single column: positive=DR, negative=CR */}
+                                                {(() => {
+                                                    const net = account.debit - account.credit;
+                                                    const isDebit = net > 0;
+                                                    const isCredit = net < 0;
+                                                    return (
+                                                        <td className={`py-1.5 px-2 text-right font-mono tabular-nums font-semibold ${isDebit ? 'text-blue-700' : isCredit ? 'text-red-600' : 'text-gray-400'}`} style={{ width: '100px' }}>
+                                                            {net !== 0
+                                                                ? <>{fmt(Math.abs(net))} <span className="text-[8px] font-normal ml-0.5">{isDebit ? 'DR' : 'CR'}</span></>
+                                                                : '—'}
+                                                        </td>
+                                                    );
+                                                })()}
                                             </tr>
                                         ))}
 
@@ -338,7 +342,7 @@ export function LiveReportPanel({
                                                 <td className="py-1.5 px-1 text-[10px] font-semibold text-cyan-800">
                                                     Net GST Payable
                                                 </td>
-                                                <td className="py-1.5 px-2 text-right font-mono tabular-nums text-[10px] font-semibold text-cyan-700" colSpan="2">
+                                                <td className="py-1.5 px-2 text-right font-mono tabular-nums text-[10px] font-semibold text-cyan-700">
                                                     {netGST >= 0
                                                         ? <span className="text-red-600">{fmt(netGST)} owed</span>
                                                         : <span className="text-green-600">{fmt(Math.abs(netGST))} refund</span>
@@ -351,15 +355,19 @@ export function LiveReportPanel({
                             })}
                         </tbody>
                         <tfoot className="bg-gray-50 border-t-2 border-gray-300 sticky bottom-0">
-                            <tr>
-                                <td colSpan="2" className="py-2 px-2 font-bold uppercase text-[10px] text-gray-700">Totals</td>
-                                <td className="py-2 px-2 text-right font-mono font-bold tabular-nums text-[11px]">
-                                    {fmt(reportData.totals.debit)}
-                                </td>
-                                <td className="py-2 px-2 text-right font-mono font-bold tabular-nums text-[11px]">
-                                    {fmt(reportData.totals.credit)}
-                                </td>
-                            </tr>
+                            {(() => {
+                                const net = reportData.totals.debit - reportData.totals.credit;
+                                return (
+                                    <tr>
+                                        <td colSpan="2" className="py-2 px-2 font-bold uppercase text-[10px] text-gray-700">Totals</td>
+                                        <td className={`py-2 px-2 text-right font-mono font-bold tabular-nums text-[11px] ${net === 0 ? 'text-green-700' : 'text-red-600'}`}>
+                                            {net === 0
+                                                ? '✓ Balanced'
+                                                : <>{fmt(Math.abs(net))} <span className="text-[8px] font-normal ml-0.5">{net > 0 ? 'DR' : 'CR'}</span></>}
+                                        </td>
+                                    </tr>
+                                );
+                            })()}
                         </tfoot>
                     </table>
                 </div>

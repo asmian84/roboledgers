@@ -590,21 +590,26 @@ export function TrialBalanceReport() {
         if (!reportData) return;
         const groups = getGroupedAccounts();
         const hasOB = Object.keys(openingBalances).length > 0;
-        const rows = [['Group', 'Account Code', 'Account Name', ...(hasOB ? ['Prior Year'] : []), 'Debit', 'Credit', 'Balance']];
+        const rows = [['Group', 'Account Code', 'Account Name', ...(hasOB ? ['Prior Year'] : []), 'Amount', 'DR/CR']];
         groups.forEach(group => {
-            if (viewMode !== 'account') rows.push([`[${group.code}] ${group.name}`, '', '', ...(hasOB ? [''] : []), '', '', '']);
+            if (viewMode !== 'account') rows.push([`[${group.code}] ${group.name}`, '', '', ...(hasOB ? [''] : []), '', '']);
             group.accounts.forEach(acc => {
                 const ob = hasOB ? (openingBalances[String(acc.code)] ?? '') : undefined;
+                const net = acc.debit - acc.credit;
                 rows.push([
                     viewMode === 'account' ? '' : '',
                     acc.code, acc.name,
                     ...(hasOB ? [ob !== '' ? ob.toFixed(2) : ''] : []),
-                    acc.debit.toFixed(2), acc.credit.toFixed(2), acc.balance.toFixed(2)
+                    Math.abs(net).toFixed(2), net > 0 ? 'DR' : net < 0 ? 'CR' : ''
                 ]);
             });
-            if (viewMode !== 'account') rows.push(['', '', `Subtotal: ${group.name}`, ...(hasOB ? [''] : []), group.totalDebit.toFixed(2), group.totalCredit.toFixed(2), (group.totalDebit - group.totalCredit).toFixed(2)]);
+            if (viewMode !== 'account') {
+                const subNet = group.totalDebit - group.totalCredit;
+                rows.push(['', '', `Subtotal: ${group.name}`, ...(hasOB ? [''] : []), Math.abs(subNet).toFixed(2), subNet > 0 ? 'DR' : subNet < 0 ? 'CR' : '']);
+            }
         });
-        rows.push(['', '', 'GRAND TOTAL', ...(hasOB ? [''] : []), reportData.totals.debit.toFixed(2), reportData.totals.credit.toFixed(2), reportData.totals.balance.toFixed(2)]);
+        const grandNet = reportData.totals.debit - reportData.totals.credit;
+        rows.push(['', '', 'GRAND TOTAL', ...(hasOB ? [''] : []), Math.abs(grandNet).toFixed(2), grandNet > 0 ? 'DR' : grandNet < 0 ? 'CR' : 'BALANCED']);
         const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
@@ -681,8 +686,8 @@ export function TrialBalanceReport() {
     const hasOB  = Object.keys(openingBalances).length > 0;
 
     // Column count depends on view mode + comparative column
-    const baseColCount = viewMode === 'leadsheet' ? 4 : viewMode === 'type' ? 4 : 3;
-    const numericCols  = hasOB ? 4 : 3; // Prior Year + Debit + Credit + Balance, or just 3
+    const baseColCount = viewMode === 'leadsheet' ? 3 : viewMode === 'type' ? 4 : 2;
+    const numericCols  = hasOB ? 2 : 1; // Prior Year + Amount, or just Amount
     const colCount     = baseColCount + numericCols;
 
     // ─── View Mode Labels ─────────────────────────────────────────────────────
@@ -833,9 +838,7 @@ export function TrialBalanceReport() {
                                             Prior Year
                                         </th>
                                     )}
-                                    <th className="px-8 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[160px]">Debit</th>
-                                    <th className="px-8 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[160px]">Credit</th>
-                                    <th className="px-8 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[160px]">Balance</th>
+                                    <th className="px-8 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[180px]">Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -859,12 +862,14 @@ export function TrialBalanceReport() {
                                                             </span>
                                                             <span className="text-[12px] font-semibold text-gray-800">{group.name}</span>
                                                             <span className="text-[10px] text-gray-400 ml-1">({group.accounts.length})</span>
-                                                            {isCollapsed && (
-                                                                <span className="ml-auto flex items-center gap-4 text-[11px] font-mono tabular-nums text-gray-600">
-                                                                    <span>Dr {fmt(group.totalDebit)}</span>
-                                                                    <span>Cr {fmt(group.totalCredit)}</span>
-                                                                </span>
-                                                            )}
+                                                            {isCollapsed && (() => {
+                                                                const net = group.totalDebit - group.totalCredit;
+                                                                return (
+                                                                    <span className={`ml-auto text-[11px] font-mono tabular-nums ${net > 0 ? 'text-blue-600' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                                                        {net !== 0 ? <>{fmtAbs(net)} {net > 0 ? 'DR' : 'CR'}</> : '—'}
+                                                                    </span>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -910,15 +915,18 @@ export function TrialBalanceReport() {
                                                                 }
                                                             </td>
                                                         )}
-                                                        <td className="px-8 py-2.5 text-[12px] text-right tabular-nums font-mono text-gray-700">
-                                                            {acc.debit > 0 ? fmt(acc.debit) : ''}
-                                                        </td>
-                                                        <td className="px-8 py-2.5 text-[12px] text-right tabular-nums font-mono text-gray-700">
-                                                            {acc.credit > 0 ? fmt(acc.credit) : ''}
-                                                        </td>
-                                                        <td className={`px-8 py-2.5 text-[12px] text-right tabular-nums font-mono font-semibold ${acc.balance > 0 ? 'text-blue-700' : acc.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                                                            {acc.balance !== 0 ? fmt(acc.balance) : '—'}
-                                                        </td>
+                                                        {(() => {
+                                                            const net = acc.debit - acc.credit;
+                                                            const isDebit = net > 0;
+                                                            const isCredit = net < 0;
+                                                            return (
+                                                                <td className={`px-8 py-2.5 text-[12px] text-right tabular-nums font-mono font-semibold ${isDebit ? 'text-blue-700' : isCredit ? 'text-red-600' : 'text-gray-400'}`}>
+                                                                    {net !== 0
+                                                                        ? <>{fmtAbs(net)} <span className="text-[10px] font-normal ml-1">{isDebit ? 'DR' : 'CR'}</span></>
+                                                                        : '—'}
+                                                                </td>
+                                                            );
+                                                        })()}
                                                     </tr>
                                                 );
                                             })}
@@ -926,21 +934,24 @@ export function TrialBalanceReport() {
                                             {/* Subtotal Row */}
                                             {viewMode !== 'account' && !isCollapsed && (
                                                 <tr className={`${colors.sub} border-b-2`}>
-                                                    <td className="px-4 py-2" colSpan={viewMode === 'leadsheet' ? 4 : viewMode === 'type' ? 4 : 3}>
+                                                    <td className="px-4 py-2" colSpan={baseColCount}>
                                                         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
                                                             Subtotal — {group.code}
                                                         </span>
                                                     </td>
                                                     {hasOB && <td className="px-8 py-2"></td>}
-                                                    <td className="px-8 py-2 text-[12px] text-right tabular-nums font-mono font-bold text-gray-800">
-                                                        {group.totalDebit > 0 ? fmt(group.totalDebit) : ''}
-                                                    </td>
-                                                    <td className="px-8 py-2 text-[12px] text-right tabular-nums font-mono font-bold text-gray-800">
-                                                        {group.totalCredit > 0 ? fmt(group.totalCredit) : ''}
-                                                    </td>
-                                                    <td className={`px-8 py-2 text-[12px] text-right tabular-nums font-mono font-bold ${(group.totalDebit - group.totalCredit) > 0 ? 'text-blue-700' : (group.totalDebit - group.totalCredit) < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                                                        {fmt(group.totalDebit - group.totalCredit)}
-                                                    </td>
+                                                    {(() => {
+                                                        const net = group.totalDebit - group.totalCredit;
+                                                        const isDebit = net > 0;
+                                                        const isCredit = net < 0;
+                                                        return (
+                                                            <td className={`px-8 py-2 text-[12px] text-right tabular-nums font-mono font-bold ${isDebit ? 'text-blue-700' : isCredit ? 'text-red-600' : 'text-gray-400'}`}>
+                                                                {net !== 0
+                                                                    ? <>{fmtAbs(net)} <span className="text-[10px] font-normal ml-1">{isDebit ? 'DR' : 'CR'}</span></>
+                                                                    : '—'}
+                                                            </td>
+                                                        );
+                                                    })()}
                                                 </tr>
                                             )}
                                         </React.Fragment>
@@ -953,11 +964,18 @@ export function TrialBalanceReport() {
                                         Grand Total
                                     </td>
                                     {hasOB && <td className="px-8 py-3.5"></td>}
-                                    <td className="px-8 py-3.5 text-[12px] text-right tabular-nums font-mono font-bold">{fmt(reportData.totals.debit)}</td>
-                                    <td className="px-8 py-3.5 text-[12px] text-right tabular-nums font-mono font-bold">{fmt(reportData.totals.credit)}</td>
-                                    <td className={`px-8 py-3.5 text-[12px] text-right tabular-nums font-mono font-bold ${reportData.isBalanced ? 'text-green-400' : 'text-red-400'}`}>
-                                        {fmt(reportData.totals.balance)}
-                                    </td>
+                                    {(() => {
+                                        const net = reportData.totals.debit - reportData.totals.credit;
+                                        const isDebit = net > 0;
+                                        const isCredit = net < 0;
+                                        return (
+                                            <td className={`px-8 py-3.5 text-[12px] text-right tabular-nums font-mono font-bold ${net === 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                {net === 0
+                                                    ? '$0.00 — Balanced'
+                                                    : <>{fmtAbs(net)} <span className="text-[10px] font-normal ml-1">{isDebit ? 'DR' : 'CR'}</span> — Out of Balance</>}
+                                            </td>
+                                        );
+                                    })()}
                                 </tr>
                             </tfoot>
                         </table>
