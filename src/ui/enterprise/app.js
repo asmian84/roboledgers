@@ -1745,8 +1745,12 @@
       item.onclick = (e) => {
         const route = e.currentTarget.dataset.route;
 
-        // Action-only nav items (no data-route) handle their own onclick — skip routing
-        if (!route) return;
+        // Action-only nav items (no data-route) — dispatch by action attribute
+        if (!route) {
+          const action = e.currentTarget.dataset.action;
+          if (action === 'clearGrid') window.clearGrid?.();
+          return;
+        }
 
         // Close mobile sidebar when navigation is clicked
         const sidebar = document.getElementById('sidebar');
