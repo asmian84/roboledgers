@@ -366,6 +366,8 @@ window.RoboLedger = (function () {
         state.coa = {};
         if (!saved) {
             console.log(`[LEDGER] No data at key: ${key} — starting fresh`);
+            // Re-seed COA defaults so dropdowns/lookups work even on a fresh client
+            COA.init();
             return;
         }
         try {
@@ -374,6 +376,8 @@ window.RoboLedger = (function () {
             state.sigIndex     = parsed.sigIndex     || {};
             state.accounts     = parsed.accounts     || [];
             state.coa          = parsed.coa          || {};
+            // Re-seed COA defaults (backfills any missing entries after client switch)
+            COA.init();
             if (window.RuleEngine?.updateTransactionContext) {
                 window.RuleEngine.updateTransactionContext(Object.values(state.transactions));
             }
@@ -381,6 +385,8 @@ window.RoboLedger = (function () {
         } catch (e) {
             console.error('[LEDGER] Failed to load from key:', key, e);
             localStorage.removeItem(key);
+            // Re-seed COA defaults even after a failed load
+            COA.init();
         }
     }
 
