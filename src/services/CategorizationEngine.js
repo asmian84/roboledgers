@@ -68,6 +68,10 @@ const VENDOR_PATTERNS = [
   { type: 'FUEL', conf: 'HIGH',   re: /HERITAGE\s*POINTE\s*GAS/i },
   { type: 'FUEL', conf: 'HIGH',   re: /HI\s*HO\s*GAS|HIHO\s*GAS/i },
   { type: 'FUEL', conf: 'HIGH',   re: /DALHOUSIE\s*STATION\s*(?:GAS|FUEL|HUSKY)/i },
+  // US/international fuel brands (from vendor_dictionary.xlsx)
+  { type: 'FUEL', conf: 'HIGH',   re: /\bEXXONMOBIL\b|\bEXXON\b|\bMOBIL\b(?!\s*(HOME|PROLOG|SUITE))/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /\bBP\b\s*(GAS|FUEL|STATION|OIL)?(?!\s*(SOFTWARE|TECH|CANADA\s*POST))/i },
+  { type: 'FUEL', conf: 'HIGH',   re: /\bSUNOCO\b/i },
   { type: 'FUEL', conf: 'MEDIUM', re: /(?:GAS|FUEL|PETROL|DIESEL|GASOLINE)\s*(BAR|STATION|STOP|MART)|\b(?:FILLING|SERVICE)\s*STATION\b/i },
   // Circle K only as fuel if "gas" or "fuel" appears too — otherwise it's a convenience store
   { type: 'FUEL', conf: 'MEDIUM', re: /CIRCLE\s*K.*(?:GAS|FUEL)|(?:GAS|FUEL).*CIRCLE\s*K/i },
@@ -94,6 +98,17 @@ const VENDOR_PATTERNS = [
   { type: 'UTILITY', conf: 'HIGH', re: /\bMANITOBA\s*HYDRO\b|\bNB\s*POWER\b|\bNOVA\s*SCOTIA\s*POWER\b|\bNSP\b/i },
   { type: 'UTILITY', conf: 'MEDIUM', re: /CITY\s*(OF\s*\w+)?\s*(WATER|SEWER|UTILITIES)|WATER\s*(UTILITY|SERVICE|BILL)/i },
   { type: 'UTILITY', conf: 'MEDIUM', re: /WASTE\s*MANAGEMENT|CLEAN\s*HARBORS|GFL\s*ENVIRONMENTAL|GARBAGE\s*(PICKUP|SERVICE)/i },
+  // Vendor dictionary: EPCOR, ENMAX, ATCO GAS, DIRECT ENERGY (already covered above)
+
+  // ── CLEANING / JANITORIAL SERVICES (→ 7300 Repairs & Maintenance via BLDG_SUPPLY route) ──
+  { type: 'BLDG_SUPPLY', conf: 'HIGH',   re: /\bMOLLY\s*MAID\b|\bHOME\s*MAID\b|\bMERRY\s*MAIDS?\b/i },
+  { type: 'BLDG_SUPPLY', conf: 'MEDIUM', re: /JANITORIAL|CLEANING\s*SERVICE|MAID\s*SERVICE|HOUSE\s*CLEANING|CONDO\s*CLEANING|UNIT\s*CLEANING/i },
+  // ── LANDSCAPING / LAWN CARE ───────────────────────────────────────────────
+  { type: 'BLDG_SUPPLY', conf: 'HIGH',   re: /\bTRUGREEN\b/i },
+  { type: 'BLDG_SUPPLY', conf: 'MEDIUM', re: /LANDSCAPING|LAWN\s*(CARE|SERVICE|MAINT)|SNOW\s*REMOVAL|GROUNDS\s*MAINTENANCE/i },
+  // ── PEST CONTROL ──────────────────────────────────────────────────────────
+  { type: 'BLDG_SUPPLY', conf: 'HIGH',   re: /\bTERMINIX\b|\bORKIN\b|\bEXTERMINATOR\b/i },
+  { type: 'BLDG_SUPPLY', conf: 'MEDIUM', re: /PEST\s*CONTROL|BUG\s*CONTROL|PEST\s*MANAGEMENT/i },
 
   // ── INSURANCE ─────────────────────────────────────────────────────────────
   { type: 'INSURANCE', conf: 'HIGH', re: /\bWAWANESA\b/i },
@@ -253,6 +268,12 @@ const VENDOR_PATTERNS = [
   { type: 'INTEREST_INCOME', conf: 'HIGH', re: /DEPOSIT\s*INTEREST|INTEREST\s*(CREDIT(ED)?|EARNED|PAID|INCOME)|SAVINGS\s*INTEREST|INT\s*PAID/i },
   // Cash back / rewards = contra income, not bank charge
   { type: 'CASHBACK',         conf: 'HIGH', re: /CASH\s*BACK|CASHBACK|\bREWARD\b(?!\s*CARD)|\bREBATE\b/i },
+  // Merchant processing fees (vendor_dictionary: Stripe, Square, Moneris, PayPal fees)
+  { type: 'BANK_FEE', conf: 'HIGH', re: /\bSTRIPE\b(?!\s*(PAYMENTS?|INC)?.*CAPITAL)/i },    // Stripe fees (not Stripe Capital loans)
+  { type: 'BANK_FEE', conf: 'HIGH', re: /\bSQUARE\b\s*(INC|UP|PAYMENTS?)?(?!\s*ONE)/i },     // Square merchant (not Square One Insurance)
+  { type: 'BANK_FEE', conf: 'HIGH', re: /\bMONERIS\b/i },
+  { type: 'BANK_FEE', conf: 'HIGH', re: /\bCLOVER\b\s*(NETWORK|PAYMENTS?)?/i },
+  { type: 'BANK_FEE', conf: 'HIGH', re: /MERCHANT\s*(PROCESSING|FEE|SERVICE|DISCOUNT)/i },
 
   // ── CREDIT CARD PAYMENTS ──────────────────────────────────────────────────
   { type: 'CC_PAYMENT', conf: 'HIGH', re: /PAYMENT\s*-\s*THANK\s*YOU|PAIEMENT\s*-\s*MERCI|PAYMENT\s*RECEIVED\s*-\s*THANK|THANK\s*YOU[,.]?\s*PAYMENT/i },
@@ -434,6 +455,13 @@ const VENDOR_PATTERNS = [
   { type: 'ADVERTISING', conf: 'HIGH', re: /\bPATTISON\s*OUTDOOR\b/i },
   { type: 'ADVERTISING', conf: 'HIGH', re: /\bCALGARY\s*OUTDOOR\s*ADVERTIS\b/i },
   { type: 'ADVERTISING', conf: 'HIGH', re: /\bHIILITE\s*CREATIVE\s*GROUP\b/i },
+  // Vendor dictionary additions
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bLINKEDIN\s*ADS?\b|\bLINKEDIN\s*MARKETING\b/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bTIKTOK\s*ADS?\b|\bBYTEDANCE\b/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bTWITTER\s*ADS?\b|\bX\s*ADS?\b|\bX\s*CORP\b(?!\s*\d)/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bYELP\b(?:\s*ADS?|\s*INC)?/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bHOOTSUITE\b|\bSPROUT\s*SOCIAL\b|\bBUFFER\b(?:\s*APP|\s*INC)?\b/i },
+  { type: 'ADVERTISING', conf: 'HIGH', re: /\bMAILCHIMP\b|\bCONSTANT\s*CONTACT\b|\bSENDGRID\b|\bKLAVIYO\b/i },
 
   // ── OFFICE SUPPLIES ───────────────────────────────────────────────────────
   { type: 'OFFICE_SUPPLY', conf: 'HIGH', re: /\bSTAPLES\b|\bBUREAU\s*EN\s*GROS\b|\bGRAND\s*&\s*TOY\b/i },
@@ -456,6 +484,11 @@ const VENDOR_PATTERNS = [
   { type: 'TRAINING', conf: 'HIGH',   re: /\bYOUPRENEUR\b|\bVSF\s*LONDON\b|\bPARAGON\s*TESTING\b/i },
   { type: 'TRAINING', conf: 'HIGH',   re: /\bUDEMY\b(?:\s*(?::|ONLINE|\.COM))?\b/i },
   { type: 'TRAINING', conf: 'HIGH',   re: /\bEWORKPLACE\s*TRAINING\b/i },
+  // Vendor dictionary: online learning platforms
+  { type: 'TRAINING', conf: 'HIGH',   re: /\bCOURSERA\b/i },
+  { type: 'TRAINING', conf: 'HIGH',   re: /\bSKILLSHARE\b/i },
+  { type: 'TRAINING', conf: 'HIGH',   re: /\bLINKEDIN\s*LEARNING\b|\bLYNDA\.COM\b/i },
+  { type: 'TRAINING', conf: 'HIGH',   re: /\bEVENTBRITE\b/i },
   { type: 'TRAINING', conf: 'MEDIUM', re: /TRAINING|COURSE|SEMINAR|WORKSHOP|SAFETY\s*TRAIN|\bH2S\b|FIRST\s*AID|\bCERTIFICATE\b/i },
 
   // ── TRAVEL ────────────────────────────────────────────────────────────────
@@ -467,6 +500,10 @@ const VENDOR_PATTERNS = [
   { type: 'TRAVEL', conf: 'HIGH', re: /UBER\s*(?:CANADA|TRIP|RIDE|CAR|BV|TECHNOLOGIES)(?!\s*(?:EATS|DELIVERY|FOOD))/i },
   // Airbnb on a CC card = travel/accommodation. On CHQ/SAV = rental revenue (handled by polarity/account type)
   { type: 'TRAVEL',  conf: 'MEDIUM', re: /\bAIRBNB\b(?!.*PAYOUT)/i },
+  // Vendor dictionary: parking is travel-related
+  { type: 'TRAVEL',  conf: 'HIGH',   re: /\bIMPARK\b|\bINDIGO\s*PARK\b|\bIMPARK\s*\*?\s*PARK\b/i },
+  { type: 'TRAVEL',  conf: 'MEDIUM', re: /\bPARKADE\b|\bPARKING\s*(LOT|GARAGE|FEE|METER)|\bCITY\s*PARKING\b/i },
+  { type: 'TRAVEL',  conf: 'HIGH',   re: /EZPASS|E-ZPASS|407\s*ETR|HIGHWAY\s*407|\bHOT\s*LANE\s*TOLL\b/i },
 
   // ── LOCKSMITH / SECURITY ──────────────────────────────────────────────────
   { type: 'LOCKSMITH', conf: 'HIGH', re: /\bSTRONGHOLD\s*LOCKSMITH\b|\bLOCKSMITH\b|\bSECURITY\s*LOCK\b/i },
