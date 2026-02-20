@@ -896,7 +896,12 @@
 
     if (action === 'continue') {
       UI_STATE.recoveryPending = false;
-      window.updateWorkspace();
+      // Navigate to transactions page so user sees their recovered data
+      if (UI_STATE.activeClientId) {
+        window.navigateTo('import');
+      } else {
+        window.updateWorkspace();
+      }
     } else {
       window.RoboLedger.Ledger.reset();
       UI_STATE.recoveryPending = false;
@@ -3215,10 +3220,11 @@
       localStorage.setItem('roboledger_clients', JSON.stringify(clients));
     }
 
-    // 5. Update sidebar UI + navigate home
+    // 5. Update sidebar UI + navigate to transactions if client has data, else home
     window.updateClientSwitcherUI(client);
-    window.navigateTo('home');
-    console.log(`[CLIENT] Switch complete → ${client.name}`);
+    const clientTxns = window.RoboLedger.Ledger.getAll();
+    window.navigateTo(clientTxns.length > 0 ? 'import' : 'home');
+    console.log(`[CLIENT] Switch complete → ${client.name} (${clientTxns.length} txns)`);
   };
 
   window.updateClientSwitcherUI = function(client) {
