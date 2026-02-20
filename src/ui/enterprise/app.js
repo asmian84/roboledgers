@@ -39,7 +39,7 @@
     fontSize: 13,
     density: 'comfortable',
     autocatEnabled: true,
-    confidenceThreshold: 0.8,
+    confidenceThreshold: 0.60, // Must match SignalFusionEngine.REVIEW_THRESHOLD — below this = manual review
     refOverride: 'TXN',
     dateFormat: 'MM/DD/YYYY',
     province: 'AB',
@@ -487,7 +487,9 @@
 
 
     // Hide progress bar after brief delay, then refresh grid
-    setTimeout(() => {
+    // Use async IIFE so we can await auto-categorization before rendering the grid.
+    // This ensures the grid shows categorized data on first paint (no flicker from 9970 → categorized).
+    setTimeout(async () => {
       try {
         // CRITICAL: Clean up any empty accounts before rendering
         // (prevents hangover accounts from failed uploads or zero-transaction files)
@@ -510,10 +512,10 @@
         // Retroactively fix any CC refunds/cashback mis-categorized as revenue
         window.fixCCRefunds?.();
 
-        // Auto-categorize all uncategorized transactions (waits for RuleEngine.ready)
-        window._runAutoCatOnExisting();
+        // Auto-categorize all uncategorized transactions — AWAIT so grid renders with categories already applied
+        await window._runAutoCatOnExisting();
 
-        // Seed GST data for all newly imported transactions
+        // Seed GST data for all newly imported transactions (after auto-cat so COA codes are correct)
         window.initGSTOnTransactions?.();
 
         // Render - this will naturally exclude progress bar since isIngesting is false
@@ -1495,26 +1497,44 @@
   };
 
   // ─── AUTO-CAT HELPER: run on any existing uncategorized transactions ────────
-  // Called after client restore (init) and after switchClient.
+  // Called after client restore (init), after switchClient, and after import (awaited).
   // Waits for RuleEngine.ready so there's no race with the async FuzzyMatcher fetch.
   window._runAutoCatOnExisting = async function() {
-    if (!window.RuleEngine) return;
+    if (!window.RuleEngine) {
+      console.warn('[AUTO-CAT] RuleEngine not loaded — skipping');
+      return;
+    }
+    console.log('[AUTO-CAT] Waiting for RuleEngine.ready...');
     await window.RuleEngine.ready;
+    console.log('[AUTO-CAT] RuleEngine ready ✓');
 
     const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+
+    // Collect uncategorized: no category, explicit UNCATEGORIZED string, RAW status, or 9970 fallback
+    // NOTE: do NOT re-try user_categorized transactions (category_source === 'user')
     const uncategorized = allTxns.filter(tx =>
-      !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW' || tx.category === '9970'
+      tx.category_source !== 'user' && (
+        !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW' || tx.category === '9970'
+      )
     );
-    if (uncategorized.length === 0) return;
 
-    console.log(`[AUTO-CAT] Running on ${uncategorized.length} uncategorized of ${allTxns.length} total...`);
-    const result = window.RuleEngine.bulkCategorize(uncategorized);
-    console.log(`[AUTO-CAT] Done: ${result.categorized} categorized, ${result.flagged} flagged, ${result.skipped} skipped`);
-
-    if (result.categorized > 0) {
-      if (window.initGSTOnTransactions) window.initGSTOnTransactions(true);
-      if (window.updateWorkspace) window.updateWorkspace();
+    console.log(`[AUTO-CAT] ${allTxns.length} total txns, ${uncategorized.length} need categorization`);
+    if (uncategorized.length === 0) {
+      console.log('[AUTO-CAT] All transactions already categorized ✓');
+      return;
     }
+
+    // Log a sample of what we're trying to categorize (first 3)
+    uncategorized.slice(0, 3).forEach(tx => {
+      console.log(`[AUTO-CAT] Sample: "${(tx.description || tx.raw_description || '').slice(0, 50)}" category=${tx.category} status=${tx.status}`);
+    });
+
+    const result = window.RuleEngine.bulkCategorize(uncategorized);
+    console.log(`[AUTO-CAT] Done: ${result.categorized} categorized, ${result.flagged} flagged for review, ${result.skipped} skipped (no match)`);
+
+    // Always refresh workspace so the grid reflects the latest state (even if 0 categorized,
+    // the skipped txns may have had their status updated)
+    if (window.updateWorkspace) window.updateWorkspace();
   };
 
   function init() {

@@ -646,120 +646,139 @@ window.RoboLedger = (function () {
     }
 
     // --- AUTO-CATEGORIZATION ENGINE ---
+    // NOTE: These are first-pass rules that fire at import time.
+    // The SignalFusionEngine (via _runAutoCatOnExisting) handles more complex matching.
+    // COA codes must match the client's actual chart of accounts.
+    // Only rules with HIGH confidence (>= 0.85) should set status 'auto_categorized'.
+    // Rules below 0.60 are excluded — SignalFusion handles those better.
     const AUTO_CATEGORIZE_RULES = [
+        // ── REVENUE ─────────────────────────────────────────────────────────────
         {
-            pattern: /e-transfer|interac|e-trf/i,
+            pattern: /airbnb|vrbo|booking\.com/i,
             test: (tx) => tx.polarity === 'CREDIT',
-            category: '4900', // Rental Revenue (Airbnb e-transfers)
+            category: '4900', // Rental Revenue
+            confidence: 0.90,
+            status: 'auto_categorized'
+        },
+        {
+            pattern: /e-transfer.*autodeposit|autodeposit.*e-transfer/i,
+            test: (tx) => tx.polarity === 'CREDIT',
+            category: '4900', // Rental Revenue (Airbnb autodeposit)
             confidence: 0.85,
             status: 'auto_categorized'
         },
         {
-            pattern: /e-transfer|interac|e-trf/i,
-            test: (tx) => tx.polarity === 'DEBIT',
-            category: '5100', // Direct Labor (sub-contractors)
-            confidence: 0.6,
+            pattern: /e-transfer|interac.*e-trf|e-trf.*interac/i,
+            test: (tx) => tx.polarity === 'CREDIT',
+            category: '4900', // Rental Revenue (e-transfer income)
+            confidence: 0.70,
             status: 'needs_review'
         },
-        // High-confidence rules (auto_categorized)
+
+        // ── BALANCE SHEET / CLEARING ─────────────────────────────────────────
         {
-            pattern: /^e-transfer.*autodeposit$/i,
-            category: '4900', // Rental Revenue (Airbnb autodeposit)
-            confidence: 0.95,
+            pattern: /payment\s*-?\s*thank\s*you|paiement\s*-?\s*merci|payment received|autopay/i,
+            test: (tx) => tx.polarity === 'CREDIT',
+            category: '9971', // CC Payment clearing
+            confidence: 0.92,
             status: 'auto_categorized'
         },
         {
-            pattern: /petro|shell|esso|gas station|fuel/i,
-            category: '8300', // Fuel
-            confidence: 0.8,
-            status: 'auto_categorized'
-        },
-        {
-            pattern: /bank charge|service fee|monthly fee|transaction fee/i,
-            category: '8700', // Bank Charges
-            confidence: 0.9,
-            status: 'auto_categorized'
-        },
-        {
-            pattern: /payroll|salary|wages|cpp|ei deduction/i,
-            category: '7100', // Payroll Expenses
-            confidence: 0.85,
-            status: 'auto_categorized'
-        },
-        {
-            pattern: /rent|lease payment|landlord/i,
-            category: '8200', // Rent
-            confidence: 0.8,
+            pattern: /gst\s*remit|hst\s*remit|receiver\s*gen|canada revenue|cra\s*payment/i,
+            category: '2110', // GST/HST Payable
+            confidence: 0.90,
             status: 'auto_categorized'
         },
 
-        // Medium-confidence rules (needs_review)
+        // ── FUEL (7400) ──────────────────────────────────────────────────────
         {
-            pattern: /restaurant|cafe|coffee|tim hortons|starbucks|food|dining/i,
-            category: '8550', // Meals & Entertainment
-            confidence: 0.7,
+            pattern: /petro-?can(ada)?|petrocan|fas\s*gas|shell|esso|husky|co-?op\s*gas|cardlock|costco\s*gas|ultramar|chevron|flying\s*j/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '7400', // Fuel & Oil
+            confidence: 0.88,
+            status: 'auto_categorized'
+        },
+
+        // ── BANK CHARGES (7700) ─────────────────────────────────────────────
+        {
+            pattern: /bank\s*(fee|charge)|service\s*charge|monthly\s*(fee|account\s*fee)|nsf\s*fee|overdraft\s*fee|wire\s*fee|atm\s*fee|interac\s*fee|purchase\s*interest|interest\s*charge/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '7700', // Bank Charges & Interest
+            confidence: 0.88,
+            status: 'auto_categorized'
+        },
+
+        // ── TELECOM (9100) ───────────────────────────────────────────────────
+        {
+            pattern: /\btelus\b|\bshaw\b|\brogers\b|\bbell\b|\bfido\b|\bkoodo\b|\bfreedom\s*mobile\b|\bstarlink\b|\bxplornet\b|\bopenphone\b/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '9100', // Telephone & Internet
+            confidence: 0.88,
+            status: 'auto_categorized'
+        },
+
+        // ── INSURANCE (7600) ─────────────────────────────────────────────────
+        {
+            pattern: /\bwawanesa\b|\bintact\b|\baviva\b|\ballstate\b|\bdesjardins\s*ins|\bsecurity\s*national\s*insur/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '7600', // Insurance
+            confidence: 0.88,
+            status: 'auto_categorized'
+        },
+
+        // ── PROFESSIONAL FEES (8700) ─────────────────────────────────────────
+        {
+            pattern: /accounting|bookkeeping|quickbooks|freshbooks|allison\s*associates|cpa\s*firm/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '8700', // Professional Fees
+            confidence: 0.80,
             status: 'needs_review'
         },
+
+        // ── SOFTWARE & SUBSCRIPTIONS (6800) ─────────────────────────────────
         {
-            pattern: /amazon|office depot|staples|supplies/i,
-            category: '8400', // Office Supplies
-            confidence: 0.6,
+            pattern: /pricelabs|igms|rankbreeze|minut|monday\.com|adobe|github|dropbox|zoom|notion|slack|hostaway|guesty|loom|wordpress/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '6800', // Software & Subscriptions
+            confidence: 0.80,
             status: 'needs_review'
         },
+
+        // ── REPAIRS & MAINTENANCE (7300) ─────────────────────────────────────
         {
-            pattern: /grocery|supermarket|safeway|walmart|loblaws|sobeys/i,
-            category: '8410', // Groceries (if business)
-            confidence: 0.65,
+            pattern: /home\s*depot|rona|home\s*hardware|canadian\s*tire/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '7300', // Repairs & Maintenance
+            confidence: 0.70,
             status: 'needs_review'
         },
+
+        // ── MEALS & ENTERTAINMENT (6415) ─────────────────────────────────────
         {
-            pattern: /insurance|liability coverage|policy premium/i,
-            category: '8600', // Insurance
+            pattern: /starbucks|tim\s*horton|mcdonald|restaurant|cafe|coffee|bistro|pizza|sushi/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '6415', // Meals & Entertainment
+            confidence: 0.72,
+            status: 'needs_review'
+        },
+
+        // ── OFFICE SUPPLIES (8600) ────────────────────────────────────────────
+        {
+            pattern: /staples|office\s*depot|uline/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '8600', // Office Supplies
             confidence: 0.75,
             status: 'needs_review'
         },
+
+        // ── TRAVEL (9200) ─────────────────────────────────────────────────────
         {
-            pattern: /contractor|freelancer|consulting|professional services/i,
-            category: '7200', // Contract Labor
-            confidence: 0.7,
+            pattern: /westjet|air\s*canada|air\s*transat|swoop|hotel|marriott|hilton|\buber\b|\blyft\b/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '9200', // Travel & Accommodations
+            confidence: 0.72,
             status: 'needs_review'
         },
-        {
-            pattern: /software|saas|subscription|microsoft|adobe|google workspace/i,
-            category: '8450', // Software & Subscriptions
-            confidence: 0.75,
-            status: 'needs_review'
-        },
-        {
-            pattern: /fedex|ups|purolator|canada post|shipping|freight/i,
-            category: '8350', // Shipping & Delivery
-            confidence: 0.8,
-            status: 'needs_review'
-        },
-        {
-            pattern: /advertising|marketing|google ads|facebook ads|promotion/i,
-            category: '8100', // Advertising & Marketing
-            confidence: 0.75,
-            status: 'needs_review'
-        },
-        {
-            pattern: /lawyer|legal|attorney|accounting|bookkeeping|cpa/i,
-            category: '8500', // Professional Fees
-            confidence: 0.8,
-            status: 'needs_review'
-        },
-        {
-            pattern: /telus|rogers|bell|phone|mobile|internet|data plan/i,
-            category: '8650', // Telecommunications
-            confidence: 0.75,
-            status: 'needs_review'
-        },
-        {
-            pattern: /utility|hydro|electric|water|gas bill|energy/i,
-            category: '8250', // Utilities
-            confidence: 0.75,
-            status: 'needs_review'
-        }
     ];
 
     function autoCategorizTransaction(tx) {
