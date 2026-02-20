@@ -448,16 +448,19 @@
     <script src="src/parsers_raw/HSBCParser.js"></script>
 
     <!-- Category / Rule Engine -->
+    <!-- IMPORTANT: These are ES modules (type="module") which are deferred by default.
+         ledger.core.js and app.js MUST also be deferred so they execute AFTER
+         window.VendorMatcher and window.RuleEngine are set by the modules above.
+         Without defer, ledger.core.js and app.js run synchronously before modules execute. -->
     <script type="module" src="src/constants/defaultCategories.js"></script>
     <script type="module" src="src/services/CategoryService.js"></script>
     <script type="module" src="src/services/VendorMatcher.js"></script>
     <script type="module" src="src/services/RuleEngine.js"></script>
     <!-- TransactionExporter is now bundled via main.jsx (ES module with xlsx dependency) -->
 
-
-    <script src="src/ui/enterprise/ledger.core.js"></script>
-    <script src="src/ui/enterprise/utility-bar.js"></script>
-    <script src="src/ui/enterprise/app.js"></script>
+    <script defer src="src/ui/enterprise/ledger.core.js"></script>
+    <script defer src="src/ui/enterprise/utility-bar.js"></script>
+    <script defer src="src/ui/enterprise/app.js"></script>
     <!-- Dev: DBG2 debug helper auto-inject -->
     <script>
         (function () {

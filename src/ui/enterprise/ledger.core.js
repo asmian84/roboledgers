@@ -2270,18 +2270,12 @@ window.RoboLedger = (function () {
                 }
             }
 
-            // Auto-categorize imported transactions using RuleEngine
-            if (importedCount > 0 && window.RuleEngine) {
-                try {
-                    console.log(`[LEDGER] Auto-categorizing ${importedCount} imported transactions...`);
-                    // Fetch the newly imported transactions from state by their IDs
-                    const recentTxs = importedTxIds.map(id => state.transactions[id]).filter(Boolean);
-                    const result = window.RuleEngine.bulkCategorize(recentTxs);
-                    console.log(`[LEDGER] Auto-categorization complete: ${result.categorized} categorized, ${result.skipped} skipped`);
-                } catch (error) {
-                    console.error('[LEDGER] Auto-categorization failed:', error);
-                    // Don't halt upload on categorization failure
-                }
+            // Auto-categorization is handled by app.js _runAutoCatOnExisting() after import completes.
+            // NOT called here because RuleEngine is a deferred ES module:
+            // fusionEngine may not be initialized yet at this point in the ingestion flow.
+            // app.js awaits window.RuleEngine.ready before calling bulkCategorize().
+            if (importedCount > 0) {
+                console.log(`[LEDGER] ${importedCount} transactions imported — auto-categorization handled by app.js`);
             }
 
             // Prune any ghost accounts left behind by this import (zero-transaction metadata stubs)

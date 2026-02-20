@@ -1500,9 +1500,23 @@
   // Called after client restore (init), after switchClient, and after import (awaited).
   // Waits for RuleEngine.ready so there's no race with the async FuzzyMatcher fetch.
   window._runAutoCatOnExisting = async function() {
+    // RuleEngine is a deferred ES module — wait up to 5s for it to set window.RuleEngine
     if (!window.RuleEngine) {
-      console.warn('[AUTO-CAT] RuleEngine not loaded — skipping');
-      return;
+      console.log('[AUTO-CAT] Waiting for window.RuleEngine to load (ES module defer)...');
+      const start = Date.now();
+      await new Promise(resolve => {
+        const poll = setInterval(() => {
+          if (window.RuleEngine || Date.now() - start > 5000) {
+            clearInterval(poll);
+            resolve();
+          }
+        }, 50);
+      });
+      if (!window.RuleEngine) {
+        console.warn('[AUTO-CAT] RuleEngine never loaded after 5s — categorization skipped');
+        return;
+      }
+      console.log('[AUTO-CAT] window.RuleEngine appeared ✓');
     }
     console.log('[AUTO-CAT] Waiting for RuleEngine.ready...');
     await window.RuleEngine.ready;
