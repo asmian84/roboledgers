@@ -1543,7 +1543,7 @@
       console.log(`[AUTO-CAT] Sample: "${(tx.description || tx.raw_description || '').slice(0, 50)}" category=${tx.category} status=${tx.status}`);
     });
 
-    const result = window.RuleEngine.bulkCategorize(uncategorized);
+    const result = await window.RuleEngine.bulkCategorize(uncategorized);
     console.log(`[AUTO-CAT] Done: ${result.categorized} categorized, ${result.flagged} flagged for review, ${result.skipped} skipped (no match)`);
 
     // Always refresh workspace so the grid reflects the latest state (even if 0 categorized,

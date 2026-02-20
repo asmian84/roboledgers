@@ -194,42 +194,51 @@ class RuleEngine {
     }
 
     /**
-     * Bulk categorize. Single localStorage save at the end.
+     * Bulk categorize — async, yields to browser every CHUNK_SIZE transactions.
+     * Prevents "Aw Snap" / tab crash caused by blocking the main thread with
+     * 16,501-vendor fuzzy ML matching on large imports.
      */
-    bulkCategorize(transactions) {
-        const results    = { categorized: 0, skipped: 0, flagged: 0, details: [] };
-        let rulesDirty   = false;
+    async bulkCategorize(transactions, { chunkSize = 10, onProgress } = {}) {
+        const results  = { categorized: 0, skipped: 0, flagged: 0, details: [] };
+        let rulesDirty = false;
 
-        transactions.forEach(tx => {
-            const match = this.applyRules(tx, null, true);
+        for (let i = 0; i < transactions.length; i += chunkSize) {
+            const chunk = transactions.slice(i, i + chunkSize);
 
-            if (!match?.coa_code) {
-                results.skipped++;
-                return;
-            }
+            chunk.forEach(tx => {
+                const match = this.applyRules(tx, null, true);
 
-            if (match.needsReview) {
-                results.flagged++;
-            }
+                if (!match?.coa_code) {
+                    results.skipped++;
+                    return;
+                }
 
-            if (window.RoboLedger?.Ledger?.updateCategory) {
-                window.RoboLedger.Ledger.updateCategory(tx.tx_id, match.coa_code, {
-                    confidence:  match.confidence,
-                    needsReview: match.needsReview,
-                    explanation: match.explanation,
-                });
-                results.categorized++;
-                results.details.push({
-                    tx_id:       tx.tx_id,
-                    description: tx.description,
-                    coa_code:    match.coa_code,
-                    confidence:  match.confidence,
-                    method:      match.method,
-                    needsReview: match.needsReview,
-                });
-                if (match.ruleId) rulesDirty = true;
-            }
-        });
+                if (match.needsReview) results.flagged++;
+
+                if (window.RoboLedger?.Ledger?.updateCategory) {
+                    window.RoboLedger.Ledger.updateCategory(tx.tx_id, match.coa_code, {
+                        confidence:  match.confidence,
+                        needsReview: match.needsReview,
+                        explanation: match.explanation,
+                    });
+                    results.categorized++;
+                    results.details.push({
+                        tx_id:       tx.tx_id,
+                        description: tx.description,
+                        coa_code:    match.coa_code,
+                        confidence:  match.confidence,
+                        method:      match.method,
+                        needsReview: match.needsReview,
+                    });
+                    if (match.ruleId) rulesDirty = true;
+                }
+            });
+
+            if (onProgress) onProgress(Math.min(i + chunkSize, transactions.length), transactions.length);
+
+            // Yield to the browser event loop so the tab stays responsive
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
 
         if (rulesDirty) this.saveRules();
 
