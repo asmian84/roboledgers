@@ -698,7 +698,8 @@ window.RoboLedger = (function () {
 
         // ── FUEL (7400) ──────────────────────────────────────────────────────
         {
-            pattern: /petro-?can(ada)?|petrocan|fas\s*gas|shell|esso|husky|co-?op\s*gas|cardlock|costco\s*gas|ultramar|chevron|flying\s*j/i,
+            // CHQ data: HUSKY DEADMANS FLATS, CALG CO-OP GAS BAR, COSTCO GAS all appear
+            pattern: /petro-?can(ada)?|petrocan|fas\s*gas|shell|esso|husky|co-?op\s*gas|calg\s*co-?op|cardlock|costco\s*gas|ultramar|chevron|flying\s*j|gas\s*bar/i,
             test: (tx) => tx.polarity === 'DEBIT',
             category: '7400', // Fuel & Oil
             confidence: 0.88,
@@ -707,7 +708,8 @@ window.RoboLedger = (function () {
 
         // ── BANK CHARGES (7700) ─────────────────────────────────────────────
         {
-            pattern: /bank\s*(fee|charge)|service\s*charge|monthly\s*(fee|account\s*fee)|nsf\s*fee|overdraft\s*fee|wire\s*fee|atm\s*fee|interac\s*fee|purchase\s*interest|interest\s*charge/i,
+            // CHQ data: "Account Fees, RBC Service Charge" was routing to 8800 — fix to 7700
+            pattern: /bank\s*(fee|charge)|service\s*charge|account\s*fee|monthly\s*(fee|account\s*fee)|nsf\s*fee|overdraft\s*fee|wire\s*fee|atm\s*fee|interac\s*fee|purchase\s*interest|interest\s*charge|rbc\s*service/i,
             test: (tx) => tx.polarity === 'DEBIT',
             category: '7700', // Bank Charges & Interest
             confidence: 0.88,
@@ -716,6 +718,7 @@ window.RoboLedger = (function () {
 
         // ── TELECOM (9100) ───────────────────────────────────────────────────
         {
+            // CHQ data: OPENPHONE SAN FRANCISCO was inconsistently hitting 9970
             pattern: /\btelus\b|\bshaw\b|\brogers\b|\bbell\b|\bfido\b|\bkoodo\b|\bfreedom\s*mobile\b|\bstarlink\b|\bxplornet\b|\bopenphone\b/i,
             test: (tx) => tx.polarity === 'DEBIT',
             category: '9100', // Telephone & Internet
@@ -725,11 +728,23 @@ window.RoboLedger = (function () {
 
         // ── INSURANCE (7600) ─────────────────────────────────────────────────
         {
-            pattern: /\bwawanesa\b|\bintact\b|\baviva\b|\ballstate\b|\bdesjardins\s*ins|\bsecurity\s*national\s*insur/i,
+            // CHQ data: AMA INS CTR#85 (Alberta Motor Association), RBCINS-LIFE routing to 9970
+            pattern: /\bwawanesa\b|\bintact\b|\baviva\b|\ballstate\b|\bdesjardins\s*ins|\bsecurity\s*national\s*insur|\bama\s*ins\b|\brbcins\b|\binsurance\s*rbc|\bsun\s*life\s*ins/i,
             test: (tx) => tx.polarity === 'DEBIT',
             category: '7600', // Insurance
             confidence: 0.88,
             status: 'auto_categorized'
+        },
+
+        // ── SUBCONTRACTING (8950) ────────────────────────────────────────────
+        {
+            // CHQ data: TRUE NORTH DISTRIBUTORS SARNIA (15 txns $340–$7k, all in 9970)
+            // Large recurring supplier payments — subcontractor / supply vendor
+            pattern: /true\s*north\s*distributors|fiverr|fiverrEU/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '8950', // Subcontracting
+            confidence: 0.80,
+            status: 'needs_review'
         },
 
         // ── PROFESSIONAL FEES (8700) ─────────────────────────────────────────
@@ -743,25 +758,28 @@ window.RoboLedger = (function () {
 
         // ── SOFTWARE & SUBSCRIPTIONS (6800) ─────────────────────────────────
         {
-            pattern: /pricelabs|igms|rankbreeze|minut|monday\.com|adobe|github|dropbox|zoom|notion|slack|hostaway|guesty|loom|wordpress/i,
+            // CHQ data: RANKBREEZE, NETFLIX, APPLE.COM/BILL were in 9970
+            pattern: /pricelabs|igms|rankbreeze|minut|monday\.com|adobe|github|dropbox|zoom|notion|slack|hostaway|guesty|loom|wordpress|netflix|apple\.com\/bill|disney\+|spotify/i,
             test: (tx) => tx.polarity === 'DEBIT',
-            category: '6800', // Software & Subscriptions
+            category: '6800', // Dues, memberships and subscriptions
             confidence: 0.80,
             status: 'needs_review'
         },
 
         // ── REPAIRS & MAINTENANCE (7300) ─────────────────────────────────────
         {
-            // NOTE: "CDN TIRE STORE" handled separately below (8450 Materials) via SignalFusion
+            // Home Depot, Rona, Home Hardware = building supplies → 7300
+            // CDN TIRE non-abbreviated form → 7300 (abbreviated form handled below → 8450)
             pattern: /home\s*depot|rona|home\s*hardware|canadian\s*tire(?!\s*store)/i,
             test: (tx) => tx.polarity === 'DEBIT',
-            category: '7300', // Repairs & Maintenance
+            category: '7300', // Repairs & Maintenance - property
             confidence: 0.72,
             status: 'needs_review'
         },
         {
-            // "CDN TIRE STORE" = abbreviated Canadian Tire on CC statements
-            // Training data: CDN TIRE STORE → 8450 (911x primary), with 5335/8600/8900 as alternatives
+            // "CDN TIRE STORE" = abbreviated Canadian Tire on bank/CC statements
+            // All variants: "CDN TIRE STORE 00469", "CDN TIRE STORE #00469 CANMORE", "CDN TIRE STORE CANMORE"
+            // Training data: CDN TIRE STORE → 8450 (911x primary)
             pattern: /cdn\s*tire\s*store/i,
             test: (tx) => tx.polarity === 'DEBIT',
             category: '8450', // Materials and supplies
@@ -770,12 +788,21 @@ window.RoboLedger = (function () {
         },
 
         // ── MATERIALS & SUPPLIES (8450) ───────────────────────────────────────
-        // Costco / Walmart: flagged for review — could be supplies, meals, or personal
-        // Training data: COSTCO WHOLESALE → 8450 (90x), WALMART STORE → 5335 (168x cogs) / overhead 8450
         {
-            pattern: /costco\s*wholesale|costco\s*gas(?!\s*bar)/i,
+            // Costco: all variants — "COSTCO WHOLESALE", "WWW COSTCO CA", "Costco Wholesale Refund"
+            // CHQ data: 107 txns split across 8450/8500/9970 due to variant descriptions
+            pattern: /costco|www\s*costco/i,
             test: (tx) => tx.polarity === 'DEBIT',
             category: '8450', // Materials and supplies
+            confidence: 0.65,
+            status: 'needs_review'
+        },
+        {
+            // Amazon: all variants — AMZN MKTP CA, AMAZON.CA, AMZ*, WWW.AMAZON.CA, BUSINESS PRIME
+            // CHQ data: 530 txns, split 394→8500 / 136→9970 due to prefix variants not matching
+            pattern: /\bamzn\b|amazon\.ca|amz\*|www\.amazon|business\s*prime\s*amazon/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '8450', // Materials and supplies (flagged — could be anything)
             confidence: 0.65,
             status: 'needs_review'
         },
@@ -789,10 +816,13 @@ window.RoboLedger = (function () {
 
         // ── MEALS & ENTERTAINMENT (6415) ─────────────────────────────────────
         {
-            pattern: /starbucks|tim\s*horton|mcdonald|restaurant|cafe|coffee|bistro|pizza|sushi/i,
+            // CHQ data: SAFEWAY #8919 CANMORE (near STR property = grocery for guests)
+            // ACE LIQUOR CANMORE (liquor for STR property)
+            // Grocery/liquor near rental property = guest supplies → 6415
+            pattern: /starbucks|tim\s*horton|mcdonald|restaurant|cafe|coffee|bistro|pizza|sushi|safeway|ace\s*liquor|grocery|liquor\s*store|skip\s*the\s*dishes|skipthedishes|doordash|uber\s*eats/i,
             test: (tx) => tx.polarity === 'DEBIT',
-            category: '6415', // Meals & Entertainment
-            confidence: 0.72,
+            category: '6415', // Client meals and entertainment
+            confidence: 0.70,
             status: 'needs_review'
         },
 

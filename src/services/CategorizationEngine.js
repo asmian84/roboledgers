@@ -117,6 +117,9 @@ const VENDOR_PATTERNS = [
   { type: 'INSURANCE', conf: 'HIGH', re: /DIRECT\s*DEBIT\s*INSUR(ANCE)?|DIRECT\s*DEBIT.*INS\b/i },
   { type: 'INSURANCE', conf: 'HIGH', re: /\bBMO\s*INSUR(ANCE)?\b/i },
   { type: 'INSURANCE', conf: 'HIGH', re: /\bSASKATCHEWAN\s*MUTUAL\s*INSUR\b/i },
+  // CHQ data: AMA INS CTR#85 = Alberta Motor Association insurance; RBCINS-LIFE = RBC life insurance
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bAMA\s*INS\b/i },
+  { type: 'INSURANCE', conf: 'HIGH', re: /\bRBCINS\b/i },
   { type: 'INSURANCE', conf: 'MEDIUM', re: /INSUR(ANCE)?\s*(PREMIUM|PMT|PAYMENT)|POLICY\s*(PAYMENT|PREMIUM)/i },
 
   // ── PAYROLL SERVICE PROVIDERS ──────────────────────────────────────────────
@@ -413,9 +416,11 @@ const VENDOR_PATTERNS = [
   { type: 'EQUIP_RENTAL', conf: 'HIGH', re: /\bAFFORDABLE\s*AUTO\s*RENTAL\b/i },
 
   // ── SUBCONTRACTORS ────────────────────────────────────────────────────────
-  { type: 'SUBCONTRACTOR', conf: 'HIGH',   re: /\bFIVERR\b|\bUPWORK\b|\bFREELANCER\.COM\b|\b99DESIGNS\b/i },
+  { type: 'SUBCONTRACTOR', conf: 'HIGH',   re: /\bFIVERR\b|\bFIVERREU\b|\bUPWORK\b|\bFREELANCER\.COM\b|\b99DESIGNS\b/i },
   // Training: VIRTUAL GURUS (virtual assistant staffing firm)
   { type: 'SUBCONTRACTOR', conf: 'HIGH',   re: /\bVIRTUAL\s*GURUS\b/i },
+  // CHQ data: TRUE NORTH DISTRIBUTORS SARNIA (15 txns $340–$7k = recurring supplier/subcontractor)
+  { type: 'SUBCONTRACTOR', conf: 'HIGH',   re: /\bTRUE\s*NORTH\s*DISTRIBUTORS\b/i },
   { type: 'SUBCONTRACTOR', conf: 'MEDIUM', re: /SUBCONTRACT|SUB-?CONTRACT|TRADE\s*CONTRACTOR/i },
 
   // ── ADVERTISING ───────────────────────────────────────────────────────────
