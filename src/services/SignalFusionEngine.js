@@ -48,6 +48,17 @@ if (BRAIN) {
 // 2,369 type-specific + 403 universal rules extracted from human accountant files
 import CONTEXT_BRAIN_DATA from '../data/context_brain.json';
 const CONTEXT_BRAIN = CONTEXT_BRAIN_DATA?.metadata ? CONTEXT_BRAIN_DATA : null;
+
+// ─── MCC → VendorTypeCode lookup (ISO 18245 / Visa/Mastercard) ───────────────
+// Maps 4-digit MCC codes to our 57 VendorTypeCodes from CategorizationEngine.
+// Fires as mccSignal (weight 0.85) when tx.mcc_code is present.
+// Canadian bank CSV/PDF exports don't carry MCCs today, but API feeds (Amex, Plaid, Stripe) do.
+import MCC_MAP_RAW from '../data/mcc_to_vendor_type.json';
+// Strip _meta and null entries at load time
+const MCC_MAP = Object.fromEntries(
+    Object.entries(MCC_MAP_RAW)
+        .filter(([k, v]) => k !== '_meta' && v !== null && v !== 'null')
+);
 if (CONTEXT_BRAIN) {
     const m = CONTEXT_BRAIN.metadata;
     console.log(`[SignalFusion] 📚 Context brain loaded: ${m.rows_ingested} rows, ${m.total_rules} rules`);
@@ -68,6 +79,7 @@ const WEIGHTS = {
     contextBrain:  0.97,   // Human-verified SWIFT workpapers: (payee, account_type) → COA
     exactVendor:   0.95,
     firmVendor:    0.92,   // Firm's learned vendor mappings (4,317 vendors)
+    mccSignal:     0.84,   // MCC code lookup → VendorType → COA (ISO 18245 / Visa/Mastercard)
     firmEntity:    0.85,   // Entity register (231 entities with roles)
     recurring:     0.80,
     firmPattern:   0.78,   // Pattern templates (etransfer, payment, etc.)
@@ -190,6 +202,7 @@ class SignalFusionEngine {
             this._signalContextBrain(enriched),     // Context brain: human SWIFT workpapers (account-type-aware)
             this._signalExactVendor(enriched),
             this._signalFirmVendor(enriched),       // Brain: 4,317 learned vendor mappings
+            this._signalMCC(enriched),              // MCC code: ISO 18245 4-digit code → VendorType → COA
             this._signalFirmEntity(enriched),       // Brain: 231 entities with roles
             this._signalRecurring(enriched),
             this._signalFirmPattern(enriched),      // Brain: 11 pattern templates
@@ -553,6 +566,34 @@ class SignalFusionEngine {
             }
         }
         return null;
+    }
+
+    // ─── Signal: MCC Code ────────────────────────────────────────────────────
+    // Fires when a transaction carries an mcc_code field (ISO 18245 4-digit code).
+    // Canadian bank CSV/PDF exports don't include MCCs today — this fires for API-sourced
+    // transactions (Plaid, Amex API, Stripe Issuing, future bank API integrations).
+    // MCC → VendorTypeCode (from mcc_to_vendor_type.json) → ROUTING_TABLE → COA.
+    // Weight 0.84: below deterministic/userRule/firmVendor, above recurring/keyword.
+
+    _signalMCC(tx) {
+        const mcc = tx.mcc_code;
+        if (!mcc) return null;
+
+        const vendorType = MCC_MAP[String(mcc)];
+        if (!vendorType) return null;
+
+        // Look up the COA via CategorizationEngine routing table
+        const det = categorizationEngine.routeByVendorType(vendorType, { isCCAcct: tx._isCCAcct });
+        if (!det?.coa_code) return null;
+
+        return {
+            type:       'mccSignal',
+            coa:        det.coa_code,
+            confidence: 0.85,
+            weight:     WEIGHTS.mccSignal,
+            note:       `MCC ${mcc} → ${vendorType} → ${det.coa_code} | ${det.routing_logic || ''}`,
+            needsReview: det.needs_review || false,
+        };
     }
 
     // ─── Signal: Recurring ───────────────────────────────────────────────────

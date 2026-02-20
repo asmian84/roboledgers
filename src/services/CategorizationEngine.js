@@ -1054,6 +1054,45 @@ class CategorizationEngine {
       coaCode:  proposedCOA,
     };
   }
+
+  /**
+   * Route directly by VendorTypeCode without requiring a description match.
+   * Called by mccSignal in SignalFusionEngine when tx.mcc_code maps to a VendorTypeCode.
+   *
+   * @param {string} vendorType   — VendorTypeCode (e.g. 'FUEL', 'MEALS', 'TRAVEL')
+   * @param {Object} opts         — { isCCAcct, industry }
+   * @returns {{ coa_code, routing_logic, needs_review } | null}
+   */
+  routeByVendorType(vendorType, opts = {}) {
+    const routing = this._routing[vendorType];
+    if (!routing) return null;
+
+    const industry    = opts.industry || window.RoboLedger?.firm?.industry || 'SHORT_TERM_RENTAL';
+
+    // GENERAL_RETAIL always needs review — never auto-route via MCC
+    if (vendorType === 'GENERAL_RETAIL') {
+      return {
+        coa_code:      routing.overhead || null,
+        routing_logic: routing.logic,
+        needs_review:  true,
+      };
+    }
+
+    // Pick COGS vs Overhead based on industry profile (reuse existing logic)
+    const coaCode = this._resolveCOGSvsOverhead(vendorType, industry, routing)
+                 || routing.overhead
+                 || routing.rev
+                 || routing.bs
+                 || null;
+
+    if (!coaCode) return null;
+
+    return {
+      coa_code:      coaCode,
+      routing_logic: routing.logic,
+      needs_review:  vendorType === 'ATM_WITHDRAWAL' || vendorType === 'LOAN_PMT',
+    };
+  }
 }
 
 // Singleton export
