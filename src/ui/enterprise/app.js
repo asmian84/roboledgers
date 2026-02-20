@@ -1607,6 +1607,8 @@
 
   // Navigation function for routing between pages
   window.navigateTo = function (route) {
+    if (!route) return; // Guard: action-only nav items have no route
+
     console.log(`[NAVIGATE] → ${route}`);
 
     // Guard: client-only routes require an active client — redirect to portal
@@ -1742,6 +1744,9 @@
     document.querySelectorAll('.nav-item').forEach(item => {
       item.onclick = (e) => {
         const route = e.currentTarget.dataset.route;
+
+        // Action-only nav items (no data-route) handle their own onclick — skip routing
+        if (!route) return;
 
         // Close mobile sidebar when navigation is clicked
         const sidebar = document.getElementById('sidebar');
