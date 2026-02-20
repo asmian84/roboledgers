@@ -752,10 +752,38 @@ window.RoboLedger = (function () {
 
         // ── REPAIRS & MAINTENANCE (7300) ─────────────────────────────────────
         {
-            pattern: /home\s*depot|rona|home\s*hardware|canadian\s*tire/i,
+            // NOTE: "CDN TIRE STORE" handled separately below (8450 Materials) via SignalFusion
+            pattern: /home\s*depot|rona|home\s*hardware|canadian\s*tire(?!\s*store)/i,
             test: (tx) => tx.polarity === 'DEBIT',
             category: '7300', // Repairs & Maintenance
-            confidence: 0.70,
+            confidence: 0.72,
+            status: 'needs_review'
+        },
+        {
+            // "CDN TIRE STORE" = abbreviated Canadian Tire on CC statements
+            // Training data: CDN TIRE STORE → 8450 (911x primary), with 5335/8600/8900 as alternatives
+            pattern: /cdn\s*tire\s*store/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '8450', // Materials and supplies
+            confidence: 0.72,
+            status: 'needs_review'
+        },
+
+        // ── MATERIALS & SUPPLIES (8450) ───────────────────────────────────────
+        // Costco / Walmart: flagged for review — could be supplies, meals, or personal
+        // Training data: COSTCO WHOLESALE → 8450 (90x), WALMART STORE → 5335 (168x cogs) / overhead 8450
+        {
+            pattern: /costco\s*wholesale|costco\s*gas(?!\s*bar)/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '8450', // Materials and supplies
+            confidence: 0.65,
+            status: 'needs_review'
+        },
+        {
+            pattern: /\bwal-?mart\b/i,
+            test: (tx) => tx.polarity === 'DEBIT',
+            category: '8450', // Materials and supplies
+            confidence: 0.65,
             status: 'needs_review'
         },
 

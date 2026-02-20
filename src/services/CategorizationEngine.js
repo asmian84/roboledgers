@@ -134,6 +134,8 @@ const VENDOR_PATTERNS = [
   { type: 'BLDG_SUPPLY', conf: 'HIGH', re: /\bHOME\s*DEPOT\b|PAYPAL.*HOMEDEPOT/i },
   { type: 'BLDG_SUPPLY', conf: 'HIGH', re: /\bRONA\b/i },
   { type: 'BLDG_SUPPLY', conf: 'HIGH', re: /\bHOME\s*HARDWARE\b/i },
+  // CDN TIRE STORE = abbreviated Canadian Tire on CC statements (non-auto context = building/maintenance supplies)
+  { type: 'BLDG_SUPPLY', conf: 'MEDIUM', re: /\bCDN\s*TIRE\s*STORE\b/i },
   { type: 'BLDG_SUPPLY', conf: 'HIGH', re: /\bLOWE'?S\b/i },
   { type: 'BLDG_SUPPLY', conf: 'HIGH', re: /\bWINDSOR\s*PLYWOOD\b|\bTIMBER\s*MART\b|\bCASTLE\s*BLDG\b|\bTAIGA\s*BUILDING\b/i },
   { type: 'BLDG_SUPPLY', conf: 'HIGH', re: /\bEMCO\b|\bWOLSELEY\b|\bANDREW\s*SHERET\b/i },
@@ -524,7 +526,7 @@ const ROUTING_TABLE = {
   ATM_WITHDRAWAL:     { cogs: null,   overhead: null,   bs: null,              defaultCOGS: false, gifi: null,   logic: 'ATM/cash withdrawal — owner draw. Route to 9970 and FLAG_FOR_REVIEW. Accountant splits: shareholder draw (2650/8400) vs petty-cash reimbursement.' },
   BANK_FEE:           { cogs: null,   overhead: '7700', bs: null,              defaultCOGS: false, gifi: '8710', logic: 'Always overhead — interest and bank charges' },
   INTEREST_INCOME:    { cogs: null,   overhead: null,   bs: null,   rev: '4860', defaultCOGS: false, gifi: '8710', logic: 'Deposit interest = INCOME → 4860 Interest income' },
-  CASHBACK:           { cogs: null,   overhead: '7700', bs: null,              defaultCOGS: false, gifi: '8710', logic: 'Cash back/reward = contra bank charge → 7700' },
+  CASHBACK:           { cogs: null,   overhead: '4840', bs: null,              defaultCOGS: false, gifi: '4840', logic: 'Cash back/reward = expenses recovered → 4840 (REVENUE). Not a bank charge.' },
   INTEREST_LTD:       { cogs: null,   overhead: '7800', bs: null,              defaultCOGS: false, gifi: '8710', logic: 'Long-term debt interest → 7800' },
   CC_PAYMENT:         { cogs: null,   overhead: null,   bs: '2101',            defaultCOGS: false, gifi: '2130', logic: 'BS only — credit card payment reduces Visa Payable' },
   LOAN_PMT:           { cogs: null,   overhead: '7800', bs: '2710',            defaultCOGS: false, gifi: '2780', logic: 'SPLIT REQUIRED: principal → 2710-2880 BS, interest → 7800 IS' },
