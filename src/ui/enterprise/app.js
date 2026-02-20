@@ -510,6 +510,23 @@
         // Retroactively fix any CC refunds/cashback mis-categorized as revenue
         window.fixCCRefunds?.();
 
+        // Run auto-categorization on all imported transactions.
+        // Guarantees categorization fires even if ledger.core.js raced ahead of RuleEngine
+        // module load. Retries once after 1.5s in case FuzzyMatcher fetch was still pending.
+        const _runAutoCat = () => {
+          if (!window.RuleEngine) return;
+          const allTxns = window.RoboLedger.Ledger.getAll();
+          const uncategorized = allTxns.filter(tx => !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW');
+          if (uncategorized.length > 0) {
+            console.log(`[IMPORT] Auto-categorizing ${uncategorized.length} uncategorized transactions...`);
+            const result = window.RuleEngine.bulkCategorize(uncategorized);
+            if (result.categorized > 0 && window.updateWorkspace) window.updateWorkspace();
+          }
+        };
+        _runAutoCat();
+        // Retry after 1.5s — covers the case where FuzzyMatcher async fetch was still in flight
+        setTimeout(_runAutoCat, 1500);
+
         // Seed GST data for all newly imported transactions
         window.initGSTOnTransactions?.();
 
