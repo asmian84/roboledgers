@@ -19,19 +19,18 @@ const HomePage = () => {
 
             const uncategorized = allTxns.filter(t => !t.category || String(t.category) === '9970' || t.category_name === 'UNCATEGORIZED').length;
             const categorized = allTxns.length - uncategorized;
-            const totalDebits  = allTxns.reduce((s, t) => s + (parseFloat(t.debit)  || 0), 0);
-            const totalCredits = allTxns.reduce((s, t) => s + (parseFloat(t.credit) || 0), 0);
+            // Transaction schema uses amount_cents + polarity (DEBIT/CREDIT), NOT separate debit/credit fields
+            const totalDebits  = allTxns.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
+            const totalCredits = allTxns.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
 
             // Revenue & Expenses from COA codes
             let revenue = 0, expenses = 0;
             const expenseByCategory = {};
             allTxns.forEach(t => {
                 const code = parseInt(t.category) || 0;
-                const debit  = parseFloat(t.debit)  || 0;
-                const credit = parseFloat(t.credit) || 0;
-                if (code >= 4000 && code < 5000) revenue  += credit - debit;
+                const amt = Math.abs((t.amount_cents || 0) / 100);
+                if (code >= 4000 && code < 5000) revenue += amt;
                 if (code >= 5000 && code < 9970) {
-                    const amt = debit - credit;
                     expenses += amt;
                     const catName = t.category_name || coa[code]?.name || `Code ${code}`;
                     expenseByCategory[catName] = (expenseByCategory[catName] || 0) + amt;
@@ -47,8 +46,8 @@ const HomePage = () => {
             // Per-account summaries
             const accountSummaries = accounts.map(acc => {
                 const accTxns = allTxns.filter(t => t.account_id === acc.id);
-                const totalDebit  = accTxns.reduce((s, t) => s + (parseFloat(t.debit)  || 0), 0);
-                const totalCredit = accTxns.reduce((s, t) => s + (parseFloat(t.credit) || 0), 0);
+                const totalDebit  = accTxns.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
+                const totalCredit = accTxns.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
                 const balance = totalCredit - totalDebit;
                 // Find last import date
                 const dates = accTxns.map(t => t.date).filter(Boolean).sort();
@@ -74,10 +73,9 @@ const HomePage = () => {
                 if (!t.date) return;
                 const monthKey = t.date.substring(0, 7); // "2024-01"
                 if (!monthMap[monthKey]) monthMap[monthKey] = { inflow: 0, outflow: 0 };
-                const debit  = parseFloat(t.debit)  || 0;
-                const credit = parseFloat(t.credit) || 0;
-                monthMap[monthKey].inflow  += credit;
-                monthMap[monthKey].outflow += debit;
+                const amt = Math.abs((t.amount_cents || 0) / 100);
+                if (t.polarity === 'CREDIT') monthMap[monthKey].inflow += amt;
+                else monthMap[monthKey].outflow += amt;
             });
             const monthlyData = Object.entries(monthMap)
                 .sort((a, b) => a[0].localeCompare(b[0]))
