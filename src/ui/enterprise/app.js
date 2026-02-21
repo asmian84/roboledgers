@@ -4553,6 +4553,340 @@
     }
   };
 
+  // ─── ADMIN DASHBOARD (GOD VIEW) ──────────────────────────────────────────────
+  // Shows aggregate stats across ALL accountants and ALL clients.
+  // Visible when no accountant and no client is selected.
+  function renderAdminDashboard() {
+    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const allClients  = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+
+    // ── Aggregate stats across ALL clients ─────────────────────────────────
+    let totalTxns = 0, totalAccounts = 0, totalUncat = 0, totalRevenue = 0, totalExpenses = 0;
+    const firmStats = [];
+    const healthCounts = { good: 0, attention: 0, urgent: 0 };
+    const industryMap = {};
+    const recentImports = [];
+
+    const readClientLedger = (clientId) => {
+      try {
+        const raw = localStorage.getItem('roboledger_v5_data_' + clientId);
+        return raw ? JSON.parse(raw) : {};
+      } catch { return {}; }
+    };
+
+    allClients.forEach(client => {
+      const ledger   = readClientLedger(client.id);
+      const txList   = Object.values(ledger.transactions || {});
+      const accounts = ledger.accounts || [];
+      const txCount  = txList.length;
+      const acctCount = accounts.length;
+
+      totalTxns     += txCount;
+      totalAccounts += acctCount;
+
+      const uncatCount = txList.filter(t => {
+        const cat = (t.category || '').trim();
+        return !cat || cat === 'UNCATEGORIZED';
+      }).length;
+      totalUncat += uncatCount;
+
+      // Revenue (4000-series) and Expenses (5000-9000 series)
+      txList.forEach(t => {
+        const code = parseInt(t.category) || 0;
+        const debit  = parseFloat(t.debit)  || 0;
+        const credit = parseFloat(t.credit) || 0;
+        if (code >= 4000 && code < 5000) totalRevenue  += credit - debit;
+        if (code >= 5000 && code < 9970) totalExpenses += debit - credit;
+      });
+
+      // Health
+      const reviewCount = txList.filter(t => t.needsReview || t.status === 'needs_review').length;
+      let health = 'good';
+      if (reviewCount > 0 || (txCount > 0 && uncatCount / txCount > 0.3)) health = 'urgent';
+      else if (uncatCount > 0) health = 'attention';
+      healthCounts[health]++;
+
+      // Industry distribution
+      const ind = client.industry || 'OTHER';
+      industryMap[ind] = (industryMap[ind] || 0) + 1;
+
+      // Recent imports
+      if (txList.length > 0) {
+        const dates = txList.map(t => t.date ? new Date(t.date) : null).filter(Boolean);
+        if (dates.length > 0) {
+          const mostRecent = new Date(Math.max(...dates.map(d => d.getTime())));
+          recentImports.push({ name: client.name, date: mostRecent, count: txCount, color: client.color || '#3b82f6' });
+        }
+      }
+    });
+
+    // Per-accountant aggregates
+    accountants.forEach(acc => {
+      const accClients = allClients.filter(c => c.accountantId === acc.id);
+      let firmTxns = 0, firmUncat = 0;
+      accClients.forEach(c => {
+        const ledger = readClientLedger(c.id);
+        const txList = Object.values(ledger.transactions || {});
+        firmTxns  += txList.length;
+        firmUncat += txList.filter(t => { const cat = (t.category || '').trim(); return !cat || cat === 'UNCATEGORIZED'; }).length;
+      });
+      firmStats.push({ name: acc.name, color: acc.color || '#8b5cf6', clients: accClients.length, txns: firmTxns, uncat: firmUncat, id: acc.id });
+    });
+
+    // Unassigned clients
+    const unassigned = allClients.filter(c => !c.accountantId);
+    if (unassigned.length > 0) {
+      let uTxns = 0, uUncat = 0;
+      unassigned.forEach(c => {
+        const ledger = readClientLedger(c.id);
+        const txList = Object.values(ledger.transactions || {});
+        uTxns  += txList.length;
+        uUncat += txList.filter(t => { const cat = (t.category || '').trim(); return !cat || cat === 'UNCATEGORIZED'; }).length;
+      });
+      firmStats.push({ name: 'Unassigned', color: '#94a3b8', clients: unassigned.length, txns: uTxns, uncat: uUncat, id: null });
+    }
+
+    // Sort recent imports by date descending
+    recentImports.sort((a, b) => b.date - a.date);
+
+    const fmt = (n) => n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
+    const catPct = totalTxns > 0 ? Math.round(((totalTxns - totalUncat) / totalTxns) * 100) : 0;
+    const netIncome = totalRevenue - totalExpenses;
+
+    // Industry labels
+    const indLabels = {
+      PROFESSIONAL_SERVICES: 'Professional', SHORT_TERM_RENTAL: 'Short-Term Rental',
+      RETAIL: 'Retail', CONSTRUCTION: 'Construction', RESTAURANT: 'Restaurant',
+      REAL_ESTATE: 'Real Estate', E_COMMERCE: 'E-Commerce', OTHER: 'Other',
+    };
+    const indColors = {
+      PROFESSIONAL_SERVICES: '#3b82f6', SHORT_TERM_RENTAL: '#16a34a', RETAIL: '#d97706',
+      CONSTRUCTION: '#ea580c', RESTAURANT: '#9333ea', REAL_ESTATE: '#0d9488',
+      E_COMMERCE: '#7c3aed', OTHER: '#64748b',
+    };
+
+    // ── KPI Cards ────────────────────────────────────────────────────────────
+    const kpiCards = `
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px;">
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-buildings" style="font-size:18px;color:#8b5cf6;"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Firms</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${accountants.length}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${allClients.length} total clients</div>
+        </div>
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-receipt" style="font-size:18px;color:#3b82f6;"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Transactions</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${totalTxns.toLocaleString()}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${totalAccounts} accounts</div>
+        </div>
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-trend-up" style="font-size:18px;color:#16a34a;"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Revenue</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:#16a34a;">${fmt(totalRevenue)}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">across all clients</div>
+        </div>
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-trend-down" style="font-size:18px;color:#ef4444;"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Expenses</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:#ef4444;">${fmt(totalExpenses)}</div>
+          <div style="font-size:10px;color:${netIncome >= 0 ? '#16a34a' : '#ef4444'};margin-top:2px;font-weight:600;">Net: ${fmt(netIncome)}</div>
+        </div>
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-check-circle" style="font-size:18px;color:${catPct >= 90 ? '#16a34a' : catPct >= 60 ? '#d97706' : '#ef4444'};"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Categorized</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${catPct}%</div>
+          <div style="font-size:10px;color:${totalUncat > 0 ? '#d97706' : '#16a34a'};margin-top:2px;">${totalUncat > 0 ? `${totalUncat.toLocaleString()} remaining` : 'All done ✓'}</div>
+        </div>
+      </div>`;
+
+    // ── Categorization progress bar ──────────────────────────────────────────
+    const progressBar = totalTxns > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:11px;font-weight:600;color:var(--text-secondary,#475569);">Practice-Wide Categorization</span>
+          <span style="font-size:11px;color:#94a3b8;">${(totalTxns - totalUncat).toLocaleString()} / ${totalTxns.toLocaleString()}</span>
+        </div>
+        <div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden;">
+          <div style="height:100%;width:${catPct}%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:99px;transition:width 0.5s;"></div>
+        </div>
+      </div>` : '';
+
+    // ── Health Distribution ──────────────────────────────────────────────────
+    const totalH = healthCounts.good + healthCounts.attention + healthCounts.urgent;
+    const healthBar = totalH > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Client Health</div>
+        <div style="display:flex;height:10px;border-radius:99px;overflow:hidden;margin-bottom:12px;">
+          ${healthCounts.good > 0 ? `<div style="width:${(healthCounts.good/totalH*100)}%;background:#16a34a;" title="${healthCounts.good} good"></div>` : ''}
+          ${healthCounts.attention > 0 ? `<div style="width:${(healthCounts.attention/totalH*100)}%;background:#f59e0b;" title="${healthCounts.attention} attention"></div>` : ''}
+          ${healthCounts.urgent > 0 ? `<div style="width:${(healthCounts.urgent/totalH*100)}%;background:#ef4444;" title="${healthCounts.urgent} urgent"></div>` : ''}
+        </div>
+        <div style="display:flex;gap:18px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;"></span>
+            <span style="font-size:11px;color:#475569;"><strong>${healthCounts.good}</strong> Good</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;"></span>
+            <span style="font-size:11px;color:#475569;"><strong>${healthCounts.attention}</strong> Attention</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></span>
+            <span style="font-size:11px;color:#475569;"><strong>${healthCounts.urgent}</strong> Urgent</span>
+          </div>
+        </div>
+      </div>` : '';
+
+    // ── Firm Workload Table ──────────────────────────────────────────────────
+    const firmTable = firmStats.length > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Workload by Firm</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid #f1f5f9;">
+              <th style="text-align:left;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Firm</th>
+              <th style="text-align:center;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Clients</th>
+              <th style="text-align:center;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Txns</th>
+              <th style="text-align:center;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Uncategorized</th>
+              <th style="text-align:right;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Progress</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${firmStats.map(f => {
+              const pct = f.txns > 0 ? Math.round(((f.txns - f.uncat) / f.txns) * 100) : 100;
+              return `
+                <tr style="border-bottom:1px solid #f8fafc;cursor:${f.id ? 'pointer' : 'default'};" ${f.id ? `onclick="window.switchAccountant('${f.id}')"` : ''}>
+                  <td style="padding:10px 8px;display:flex;align-items:center;gap:8px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${f.color};flex-shrink:0;"></span>
+                    <span style="font-size:12px;font-weight:600;color:var(--text-primary,#0f172a);">${f.name}</span>
+                  </td>
+                  <td style="text-align:center;padding:10px 8px;font-size:12px;font-weight:700;color:var(--text-primary,#0f172a);">${f.clients}</td>
+                  <td style="text-align:center;padding:10px 8px;font-size:12px;color:var(--text-secondary,#475569);">${f.txns.toLocaleString()}</td>
+                  <td style="text-align:center;padding:10px 8px;font-size:12px;color:${f.uncat > 0 ? '#d97706' : '#16a34a'};font-weight:600;">${f.uncat > 0 ? f.uncat.toLocaleString() : '✓'}</td>
+                  <td style="text-align:right;padding:10px 8px;">
+                    <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+                      <div style="width:60px;height:5px;background:#f1f5f9;border-radius:99px;overflow:hidden;">
+                        <div style="width:${pct}%;height:100%;background:${pct >= 90 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#ef4444'};border-radius:99px;"></div>
+                      </div>
+                      <span style="font-size:11px;font-weight:600;color:${pct >= 90 ? '#16a34a' : pct >= 60 ? '#d97706' : '#ef4444'};">${pct}%</span>
+                    </div>
+                  </td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` : '';
+
+    // ── Industry Distribution ────────────────────────────────────────────────
+    const industries = Object.entries(industryMap).sort((a, b) => b[1] - a[1]);
+    const industrySection = industries.length > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Client Industries</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${industries.map(([ind, count]) => `
+            <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:${indColors[ind] || '#64748b'}12;border-radius:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${indColors[ind] || '#64748b'};"></span>
+              <span style="font-size:11px;font-weight:600;color:${indColors[ind] || '#64748b'};">${indLabels[ind] || ind}</span>
+              <span style="font-size:10px;font-weight:700;color:var(--text-secondary,#475569);background:var(--bg-secondary,#f8fafc);padding:1px 6px;border-radius:4px;">${count}</span>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    // ── Recent Activity Feed ─────────────────────────────────────────────────
+    const activityFeed = recentImports.length > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Recent Activity</div>
+        <div style="display:flex;flex-direction:column;gap:0;">
+          ${recentImports.slice(0, 8).map(item => {
+            const dateStr = item.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+            return `
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f8fafc;">
+                <span style="width:6px;height:6px;border-radius:50%;background:${item.color};flex-shrink:0;"></span>
+                <span style="font-size:12px;font-weight:600;color:var(--text-primary,#0f172a);flex:1;">${item.name}</span>
+                <span style="font-size:11px;color:#94a3b8;">${item.count.toLocaleString()} txns</span>
+                <span style="font-size:10px;color:#94a3b8;min-width:50px;text-align:right;">${dateStr}</span>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>` : '';
+
+    // ── Quick Actions ────────────────────────────────────────────────────────
+    const quickActions = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+        <button onclick="window.openCreateAccountantModal()"
+                style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:18px;cursor:pointer;text-align:left;transition:all 0.15s;">
+          <div style="width:36px;height:36px;border-radius:9px;background:#8b5cf620;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            <i class="ph ph-user-circle-plus" style="font-size:18px;color:#8b5cf6;"></i>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary,#0f172a);margin-bottom:3px;">New Accountant</div>
+          <div style="font-size:11px;color:#94a3b8;">Add a firm or CPA to the practice</div>
+        </button>
+        <button onclick="window.openCreateClientModal()"
+                style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:18px;cursor:pointer;text-align:left;transition:all 0.15s;">
+          <div style="width:36px;height:36px;border-radius:9px;background:#3b82f620;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            <i class="ph ph-buildings" style="font-size:18px;color:#3b82f6;"></i>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary,#0f172a);margin-bottom:3px;">New Client</div>
+          <div style="font-size:11px;color:#94a3b8;">Register a new business client</div>
+        </button>
+        <button onclick="window.navigateTo('accountants')"
+                style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:18px;cursor:pointer;text-align:left;transition:all 0.15s;">
+          <div style="width:36px;height:36px;border-radius:9px;background:#16a34a20;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            <i class="ph ph-list-dashes" style="font-size:18px;color:#16a34a;"></i>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary,#0f172a);margin-bottom:3px;">Manage Registry</div>
+          <div style="font-size:11px;color:#94a3b8;">View all accountants and clients</div>
+        </button>
+      </div>`;
+
+    // ── Assemble ─────────────────────────────────────────────────────────────
+    return `
+      <div class="ai-brain-page" style="padding:24px 28px;max-width:1200px;">
+        <div class="std-page-header" style="margin-bottom:20px;">
+          <div class="header-brand">
+            <div class="icon-box" style="background:linear-gradient(135deg,#6d28d9,#4f46e5);">
+              <i class="ph ph-shield-check"></i>
+            </div>
+            <div>
+              <h1 style="margin:0;font-size:1.15rem;font-weight:700;color:var(--text-primary,#0f172a);">Admin Dashboard</h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">
+                ${accountants.length} firm${accountants.length !== 1 ? 's' : ''} · ${allClients.length} client${allClients.length !== 1 ? 's' : ''} · Practice overview
+              </p>
+            </div>
+          </div>
+          <button onclick="window.openContextDrawer()" class="btn-restored"
+                  style="background:#6d28d9;border:none;color:white;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-arrows-left-right"></i> Switch Context
+          </button>
+        </div>
+
+        ${kpiCards}
+        ${progressBar}
+        ${quickActions}
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          ${firmTable}
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            ${healthBar}
+            ${industrySection}
+          </div>
+        </div>
+
+        ${activityFeed}
+      </div>`;
+  }
+
   // ─── ACCOUNTANT PORTAL ───────────────────────────────────────────────────────
   // Renders the no-client landing page. Reads all client ledger data directly
   // from localStorage without switching context (no loadFromKey calls).
@@ -4645,6 +4979,35 @@
     const totalUncat     = clientStats.reduce((s, { stats }) => s + stats.uncatCount, 0);
     const urgentCount    = clientStats.filter(({ stats }) => stats.health === 'urgent').length;
     const attentionCount = clientStats.filter(({ stats }) => stats.health !== 'good').length;
+
+    // ── 4b. FINANCIAL AGGREGATES (Revenue/Expense across all clients) ─────
+    let _portalRevenue = 0, _portalExpenses = 0;
+    const _fmtPortal = (n) => n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
+    clients.forEach(client => {
+      try {
+        const raw = localStorage.getItem('roboledger_v5_data_' + client.id);
+        if (!raw) return;
+        const ledger = JSON.parse(raw);
+        Object.values(ledger.transactions || {}).forEach(t => {
+          const code = parseInt(t.category) || 0;
+          const debit  = parseFloat(t.debit)  || 0;
+          const credit = parseFloat(t.credit) || 0;
+          if (code >= 4000 && code < 5000) _portalRevenue  += credit - debit;
+          if (code >= 5000 && code < 9970) _portalExpenses += debit - credit;
+        });
+      } catch {}
+    });
+    const _portalNetIncome = _portalRevenue - _portalExpenses;
+    const _portalCatPct = totalTxns > 0 ? Math.round(((totalTxns - totalUncat) / totalTxns) * 100) : 0;
+
+    // ── FY Deadline tracking ──────────────────────────────────────────────
+    const _now = new Date();
+    const _currentMonth = _now.getMonth() + 1;
+    const _deadlineSoon = clients.filter(c => {
+      if (!c.fiscalYearEnd) return false;
+      const monthsUntil = ((c.fiscalYearEnd - _currentMonth + 12) % 12);
+      return monthsUntil <= 2 && monthsUntil >= 0;
+    });
 
     // ── 5. HEALTH BADGE ─────────────────────────────────────────────────────
     const healthBadge = (health) => {
@@ -4811,6 +5174,52 @@
           </button>
         </div>
         ${clientStats.length > 0 ? summaryStrip : ''}
+        ${clientStats.length > 0 ? `
+        <!-- Financial KPI Strip -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
+          <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <i class="ph ph-trend-up" style="font-size:14px;color:#16a34a;"></i>
+              <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Revenue</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:#16a34a;">${_fmtPortal(_portalRevenue)}</div>
+          </div>
+          <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <i class="ph ph-trend-down" style="font-size:14px;color:#ef4444;"></i>
+              <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Expenses</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:#ef4444;">${_fmtPortal(_portalExpenses)}</div>
+          </div>
+          <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <i class="ph ph-scales" style="font-size:14px;color:${_portalNetIncome >= 0 ? '#3b82f6' : '#ef4444'};"></i>
+              <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Net Income</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:${_portalNetIncome >= 0 ? '#3b82f6' : '#ef4444'};">${_fmtPortal(_portalNetIncome)}</div>
+          </div>
+          <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <i class="ph ph-chart-bar" style="font-size:14px;color:${_portalCatPct >= 90 ? '#16a34a' : '#d97706'};"></i>
+              <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Categorized</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:var(--text-primary,#0f172a);">${_portalCatPct}%</div>
+            <div style="height:4px;background:#f1f5f9;border-radius:99px;overflow:hidden;margin-top:6px;">
+              <div style="height:100%;width:${_portalCatPct}%;background:${_portalCatPct >= 90 ? '#16a34a' : _portalCatPct >= 60 ? '#f59e0b' : '#ef4444'};border-radius:99px;"></div>
+            </div>
+          </div>
+        </div>
+        ${_deadlineSoon.length > 0 ? `
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:10px;">
+          <i class="ph ph-warning-circle" style="font-size:18px;color:#d97706;flex-shrink:0;"></i>
+          <div>
+            <span style="font-size:12px;font-weight:600;color:#92400e;">Fiscal Year-End Approaching:</span>
+            <span style="font-size:12px;color:#78350f;margin-left:4px;">
+              ${_deadlineSoon.map(c => c.name).join(', ')}
+            </span>
+          </div>
+        </div>` : ''}
+        ` : ''}
         ${clientStats.length === 0
           ? emptyState
           : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;">
@@ -4823,10 +5232,18 @@
     const stage = document.getElementById('app-stage');
     if (!stage) return;
 
-    // ── PORTAL BRANCH: no client selected → show accountant portal ──────────
+    // ── ADMIN BRANCH: no accountant + no client → admin dashboard ───────────
+    if (!UI_STATE.activeAccountantId && !UI_STATE.activeClientId) {
+      const existingContainer = document.getElementById('home-container');
+      if (existingContainer) existingContainer.remove();
+      stage.innerHTML = `<div class="fade-in" style="overflow-y:auto;height:100%;">${renderAdminDashboard()}</div>`;
+      return;
+    }
+
+    // ── PORTAL BRANCH: accountant active, no client → accountant portal ─────
     if (!UI_STATE.activeClientId) {
       const existingContainer = document.getElementById('home-container');
-      if (existingContainer) existingContainer.remove(); // clear any stale React mount
+      if (existingContainer) existingContainer.remove();
       stage.innerHTML = `<div class="fade-in" style="overflow-y:auto;height:100%;">${renderAccountantPortal()}</div>`;
       return;
     }
