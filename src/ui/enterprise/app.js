@@ -3122,25 +3122,11 @@
                 style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
           </div>
           <div>
-            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Industry</label>
-            <input type="hidden" id="client-form-industry" value="${v('industry','PROFESSIONAL_SERVICES')}" />
-            <div id="industry-card-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:180px;overflow-y:auto;padding:2px;">
-              ${INDUSTRIES.map(ind => {
-                const sel = v('industry','PROFESSIONAL_SERVICES') === ind.value;
-                return `<div class="industry-card" data-value="${ind.value}" onclick="window._selectIndustry(this)"
-                  style="padding:8px 10px;border:1.5px solid ${sel ? '#3b82f6' : '#e2e8f0'};border-radius:8px;cursor:pointer;
-                  background:${sel ? '#eff6ff' : 'white'};transition:all 0.12s;display:flex;align-items:center;gap:8px;position:relative;"
-                  onmouseenter="if(!this.classList.contains('ind-active'))this.style.borderColor='#93c5fd'"
-                  onmouseleave="if(!this.classList.contains('ind-active'))this.style.borderColor='#e2e8f0'">
-                  <i class="ph ${ind.icon}" style="font-size:18px;color:${sel ? '#3b82f6' : '#64748b'};flex-shrink:0;"></i>
-                  <div style="min-width:0;">
-                    <div style="font-size:11px;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ind.label}</div>
-                    <div style="font-size:9px;color:#94a3b8;">${ind.desc}</div>
-                  </div>
-                  ${sel ? '<i class="ph ph-check-circle" style="position:absolute;top:4px;right:4px;color:#3b82f6;font-size:14px;"></i>' : ''}
-                </div>`;
-              }).join('')}
-            </div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Industry</label>
+            <select id="client-form-industry"
+                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+              ${INDUSTRIES.map(ind => `<option value="${ind.value}" ${v('industry','PROFESSIONAL_SERVICES') === ind.value ? 'selected' : ''}>${ind.label}</option>`).join('')}
+            </select>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
@@ -3206,32 +3192,6 @@
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     setTimeout(() => { const n = document.getElementById('client-form-name'); if (n) n.focus(); }, 60);
-  };
-
-  window._selectIndustry = function(el) {
-    const value = el.dataset.value;
-    const input = document.getElementById('client-form-industry');
-    if (input) input.value = value;
-    // Reset all cards
-    document.querySelectorAll('.industry-card').forEach(card => {
-      card.style.borderColor = '#e2e8f0';
-      card.style.background = 'white';
-      card.classList.remove('ind-active');
-      const check = card.querySelector('.ph-check-circle');
-      if (check) check.remove();
-      const icon = card.querySelector('i');
-      if (icon) icon.style.color = '#64748b';
-    });
-    // Highlight selected
-    el.style.borderColor = '#3b82f6';
-    el.style.background = '#eff6ff';
-    el.classList.add('ind-active');
-    const icon = el.querySelector('i');
-    if (icon) icon.style.color = '#3b82f6';
-    const checkEl = document.createElement('i');
-    checkEl.className = 'ph ph-check-circle';
-    checkEl.style.cssText = 'position:absolute;top:4px;right:4px;color:#3b82f6;font-size:14px;';
-    el.appendChild(checkEl);
   };
 
   window.openEditClientModal = function(clientId) {
