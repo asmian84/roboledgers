@@ -3121,14 +3121,14 @@
                 placeholder="Registered legal entity name"
                 style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
           </div>
-          <div>
-            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Industry</label>
-            <select id="client-form-industry"
-                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
-              ${INDUSTRIES.map(ind => `<option value="${ind.value}" ${v('industry','PROFESSIONAL_SERVICES') === ind.value ? 'selected' : ''}>${ind.label}</option>`).join('')}
-            </select>
-          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Industry</label>
+              <select id="client-form-industry"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                ${INDUSTRIES.map(ind => `<option value="${ind.value}" ${v('industry','PROFESSIONAL_SERVICES') === ind.value ? 'selected' : ''}>${ind.label}</option>`).join('')}
+              </select>
+            </div>
             <div>
               <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Province</label>
               <select id="client-form-province"
