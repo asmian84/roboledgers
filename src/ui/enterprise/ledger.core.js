@@ -30,7 +30,9 @@ window.RoboLedger = (function () {
         accounts: [],
         coa: {},         // account_code -> entry
         categoryPredictions: {}, // raw_desc -> account_code
-        fileStorage: new Map()   // fileId -> Blob (In-memory for v5.1)
+        fileStorage: new Map(),  // fileId -> Blob (In-memory for v5.1)
+        lockedPeriods: [],       // [{period:"2024-01", lockedAt:ISO, lockedBy:"admin"}, ...]
+        journalEntries: {},      // journalId -> {lines:[tx_id,...], date, description, type}
     };
 
     // --- COA DATA (V5 PRE-SEED) ---
@@ -327,6 +329,8 @@ window.RoboLedger = (function () {
                 state.sigIndex = parsed.sigIndex || {};
                 state.accounts = parsed.accounts || [];
                 state.coa = parsed.coa || {};
+                state.lockedPeriods = parsed.lockedPeriods || [];
+                state.journalEntries = parsed.journalEntries || {};
 
                 console.log(`[LEDGER] Loaded ${Object.keys(state.transactions).length} transactions from storage`);
 
@@ -351,7 +355,9 @@ window.RoboLedger = (function () {
             transactions: state.transactions,
             sigIndex: state.sigIndex,
             accounts: state.accounts,
-            coa: state.coa
+            coa: state.coa,
+            lockedPeriods: state.lockedPeriods || [],
+            journalEntries: state.journalEntries || {},
         };
         const _SS = window.StorageService;
         if (_SS) {
@@ -369,6 +375,8 @@ window.RoboLedger = (function () {
         state.sigIndex = {};
         state.accounts = [];
         state.coa = {};
+        state.lockedPeriods = [];
+        state.journalEntries = {};
         if (!raw) {
             console.log(`[LEDGER] No data at key: ${key} — starting fresh`);
             // Re-seed COA defaults so dropdowns/lookups work even on a fresh client
@@ -378,10 +386,12 @@ window.RoboLedger = (function () {
         try {
             // StorageService.get() returns already-parsed objects; localStorage returns strings
             const parsed = (typeof raw === 'string') ? JSON.parse(raw) : raw;
-            state.transactions = parsed.transactions || {};
-            state.sigIndex     = parsed.sigIndex     || {};
-            state.accounts     = parsed.accounts     || [];
-            state.coa          = parsed.coa          || {};
+            state.transactions   = parsed.transactions   || {};
+            state.sigIndex       = parsed.sigIndex       || {};
+            state.accounts       = parsed.accounts       || [];
+            state.coa            = parsed.coa            || {};
+            state.lockedPeriods  = parsed.lockedPeriods  || [];
+            state.journalEntries = parsed.journalEntries || {};
 
             // MIGRATION: Backfill client_id on legacy transactions (lazy, idempotent)
             const _keyMatch = key.match(/^roboledger_v5_data_(.+)$/);
@@ -902,6 +912,13 @@ window.RoboLedger = (function () {
         return tx.client_id === active;
     }
 
+    // --- PERIOD LOCKING HELPER ---
+    function _isInLockedPeriod(tx) {
+        if (!tx?.date || !state.lockedPeriods?.length) return false;
+        const period = tx.date.substring(0, 7); // "2024-01"
+        return state.lockedPeriods.some(lp => lp.period === period);
+    }
+
     // --- LEDGER SERVICE ---
     const Ledger = {
         post: function (tx) {
@@ -913,6 +930,12 @@ window.RoboLedger = (function () {
             }
             // Auto-stamp if missing
             if (!tx.client_id && activeClient) tx.client_id = activeClient;
+
+            // Period locking enforcement
+            if (_isInLockedPeriod(tx)) {
+                console.error(`[LEDGER] PERIOD LOCKED: Cannot post to ${tx.date?.substring(0, 7)}`);
+                return false;
+            }
 
             if (state.sigIndex[tx.txsig]) {
                 console.warn(`[LEDGER] DUPLICATE DETECTED: ${tx.txsig}`);
@@ -1005,6 +1028,11 @@ window.RoboLedger = (function () {
 
         delete: function (tx_id) {
             if (state.transactions[tx_id]) {
+                // Period locking enforcement
+                if (_isInLockedPeriod(state.transactions[tx_id])) {
+                    console.error(`[LEDGER] PERIOD LOCKED: Cannot delete tx in ${state.transactions[tx_id].date?.substring(0, 7)}`);
+                    return false;
+                }
                 const sig = state.transactions[tx_id].txsig;
                 delete state.transactions[tx_id];
                 delete state.sigIndex[sig];
@@ -1022,6 +1050,12 @@ window.RoboLedger = (function () {
         updateMetadata: function (tx_id, patch) {
             const tx = state.transactions[tx_id];
             if (!tx) throw new Error("TX_NOT_FOUND");
+
+            // Period locking enforcement
+            if (_isInLockedPeriod(tx)) {
+                console.error(`[LEDGER] PERIOD LOCKED: Cannot update metadata for tx in ${tx.date?.substring(0, 7)}`);
+                throw new Error("PERIOD_LOCKED");
+            }
 
             const forbidden = ["amount_cents", "date", "account_id", "currency", "client_id"];
             Object.keys(patch).forEach(key => {
@@ -1048,6 +1082,11 @@ window.RoboLedger = (function () {
         updateCategory: function (tx_id, category_code, metadata = {}) {
             const tx = state.transactions[tx_id];
             if (tx) {
+                // Period locking enforcement
+                if (_isInLockedPeriod(tx)) {
+                    console.error(`[LEDGER] PERIOD LOCKED: Cannot update category for tx in ${tx.date?.substring(0, 7)}`);
+                    return false;
+                }
                 // Check if this is a correction (category changed)
                 const isCorrection = tx.category && tx.category !== category_code;
                 const previousCategory = tx.category;
@@ -1102,6 +1141,11 @@ window.RoboLedger = (function () {
         updateTransaction: function (tx_id, updates) {
             const tx = state.transactions[tx_id];
             if (tx) {
+                // Period locking enforcement
+                if (_isInLockedPeriod(tx)) {
+                    console.error(`[LEDGER] PERIOD LOCKED: Cannot update tx in ${tx.date?.substring(0, 7)}`);
+                    return false;
+                }
                 Object.assign(tx, updates);
                 save();
                 console.log(`[LEDGER] Updated transaction ${tx_id}:`, updates);
@@ -1182,6 +1226,130 @@ window.RoboLedger = (function () {
         },
         loadFromKey: function (key) {
             loadFromKey(key);
+        },
+
+        // --- PERIOD LOCKING API ---
+        lockPeriod: function (period, lockedBy = 'admin') {
+            if (!state.lockedPeriods) state.lockedPeriods = [];
+            if (state.lockedPeriods.some(lp => lp.period === period)) {
+                console.warn(`[LEDGER] Period ${period} already locked`);
+                return false;
+            }
+            state.lockedPeriods.push({ period, lockedAt: new Date().toISOString(), lockedBy });
+            save();
+            console.log(`[LEDGER] 🔒 Period ${period} locked by ${lockedBy}`);
+            return true;
+        },
+        unlockPeriod: function (period) {
+            if (!state.lockedPeriods) return false;
+            const idx = state.lockedPeriods.findIndex(lp => lp.period === period);
+            if (idx === -1) return false;
+            state.lockedPeriods.splice(idx, 1);
+            save();
+            console.log(`[LEDGER] 🔓 Period ${period} unlocked`);
+            return true;
+        },
+        getLockedPeriods: function () {
+            return state.lockedPeriods || [];
+        },
+        isPeriodLocked: function (period) {
+            return (state.lockedPeriods || []).some(lp => lp.period === period);
+        },
+
+        // --- ADJUSTING JOURNAL ENTRIES API ---
+        createJournalEntry: function (description, lines, date = null, type = 'AJE') {
+            const entryId = 'JE-' + crypto.randomUUID().substring(0, 8);
+            const entryDate = date || new Date().toISOString().split('T')[0];
+            const activeClient = window.UI_STATE?.activeClientId || null;
+
+            // Validate: debits must equal credits
+            let totalDebit = 0, totalCredit = 0;
+            lines.forEach(line => {
+                totalDebit  += (line.debit  || 0);
+                totalCredit += (line.credit || 0);
+            });
+            if (Math.abs(totalDebit - totalCredit) > 0.01) {
+                console.error(`[LEDGER] AJE rejected: debits (${totalDebit}) ≠ credits (${totalCredit})`);
+                return null;
+            }
+
+            // Period locking check
+            if (_isInLockedPeriod({ date: entryDate })) {
+                console.error(`[LEDGER] PERIOD LOCKED: Cannot create AJE in ${entryDate.substring(0, 7)}`);
+                return null;
+            }
+
+            const txIds = [];
+            lines.forEach((line, i) => {
+                const tx_id = crypto.randomUUID();
+                const amount = line.debit > 0 ? line.debit : line.credit;
+                const tx = {
+                    tx_id,
+                    client_id: activeClient,
+                    account_id: line.account_id || 'ACC-001',
+                    ref: `${type}-${entryId}`,
+                    date: entryDate,
+                    raw_description: description,
+                    description: description,
+                    payee: description,
+                    amount_cents: Math.round(amount * 100),
+                    balance_cents: 0,
+                    currency: 'CAD',
+                    polarity: line.debit > 0 ? Polarity.DEBIT : Polarity.CREDIT,
+                    status: TransactionStatus.CONFIRMED,
+                    category: line.account_code || '',
+                    category_name: line.account_name || '',
+                    category_source: 'journal_entry',
+                    confidence: 1.0,
+                    journal_entry_id: entryId,
+                    journal_line: i + 1,
+                    txsig: `je-${entryId}-${i}`,
+                    created_at: new Date().toISOString()
+                };
+                state.transactions[tx_id] = tx;
+                state.sigIndex[tx.txsig] = tx_id;
+                txIds.push(tx_id);
+            });
+
+            if (!state.journalEntries) state.journalEntries = {};
+            state.journalEntries[entryId] = {
+                id: entryId,
+                description,
+                date: entryDate,
+                type, // AJE, RJE, CJE
+                lines: txIds,
+                totalDebit,
+                totalCredit,
+                createdAt: new Date().toISOString(),
+                createdBy: 'user'
+            };
+
+            save();
+            console.log(`[LEDGER] 📝 Journal entry ${entryId} posted: ${lines.length} lines, $${totalDebit.toFixed(2)}`);
+            return state.journalEntries[entryId];
+        },
+        getJournalEntries: function () {
+            return Object.values(state.journalEntries || {});
+        },
+        deleteJournalEntry: function (entryId) {
+            const entry = state.journalEntries?.[entryId];
+            if (!entry) return false;
+            // Delete all transaction lines
+            entry.lines.forEach(txId => {
+                const tx = state.transactions[txId];
+                if (tx) {
+                    if (_isInLockedPeriod(tx)) {
+                        console.error(`[LEDGER] Cannot delete JE — period locked`);
+                        return false;
+                    }
+                    delete state.sigIndex[tx.txsig];
+                    delete state.transactions[txId];
+                }
+            });
+            delete state.journalEntries[entryId];
+            save();
+            console.log(`[LEDGER] 🗑 Journal entry ${entryId} deleted`);
+            return true;
         }
     };
 

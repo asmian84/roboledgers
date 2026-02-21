@@ -2868,6 +2868,13 @@
       RESTAURANT:            { bg: '#fdf4ff', color: '#9333ea' },
       REAL_ESTATE:           { bg: '#f0fdfa', color: '#0d9488' },
       E_COMMERCE:            { bg: '#faf5ff', color: '#7c3aed' },
+      HEALTHCARE:            { bg: '#fef2f2', color: '#dc2626' },
+      TECHNOLOGY:            { bg: '#f0f9ff', color: '#0284c7' },
+      NON_PROFIT:            { bg: '#fdf2f8', color: '#be185d' },
+      AGRICULTURE:           { bg: '#f7fee7', color: '#4d7c0f' },
+      TRANSPORTATION:        { bg: '#fefce8', color: '#a16207' },
+      CONSULTING:            { bg: '#ecfeff', color: '#0e7490' },
+      MANUFACTURING:         { bg: '#f5f3ff', color: '#6d28d9' },
       OTHER:                 { bg: '#f8fafc', color: '#64748b' },
     };
     const industryLabels = {
@@ -2875,9 +2882,16 @@
       SHORT_TERM_RENTAL:     'Short-Term Rental',
       RETAIL:                'Retail',
       CONSTRUCTION:          'Construction',
-      RESTAURANT:            'Restaurant',
+      RESTAURANT:            'Restaurant / Food',
       REAL_ESTATE:           'Real Estate',
       E_COMMERCE:            'E-Commerce',
+      HEALTHCARE:            'Healthcare',
+      TECHNOLOGY:            'Technology / SaaS',
+      NON_PROFIT:            'Non-Profit',
+      AGRICULTURE:           'Agriculture',
+      TRANSPORTATION:        'Transportation',
+      CONSULTING:            'Consulting',
+      MANUFACTURING:         'Manufacturing',
       OTHER:                 'Other',
     };
     const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -3048,14 +3062,21 @@
     const v = (field, fallback) => editClient ? (editClient[field] !== undefined ? editClient[field] : fallback) : fallback;
 
     const INDUSTRIES = [
-      { value: 'PROFESSIONAL_SERVICES', label: 'Professional Services' },
-      { value: 'SHORT_TERM_RENTAL',     label: 'Short-Term Rental' },
-      { value: 'RETAIL',               label: 'Retail' },
-      { value: 'CONSTRUCTION',         label: 'Construction' },
-      { value: 'RESTAURANT',           label: 'Restaurant' },
-      { value: 'REAL_ESTATE',          label: 'Real Estate' },
-      { value: 'E_COMMERCE',           label: 'E-Commerce' },
-      { value: 'OTHER',                label: 'Other' },
+      { value: 'PROFESSIONAL_SERVICES', label: 'Professional Services', icon: 'ph-briefcase', desc: 'Consulting, legal, CPA' },
+      { value: 'SHORT_TERM_RENTAL',     label: 'Short-Term Rental', icon: 'ph-house-line', desc: 'Airbnb, vacation rental' },
+      { value: 'RETAIL',               label: 'Retail', icon: 'ph-storefront', desc: 'Brick & mortar shops' },
+      { value: 'CONSTRUCTION',         label: 'Construction', icon: 'ph-hard-hat', desc: 'Contractors, trades' },
+      { value: 'RESTAURANT',           label: 'Restaurant / Food', icon: 'ph-fork-knife', desc: 'Dining, catering' },
+      { value: 'REAL_ESTATE',          label: 'Real Estate', icon: 'ph-buildings', desc: 'Property, brokerage' },
+      { value: 'E_COMMERCE',           label: 'E-Commerce', icon: 'ph-shopping-cart', desc: 'Online retail' },
+      { value: 'HEALTHCARE',           label: 'Healthcare', icon: 'ph-first-aid', desc: 'Medical, dental, pharma' },
+      { value: 'TECHNOLOGY',           label: 'Technology / SaaS', icon: 'ph-code', desc: 'Software, IT services' },
+      { value: 'NON_PROFIT',           label: 'Non-Profit', icon: 'ph-hand-heart', desc: 'Charities, NPOs' },
+      { value: 'AGRICULTURE',          label: 'Agriculture', icon: 'ph-plant', desc: 'Farming, ranching' },
+      { value: 'TRANSPORTATION',       label: 'Transportation', icon: 'ph-truck', desc: 'Trucking, logistics' },
+      { value: 'CONSULTING',           label: 'Consulting', icon: 'ph-chats-circle', desc: 'Advisory, management' },
+      { value: 'MANUFACTURING',        label: 'Manufacturing', icon: 'ph-factory', desc: 'Production, assembly' },
+      { value: 'OTHER',                label: 'Other', icon: 'ph-dots-three', desc: 'Miscellaneous' },
     ];
     const PROVINCES = ['AB','BC','MB','NB','NL','NT','NS','NU','ON','PE','QC','SK','YT'];
     const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -3112,14 +3133,28 @@
                 placeholder="Registered legal entity name"
                 style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div>
-              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Industry</label>
-              <select id="client-form-industry"
-                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
-                ${INDUSTRIES.map(i => `<option value="${i.value}" ${v('industry','PROFESSIONAL_SERVICES') === i.value ? 'selected' : ''}>${i.label}</option>`).join('')}
-              </select>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Industry</label>
+            <input type="hidden" id="client-form-industry" value="${v('industry','PROFESSIONAL_SERVICES')}" />
+            <div id="industry-card-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:180px;overflow-y:auto;padding:2px;">
+              ${INDUSTRIES.map(ind => {
+                const sel = v('industry','PROFESSIONAL_SERVICES') === ind.value;
+                return `<div class="industry-card" data-value="${ind.value}" onclick="window._selectIndustry(this)"
+                  style="padding:8px 10px;border:1.5px solid ${sel ? '#3b82f6' : '#e2e8f0'};border-radius:8px;cursor:pointer;
+                  background:${sel ? '#eff6ff' : 'white'};transition:all 0.12s;display:flex;align-items:center;gap:8px;position:relative;"
+                  onmouseenter="if(!this.classList.contains('ind-active'))this.style.borderColor='#93c5fd'"
+                  onmouseleave="if(!this.classList.contains('ind-active'))this.style.borderColor='#e2e8f0'">
+                  <i class="ph ${ind.icon}" style="font-size:18px;color:${sel ? '#3b82f6' : '#64748b'};flex-shrink:0;"></i>
+                  <div style="min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ind.label}</div>
+                    <div style="font-size:9px;color:#94a3b8;">${ind.desc}</div>
+                  </div>
+                  ${sel ? '<i class="ph ph-check-circle" style="position:absolute;top:4px;right:4px;color:#3b82f6;font-size:14px;"></i>' : ''}
+                </div>`;
+              }).join('')}
             </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Province</label>
               <select id="client-form-province"
@@ -3183,6 +3218,32 @@
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     setTimeout(() => { const n = document.getElementById('client-form-name'); if (n) n.focus(); }, 60);
+  };
+
+  window._selectIndustry = function(el) {
+    const value = el.dataset.value;
+    const input = document.getElementById('client-form-industry');
+    if (input) input.value = value;
+    // Reset all cards
+    document.querySelectorAll('.industry-card').forEach(card => {
+      card.style.borderColor = '#e2e8f0';
+      card.style.background = 'white';
+      card.classList.remove('ind-active');
+      const check = card.querySelector('.ph-check-circle');
+      if (check) check.remove();
+      const icon = card.querySelector('i');
+      if (icon) icon.style.color = '#64748b';
+    });
+    // Highlight selected
+    el.style.borderColor = '#3b82f6';
+    el.style.background = '#eff6ff';
+    el.classList.add('ind-active');
+    const icon = el.querySelector('i');
+    if (icon) icon.style.color = '#3b82f6';
+    const checkEl = document.createElement('i');
+    checkEl.className = 'ph ph-check-circle';
+    checkEl.style.cssText = 'position:absolute;top:4px;right:4px;color:#3b82f6;font-size:14px;';
+    el.appendChild(checkEl);
   };
 
   window.openEditClientModal = function(clientId) {
@@ -3249,6 +3310,144 @@
     // Re-open drawer so user sees the new client in the list
     _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
     setTimeout(() => window.openContextDrawer(), 50);
+  };
+
+  // ─── PERIOD MANAGER MODAL ───────────────────────────────────────────────────
+  window.openPeriodManager = function() {
+    const existing = document.getElementById('period-manager-overlay');
+    if (existing) existing.remove();
+
+    const ledger = window.RoboLedger?.Ledger;
+    if (!ledger) return;
+
+    const allTxns = ledger.getAll?.() || [];
+    const lockedPeriods = ledger.getLockedPeriods?.() || [];
+    const lockedSet = new Set(lockedPeriods.map(lp => lp.period));
+
+    // Determine date range from transactions
+    const dates = allTxns.map(t => t.date).filter(Boolean).sort();
+    const earliest = dates[0] || new Date().toISOString().substring(0, 10);
+    const latest = dates[dates.length - 1] || new Date().toISOString().substring(0, 10);
+
+    // Build month cells from earliest to latest
+    const startMonth = earliest.substring(0, 7);
+    const endMonth = latest.substring(0, 7);
+    const months = [];
+    let [sy, sm] = startMonth.split('-').map(Number);
+    const [ey, em] = endMonth.split('-').map(Number);
+    while (sy < ey || (sy === ey && sm <= em)) {
+      const mk = `${sy}-${String(sm).padStart(2, '0')}`;
+      const mTxns = allTxns.filter(t => t.date && t.date.startsWith(mk));
+      const categorized = mTxns.filter(t => t.category && String(t.category) !== '9970').length;
+      const pct = mTxns.length > 0 ? Math.round((categorized / mTxns.length) * 100) : 0;
+      const isLocked = lockedSet.has(mk);
+      const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      months.push({ key: mk, label: `${MNAMES[sm - 1]} ${sy}`, txCount: mTxns.length, catPct: pct, isLocked });
+      sm++;
+      if (sm > 12) { sm = 1; sy++; }
+    }
+
+    const monthCellsHTML = months.map(m => `
+      <div style="background:${m.isLocked ? '#f0fdf4' : '#f8fafc'};border:1.5px solid ${m.isLocked ? '#86efac' : '#e2e8f0'};
+          border-radius:10px;padding:12px;text-align:center;position:relative;">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:2px;">${m.label}</div>
+        <div style="font-size:10px;color:#64748b;">${m.txCount} txns</div>
+        <div style="font-size:10px;color:${m.catPct >= 90 ? '#16a34a' : m.catPct >= 50 ? '#3b82f6' : '#d97706'};font-weight:600;">${m.catPct}% cat</div>
+        <div style="margin-top:6px;height:4px;background:#e2e8f0;border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${m.catPct}%;background:${m.catPct >= 90 ? '#22c55e' : m.catPct >= 50 ? '#3b82f6' : '#f59e0b'};border-radius:4px;"></div>
+        </div>
+        <button onclick="window._togglePeriodLock('${m.key}')"
+            style="margin-top:8px;padding:4px 10px;border:1px solid ${m.isLocked ? '#fecaca' : '#bbf7d0'};
+            background:${m.isLocked ? '#fff5f5' : '#f0fdf4'};color:${m.isLocked ? '#dc2626' : '#16a34a'};
+            border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;width:100%;">
+          <i class="ph ph-${m.isLocked ? 'lock-simple-open' : 'lock-simple'}" style="font-size:10px;margin-right:3px;"></i>
+          ${m.isLocked ? 'Unlock' : 'Lock'}
+        </button>
+        ${m.isLocked ? '<div style="position:absolute;top:4px;right:6px;"><i class="ph ph-lock-simple" style="color:#16a34a;font-size:12px;"></i></div>' : ''}
+      </div>
+    `).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'period-manager-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.65);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:white;border-radius:16px;padding:32px;width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#16a34a,#15803d);color:white;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;">
+            <i class="ph ph-lock-simple"></i>
+          </div>
+          <div>
+            <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:#0f172a;">Period Manager</h2>
+            <p style="margin:2px 0 0;font-size:0.8rem;color:#64748b;">Lock fiscal periods to prevent changes to finalized months</p>
+          </div>
+          <button onclick="document.getElementById('period-manager-overlay').remove()"
+              style="margin-left:auto;background:transparent;border:none;font-size:22px;color:#94a3b8;cursor:pointer;padding:4px;line-height:1;border-radius:6px;"
+              onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">×</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button onclick="window._bulkLockPeriods()" style="padding:6px 14px;border:1px solid #bbf7d0;background:#f0fdf4;color:#16a34a;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">
+            <i class="ph ph-lock-simple" style="margin-right:4px;"></i> Lock All Fully Categorized
+          </button>
+          <button onclick="window._unlockAllPeriods()" style="padding:6px 14px;border:1px solid #fecaca;background:#fff5f5;color:#dc2626;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">
+            <i class="ph ph-lock-simple-open" style="margin-right:4px;"></i> Unlock All
+          </button>
+          <div style="margin-left:auto;font-size:11px;color:#64748b;display:flex;align-items:center;gap:8px;">
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:3px;"></span>Locked</span>
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-right:3px;"></span>Open</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+          ${monthCellsHTML}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  };
+
+  window._togglePeriodLock = function(period) {
+    const ledger = window.RoboLedger?.Ledger;
+    if (!ledger) return;
+    if (ledger.isPeriodLocked(period)) {
+      ledger.unlockPeriod(period);
+    } else {
+      ledger.lockPeriod(period);
+    }
+    // Refresh the modal
+    window.openPeriodManager();
+  };
+
+  window._bulkLockPeriods = function() {
+    const ledger = window.RoboLedger?.Ledger;
+    if (!ledger) return;
+    const allTxns = ledger.getAll?.() || [];
+    // Find months that are >= 90% categorized
+    const monthMap = {};
+    allTxns.forEach(t => {
+      if (!t.date) return;
+      const mk = t.date.substring(0, 7);
+      if (!monthMap[mk]) monthMap[mk] = { total: 0, categorized: 0 };
+      monthMap[mk].total++;
+      if (t.category && String(t.category) !== '9970') monthMap[mk].categorized++;
+    });
+    let locked = 0;
+    Object.entries(monthMap).forEach(([mk, data]) => {
+      const pct = data.total > 0 ? (data.categorized / data.total) * 100 : 0;
+      if (pct >= 90 && !ledger.isPeriodLocked(mk)) {
+        ledger.lockPeriod(mk);
+        locked++;
+      }
+    });
+    console.log(`[PERIOD MANAGER] Bulk locked ${locked} fully-categorized periods`);
+    window.openPeriodManager();
+  };
+
+  window._unlockAllPeriods = function() {
+    const ledger = window.RoboLedger?.Ledger;
+    if (!ledger) return;
+    const periods = ledger.getLockedPeriods();
+    periods.forEach(lp => ledger.unlockPeriod(lp.period));
+    window.openPeriodManager();
   };
 
   // ─── CLIENT SWITCHER ──────────────────────────────────────────────────────────
@@ -4693,12 +4892,17 @@
     const indLabels = {
       PROFESSIONAL_SERVICES: 'Professional', SHORT_TERM_RENTAL: 'Short-Term Rental',
       RETAIL: 'Retail', CONSTRUCTION: 'Construction', RESTAURANT: 'Restaurant',
-      REAL_ESTATE: 'Real Estate', E_COMMERCE: 'E-Commerce', OTHER: 'Other',
+      REAL_ESTATE: 'Real Estate', E_COMMERCE: 'E-Commerce', HEALTHCARE: 'Healthcare',
+      TECHNOLOGY: 'Technology', NON_PROFIT: 'Non-Profit', AGRICULTURE: 'Agriculture',
+      TRANSPORTATION: 'Transport', CONSULTING: 'Consulting', MANUFACTURING: 'Manufacturing',
+      OTHER: 'Other',
     };
     const indColors = {
       PROFESSIONAL_SERVICES: '#3b82f6', SHORT_TERM_RENTAL: '#16a34a', RETAIL: '#d97706',
       CONSTRUCTION: '#ea580c', RESTAURANT: '#9333ea', REAL_ESTATE: '#0d9488',
-      E_COMMERCE: '#7c3aed', OTHER: '#64748b',
+      E_COMMERCE: '#7c3aed', HEALTHCARE: '#dc2626', TECHNOLOGY: '#0284c7',
+      NON_PROFIT: '#be185d', AGRICULTURE: '#4d7c0f', TRANSPORTATION: '#a16207',
+      CONSULTING: '#0e7490', MANUFACTURING: '#6d28d9', OTHER: '#64748b',
     };
 
     // ── KPI Cards ────────────────────────────────────────────────────────────
@@ -4940,9 +5144,16 @@
       SHORT_TERM_RENTAL:     'Short-Term Rental',
       RETAIL:                'Retail',
       CONSTRUCTION:          'Construction',
-      RESTAURANT:            'Restaurant',
+      RESTAURANT:            'Restaurant / Food',
       REAL_ESTATE:           'Real Estate',
       E_COMMERCE:            'E-Commerce',
+      HEALTHCARE:            'Healthcare',
+      TECHNOLOGY:            'Technology / SaaS',
+      NON_PROFIT:            'Non-Profit',
+      AGRICULTURE:           'Agriculture',
+      TRANSPORTATION:        'Transportation',
+      CONSULTING:            'Consulting',
+      MANUFACTURING:         'Manufacturing',
       OTHER:                 'Other',
     };
     const industryColors = {
@@ -4953,6 +5164,13 @@
       RESTAURANT:            { bg: '#fdf4ff', color: '#9333ea' },
       REAL_ESTATE:           { bg: '#f0fdfa', color: '#0d9488' },
       E_COMMERCE:            { bg: '#faf5ff', color: '#7c3aed' },
+      HEALTHCARE:            { bg: '#fef2f2', color: '#dc2626' },
+      TECHNOLOGY:            { bg: '#f0f9ff', color: '#0284c7' },
+      NON_PROFIT:            { bg: '#fdf2f8', color: '#be185d' },
+      AGRICULTURE:           { bg: '#f7fee7', color: '#4d7c0f' },
+      TRANSPORTATION:        { bg: '#fefce8', color: '#a16207' },
+      CONSULTING:            { bg: '#ecfeff', color: '#0e7490' },
+      MANUFACTURING:         { bg: '#f5f3ff', color: '#6d28d9' },
       OTHER:                 { bg: '#f8fafc', color: '#64748b' },
     };
 

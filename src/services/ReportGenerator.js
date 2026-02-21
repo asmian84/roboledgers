@@ -598,6 +598,246 @@ class ReportGenerator {
         };
     }
 
+    /**
+     * Generate Cash Flow Statement (Indirect Method)
+     * Categorizes cash movements into Operating, Investing, and Financing
+     */
+    generateCashFlow(startDate, endDate) {
+        const transactions = this.ledger.getTransactionsByDateRange?.(startDate, endDate) ||
+            this.ledger.getAllTransactions();
+
+        const operating = [];
+        const investing = [];
+        const financing = [];
+
+        // Get net income for the period
+        const incomeStatement = this.generateIncomeStatement(startDate, endDate);
+        const netIncome = incomeStatement.totals.netIncome;
+
+        transactions.forEach(tx => {
+            if (!tx.category) return;
+            const code = parseInt(tx.category) || 0;
+            const account = this.coa.get(tx.category);
+            if (!account) return;
+
+            const absAmount = (tx.amount_cents || 0) / 100;
+            // Net cash effect: credits are inflows, debits are outflows
+            const cashEffect = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+
+            // OPERATING: Revenue (4000-4999), COGS (5000-5999), Operating Expenses (6000-8999)
+            // Also includes changes in working capital: AR (1210-1299), AP (2000-2499), Inventory (1300-1399)
+            if (code >= 4000 && code < 9000) {
+                // Already captured in net income — skip to avoid double-counting
+                return;
+            }
+            // Changes in receivables
+            else if (code >= 1210 && code < 1300) {
+                this.addToCategory(operating, tx.category, account.name + ' (Change)', cashEffect);
+            }
+            // Changes in inventory
+            else if (code >= 1300 && code < 1400) {
+                this.addToCategory(operating, tx.category, account.name + ' (Change)', cashEffect);
+            }
+            // Changes in prepaids
+            else if (code >= 1350 && code < 1400) {
+                this.addToCategory(operating, tx.category, account.name + ' (Change)', cashEffect);
+            }
+            // Changes in payables and accrued liabilities
+            else if (code >= 2000 && code < 2500) {
+                this.addToCategory(operating, tx.category, account.name + ' (Change)', cashEffect);
+            }
+            // INVESTING: Capital assets (1500-1999), investments (1100, 1400)
+            else if (code >= 1500 && code < 2000) {
+                this.addToCategory(investing, tx.category, account.name, cashEffect);
+            }
+            else if (code === 1100 || code === 1400) {
+                this.addToCategory(investing, tx.category, account.name, cashEffect);
+            }
+            // FINANCING: Long-term debt (2500-2999), Equity (3000-3999)
+            else if (code >= 2500 && code < 3000) {
+                this.addToCategory(financing, tx.category, account.name, cashEffect);
+            }
+            else if (code >= 3000 && code < 4000) {
+                this.addToCategory(financing, tx.category, account.name, cashEffect);
+            }
+            // Cash accounts (1000-1099) are the resulting balance — exclude
+            else if (code >= 1000 && code < 1100) {
+                return; // Don't include cash-to-cash
+            }
+        });
+
+        // Operating starts with net income, then adjustments
+        const totalOperatingAdjustments = this.sumCategory(operating);
+        const totalOperating = netIncome + totalOperatingAdjustments;
+        const totalInvesting = this.sumCategory(investing);
+        const totalFinancing = this.sumCategory(financing);
+        const netChange = totalOperating + totalInvesting + totalFinancing;
+
+        // Get opening and closing cash balances
+        const allTxs = this.ledger.getAllTransactions ? this.ledger.getAllTransactions() : [];
+        let openingCash = 0, closingCash = 0;
+        allTxs.forEach(tx => {
+            const code = parseInt(tx.category) || 0;
+            if (code >= 1000 && code < 1100) {
+                const amt = (tx.amount_cents || 0) / 100;
+                const signed = tx.polarity === 'CREDIT' ? amt : -amt;
+                if (new Date(tx.date) < new Date(startDate)) {
+                    openingCash += signed;
+                }
+                if (new Date(tx.date) <= new Date(endDate)) {
+                    closingCash += signed;
+                }
+            }
+        });
+
+        return {
+            operating: {
+                netIncome,
+                adjustments: operating.sort((a, b) => parseInt(a.code) - parseInt(b.code)),
+                totalAdjustments: totalOperatingAdjustments,
+                total: totalOperating
+            },
+            investing: {
+                items: investing.sort((a, b) => parseInt(a.code) - parseInt(b.code)),
+                total: totalInvesting
+            },
+            financing: {
+                items: financing.sort((a, b) => parseInt(a.code) - parseInt(b.code)),
+                total: totalFinancing
+            },
+            netChange,
+            openingCash,
+            closingCash,
+            period: { startDate, endDate }
+        };
+    }
+
+    /**
+     * Generate Comparative Trial Balance (Current Year vs Prior Year)
+     */
+    generateComparativeTrialBalance(currentStart, currentEnd, priorStart, priorEnd) {
+        const currentTB = this.generateTrialBalance(currentStart, currentEnd);
+        const priorTB = this.generateTrialBalance(priorStart, priorEnd);
+
+        // Build comparison map
+        const compMap = {};
+        currentTB.accounts.forEach(acc => {
+            compMap[acc.code] = {
+                code: acc.code,
+                name: acc.name,
+                leadsheet: acc.leadsheet || '',
+                root: acc.root || '',
+                currentDebit: acc.debit,
+                currentCredit: acc.credit,
+                currentBalance: acc.balance,
+                priorDebit: 0,
+                priorCredit: 0,
+                priorBalance: 0,
+            };
+        });
+        priorTB.accounts.forEach(acc => {
+            if (!compMap[acc.code]) {
+                compMap[acc.code] = {
+                    code: acc.code,
+                    name: acc.name,
+                    leadsheet: acc.leadsheet || '',
+                    root: acc.root || '',
+                    currentDebit: 0,
+                    currentCredit: 0,
+                    currentBalance: 0,
+                    priorDebit: 0,
+                    priorCredit: 0,
+                    priorBalance: 0,
+                };
+            }
+            compMap[acc.code].priorDebit = acc.debit;
+            compMap[acc.code].priorCredit = acc.credit;
+            compMap[acc.code].priorBalance = acc.balance;
+        });
+
+        const accounts = Object.values(compMap).map(acc => ({
+            ...acc,
+            varianceAmount: acc.currentBalance - acc.priorBalance,
+            variancePct: acc.priorBalance !== 0 ? ((acc.currentBalance - acc.priorBalance) / Math.abs(acc.priorBalance)) * 100 : (acc.currentBalance !== 0 ? 100 : 0),
+        })).sort((a, b) => {
+            if (a.code === UNCATEGORIZED_CODE) return 1;
+            if (b.code === UNCATEGORIZED_CODE) return -1;
+            return parseInt(a.code) - parseInt(b.code);
+        });
+
+        return {
+            accounts,
+            currentPeriod: { start: currentStart, end: currentEnd },
+            priorPeriod: { start: priorStart, end: priorEnd },
+            currentTotals: currentTB.totals,
+            priorTotals: priorTB.totals,
+        };
+    }
+
+    /**
+     * Generate Bank Reconciliation for a specific account
+     */
+    generateBankReconciliation(accountId, asOfDate, bankBalance) {
+        const allTxs = this.ledger.getAllTransactions ? this.ledger.getAllTransactions() : [];
+        const accountTxs = allTxs.filter(tx =>
+            tx.account_id === accountId && new Date(tx.date) <= new Date(asOfDate)
+        );
+
+        // Calculate book balance
+        let bookBalance = 0;
+        const account = this.ledger.getAccount?.(accountId);
+        const openingBalance = (account?.openingBalance || 0) * 100; // to cents
+        bookBalance = openingBalance;
+
+        accountTxs.forEach(tx => {
+            const amt = tx.amount_cents || 0;
+            bookBalance += tx.polarity === 'CREDIT' ? amt : -amt;
+        });
+        bookBalance = bookBalance / 100;
+
+        // Find unreconciled items
+        const unreconciledItems = accountTxs.filter(tx => tx.status !== 'RECONCILED');
+        const outstandingDeposits = unreconciledItems
+            .filter(tx => tx.polarity === 'CREDIT')
+            .map(tx => ({
+                date: tx.date,
+                description: tx.description || tx.payee || '',
+                amount: (tx.amount_cents || 0) / 100,
+                tx_id: tx.tx_id,
+            }));
+        const outstandingCheques = unreconciledItems
+            .filter(tx => tx.polarity === 'DEBIT')
+            .map(tx => ({
+                date: tx.date,
+                description: tx.description || tx.payee || '',
+                amount: (tx.amount_cents || 0) / 100,
+                tx_id: tx.tx_id,
+            }));
+
+        const totalOutDeposits = outstandingDeposits.reduce((s, i) => s + i.amount, 0);
+        const totalOutCheques = outstandingCheques.reduce((s, i) => s + i.amount, 0);
+
+        // Adjusted bank balance = bank statement + outstanding deposits - outstanding cheques
+        const adjustedBankBalance = (bankBalance || 0) + totalOutDeposits - totalOutCheques;
+        const variance = bookBalance - adjustedBankBalance;
+
+        return {
+            accountId,
+            accountName: account?.name || accountId,
+            asOfDate,
+            bankBalance: bankBalance || 0,
+            bookBalance,
+            outstandingDeposits,
+            outstandingCheques,
+            totalOutstandingDeposits: totalOutDeposits,
+            totalOutstandingCheques: totalOutCheques,
+            adjustedBankBalance,
+            variance,
+            isReconciled: Math.abs(variance) < 0.01,
+            totalTransactions: accountTxs.length,
+        };
+    }
+
     // Helper methods
     addToCategory(categoryArray, code, name, amount) {
         let existing = categoryArray.find(c => c.code === code);

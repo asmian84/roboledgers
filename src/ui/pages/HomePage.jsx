@@ -7,6 +7,7 @@ const HomePage = () => {
         revenue: 0, expenses: 0,
         topExpenses: [], accountSummaries: [], recentTxns: [],
         monthlyData: [],
+        fiscalYear: null,
     });
 
     useEffect(() => {
@@ -83,10 +84,78 @@ const HomePage = () => {
                 .slice(-6)
                 .map(([month, data]) => ({ month, ...data }));
 
+            // ── Fiscal Year Timeline ──────────────────────────────────
+            let fiscalYear = null;
+            const clients = (window.StorageService ? window.StorageService.get('roboledger_clients') : null)
+                || JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+            const activeClient = clients.find(c => c.id === window.UI_STATE?.activeClientId);
+            const fyEnd = activeClient?.fiscalYearEnd || 12; // 1-12, default December
+            const now = new Date();
+            const fyEndMonth = fyEnd; // month number 1-12
+            // Determine current FY start: if we're past the FY end month, FY started this year; otherwise last year
+            let fyStartYear, fyEndYear;
+            if (now.getMonth() + 1 > fyEndMonth) {
+                fyStartYear = now.getFullYear();
+                fyEndYear = now.getFullYear() + 1;
+            } else {
+                fyStartYear = now.getFullYear() - 1;
+                fyEndYear = now.getFullYear();
+            }
+            // FY start = month after FY end of previous year
+            const fyStartMonth = (fyEndMonth % 12) + 1; // e.g. if FY end = Dec(12), start = Jan(1)
+            const fyStart = new Date(fyStartYear, fyStartMonth - 1, 1);
+            const fyEndDate = new Date(fyEndYear, fyEndMonth, 0); // last day of FY end month
+            const daysRemaining = Math.max(0, Math.ceil((fyEndDate - now) / (1000*60*60*24)));
+
+            // Build quarters (4 quarters of 3 months each, starting from fyStartMonth)
+            const quarters = [0,1,2,3].map(qi => {
+                const qStartMonth = ((fyStartMonth - 1 + qi * 3) % 12); // 0-indexed
+                const qStartYear = fyStartYear + Math.floor((fyStartMonth - 1 + qi * 3) / 12);
+                const qEndMonth = ((fyStartMonth - 1 + qi * 3 + 2) % 12);
+                const qEndYear = fyStartYear + Math.floor((fyStartMonth - 1 + qi * 3 + 2) / 12);
+                const qStart = new Date(qStartYear, qStartMonth, 1);
+                const qEnd = new Date(qEndYear, qEndMonth + 1, 0); // last day
+                const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const label = `Q${qi+1}`;
+                const range = `${MNAMES[qStartMonth]} – ${MNAMES[qEndMonth]}`;
+
+                // Count txns + categorization in this quarter
+                const qTxns = allTxns.filter(t => {
+                    if (!t.date) return false;
+                    const d = new Date(t.date);
+                    return d >= qStart && d <= qEnd;
+                });
+                const qCategorized = qTxns.filter(t => t.category && String(t.category) !== '9970').length;
+                const qPct = qTxns.length > 0 ? Math.round((qCategorized / qTxns.length) * 100) : 0;
+
+                // Period locked?
+                const lockedPeriods = window.RoboLedger?.Ledger?.getLockedPeriods?.() || [];
+                const qMonthKeys = [0,1,2].map(i => {
+                    const m = (qStartMonth + i) % 12;
+                    const y = qStartYear + Math.floor((qStartMonth + i) / 12);
+                    return `${y}-${String(m + 1).padStart(2, '0')}`;
+                });
+                const allLocked = qMonthKeys.every(mk => lockedPeriods.some(lp => lp.period === mk));
+                const someLocked = qMonthKeys.some(mk => lockedPeriods.some(lp => lp.period === mk));
+                const status = allLocked ? 'locked' : someLocked ? 'partial' : 'open';
+
+                return { label, range, txCount: qTxns.length, catPct: qPct, status, isCurrent: now >= qStart && now <= qEnd };
+            });
+
+            const MNAMES_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            fiscalYear = {
+                fyEnd,
+                startLabel: `${MNAMES_FULL[fyStartMonth - 1]} 1, ${fyStartYear}`,
+                endLabel: `${MNAMES_FULL[fyEndMonth - 1]} ${fyEndDate.getDate()}, ${fyEndYear}`,
+                daysRemaining,
+                quarters,
+            };
+
             setStats({
                 txns: allTxns.length, accounts: accounts.length, uncategorized, categorized,
                 totalDebits, totalCredits, revenue, expenses,
                 topExpenses, accountSummaries, recentTxns, monthlyData,
+                fiscalYear,
             });
         };
         compute();
@@ -163,6 +232,62 @@ const HomePage = () => {
                         <KpiCard icon="ph-check-circle" label="Categorized" value={`${catPct}%`}
                             color={catPct >= 90 ? 'green' : catPct >= 60 ? 'amber' : 'red'}
                             sub={stats.uncategorized > 0 ? `${stats.uncategorized} remaining` : 'All done ✓'} />
+                    </div>
+                )}
+
+                {/* ── Fiscal Year Timeline ──────────────────────────────── */}
+                {hasData && stats.fiscalYear && (
+                    <div className="bg-white border border-slate-200 rounded-xl px-5 py-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <i className="ph ph-calendar-blank text-slate-500 text-sm"></i>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fiscal Year</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-[11px] text-slate-500">
+                                    {stats.fiscalYear.startLabel} — {stats.fiscalYear.endLabel}
+                                </span>
+                                <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                    {stats.fiscalYear.daysRemaining} days left
+                                </span>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                            {stats.fiscalYear.quarters.map((q, i) => {
+                                const statusColors = {
+                                    locked:  { bg: 'bg-green-50', border: 'border-green-200', badge: 'bg-green-100 text-green-700', icon: 'ph-lock-simple' },
+                                    partial: { bg: 'bg-amber-50', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-700', icon: 'ph-lock-simple-open' },
+                                    open:    { bg: 'bg-slate-50', border: 'border-slate-200', badge: 'bg-blue-50 text-blue-600', icon: 'ph-lock-open' },
+                                };
+                                const sc = statusColors[q.status] || statusColors.open;
+                                return (
+                                    <div key={i} className={`${sc.bg} border ${sc.border} rounded-lg p-3 relative ${q.isCurrent ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <span className="text-[12px] font-bold text-slate-800">{q.label}</span>
+                                            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${sc.badge}`}>
+                                                <i className={`ph ${sc.icon} text-[8px] mr-0.5`}></i>
+                                                {q.status === 'locked' ? 'Locked' : q.status === 'partial' ? 'Partial' : 'Open'}
+                                            </span>
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 mb-2">{q.range}</div>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[10px] text-slate-400">{q.txCount} txns</span>
+                                            <span className="text-[10px] font-semibold text-slate-600">{q.catPct}%</span>
+                                        </div>
+                                        <div className="h-1.5 bg-white/60 rounded-full overflow-hidden">
+                                            <div className={`h-full rounded-full transition-all duration-500 ${
+                                                q.catPct >= 90 ? 'bg-green-400' : q.catPct >= 50 ? 'bg-blue-400' : 'bg-amber-400'
+                                            }`} style={{ width: `${q.catPct}%` }}></div>
+                                        </div>
+                                        {q.isCurrent && (
+                                            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
+                                                CURRENT
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 

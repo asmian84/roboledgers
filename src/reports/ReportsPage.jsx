@@ -7,6 +7,11 @@ import { GeneralLedgerReport } from './GeneralLedgerReport.jsx';
 import { GeneralJournalReport } from './GeneralJournalReport.jsx';
 import { COASummaryReport } from './COASummaryReport.jsx';
 import { FinancialRatiosReport } from './FinancialRatiosReport.jsx';
+import { CashFlowReport } from './CashFlowReport.jsx';
+import { BankReconciliationReport } from './BankReconciliationReport.jsx';
+import { AJEReport } from './AJEReport.jsx';
+import { ComparativeReport } from './ComparativeReport.jsx';
+import { CaseWareExport } from './CaseWareExport.jsx';
 
 // ─── Opening Balances helpers (shared with TrialBalanceReport) ─────────────────
 function getOpeningBalances() {
@@ -480,15 +485,19 @@ export function ReportsPage() {
     const fmt = (n) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(n);
 
     const reports = [
-        { id: 'trial-balance',     icon: 'ph-scales',               title: 'Trial Balance',     description: 'Verify debits equal credits',     color: 'blue',   ready: true,  component: TrialBalanceReport },
-        { id: 'income-statement',  icon: 'ph-chart-line-up',        title: 'Income Statement',  description: 'Revenue, expenses, profit',        color: 'green',  ready: true,  component: IncomeStatementReport },
-        { id: 'gst-report',        icon: 'ph-percent',              title: 'GST/HST Report',    description: 'Tax collected vs paid',            color: 'red',    ready: true,  component: GSTReport },
-        { id: 'balance-sheet',     icon: 'ph-stack',                title: 'Balance Sheet',     description: 'Assets, liabilities, equity',      color: 'cyan',   ready: true,  component: BalanceSheetReport },
-        { id: 'cash-flow',         icon: 'ph-currency-circle-dollar', title: 'Cash Flow',       description: 'Operating, investing, financing',  color: 'teal',   ready: false },
-        { id: 'general-ledger',    icon: 'ph-list-bullets',         title: 'General Ledger',    description: 'Account-specific history',         color: 'indigo', ready: true,  component: GeneralLedgerReport },
-        { id: 'general-journal',   icon: 'ph-book',                 title: 'General Journal',   description: 'Transaction log',                  color: 'purple', ready: true,  component: GeneralJournalReport },
-        { id: 'coa-summary',       icon: 'ph-chart-bar',            title: 'COA Summary',       description: 'Category breakdown',               color: 'orange', ready: true,  component: COASummaryReport },
-        { id: 'financial-ratios',  icon: 'ph-chart-line',           title: 'Financial Ratios',  description: 'Key metrics',                      color: 'violet', ready: true,  component: FinancialRatiosReport },
+        { id: 'trial-balance',       icon: 'ph-scales',                 title: 'Trial Balance',       description: 'Verify debits equal credits',       color: 'blue',   ready: true,  component: TrialBalanceReport },
+        { id: 'income-statement',    icon: 'ph-chart-line-up',          title: 'Income Statement',    description: 'Revenue, expenses, profit',          color: 'green',  ready: true,  component: IncomeStatementReport },
+        { id: 'balance-sheet',       icon: 'ph-stack',                  title: 'Balance Sheet',       description: 'Assets, liabilities, equity',        color: 'cyan',   ready: true,  component: BalanceSheetReport },
+        { id: 'cash-flow',           icon: 'ph-currency-circle-dollar', title: 'Cash Flow',           description: 'Operating, investing, financing',    color: 'teal',   ready: true,  component: CashFlowReport },
+        { id: 'comparative',         icon: 'ph-arrows-left-right',      title: 'Comparative',         description: 'Current vs prior year',              color: 'amber',  ready: true,  component: ComparativeReport },
+        { id: 'bank-reconciliation', icon: 'ph-bank',                   title: 'Bank Reconciliation', description: 'Reconcile bank to books',            color: 'sky',    ready: true,  component: BankReconciliationReport },
+        { id: 'aje',                 icon: 'ph-notebook',               title: 'Journal Entries',     description: 'AJE, RJE, closing entries',          color: 'rose',   ready: true,  component: AJEReport },
+        { id: 'gst-report',          icon: 'ph-percent',                title: 'GST/HST Report',      description: 'Tax collected vs paid',              color: 'red',    ready: true,  component: GSTReport },
+        { id: 'general-ledger',      icon: 'ph-list-bullets',           title: 'General Ledger',      description: 'Account-specific history',           color: 'indigo', ready: true,  component: GeneralLedgerReport },
+        { id: 'general-journal',     icon: 'ph-book',                   title: 'General Journal',     description: 'Transaction log',                    color: 'purple', ready: true,  component: GeneralJournalReport },
+        { id: 'coa-summary',         icon: 'ph-chart-bar',              title: 'COA Summary',         description: 'Category breakdown',                 color: 'orange', ready: true,  component: COASummaryReport },
+        { id: 'financial-ratios',    icon: 'ph-chart-line',             title: 'Financial Ratios',    description: 'Key metrics',                        color: 'violet', ready: true,  component: FinancialRatiosReport },
+        { id: 'casaware-export',     icon: 'ph-export',                 title: 'CaseWare Export',     description: 'Full working paper package',          color: 'slate',  ready: true,  component: CaseWareExport },
     ];
 
     const colorMap = {
@@ -501,6 +510,10 @@ export function ReportsPage() {
         purple: { bg: 'bg-purple-50', border: 'border-purple-200', icon: 'text-purple-600', hover: 'hover:bg-purple-100' },
         orange: { bg: 'bg-orange-50', border: 'border-orange-200', icon: 'text-orange-600', hover: 'hover:bg-orange-100' },
         violet: { bg: 'bg-violet-50', border: 'border-violet-200', icon: 'text-violet-600', hover: 'hover:bg-violet-100' },
+        amber:  { bg: 'bg-amber-50',  border: 'border-amber-200',  icon: 'text-amber-600',  hover: 'hover:bg-amber-100'  },
+        sky:    { bg: 'bg-sky-50',    border: 'border-sky-200',    icon: 'text-sky-600',    hover: 'hover:bg-sky-100'    },
+        rose:   { bg: 'bg-rose-50',   border: 'border-rose-200',   icon: 'text-rose-600',   hover: 'hover:bg-rose-100'   },
+        slate:  { bg: 'bg-slate-50',  border: 'border-slate-200',  icon: 'text-slate-600',  hover: 'hover:bg-slate-100'  },
     };
 
     // Expose global back-to-hub function for sub-reports
