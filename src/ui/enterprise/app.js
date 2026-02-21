@@ -2031,24 +2031,10 @@
     });
   }
 
+  // handleReset now delegates to clearGrid() which properly scopes the clear
+  // to only transaction/account data while preserving firm and client metadata.
   window.handleReset = () => {
-    if (!UI_STATE.resetConfirm) {
-      UI_STATE.resetConfirm = true;
-      window.updateWorkspace();
-      // Auto-reset confirmation after 3 seconds of inactivity
-      setTimeout(() => {
-        if (UI_STATE.resetConfirm) {
-          UI_STATE.resetConfirm = false;
-          window.updateWorkspace();
-        }
-      }, 3000);
-    } else {
-      window.RoboLedger.Ledger.reset();
-      window.RoboLedger.Accounts.reset(); // Clear cached accounts
-      UI_STATE.resetConfirm = false;
-      UI_STATE.selectedAccount = 'ALL';
-      window.updateWorkspace();
-    }
+    window.clearGrid();
   };
 
   window.toggleSearch = function (open) {
@@ -6093,6 +6079,14 @@
          <!-- Settings Gear (existing) -->
           <button onclick="window.toggleSettings(true)" style="padding: 7px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'" title="Grid Settings (Appearance & Columns)">
             <i class="ph ph-gear-six" style="font-size: 16px; color: #64748b;"></i>
+          </button>
+
+          <!-- Divider -->
+          <div style="width: 1px; height: 20px; background: #e2e8f0;"></div>
+
+          <!-- Clear Grid Button -->
+          <button onclick="window.clearGrid()" style="padding: 7px 10px; border: 1px solid #fecaca; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'" title="Clear Grid — removes all transactions (keeps client profile)">
+            <i class="ph ph-trash" style="font-size: 16px; color: #ef4444;"></i>
           </button>
         </div>
       </div>
