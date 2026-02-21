@@ -372,10 +372,8 @@ const HomePage = () => {
                                 </div>
                                 <div className="divide-y divide-slate-100">
                                     {stats.recentTxns.map((tx, i) => {
-                                        const debit  = parseFloat(tx.debit)  || 0;
-                                        const credit = parseFloat(tx.credit) || 0;
-                                        const isDebit = debit > 0;
-                                        const amount = isDebit ? debit : credit;
+                                        const isDebit = tx.polarity === 'DEBIT';
+                                        const amount = Math.abs((tx.amount_cents || 0) / 100);
                                         const isCategorized = tx.category && String(tx.category) !== '9970';
                                         return (
                                             <div key={tx.tx_id || i} className="flex items-center gap-3 py-2.5">
