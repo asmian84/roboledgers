@@ -9,7 +9,9 @@ export function getStatementFile(fileId: string): Blob | null {
     // ignore and fallback to localStorage
   }
 
-  const stored = localStorage.getItem('roboledger_files');
+  const clientId = (window as any).UI_STATE?.activeClientId;
+  const storageKey = clientId ? `roboledger_files_${clientId}` : 'roboledger_files';
+  const stored = localStorage.getItem(storageKey);
   if (!stored) return null;
 
   try {

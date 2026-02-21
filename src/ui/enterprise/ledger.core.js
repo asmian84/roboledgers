@@ -376,6 +376,24 @@ window.RoboLedger = (function () {
             state.sigIndex     = parsed.sigIndex     || {};
             state.accounts     = parsed.accounts     || [];
             state.coa          = parsed.coa          || {};
+
+            // MIGRATION: Backfill client_id on legacy transactions (lazy, idempotent)
+            const _keyMatch = key.match(/^roboledger_v5_data_(.+)$/);
+            const _clientIdFromKey = _keyMatch ? _keyMatch[1] : null;
+            if (_clientIdFromKey) {
+                let _migrated = 0;
+                for (const _txId in state.transactions) {
+                    if (!state.transactions[_txId].client_id) {
+                        state.transactions[_txId].client_id = _clientIdFromKey;
+                        _migrated++;
+                    }
+                }
+                if (_migrated > 0) {
+                    console.log(`[LEDGER] Migrated ${_migrated} txns → client_id=${_clientIdFromKey}`);
+                    save();
+                }
+            }
+
             // Re-seed COA defaults (backfills any missing entries after client switch)
             COA.init();
             if (window.RuleEngine?.updateTransactionContext) {
@@ -870,9 +888,26 @@ window.RoboLedger = (function () {
     }
 
 
+    // --- CLIENT SCOPE GUARD (defense-in-depth) ---
+    function _clientScope(tx) {
+        const active = window.UI_STATE?.activeClientId;
+        if (!active) return true;        // legacy/demo mode — no filtering
+        if (!tx.client_id) return true;  // pre-migration tx — allow through
+        return tx.client_id === active;
+    }
+
     // --- LEDGER SERVICE ---
     const Ledger = {
         post: function (tx) {
+            // Defense: reject cross-client posts
+            const activeClient = window.UI_STATE?.activeClientId;
+            if (activeClient && tx.client_id && tx.client_id !== activeClient) {
+                console.error(`[LEDGER] CROSS-CLIENT VIOLATION: tx.client_id=${tx.client_id} active=${activeClient}`);
+                return false;
+            }
+            // Auto-stamp if missing
+            if (!tx.client_id && activeClient) tx.client_id = activeClient;
+
             if (state.sigIndex[tx.txsig]) {
                 console.warn(`[LEDGER] DUPLICATE DETECTED: ${tx.txsig}`);
                 return false;
@@ -890,7 +925,7 @@ window.RoboLedger = (function () {
 
         getAll: function () {
             // Sort ASCENDING for benchmark parity (oldest first)
-            const raw = Object.values(state.transactions).sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));
+            const raw = Object.values(state.transactions).filter(tx => _clientScope(tx)).sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at));
 
             // Map of starting balances per account
             const startingBalances = {};
@@ -919,11 +954,13 @@ window.RoboLedger = (function () {
         },
 
         get: function (tx_id) {
-            return state.transactions[tx_id];
+            const tx = state.transactions[tx_id];
+            if (tx && !_clientScope(tx)) return undefined;
+            return tx;
         },
 
         getByParserRef: function (parser_ref) {
-            return Object.values(state.transactions).find(tx => tx.parser_ref === parser_ref);
+            return Object.values(state.transactions).find(tx => tx.parser_ref === parser_ref && _clientScope(tx));
         },
 
         // REPORTS: Query transactions by date range
@@ -932,6 +969,7 @@ window.RoboLedger = (function () {
             const end = new Date(endDate);
 
             return Object.values(state.transactions).filter(tx => {
+                if (!_clientScope(tx)) return false;
                 const txDate = new Date(tx.date);
                 const inRange = txDate >= start && txDate <= end;
                 const matchAccount = !accountIds || (Array.isArray(accountIds) ? accountIds.includes(tx.account_id) : tx.account_id === accountIds);
@@ -979,7 +1017,7 @@ window.RoboLedger = (function () {
             const tx = state.transactions[tx_id];
             if (!tx) throw new Error("TX_NOT_FOUND");
 
-            const forbidden = ["amount_cents", "date", "account_id", "currency"];
+            const forbidden = ["amount_cents", "date", "account_id", "currency", "client_id"];
             Object.keys(patch).forEach(key => {
                 if (forbidden.includes(key)) {
                     throw new Error("INVARIANT_VIOLATION_IMMUTABLE_FIELD");
@@ -1105,6 +1143,7 @@ window.RoboLedger = (function () {
             const tx_id = crypto.randomUUID();
             const tx = {
                 tx_id,
+                client_id: window.UI_STATE?.activeClientId || null,
                 account_id,
                 ref: 'MANUAL',
                 date: new Date().toISOString().split('T')[0],
@@ -1790,6 +1829,12 @@ window.RoboLedger = (function () {
         },
 
         processUpload: async function (file, account_id) {
+            // ── PRE-IMPORT GUARD: Require an active client ───────────────────────
+            if (!window.UI_STATE?.activeClientId) {
+                console.error('[INGEST] No active client — aborting import. Select a client first.');
+                return 0;
+            }
+
             // Note: We'll generate account_id AFTER parsing metadata
             // Keep original account_id for now as placeholder
             let originalAccountId = account_id;
@@ -2186,6 +2231,7 @@ window.RoboLedger = (function () {
                 // Build canonical transaction object
                 const canonical = {
                     tx_id,
+                    client_id: window.UI_STATE?.activeClientId || null,
                     account_id,
                     date,
                     ref: row.ref || null, // Capture Ref# from parser

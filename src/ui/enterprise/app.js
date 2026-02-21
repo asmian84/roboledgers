@@ -1429,24 +1429,35 @@
     // Will be applied after grid renders
     setTimeout(applyThemeToGrid, 100);
 
-    // Persist to unified settings object
-    const settings = {
+    // Persist settings — split into global (user prefs) vs per-client
+    const globalSettings = {
       activeTheme: UI_STATE.activeTheme,
       dexterity: UI_STATE.dexterity,
       fontSize: UI_STATE.fontSize,
       density: UI_STATE.density,
-      autocatEnabled: UI_STATE.autocatEnabled,
-      confidenceThreshold: UI_STATE.confidenceThreshold,
       refOverride: UI_STATE.refOverride,
       dateFormat: UI_STATE.dateFormat,
-      province: UI_STATE.province,
-      gstEnabled: UI_STATE.gstEnabled,
       // Grid appearance settings
       gridTheme: UI_STATE.gridTheme,
       gridFontSize: UI_STATE.gridFontSize
     };
+    localStorage.setItem('roboledger_v5_settings', JSON.stringify(globalSettings));
 
-    localStorage.setItem('roboledger_v5_settings', JSON.stringify(settings));
+    // Per-client settings (province, GST, autocat) — scoped to active client
+    if (UI_STATE.activeClientId) {
+      const clientSettings = {
+        province: UI_STATE.province,
+        gstEnabled: UI_STATE.gstEnabled,
+        autocatEnabled: UI_STATE.autocatEnabled,
+        confidenceThreshold: UI_STATE.confidenceThreshold,
+      };
+      localStorage.setItem('roboledger_settings_' + UI_STATE.activeClientId, JSON.stringify(clientSettings));
+      console.log(`[SETTINGS] Per-client settings saved for ${UI_STATE.activeClientId}`);
+    } else {
+      // No client active — save as global fallback (backward compat)
+      const fallback = { ...globalSettings, province: UI_STATE.province, gstEnabled: UI_STATE.gstEnabled, autocatEnabled: UI_STATE.autocatEnabled, confidenceThreshold: UI_STATE.confidenceThreshold };
+      localStorage.setItem('roboledger_v5_settings', JSON.stringify(fallback));
+    }
 
     // Close drawer
     toggleSettings(false);
@@ -1614,15 +1625,28 @@
     setupNav();
     setupActions();
 
-    // Load saved settings
+    // Load saved settings — global first, then overlay per-client
     const savedSettings = localStorage.getItem('roboledger_v5_settings');
     if (savedSettings) {
       try {
         const settings = JSON.parse(savedSettings);
         Object.assign(UI_STATE, settings);
-        console.log('[SETTINGS] Loaded user preferences.');
+        console.log('[SETTINGS] Loaded global user preferences.');
       } catch (e) {
         console.error('[SETTINGS] Failed to parse saved settings', e);
+      }
+    }
+    // Overlay per-client settings (province, GST, autocat) if a client is active
+    if (UI_STATE.activeClientId) {
+      const clientSettingsRaw = localStorage.getItem('roboledger_settings_' + UI_STATE.activeClientId);
+      if (clientSettingsRaw) {
+        try {
+          const clientSettings = JSON.parse(clientSettingsRaw);
+          Object.assign(UI_STATE, clientSettings);
+          console.log(`[SETTINGS] Loaded per-client settings for ${UI_STATE.activeClientId}`);
+        } catch (e) {
+          console.error('[SETTINGS] Failed to parse per-client settings', e);
+        }
       }
     }
 
@@ -3221,6 +3245,18 @@
     UI_STATE.selectedAccount  = 'ALL';
     localStorage.setItem('roboledger_active_client', clientId);
 
+    // 3b. Load per-client settings (province, GST, autocat) — overlay onto UI_STATE
+    const _clientSettingsRaw = localStorage.getItem('roboledger_settings_' + clientId);
+    if (_clientSettingsRaw) {
+      try {
+        const _cs = JSON.parse(_clientSettingsRaw);
+        Object.assign(UI_STATE, _cs);
+        console.log(`[CLIENT] Loaded per-client settings for ${clientId}`);
+      } catch (e) {
+        console.error('[CLIENT] Failed to parse per-client settings', e);
+      }
+    }
+
     // 4. Update cached counts on client registry entry
     const idx = clients.findIndex(c => c.id === clientId);
     if (idx !== -1) {
@@ -3286,9 +3322,11 @@
       window.updateClientSwitcherUI(null);
     }
     localStorage.removeItem('roboledger_v5_data_' + clientId);
+    localStorage.removeItem('roboledger_settings_' + clientId);
+    localStorage.removeItem('roboledger_files_' + clientId);
     const updated = clients.filter(c => c.id !== clientId);
     localStorage.setItem('roboledger_clients', JSON.stringify(updated));
-    console.log(`[CLIENT] Deleted: ${client.name} (${clientId})`);
+    console.log(`[CLIENT] Deleted: ${client.name} (${clientId}) — data, settings & files purged`);
     _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
     setTimeout(() => window.openContextDrawer(), 50);
   };
