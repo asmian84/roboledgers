@@ -11,7 +11,8 @@ export function getStatementFile(fileId: string): Blob | null {
 
   const clientId = (window as any).UI_STATE?.activeClientId;
   const storageKey = clientId ? `roboledger_files_${clientId}` : 'roboledger_files';
-  const stored = localStorage.getItem(storageKey);
+  const _SS = (window as any).StorageService;
+  const stored = _SS ? _SS.get(storageKey) : localStorage.getItem(storageKey);
   if (!stored) return null;
 
   try {

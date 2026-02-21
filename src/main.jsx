@@ -62,13 +62,15 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     // Get density setting
     const density = window.UI_STATE?.density || 'comfortable';
 
-    // Load saved column preferences from localStorage (with corruption recovery)
+    // Load saved column preferences (with corruption recovery)
     let savedPrefs = {};
     try {
-        const stored = localStorage.getItem('roboledger_column_prefs');
-        if (stored) savedPrefs = JSON.parse(stored);
+        const _SS = window.StorageService;
+        const stored = _SS ? _SS.get('roboledger_column_prefs') : localStorage.getItem('roboledger_column_prefs');
+        if (stored) savedPrefs = (typeof stored === 'string') ? JSON.parse(stored) : stored;
     } catch (e) {
-        localStorage.removeItem('roboledger_column_prefs');
+        const _SS = window.StorageService;
+        if (_SS) _SS.remove('roboledger_column_prefs'); else localStorage.removeItem('roboledger_column_prefs');
     }
     const columnVisibility = {
         // TanStack Grid uses INVERTED logic in state: false = visible, true = hidden

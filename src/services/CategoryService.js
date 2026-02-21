@@ -22,9 +22,10 @@ class CategoryService {
      */
     loadCategories() {
         try {
-            const stored = localStorage.getItem(this.STORAGE_KEY);
+            const _SS = window.StorageService;
+            const stored = _SS ? _SS.get(this.STORAGE_KEY) : localStorage.getItem(this.STORAGE_KEY);
             if (stored) {
-                return JSON.parse(stored);
+                return (typeof stored === 'string') ? JSON.parse(stored) : stored;
             }
         } catch (e) {
             console.error('[CATEGORY] Failed to load categories:', e);
@@ -81,7 +82,9 @@ class CategoryService {
      */
     saveCategories(categories = this.categories) {
         try {
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(categories));
+            const _SS = window.StorageService;
+            if (_SS) { _SS.set(this.STORAGE_KEY, categories); }
+            else { localStorage.setItem(this.STORAGE_KEY, JSON.stringify(categories)); }
             this.categories = categories;
             return true;
         } catch (e) {
@@ -237,7 +240,8 @@ class CategoryService {
      * Reset to defaults
      */
     reset() {
-        localStorage.removeItem(this.STORAGE_KEY);
+        const _SS = window.StorageService;
+        if (_SS) _SS.remove(this.STORAGE_KEY); else localStorage.removeItem(this.STORAGE_KEY);
         this.categories = this.initializeDefaults();
         console.log('[CATEGORY] Reset to defaults');
         return this.categories;

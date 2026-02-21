@@ -310,18 +310,17 @@ window.RoboLedger = (function () {
     const LEDGER_VERSION = '2.0.0'; // Increment when schema/logic changes
 
     function load() {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
+        const _SS = window.StorageService;
+        const parsed = _SS ? _SS.get(STORAGE_KEY) : (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } })();
+        if (parsed) {
             try {
-                const parsed = JSON.parse(saved);
-
                 // Version check - auto-clear incompatible cache
                 const savedVersion = parsed.version || '1.0.0';
                 if (savedVersion !== LEDGER_VERSION) {
                     console.warn(`[LEDGER] Version mismatch: saved=${savedVersion}, current=${LEDGER_VERSION}`);
                     console.warn('[LEDGER] Clearing incompatible cache and starting fresh');
-                    localStorage.removeItem(STORAGE_KEY);
-                    return; // Start with empty state
+                    if (_SS) _SS.remove(STORAGE_KEY); else localStorage.removeItem(STORAGE_KEY);
+                    return;
                 }
 
                 state.transactions = parsed.transactions || {};
@@ -331,7 +330,6 @@ window.RoboLedger = (function () {
 
                 console.log(`[LEDGER] Loaded ${Object.keys(state.transactions).length} transactions from storage`);
 
-                // Update SignalFusionEngine with transaction context for recurring detection
                 if (window.RuleEngine?.updateTransactionContext) {
                     window.RuleEngine.updateTransactionContext(Object.values(state.transactions));
                     console.log('[LEDGER] Updated SignalFusionEngine transaction context');
@@ -339,7 +337,7 @@ window.RoboLedger = (function () {
                 console.log(`[LEDGER] State loaded (v${LEDGER_VERSION})`);
             } catch (e) {
                 console.error('[LEDGER] Failed to load state', e);
-                localStorage.removeItem(STORAGE_KEY); // Clear corrupted data
+                if (_SS) _SS.remove(STORAGE_KEY); else localStorage.removeItem(STORAGE_KEY);
             }
         }
     }
@@ -348,30 +346,38 @@ window.RoboLedger = (function () {
         // Client-aware save: write to per-client key when a client is active
         const clientId = window.UI_STATE?.activeClientId;
         const key = clientId ? ('roboledger_v5_data_' + clientId) : STORAGE_KEY;
-        localStorage.setItem(key, JSON.stringify({
+        const data = {
             version: LEDGER_VERSION,
             transactions: state.transactions,
             sigIndex: state.sigIndex,
             accounts: state.accounts,
             coa: state.coa
-        }));
+        };
+        const _SS = window.StorageService;
+        if (_SS) {
+            _SS.set(key, data);
+        } else {
+            localStorage.setItem(key, JSON.stringify(data));
+        }
     }
 
     // Client-aware load by arbitrary key (called by app.js switchClient / init restore)
     function loadFromKey(key) {
-        const saved = localStorage.getItem(key);
+        const _SS = window.StorageService;
+        const raw = _SS ? _SS.get(key) : localStorage.getItem(key);
         state.transactions = {};
         state.sigIndex = {};
         state.accounts = [];
         state.coa = {};
-        if (!saved) {
+        if (!raw) {
             console.log(`[LEDGER] No data at key: ${key} — starting fresh`);
             // Re-seed COA defaults so dropdowns/lookups work even on a fresh client
             COA.init();
             return;
         }
         try {
-            const parsed = JSON.parse(saved);
+            // StorageService.get() returns already-parsed objects; localStorage returns strings
+            const parsed = (typeof raw === 'string') ? JSON.parse(raw) : raw;
             state.transactions = parsed.transactions || {};
             state.sigIndex     = parsed.sigIndex     || {};
             state.accounts     = parsed.accounts     || [];
@@ -402,7 +408,7 @@ window.RoboLedger = (function () {
             console.log(`[LEDGER] Loaded ${Object.keys(state.transactions).length} txns from key: ${key}`);
         } catch (e) {
             console.error('[LEDGER] Failed to load from key:', key, e);
-            localStorage.removeItem(key);
+            if (_SS) _SS.remove(key); else localStorage.removeItem(key);
             // Re-seed COA defaults even after a failed load
             COA.init();
         }

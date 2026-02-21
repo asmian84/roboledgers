@@ -91,8 +91,9 @@ class RuleEngine {
 
     loadRules() {
         try {
-            const stored = localStorage.getItem(this.STORAGE_KEY);
-            if (stored) return JSON.parse(stored);
+            const _SS = window.StorageService;
+            const stored = _SS ? _SS.get(this.STORAGE_KEY) : localStorage.getItem(this.STORAGE_KEY);
+            if (stored) return (typeof stored === 'string') ? JSON.parse(stored) : stored;
         } catch (e) {
             console.error('[RULE_ENGINE] Failed to load rules:', e);
         }
@@ -101,7 +102,9 @@ class RuleEngine {
 
     saveRules(rules = this.rules) {
         try {
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(rules));
+            const _SS = window.StorageService;
+            if (_SS) { _SS.set(this.STORAGE_KEY, rules); }
+            else { localStorage.setItem(this.STORAGE_KEY, JSON.stringify(rules)); }
             this.rules = rules;
             return true;
         } catch (e) {

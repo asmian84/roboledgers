@@ -3,6 +3,25 @@
  * Wired to the live Ledger Engine (ledger.core.js)
  */
 (function () {
+  // ── StorageService helpers (IndexedDB via cache, localStorage fallback) ──
+  function _ssGet(key) {
+    const _SS = window.StorageService;
+    if (_SS) return _SS.get(key);
+    const raw = localStorage.getItem(key);
+    if (raw === null) return null;
+    try { return JSON.parse(raw); } catch { return raw; }
+  }
+  function _ssSet(key, value) {
+    const _SS = window.StorageService;
+    if (_SS) { _SS.set(key, value); }
+    else { localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value)); }
+  }
+  function _ssRemove(key) {
+    const _SS = window.StorageService;
+    if (_SS) _SS.remove(key); else localStorage.removeItem(key);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // --- UI STATE & ROUTING ---
   window.UI_STATE = {
     currentRoute: 'home',
@@ -174,11 +193,11 @@
           Object.assign(tx, updatedTx);
         }
       });
-      // Save to localstorage via ledger
-      localStorage.setItem('roboledger_v5_data', JSON.stringify({
-        transactions: window.RoboLedger.Ledger.getRawState().transactions,
-        sigIndex: window.RoboLedger.Ledger.getRawState().sigIndex
-      }));
+      // Save to storage via ledger
+      const _ssData = { transactions: window.RoboLedger.Ledger.getRawState().transactions, sigIndex: window.RoboLedger.Ledger.getRawState().sigIndex };
+      const _SS0 = window.StorageService;
+      if (_SS0) { _SS0.set('roboledger_v5_data', _ssData); }
+      else { localStorage.setItem('roboledger_v5_data', JSON.stringify(_ssData)); }
       window.updateWorkspace();
     } else if (type === 'popIn') {
       window.popInGrid();
@@ -1354,7 +1373,9 @@
   window.updateRefPrefix = function (newPrefix) {
     const sanitized = newPrefix.toUpperCase().trim().substr(0, 8); // Limit to 8 chars
     UI_STATE.refPrefix = sanitized || 'CHQ1';
-    localStorage.setItem('roboledger_refPrefix', UI_STATE.refPrefix);
+    const _SS = window.StorageService;
+    if (_SS) { _SS.set('roboledger_refPrefix', UI_STATE.refPrefix); }
+    else { localStorage.setItem('roboledger_refPrefix', UI_STATE.refPrefix); }
 
     // Trigger grid re-render to update ref numbers
     window.updateWorkspace();
@@ -1441,7 +1462,9 @@
       gridTheme: UI_STATE.gridTheme,
       gridFontSize: UI_STATE.gridFontSize
     };
-    localStorage.setItem('roboledger_v5_settings', JSON.stringify(globalSettings));
+    const _SS = window.StorageService;
+    if (_SS) { _SS.set('roboledger_v5_settings', globalSettings); }
+    else { localStorage.setItem('roboledger_v5_settings', JSON.stringify(globalSettings)); }
 
     // Per-client settings (province, GST, autocat) — scoped to active client
     if (UI_STATE.activeClientId) {
@@ -1451,12 +1474,14 @@
         autocatEnabled: UI_STATE.autocatEnabled,
         confidenceThreshold: UI_STATE.confidenceThreshold,
       };
-      localStorage.setItem('roboledger_settings_' + UI_STATE.activeClientId, JSON.stringify(clientSettings));
+      if (_SS) { _SS.set('roboledger_settings_' + UI_STATE.activeClientId, clientSettings); }
+      else { localStorage.setItem('roboledger_settings_' + UI_STATE.activeClientId, JSON.stringify(clientSettings)); }
       console.log(`[SETTINGS] Per-client settings saved for ${UI_STATE.activeClientId}`);
     } else {
       // No client active — save as global fallback (backward compat)
       const fallback = { ...globalSettings, province: UI_STATE.province, gstEnabled: UI_STATE.gstEnabled, autocatEnabled: UI_STATE.autocatEnabled, confidenceThreshold: UI_STATE.confidenceThreshold };
-      localStorage.setItem('roboledger_v5_settings', JSON.stringify(fallback));
+      if (_SS) { _SS.set('roboledger_v5_settings', fallback); }
+      else { localStorage.setItem('roboledger_v5_settings', JSON.stringify(fallback)); }
     }
 
     // Close drawer
@@ -1563,32 +1588,42 @@
   };
 
   function init() {
+    const _SS = window.StorageService;
+    // Helper: read from StorageService (parsed objects) or localStorage (JSON strings)
+    function _ssGet(key) {
+      if (_SS) return _SS.get(key);
+      const raw = localStorage.getItem(key);
+      if (raw === null) return null;
+      try { return JSON.parse(raw); } catch { return raw; }
+    }
+    function _ssRemove(key) { if (_SS) _SS.remove(key); else localStorage.removeItem(key); }
+
     // STATE VERSION CHECK: Prevent cache hallucination
     // Multi-client aware: only check legacy key if no client is active
     const STATE_VERSION = '5.2.0';
-    const savedActiveClient = localStorage.getItem('roboledger_active_client');
+    const savedActiveClient = _ssGet('roboledger_active_client');
 
     if (!savedActiveClient) {
       // Legacy / demo mode: check the shared roboledger_v5_data key
-      const savedData = localStorage.getItem('roboledger_v5_data');
+      const savedData = _ssGet('roboledger_v5_data');
       if (savedData) {
         try {
-          const parsed = JSON.parse(savedData);
+          const parsed = (typeof savedData === 'string') ? JSON.parse(savedData) : savedData;
           if (parsed.version && parsed.version !== STATE_VERSION) {
             console.warn(`[STATE] Version mismatch: saved=${parsed.version}, current=${STATE_VERSION}`);
-            localStorage.removeItem('roboledger_v5_data'); // Targeted removal — preserve client keys
+            _ssRemove('roboledger_v5_data'); // Targeted removal — preserve client keys
             window.RoboLedger.Ledger.reset();
           }
         } catch (e) {
-          console.error('[STATE] Corrupt legacy localStorage — removing legacy key only', e);
-          localStorage.removeItem('roboledger_v5_data');
+          console.error('[STATE] Corrupt legacy storage — removing legacy key only', e);
+          _ssRemove('roboledger_v5_data');
         }
       }
     }
 
     // ── MULTI-CLIENT RESTORE ──────────────────────────────────────────────────
     if (savedActiveClient) {
-      const savedClients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+      const savedClients = _ssGet('roboledger_clients') || [];
       const savedClient  = savedClients.find(c => c.id === savedActiveClient);
       if (savedClient) {
         window.RoboLedger.Ledger.loadFromKey('roboledger_v5_data_' + savedActiveClient);
@@ -1599,16 +1634,16 @@
         setTimeout(() => window.updateClientSwitcherUI(savedClient), 0);
       } else {
         // Client no longer exists — clear stale reference
-        localStorage.removeItem('roboledger_active_client');
+        _ssRemove('roboledger_active_client');
         console.warn('[CLIENT] Stale active_client reference cleared');
       }
     }
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── MULTI-ACCOUNTANT RESTORE ─────────────────────────────────────────────
-    const savedActiveAccountant = localStorage.getItem('roboledger_active_accountant');
+    const savedActiveAccountant = _ssGet('roboledger_active_accountant');
     if (savedActiveAccountant) {
-      const savedAccountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+      const savedAccountants = _ssGet('roboledger_accountants') || [];
       const savedAccountant  = savedAccountants.find(a => a.id === savedActiveAccountant);
       if (savedAccountant) {
         UI_STATE.activeAccountantId   = savedActiveAccountant;
@@ -1616,7 +1651,7 @@
         console.log(`[ACCOUNTANT] Restored: ${savedAccountant.name} (${savedActiveAccountant})`);
         setTimeout(() => { if (window.updateAccountantSwitcherUI) window.updateAccountantSwitcherUI(savedAccountant); }, 0);
       } else {
-        localStorage.removeItem('roboledger_active_accountant');
+        _ssRemove('roboledger_active_accountant');
         console.warn('[ACCOUNTANT] Stale active_accountant reference cleared');
       }
     }
@@ -1626,10 +1661,10 @@
     setupActions();
 
     // Load saved settings — global first, then overlay per-client
-    const savedSettings = localStorage.getItem('roboledger_v5_settings');
+    const savedSettings = _ssGet('roboledger_v5_settings');
     if (savedSettings) {
       try {
-        const settings = JSON.parse(savedSettings);
+        const settings = (typeof savedSettings === 'string') ? JSON.parse(savedSettings) : savedSettings;
         Object.assign(UI_STATE, settings);
         console.log('[SETTINGS] Loaded global user preferences.');
       } catch (e) {
@@ -1638,10 +1673,10 @@
     }
     // Overlay per-client settings (province, GST, autocat) if a client is active
     if (UI_STATE.activeClientId) {
-      const clientSettingsRaw = localStorage.getItem('roboledger_settings_' + UI_STATE.activeClientId);
+      const clientSettingsRaw = _ssGet('roboledger_settings_' + UI_STATE.activeClientId);
       if (clientSettingsRaw) {
         try {
-          const clientSettings = JSON.parse(clientSettingsRaw);
+          const clientSettings = (typeof clientSettingsRaw === 'string') ? JSON.parse(clientSettingsRaw) : clientSettingsRaw;
           Object.assign(UI_STATE, clientSettings);
           console.log(`[SETTINGS] Loaded per-client settings for ${UI_STATE.activeClientId}`);
         } catch (e) {
@@ -1651,7 +1686,7 @@
     }
 
     // Apply saved theme on page load (legacy support + immediate apply)
-    const savedTheme = localStorage.getItem('roboledger_theme') || 'default';
+    const savedTheme = _ssGet('roboledger_theme') || 'default';
     if (savedTheme) { // Check if savedTheme is not null/undefined
       UI_STATE.activeTheme = savedTheme;
       // Theme will be applied to grid container after render, not to body
@@ -1685,7 +1720,7 @@
     if (route === 'accountants') {
       UI_STATE.activeAccountantId   = null;
       UI_STATE.activeAccountantName = '';
-      localStorage.removeItem('roboledger_active_accountant');
+      _ssRemove('roboledger_active_accountant');
       if (window.updateAccountantSwitcherUI) window.updateAccountantSwitcherUI(null);
     }
 
@@ -1846,6 +1881,7 @@
     console.warn('[DEV RESET] Clearing all state and cache...');
 
     // Clear ALL storage
+    if (window.StorageService?.clearAll) window.StorageService.clearAll();
     localStorage.clear();
     sessionStorage.clear();
     window.RoboLedger.Ledger.reset();
@@ -2300,7 +2336,7 @@
 
     // ── COLUMNS ─────────────────────────────────────────────────────────────
     if (UI_STATE.settingsTab === 'columns') {
-      const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+      const savedPrefs = _ssGet('roboledger_column_prefs') || {};
       const columns = [
         { field:'date',        label:'Date',        icon:'ph-calendar-blank',  visible: savedPrefs.date        !== false },
         { field:'ref',         label:'Ref #',       icon:'ph-hash',            visible: savedPrefs.ref         !== false },
@@ -2397,7 +2433,7 @@
           <div style="padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11px;color:#64748b;line-height:1.9;">
             <div>Version: <strong style="color:#1e293b;">${UI_STATE.version||'5.1'}</strong></div>
             <div>Mode: <strong style="color:#1e293b;">${window.location.protocol==='file:'?'Native':'Web'}</strong></div>
-            <div>Storage: <strong style="color:#1e293b;">localStorage</strong></div>
+            <div>Storage: <strong style="color:#1e293b;">IndexedDB</strong></div>
           </div>
         </div>
 
@@ -2419,7 +2455,7 @@
     UI_STATE.gridFontSize = 13.5;
     UI_STATE.density = 'comfortable';
 
-    localStorage.removeItem('roboledger_v5_settings');
+    _ssRemove('roboledger_v5_settings');
     renderSettingsDrawer();
     window.applyGridSettings();
 
@@ -2557,9 +2593,9 @@
       window.setGridColumnVisibility(columnId, visible);
 
       // Save preference to localStorage
-      const saved = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+      const saved = _ssGet('roboledger_column_prefs') || {};
       saved[field] = visible;
-      localStorage.setItem('roboledger_column_prefs', JSON.stringify(saved));
+      _ssSet('roboledger_column_prefs', saved);
 
       console.log(`[SETTINGS] Column ${columnId} ${visible ? 'shown' : 'hidden'} via React bridge`);
     } else {
@@ -2816,7 +2852,7 @@
 
   // ─── CLIENTS PAGE ────────────────────────────────────────────────────────────
   function renderClientsPage() {
-    let clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    let clients = _ssGet('roboledger_clients') || [];
     // ACCOUNTANT LAYER: filter when drilling into an accountant
     if (UI_STATE.activeAccountantId) {
       clients = clients.filter(c => c.accountantId === UI_STATE.activeAccountantId);
@@ -3006,7 +3042,7 @@
     const existing = document.getElementById('client-modal-overlay');
     if (existing) existing.remove();
 
-    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const clients = _ssGet('roboledger_clients') || [];
     const editClient = existingId ? clients.find(c => c.id === existingId) : null;
     const isEdit = !!editClient;
     const v = (field, fallback) => editClient ? (editClient[field] !== undefined ? editClient[field] : fallback) : fallback;
@@ -3161,7 +3197,7 @@
       if (inp) { inp.style.border = '1.5px solid #dc2626'; inp.focus(); }
       return;
     }
-    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const clients = _ssGet('roboledger_clients') || [];
     const today = new Date().toISOString().split('T')[0];
     const getField = (id, fallback) => {
       const el = document.getElementById(id);
@@ -3179,7 +3215,7 @@
       clients[idx].currency      = getField('client-form-currency', 'CAD');
       clients[idx].gstNumber     = getField('client-form-gst', '').trim();
       clients[idx].color         = getField('client-color-input', '#3b82f6');
-      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+      _ssSet('roboledger_clients', clients);
       if (UI_STATE.activeClientId === existingId) {
         UI_STATE.activeClientName = name;
         window.updateClientSwitcherUI(clients[idx]);
@@ -3206,7 +3242,7 @@
         accountCount:  0,
       };
       clients.push(newClient);
-      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+      _ssSet('roboledger_clients', clients);
     }
     const overlay = document.getElementById('client-modal-overlay');
     if (overlay) overlay.remove();
@@ -3217,7 +3253,7 @@
 
   // ─── CLIENT SWITCHER ──────────────────────────────────────────────────────────
   window.switchClient = function(clientId) {
-    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const clients = _ssGet('roboledger_clients') || [];
     const client = clients.find(c => c.id === clientId);
     if (!client) { console.error('[CLIENT] Unknown client id:', clientId); return; }
 
@@ -3227,12 +3263,12 @@
     if (UI_STATE.activeClientId) {
       const raw   = window.RoboLedger.Ledger.getRawState();
       const accts = window.RoboLedger.Accounts.getAll();
-      localStorage.setItem('roboledger_v5_data_' + UI_STATE.activeClientId, JSON.stringify({
+      _ssSet('roboledger_v5_data_' + UI_STATE.activeClientId, {
         version: '2.0.0',
         transactions: raw.transactions,
         sigIndex:     raw.sigIndex,
         accounts:     accts,
-      }));
+      });
       console.log(`[CLIENT] Saved ledger for ${UI_STATE.activeClientId}`);
     }
 
@@ -3243,13 +3279,13 @@
     UI_STATE.activeClientId   = clientId;
     UI_STATE.activeClientName = client.name;
     UI_STATE.selectedAccount  = 'ALL';
-    localStorage.setItem('roboledger_active_client', clientId);
+    _ssSet('roboledger_active_client', clientId);
 
     // 3b. Load per-client settings (province, GST, autocat) — overlay onto UI_STATE
-    const _clientSettingsRaw = localStorage.getItem('roboledger_settings_' + clientId);
+    const _clientSettingsRaw = _ssGet('roboledger_settings_' + clientId);
     if (_clientSettingsRaw) {
       try {
-        const _cs = JSON.parse(_clientSettingsRaw);
+        const _cs = (typeof _clientSettingsRaw === 'string') ? JSON.parse(_clientSettingsRaw) : _clientSettingsRaw;
         Object.assign(UI_STATE, _cs);
         console.log(`[CLIENT] Loaded per-client settings for ${clientId}`);
       } catch (e) {
@@ -3263,7 +3299,7 @@
       clients[idx].lastActive   = new Date().toISOString().split('T')[0];
       clients[idx].txCount      = Object.keys(window.RoboLedger.Ledger.getRawState().transactions).length;
       clients[idx].accountCount = window.RoboLedger.Accounts.getAll().length;
-      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+      _ssSet('roboledger_clients', clients);
     }
 
     // 5. Update sidebar UI + navigate to transactions if client has data, else home
@@ -3309,7 +3345,7 @@
   };
 
   window.deleteClient = function(clientId) {
-    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const clients = _ssGet('roboledger_clients') || [];
     const client = clients.find(c => c.id === clientId);
     if (!client) return;
     if (!confirm(`Delete "${client.name}"?\n\nThis will permanently delete all transactions and accounts for this client. This cannot be undone.`)) return;
@@ -3317,15 +3353,15 @@
     if (UI_STATE.activeClientId === clientId) {
       UI_STATE.activeClientId   = null;
       UI_STATE.activeClientName = '';
-      localStorage.removeItem('roboledger_active_client');
+      _ssRemove('roboledger_active_client');
       window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
       window.updateClientSwitcherUI(null);
     }
-    localStorage.removeItem('roboledger_v5_data_' + clientId);
-    localStorage.removeItem('roboledger_settings_' + clientId);
-    localStorage.removeItem('roboledger_files_' + clientId);
+    _ssRemove('roboledger_v5_data_' + clientId);
+    _ssRemove('roboledger_settings_' + clientId);
+    _ssRemove('roboledger_files_' + clientId);
     const updated = clients.filter(c => c.id !== clientId);
-    localStorage.setItem('roboledger_clients', JSON.stringify(updated));
+    _ssSet('roboledger_clients', updated);
     console.log(`[CLIENT] Deleted: ${client.name} (${clientId}) — data, settings & files purged`);
     _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
     setTimeout(() => window.openContextDrawer(), 50);
@@ -3333,21 +3369,21 @@
 
   // ─── CLEAR CLIENT LEDGER (wipe data, keep client profile) ───────────────────
   window.clearClientLedger = function(clientId) {
-    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const clients = _ssGet('roboledger_clients') || [];
     const client  = clients.find(c => c.id === clientId);
     if (!client) return;
 
     const txCount = (() => {
       try {
-        const d = JSON.parse(localStorage.getItem('roboledger_v5_data_' + clientId) || '{}');
+        const d = _ssGet('roboledger_v5_data_' + clientId) || {};
         return Object.keys(d.transactions || {}).length;
       } catch { return 0; }
     })();
 
     if (!confirm(`Clear all data for "${client.name}"?\n\n${txCount} transactions and all accounts will be deleted.\nThe client profile (name, settings) will be kept.\n\nThis cannot be undone.`)) return;
 
-    // Wipe ledger data from localStorage
-    localStorage.removeItem('roboledger_v5_data_' + clientId);
+    // Wipe ledger data from storage
+    _ssRemove('roboledger_v5_data_' + clientId);
 
     // Reset counts on client registry entry
     const idx = clients.findIndex(c => c.id === clientId);
@@ -3355,7 +3391,7 @@
       clients[idx].txCount      = 0;
       clients[idx].accountCount = 0;
       clients[idx].lastActive   = null;
-      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+      _ssSet('roboledger_clients', clients);
     }
 
     // If this is the active client, reset the in-memory ledger too
@@ -3377,15 +3413,15 @@
       if (window.showToast) window.showToast('No active client — nothing to clear', 'warning');
       return;
     }
-    const clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const clients = _ssGet('roboledger_clients') || [];
     const client  = clients.find(c => c.id === UI_STATE.activeClientId);
     const name    = client ? client.name : 'this client';
 
     const txCount = window.RoboLedger.Ledger.getAll().length;
     if (!confirm(`Clear all ${txCount} transactions for ${name}?\n\nAll accounts and transaction data will be deleted. The client profile is kept.\n\nThis cannot be undone.`)) return;
 
-    // Wipe localStorage
-    localStorage.removeItem('roboledger_v5_data_' + UI_STATE.activeClientId);
+    // Wipe storage
+    _ssRemove('roboledger_v5_data_' + UI_STATE.activeClientId);
 
     // Reset registry counts
     const idx = clients.findIndex(c => c.id === UI_STATE.activeClientId);
@@ -3393,7 +3429,7 @@
       clients[idx].txCount      = 0;
       clients[idx].accountCount = 0;
       clients[idx].lastActive   = null;
-      localStorage.setItem('roboledger_clients', JSON.stringify(clients));
+      _ssSet('roboledger_clients', clients);
     }
 
     // Reset in-memory ledger
@@ -3408,8 +3444,8 @@
   // ─── ACCOUNTANT LAYER ────────────────────────────────────────────────────────
 
   function renderAccountantsPage() {
-    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
-    const clients     = JSON.parse(localStorage.getItem('roboledger_clients')     || '[]');
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const clients     = _ssGet('roboledger_clients') || [];
 
     const provinceColors = {
       BC: '#3b82f6', AB: '#f59e0b', ON: '#10b981', QC: '#8b5cf6',
@@ -3450,7 +3486,7 @@
       const accClients    = clients.filter(c => c.accountantId === acc.id);
       const totalTx       = accClients.reduce((sum, c) => {
         try {
-          const d = JSON.parse(localStorage.getItem('roboledger_v5_data_' + c.id) || '{}');
+          const d = _ssGet('roboledger_v5_data_' + c.id) || {};
           return sum + Object.keys(d.transactions || {}).length;
         } catch { return sum; }
       }, 0);
@@ -3532,7 +3568,7 @@
   }
 
   window.openCreateAccountantModal = function(existingId) {
-    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const accountants = _ssGet('roboledger_accountants') || [];
     const existing    = existingId ? accountants.find(a => a.id === existingId) : null;
     const title       = existing ? 'Edit Accountant' : 'New Accountant';
 
@@ -3631,7 +3667,7 @@
     const name   = getVal('acc-form-name');
     if (!name) { alert('Firm / Practice Name is required.'); return; }
 
-    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const accountants = _ssGet('roboledger_accountants') || [];
     const now         = new Date().toISOString();
 
     if (existingId) {
@@ -3670,14 +3706,14 @@
       console.log(`[ACCOUNTANT] Created: ${newAcc.name} (${newAcc.id})`);
     }
 
-    localStorage.setItem('roboledger_accountants', JSON.stringify(accountants));
+    _ssSet('roboledger_accountants', accountants);
     document.getElementById('create-accountant-modal-overlay')?.remove();
     _drawerState.selectedFirmId = null;
     setTimeout(() => window.openContextDrawer(), 50);
   };
 
   window.switchAccountant = function(accountantId) {
-    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const accountants = _ssGet('roboledger_accountants') || [];
     const acc         = accountants.find(a => a.id === accountantId);
     if (!acc) return;
 
@@ -3687,17 +3723,17 @@
     // Clear any active client when switching accountants
     UI_STATE.activeClientId   = null;
     UI_STATE.activeClientName = '';
-    localStorage.removeItem('roboledger_active_client');
+    _ssRemove('roboledger_active_client');
     window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
     window.updateClientSwitcherUI(null);
 
-    localStorage.setItem('roboledger_active_accountant', accountantId);
+    _ssSet('roboledger_active_accountant', accountantId);
 
     // Update lastActive
     const idx = accountants.findIndex(a => a.id === accountantId);
     if (idx !== -1) {
       accountants[idx].lastActive = new Date().toISOString();
-      localStorage.setItem('roboledger_accountants', JSON.stringify(accountants));
+      _ssSet('roboledger_accountants', accountants);
     }
 
     window.updateAccountantSwitcherUI(acc);
@@ -3721,11 +3757,11 @@
   };
 
   window.deleteAccountant = function(accountantId) {
-    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const accountants = _ssGet('roboledger_accountants') || [];
     const acc         = accountants.find(a => a.id === accountantId);
     if (!acc) return;
 
-    const clients     = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const clients     = _ssGet('roboledger_clients') || [];
     const ownedClients = clients.filter(c => c.accountantId === accountantId);
     const clientCount  = ownedClients.length;
 
@@ -3737,16 +3773,16 @@
 
     // Cascade: delete all owned clients' ledger data
     ownedClients.forEach(c => {
-      localStorage.removeItem('roboledger_v5_data_' + c.id);
+      _ssRemove('roboledger_v5_data_' + c.id);
     });
 
     // Remove clients from registry
     const remainingClients = clients.filter(c => c.accountantId !== accountantId);
-    localStorage.setItem('roboledger_clients', JSON.stringify(remainingClients));
+    _ssSet('roboledger_clients', remainingClients);
 
     // Remove accountant
     const remaining = accountants.filter(a => a.id !== accountantId);
-    localStorage.setItem('roboledger_accountants', JSON.stringify(remaining));
+    _ssSet('roboledger_accountants', remaining);
 
     // Clear active state if this was the active accountant
     if (UI_STATE.activeAccountantId === accountantId) {
@@ -3754,8 +3790,8 @@
       UI_STATE.activeAccountantName = '';
       UI_STATE.activeClientId       = null;
       UI_STATE.activeClientName     = '';
-      localStorage.removeItem('roboledger_active_accountant');
-      localStorage.removeItem('roboledger_active_client');
+      _ssRemove('roboledger_active_accountant');
+      _ssRemove('roboledger_active_client');
       window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
       window.updateClientSwitcherUI(null);
       window.updateAccountantSwitcherUI(null);
@@ -3823,8 +3859,8 @@
   window._renderDrawerLeft = function() {
     const container   = document.getElementById('context-drawer-left');
     if (!container) return;
-    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
-    const clients     = JSON.parse(localStorage.getItem('roboledger_clients')     || '[]');
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const clients     = _ssGet('roboledger_clients') || [];
 
     const adminSelected = !_drawerState.selectedFirmId;
 
@@ -3869,8 +3905,8 @@
   window._renderDrawerRight = function(accountantId) {
     const container = document.getElementById('context-drawer-right');
     if (!container) return;
-    const allClients  = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
-    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+    const allClients  = _ssGet('roboledger_clients') || [];
+    const accountants = _ssGet('roboledger_accountants') || [];
     const acc         = accountantId ? accountants.find(a => a.id === accountantId) : null;
 
     const filtered = accountantId
@@ -3902,7 +3938,7 @@
         const initials = (client.name || '?').split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
         const isActive = client.id === UI_STATE.activeClientId;
         const txCount  = (() => {
-          try { const d = JSON.parse(localStorage.getItem('roboledger_v5_data_' + client.id) || '{}'); return Object.keys(d.transactions || {}).length; } catch { return 0; }
+          try { const d = _ssGet('roboledger_v5_data_' + client.id) || {}; return Object.keys(d.transactions || {}).length; } catch { return 0; }
         })();
         return `
           <div class="drawer-client-item ${isActive ? 'active-client' : ''}"
@@ -3937,18 +3973,18 @@
   window._drawerPickClient = function(accountantId, clientId) {
     // If switching to a different firm, set accountant context first
     if (accountantId && accountantId !== UI_STATE.activeAccountantId) {
-      const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
+      const accountants = _ssGet('roboledger_accountants') || [];
       const acc = accountants.find(a => a.id === accountantId);
       if (acc) {
         UI_STATE.activeAccountantId   = accountantId;
         UI_STATE.activeAccountantName = acc.name;
-        localStorage.setItem('roboledger_active_accountant', accountantId);
+        _ssSet('roboledger_active_accountant', accountantId);
         window.updateAccountantSwitcherUI(acc);
       }
     } else if (!accountantId && UI_STATE.activeAccountantId) {
       UI_STATE.activeAccountantId   = null;
       UI_STATE.activeAccountantName = '';
-      localStorage.removeItem('roboledger_active_accountant');
+      _ssRemove('roboledger_active_accountant');
       window.updateAccountantSwitcherUI(null);
     }
     window.closeContextDrawer();
@@ -4557,8 +4593,8 @@
   // Shows aggregate stats across ALL accountants and ALL clients.
   // Visible when no accountant and no client is selected.
   function renderAdminDashboard() {
-    const accountants = JSON.parse(localStorage.getItem('roboledger_accountants') || '[]');
-    const allClients  = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const allClients  = _ssGet('roboledger_clients') || [];
 
     // ── Aggregate stats across ALL clients ─────────────────────────────────
     let totalTxns = 0, totalAccounts = 0, totalUncat = 0, totalRevenue = 0, totalExpenses = 0;
@@ -4569,8 +4605,8 @@
 
     const readClientLedger = (clientId) => {
       try {
-        const raw = localStorage.getItem('roboledger_v5_data_' + clientId);
-        return raw ? JSON.parse(raw) : {};
+        const raw = _ssGet('roboledger_v5_data_' + clientId);
+        return raw || {};
       } catch { return {}; }
     };
 
@@ -4892,7 +4928,7 @@
   // from localStorage without switching context (no loadFromKey calls).
   function renderAccountantPortal() {
     // ── 1. CLIENT LIST ──────────────────────────────────────────────────────
-    let clients = JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
+    let clients = _ssGet('roboledger_clients') || [];
     if (UI_STATE.activeAccountantId) {
       clients = clients.filter(c => c.accountantId === UI_STATE.activeAccountantId);
     }
@@ -4926,8 +4962,8 @@
     const computeStats = (client) => {
       let ledger = {};
       try {
-        const raw = localStorage.getItem('roboledger_v5_data_' + client.id);
-        if (raw) ledger = JSON.parse(raw);
+        const raw = _ssGet('roboledger_v5_data_' + client.id);
+        if (raw) ledger = (typeof raw === 'string') ? JSON.parse(raw) : raw;
       } catch (e) {
         console.warn('[PORTAL] Could not parse ledger for', client.id, e);
       }
@@ -4985,9 +5021,9 @@
     const _fmtPortal = (n) => n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
     clients.forEach(client => {
       try {
-        const raw = localStorage.getItem('roboledger_v5_data_' + client.id);
+        const raw = _ssGet('roboledger_v5_data_' + client.id);
         if (!raw) return;
-        const ledger = JSON.parse(raw);
+        const ledger = (typeof raw === 'string') ? JSON.parse(raw) : raw;
         Object.values(ledger.transactions || {}).forEach(t => {
           const code = parseInt(t.category) || 0;
           const debit  = parseFloat(t.debit)  || 0;
@@ -6359,7 +6395,17 @@
   // Clean up empty accounts on initialization (prevents hangover accounts)
   cleanupEmptyAccounts();
 
-  if (typeof init === 'function') init();
+  // Initialize StorageService (IndexedDB + cache) BEFORE app init
+  (async () => {
+    try {
+      if (window.StorageService?.init) {
+        await window.StorageService.init();
+      }
+    } catch (e) {
+      console.warn('[APP] StorageService init failed, falling back to localStorage', e);
+    }
+    if (typeof init === 'function') init();
+  })();
 })();
 
 

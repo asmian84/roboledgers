@@ -27,12 +27,14 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
     // Reset GST drill when transaction changes
     useEffect(() => { setGstDrill(null); }, [transaction?.tx_id]);
 
-    // Load receipts from localStorage when transaction changes
+    // Load receipts from storage when transaction changes
     useEffect(() => {
         if (!transaction?.tx_id) { setReceipts([]); return; }
         try {
-            const stored = localStorage.getItem(`rl_receipts_${transaction.tx_id}`);
-            setReceipts(stored ? JSON.parse(stored) : []);
+            const _SS = window.StorageService;
+            const stored = _SS ? _SS.get(`rl_receipts_${transaction.tx_id}`) : localStorage.getItem(`rl_receipts_${transaction.tx_id}`);
+            if (!stored) { setReceipts([]); return; }
+            setReceipts((typeof stored === 'string') ? JSON.parse(stored) : stored);
         } catch { setReceipts([]); }
     }, [transaction?.tx_id]);
 
@@ -128,9 +130,11 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
             setReceipts(prev => {
                 const updated = [...prev, ...newReceipts];
                 try {
-                    localStorage.setItem(`rl_receipts_${transaction.tx_id}`, JSON.stringify(updated));
+                    const _SS = window.StorageService;
+                    if (_SS) { _SS.set(`rl_receipts_${transaction.tx_id}`, updated); }
+                    else { localStorage.setItem(`rl_receipts_${transaction.tx_id}`, JSON.stringify(updated)); }
                 } catch (err) {
-                    console.warn('[AuditSidebar] Could not persist receipts to localStorage:', err);
+                    console.warn('[AuditSidebar] Could not persist receipts:', err);
                 }
                 return updated;
             });
@@ -144,7 +148,9 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
         setReceipts(prev => {
             const updated = prev.filter((_, i) => i !== idx);
             try {
-                localStorage.setItem(`rl_receipts_${transaction.tx_id}`, JSON.stringify(updated));
+                const _SS = window.StorageService;
+                if (_SS) { _SS.set(`rl_receipts_${transaction.tx_id}`, updated); }
+                else { localStorage.setItem(`rl_receipts_${transaction.tx_id}`, JSON.stringify(updated)); }
             } catch { /* ignore */ }
             return updated;
         });
