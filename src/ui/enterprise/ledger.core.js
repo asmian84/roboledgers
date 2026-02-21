@@ -1387,8 +1387,9 @@ window.RoboLedger = (function () {
                 if (acc.name === 'GENERIC PARSER' && acc.transit === 'UNKNOWN') return false;
                 // Must have a real, non-empty name (not placeholder junk)
                 if (!acc.name || acc.name.trim() === '' || acc.name === 'New Account') return false;
-                // Must not be a fallback placeholder (Bank - Chequing #0000)
-                if (acc.name.endsWith('#0000') && (!acc.accountNumber || acc.accountNumber === '-----')) return false;
+                // Must not have a placeholder account number suffix (#0000, #XXXX, #----)
+                const suffixMatch = acc.name.match(/#([A-Z0-9\-]+)$/i);
+                if (suffixMatch && /^[X\-0]+$/i.test(suffixMatch[1])) return false;
                 return true;
             });
         },
@@ -1516,8 +1517,8 @@ window.RoboLedger = (function () {
             };
             const bankShort = bankShortNames[acc.bankName] || acc.bankName || metadata.name || 'Bank';
             const rawLast4 = acc.accountNumber?.replace(/[-\s]/g, '')?.slice(-4);
-            // Only use last4 if it's a real account number (not all dashes/zeros)
-            const last4 = (rawLast4 && rawLast4 !== '----' && rawLast4 !== '0000' && rawLast4.length === 4) ? rawLast4 : null;
+            // Only use last4 if it's a real account number (not placeholders like XXXX, ----, 0000)
+            const last4 = (rawLast4 && rawLast4.length === 4 && !/^[X\-0]+$/i.test(rawLast4)) ? rawLast4 : null;
 
             if (acc.brand || acc.cardNetwork) {
                 // Credit Card
@@ -1992,9 +1993,22 @@ window.RoboLedger = (function () {
                 const cardNum = (metadata._acct || metadata.accountNumber || "").replace(/\D/g, "");
                 if (cardNum.length >= 4) {
                     const last4 = cardNum.slice(-4);
-                    const brand = (tag.includes("MASTERCARD") || tag.includes("MC")) ? "MC" : "VISA";
-                    return `CC-${brand}-${last4}`;
+                    // Reject placeholder digits (all zeros)
+                    if (!/^0+$/.test(last4)) {
+                        const brand = (tag.includes("MASTERCARD") || tag.includes("MC")) ? "MC" : "VISA";
+                        return `CC-${brand}-${last4}`;
+                    }
                 }
+                // Card number was all X's / masked — try to find an existing CC account to merge into
+                const brand = (tag.includes("MASTERCARD") || tag.includes("MC")) ? "MC" : "VISA";
+                const existingCC = state.accounts.find(a => a.id && a.id.startsWith(`CC-${brand}-`) && a.id !== `CC-${brand}-0000`);
+                if (existingCC) {
+                    console.log(`[INGEST] Merging masked CC into existing account: ${existingCC.id}`);
+                    return existingCC.id;
+                }
+                // No existing CC — use bank+brand as ID (will be a unique but real account)
+                const bankTag = (metadata.bankName || metadata._bank || 'CC').toUpperCase().substring(0, 4);
+                return `CC-${brand}-${bankTag}-${Date.now()}`;
             }
             // Amex: Check both tag AND cardNetwork (tag may be "Platinum" not "Amex")
             if (tag.includes("AMEX") || tag.includes("AMERICAN EXPRESS") ||
@@ -2002,7 +2016,15 @@ window.RoboLedger = (function () {
                 const cardNum = (metadata._acct || metadata.accountNumber || "").replace(/\D/g, "");
                 if (cardNum.length >= 4) {
                     const last4 = cardNum.slice(-4);
-                    return `CC-AMEX-${last4}`;
+                    if (!/^0+$/.test(last4)) {
+                        return `CC-AMEX-${last4}`;
+                    }
+                }
+                // Masked Amex — try to merge into existing
+                const existingAmex = state.accounts.find(a => a.id && a.id.startsWith('CC-AMEX-') && !/^CC-AMEX-0+$/.test(a.id));
+                if (existingAmex) {
+                    console.log(`[INGEST] Merging masked AMEX into existing account: ${existingAmex.id}`);
+                    return existingAmex.id;
                 }
             }
 
