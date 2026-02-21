@@ -52,6 +52,14 @@ const HomePage = () => {
                 // Find last import date
                 const dates = accTxns.map(t => t.date).filter(Boolean).sort();
                 const lastDate = dates.length > 0 ? dates[dates.length - 1] : null;
+                // Resolve icon based on account type
+                const brand = (acc.brand || acc.cardNetwork || '').toUpperCase();
+                let accIcon = 'ph-bank', accIconBg = 'bg-indigo-100', accIconColor = 'text-indigo-600';
+                if (brand.includes('VISA') || brand.includes('MC') || brand.includes('MASTERCARD') || brand.includes('AMEX') || acc.accountType === 'CreditCard') {
+                    accIcon = 'ph-credit-card'; accIconBg = 'bg-purple-100'; accIconColor = 'text-purple-600';
+                } else if (acc.accountType === 'SAVINGS') {
+                    accIcon = 'ph-piggy-bank'; accIconBg = 'bg-emerald-100'; accIconColor = 'text-emerald-600';
+                }
                 return {
                     id: acc.id,
                     name: acc.name || acc.id,
@@ -59,6 +67,7 @@ const HomePage = () => {
                     txCount: accTxns.length,
                     balance,
                     lastDate,
+                    accIcon, accIconBg, accIconColor,
                 };
             });
 
@@ -432,8 +441,8 @@ const HomePage = () => {
                                     <div className="space-y-2.5">
                                         {stats.accountSummaries.map(acc => (
                                             <div key={acc.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                                                <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
-                                                    <i className="ph ph-bank text-indigo-600 text-sm"></i>
+                                                <div className={`w-8 h-8 rounded-lg ${acc.accIconBg || 'bg-indigo-100'} flex items-center justify-center shrink-0`}>
+                                                    <i className={`ph ${acc.accIcon || 'ph-bank'} ${acc.accIconColor || 'text-indigo-600'} text-sm`}></i>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-[11px] font-semibold text-slate-800 truncate">{acc.name}</div>
