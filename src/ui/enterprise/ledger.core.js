@@ -966,7 +966,10 @@ window.RoboLedger = (function () {
             const runBalances = { ...startingBalances };
 
             return raw.map((tx) => {
-                const accId = tx.account_id || 'ACC-001';
+                // Use the actual account_id — never fall back to a fake placeholder.
+                // Transactions without an account_id are orphans and will simply
+                // get a standalone running balance bucket keyed by '' (harmless).
+                const accId = tx.account_id || '';
 
                 // Initialize if not exists (defensive)
                 if (runBalances[accId] === undefined) runBalances[accId] = 0;
@@ -1190,6 +1193,11 @@ window.RoboLedger = (function () {
         },
 
         createManual: function (account_id) {
+            // Never create transactions under a placeholder account
+            if (!account_id || account_id === 'ACC-001') {
+                const firstActive = Accounts.getActive()?.[0];
+                account_id = firstActive?.id || (state.accounts[0]?.id) || account_id;
+            }
             const tx_id = crypto.randomUUID();
             const tx = {
                 tx_id,
@@ -1283,10 +1291,13 @@ window.RoboLedger = (function () {
             lines.forEach((line, i) => {
                 const tx_id = crypto.randomUUID();
                 const amount = line.debit > 0 ? line.debit : line.credit;
+
+                // Use the first real account with transactions, never a placeholder ID.
+                const fallbackAccId = Accounts.getActive()?.[0]?.id || (state.accounts[0]?.id) || 'JOURNAL';
                 const tx = {
                     tx_id,
                     client_id: activeClient,
-                    account_id: line.account_id || 'ACC-001',
+                    account_id: line.account_id && line.account_id !== 'ACC-001' ? line.account_id : fallbackAccId,
                     ref: `${type}-${entryId}`,
                     date: entryDate,
                     raw_description: description,
@@ -1297,8 +1308,8 @@ window.RoboLedger = (function () {
                     currency: 'CAD',
                     polarity: line.debit > 0 ? Polarity.DEBIT : Polarity.CREDIT,
                     status: TransactionStatus.CONFIRMED,
-                    category: line.account_code || '',
-                    category_name: line.account_name || '',
+                    category: line.account_code || '9970',
+                    category_name: line.account_name || 'Uncategorized',
                     category_source: 'journal_entry',
                     confidence: 1.0,
                     journal_entry_id: entryId,
@@ -1374,6 +1385,10 @@ window.RoboLedger = (function () {
                 if (!txnCounts[acc.id]) return false;
                 // Must not be a pure GENERIC PARSER ghost
                 if (acc.name === 'GENERIC PARSER' && acc.transit === 'UNKNOWN') return false;
+                // Must have a real, non-empty name (not placeholder junk)
+                if (!acc.name || acc.name.trim() === '' || acc.name === 'New Account') return false;
+                // Must not be a fallback placeholder (Bank - Chequing #0000)
+                if (acc.name.endsWith('#0000') && (!acc.accountNumber || acc.accountNumber === '-----')) return false;
                 return true;
             });
         },
@@ -1389,10 +1404,16 @@ window.RoboLedger = (function () {
             const before = state.accounts.length;
             state.accounts = state.accounts.filter(acc => {
                 const hasTransactions = !!txnCounts[acc.id];
+                const hasValidName = acc.name && acc.name.trim() !== '' && acc.name !== 'New Account';
                 if (!hasTransactions) {
-                    console.log(`[ACCOUNTS] 🗑 Pruned ghost account: ${acc.id} — ${acc.name}`);
+                    console.log(`[ACCOUNTS] 🗑 Pruned ghost account (0 txns): ${acc.id} — ${acc.name}`);
+                    return false;
                 }
-                return hasTransactions;
+                if (!hasValidName) {
+                    console.log(`[ACCOUNTS] 🗑 Pruned blank-name account: ${acc.id} — "${acc.name}"`);
+                    return false;
+                }
+                return true;
             });
             const pruned = before - state.accounts.length;
             if (pruned > 0) save();
@@ -1494,17 +1515,19 @@ window.RoboLedger = (function () {
                 'The Bank of Nova Scotia': 'Scotia'
             };
             const bankShort = bankShortNames[acc.bankName] || acc.bankName || metadata.name || 'Bank';
-            const last4 = acc.accountNumber?.slice(-4) || '0000';
+            const rawLast4 = acc.accountNumber?.replace(/[-\s]/g, '')?.slice(-4);
+            // Only use last4 if it's a real account number (not all dashes/zeros)
+            const last4 = (rawLast4 && rawLast4 !== '----' && rawLast4 !== '0000' && rawLast4.length === 4) ? rawLast4 : null;
 
             if (acc.brand || acc.cardNetwork) {
                 // Credit Card
                 const brand = (acc.brand || acc.cardNetwork).split(' ')[0]; // "MASTERCARD" -> "MASTERCARD"
                 const brandShort = brand === 'MASTERCARD' ? 'MC' : brand;
-                acc.name = `${bankShort} - ${brandShort} #${last4}`;
+                acc.name = last4 ? `${bankShort} - ${brandShort} #${last4}` : `${bankShort} - ${brandShort}`;
             } else {
                 // Bank Account
                 const typeShort = acc.accountType === 'SAVINGS' ? 'Savings' : 'Chequing';
-                acc.name = `${bankShort} - ${typeShort} #${last4}`;
+                acc.name = last4 ? `${bankShort} - ${typeShort} #${last4}` : `${bankShort} - ${typeShort}`;
             }
 
             save();
@@ -1998,8 +2021,9 @@ window.RoboLedger = (function () {
                 return `BANK-${metadata.transit}-${last4}`;
             }
 
-            // Fallback: timestamp-based ID
-            return `ACC-${Date.now()}`;
+            // Fallback: Use bank name + timestamp for traceability (never bare ACC-xxx)
+            const bankTag = (metadata.bankName || metadata._bank || metadata.name || 'UNKNOWN').replace(/\s+/g, '').substring(0, 6).toUpperCase();
+            return `${bankTag}-${Date.now()}`;
         },
 
         processUpload: async function (file, account_id) {
@@ -2243,6 +2267,8 @@ window.RoboLedger = (function () {
                 }
 
                 if (!date || isNaN(amount)) continue;
+                // Skip transactions with no description (parser junk / empty lines)
+                if (!raw_description || raw_description.trim() === '') continue;
 
                 // CLEAN THE NAME
                 const clean_description = Brain.cleanDescription(raw_description);

@@ -31,7 +31,7 @@ class ReportGenerator {
                 const leadsheet = this.coa.getLeadsheet ? this.coa.getLeadsheet(category) : null;
                 accountBalances[category] = {
                     code: category,
-                    name: category === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name || `Account ${category}`),
+                    name: category === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name && account.name.trim() !== '' ? account.name : `Account ${category}`),
                     leadsheet: leadsheet || '',
                     root: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(category) : ''),
                     debit: 0,
@@ -59,7 +59,7 @@ class ReportGenerator {
 
                     accountBalances[gstAccount] = {
                         code: gstAccount,
-                        name: account?.name || `GST Account ${gstAccount}`,
+                        name: (account?.name && account.name.trim()) || `GST Account ${gstAccount}`,
                         debit: 0,
                         credit: 0,
                         balance: 0
@@ -210,7 +210,7 @@ class ReportGenerator {
         return {
             account: {
                 code: coaCode,
-                name: account?.name || `Account ${coaCode}`,
+                name: (account?.name && account.name.trim()) || `Account ${coaCode}`,
                 type: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(coaCode) : 'EXPENSE')
             },
             transactions: enriched,
@@ -352,7 +352,7 @@ class ReportGenerator {
                 const account = this.coa.get(String(tx.category)) || this.coa.get(parseInt(tx.category));
                 summary[tx.category] = {
                     code: tx.category,
-                    name: account?.name || `Account ${tx.category}`,
+                    name: (account?.name && account.name.trim()) || `Account ${tx.category}`,
                     type: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(tx.category) : 'EXPENSE'),
                     count: 0,
                     debit: 0,
@@ -823,7 +823,7 @@ class ReportGenerator {
 
         return {
             accountId,
-            accountName: account?.name || accountId,
+            accountName: (account?.name && account.name.trim()) || accountId,
             asOfDate,
             bankBalance: bankBalance || 0,
             bookBalance,

@@ -94,12 +94,17 @@ export function AJEReport() {
             return;
         }
 
+        // Use the first real active account — the ledger engine will also
+        // validate and refuse to use ACC-001 placeholders.
+        const activeAccounts = window.RoboLedger?.Accounts?.getActive?.() || [];
+        const defaultAccountId = activeAccounts[0]?.id || 'JOURNAL';
+
         const result = ledger.createJournalEntry(
             description.trim(),
             validLines.map(l => ({
                 account_code: l.account_code,
                 account_name: l.account_name,
-                account_id: 'ACC-001', // Default account
+                account_id: defaultAccountId,
                 debit: parseFloat(l.debit) || 0,
                 credit: parseFloat(l.credit) || 0,
             })),
