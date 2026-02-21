@@ -541,15 +541,29 @@ window.updateUtilityBar = function () {
 
     if (activeAccounts.length > 0) {
         const accountColors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
+
+        // Resolve icon class for account type
+        function _accIcon(acc) {
+            const brand = (acc.brand || acc.cardNetwork || '').toUpperCase();
+            if (brand.includes('VISA'))       return 'ph-credit-card';
+            if (brand.includes('MC') || brand.includes('MASTERCARD')) return 'ph-credit-card';
+            if (brand.includes('AMEX'))       return 'ph-credit-card';
+            if (acc.accountType === 'CreditCard') return 'ph-credit-card';
+            if (acc.accountType === 'SAVINGS') return 'ph-piggy-bank';
+            return 'ph-bank';  // Chequing / default
+        }
+
         badgesContainer.innerHTML = activeAccounts.slice(0, 8).map((acc, idx) => {
             const txCount = allTxns.filter(t => t.account_id === acc.id).length;
-            const label = acc.ref || acc.id;
+            const label = acc.ref || acc.name || acc.id;
+            const icon = _accIcon(acc);
+            const color = accountColors[idx % accountColors.length];
             return `<div
               class="utility-badge"
-              style="background:${accountColors[idx % accountColors.length]};cursor:pointer;"
-              title="${label} · ${txCount} txns — click to drill"
+              style="background:${color};cursor:pointer;display:flex;align-items:center;gap:5px;"
+              title="${acc.name || label} · ${txCount} txns — click to drill"
               onclick="window.ubDrillAccount('${acc.id}','${label.replace(/'/g, "\\'")}')"
-            >${label}</div>`;
+            ><i class="ph ${icon}" style="font-size:12px;flex-shrink:0;"></i>${label}</div>`;
         }).join('');
     } else {
         badgesContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:11px;">No active accounts</div>';
