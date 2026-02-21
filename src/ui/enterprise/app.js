@@ -4031,9 +4031,23 @@
       html += `
         <div class="drawer-firm-item ${sel ? 'selected' : ''}"
              onclick="window._drawerSelectFirm('${acc.id}')"
-             style="${sel ? `border-left:3px solid ${color};background:${color}18;` : ''}">
+             style="${sel ? `border-left:3px solid ${color};background:${color}18;` : ''}display:flex;align-items:center;gap:8px;">
           <div class="drawer-firm-avatar" style="background:${color};">${initials}</div>
-          <span class="drawer-firm-name" style="${sel ? `color:${color};` : ''}">${acc.name}</span>
+          <span class="drawer-firm-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${sel ? `color:${color};` : ''}">${acc.name}</span>
+          <div style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation();">
+            <button onclick="window.closeContextDrawer();setTimeout(()=>window.openEditAccountantModal('${acc.id}'),50);"
+                    title="Edit firm"
+                    style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                    onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">
+              <i class="ph ph-pencil"></i>
+            </button>
+            <button onclick="window.closeContextDrawer();setTimeout(()=>window.deleteAccountant('${acc.id}'),50);"
+                    title="Delete firm"
+                    style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                    onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
+              <i class="ph ph-trash"></i>
+            </button>
+          </div>
           <span class="drawer-firm-count">${count}</span>
         </div>`;
     });
@@ -4094,6 +4108,20 @@
             <div style="flex:1;min-width:0;">
               <div class="drawer-client-name">${client.name}</div>
               <div class="drawer-client-meta">${client.industry || ''} ${txCount ? '· ' + txCount.toLocaleString() + ' txns' : ''}</div>
+            </div>
+            <div style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation();">
+              <button onclick="window.closeContextDrawer();setTimeout(()=>window.openEditClientModal('${client.id}'),50);"
+                      title="Edit client"
+                      style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                      onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">
+                <i class="ph ph-pencil"></i>
+              </button>
+              ${!isActive ? `<button onclick="window.closeContextDrawer();setTimeout(()=>window.deleteClient('${client.id}'),50);"
+                      title="Delete client"
+                      style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                      onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
+                <i class="ph ph-trash"></i>
+              </button>` : ''}
             </div>
             ${isActive ? '<span class="drawer-client-active-badge">Active</span>' : ''}
           </div>`;
