@@ -445,60 +445,126 @@ window.RoboLedger = (function () {
             // This pass runs on every load — idempotent and cheap.
             // NOTE: Accounts object is defined later in the file but is already
             // available at runtime when loadFromKey() is called.
-            let _coaNameSynced = 0;
-            let _coaCodesAssigned = 0;
-            for (const acc of state.accounts) {
-                // ── Step 1: Rebuild acc.name if bankName disagrees with current name ──
-                if (acc.bankName && acc.name) {
-                    const bankShortLookup = {
-                        'Royal Bank of Canada': 'RBC', 'RBC Royal Bank': 'RBC', 'RBC': 'RBC',
-                        'Toronto-Dominion Bank': 'TD', 'TD Canada Trust': 'TD', 'TD': 'TD',
-                        'Canadian Imperial Bank of Commerce': 'CIBC', 'CIBC': 'CIBC',
-                        'Bank of Montreal': 'BMO', 'BMO Bank of Montreal': 'BMO', 'BMO': 'BMO',
-                        'Scotiabank': 'Scotia', 'The Bank of Nova Scotia': 'Scotia',
-                        'ATB Financial': 'ATB', 'ATB': 'ATB', 'HSBC': 'HSBC'
-                    };
-                    const instCodeMap = { '003': 'RBC', '001': 'BMO', '004': 'TD', '002': 'Scotia', '010': 'CIBC', '016': 'HSBC' };
-                    const expectedBank = bankShortLookup[acc.bankName] || acc.bankName || instCodeMap[acc.inst] || '';
-                    // Check if the name starts with the right bank abbreviation
-                    if (expectedBank && !acc.name.toLowerCase().startsWith(expectedBank.toLowerCase())) {
-                        const rebuilt = Accounts._buildCleanAccountName(acc);
-                        if (rebuilt && rebuilt !== acc.name && !rebuilt.startsWith('Bank -')) {
-                            console.log(`[ACCOUNTS] Rebuilt stale name for ${acc.id}: "${acc.name}" → "${rebuilt}"`);
-                            acc.name = rebuilt;
+            // ── MIGRATION: Rebuild names, backfill COA codes, sync COA names ──
+            // All logic is INLINED here — no calls to Accounts.* which may not
+            // be defined yet depending on when loadFromKey() is invoked.
+            try {
+                const _instToBank = { '003': 'RBC', '001': 'BMO', '004': 'TD', '002': 'Scotia', '010': 'CIBC', '016': 'HSBC' };
+                const _bankShort = {
+                    'Royal Bank of Canada': 'RBC', 'RBC Royal Bank': 'RBC', 'RBC': 'RBC',
+                    'Toronto-Dominion Bank': 'TD', 'TD Canada Trust': 'TD', 'TD': 'TD',
+                    'Canadian Imperial Bank of Commerce': 'CIBC', 'CIBC': 'CIBC',
+                    'Bank of Montreal': 'BMO', 'BMO Bank of Montreal': 'BMO', 'BMO': 'BMO',
+                    'Scotiabank': 'Scotia', 'The Bank of Nova Scotia': 'Scotia',
+                    'ATB Financial': 'ATB', 'ATB': 'ATB', 'HSBC': 'HSBC',
+                    'American Express': 'Amex', 'Unknown Bank': ''
+                };
+                let _migDirty = false;
+
+                for (const acc of state.accounts) {
+                    // Step 0: Backfill bankName from inst code
+                    if (!acc.bankName && acc.inst && _instToBank[acc.inst]) {
+                        acc.bankName = _instToBank[acc.inst];
+                        _migDirty = true;
+                    }
+
+                    // Step 1: Rebuild acc.name from metadata (fully inlined)
+                    const _raw = acc.bankName || '';
+                    const _isGen = _raw.includes('GENERIC PARSER') || _raw === 'Unknown Bank';
+                    const _safe = _isGen ? '' : _raw;
+                    const _bk = _bankShort[_safe] || _safe || _instToBank[acc.inst] || '';
+                    if (_bk) {
+                        const _l4r = acc.accountNumber?.replace(/[-\s]/g, '')?.slice(-4);
+                        const _l4 = (_l4r && _l4r.length === 4 && !/^[X\-0]+$/i.test(_l4r)) ? _l4r : null;
+                        let _newName;
+                        if (acc.brand || acc.cardNetwork) {
+                            const _br = (acc.brand || acc.cardNetwork || '').toUpperCase();
+                            const _bs = _br.includes('MASTERCARD') ? 'MC' : _br.includes('VISA') ? 'Visa' : _br.includes('AMEX') ? 'Amex' : _br;
+                            _newName = _l4 ? `${_bk} - ${_bs} #${_l4}` : `${_bk} - ${_bs}`;
+                        } else {
+                            const _tu = (acc.accountType || '').toUpperCase();
+                            let _ts;
+                            if (_tu === 'SAVINGS') _ts = 'Savings';
+                            else if (_tu === 'LOC' || _tu === 'LINE_OF_CREDIT') _ts = 'Line of Credit';
+                            else if (_tu === 'MORTGAGE') _ts = 'Mortgage';
+                            else if (_tu === 'LOAN' || _tu === 'BANK_LOAN') _ts = 'Loan';
+                            else if (_tu === 'FINANCE_CONTRACT') _ts = 'Finance Contract';
+                            else if (_tu === 'USD' || _tu === 'FOREIGN' || (acc.currency && acc.currency !== 'CAD')) _ts = 'USD Account';
+                            else _ts = 'Chequing';
+                            _newName = _l4 ? `${_bk} - ${_ts} #${_l4}` : `${_bk} - ${_ts}`;
+                        }
+                        if (_newName && _newName !== acc.name) {
+                            console.log(`[MIGRATE] Rebuilt name for ${acc.id}: "${acc.name}" → "${_newName}"`);
+                            acc.name = _newName;
+                            _migDirty = true;
+                        }
+                    }
+
+                    // Step 2: Assign COA code if missing (inlined _assignCOACode logic)
+                    if (!acc.coaCode) {
+                        const _type = (acc.accountType || '').toUpperCase();
+                        const _nm = (acc.name || '').toUpperCase();
+                        const _isCC = _type === 'CREDITCARD' || acc.brand || acc.cardNetwork;
+                        const _isSav = _type === 'SAVINGS' || _nm.includes('SAVINGS');
+                        const _isUSD = _type === 'USD' || _type === 'FOREIGN' || (acc.currency && acc.currency !== 'CAD');
+                        const _isLOC = _type === 'LOC' || _type === 'LINE_OF_CREDIT' || _nm.includes('LINE OF CREDIT');
+                        const _isLoan = _type === 'LOAN' || _type === 'BANK_LOAN' || _nm.includes('BANK LOAN');
+                        const _isMtg = _type === 'MORTGAGE' || _nm.includes('MORTGAGE');
+                        const _isFin = _type === 'FINANCE_CONTRACT' || _nm.includes('FINANCE CONTRACT');
+
+                        let _rs, _re, _rt, _ls, _sg, _mp;
+                        if (_isCC)       { _rs = 2101; _re = 2118; _rt = 'LIABILITY'; _ls = 'BB'; _sg = 'Credit'; _mp = 215; }
+                        else if (_isLOC) { _rs = 2010; _re = 2039; _rt = 'LIABILITY'; _ls = 'AA'; _sg = 'Credit'; _mp = 213; }
+                        else if (_isMtg) { _rs = 2800; _re = 2830; _rt = 'LIABILITY'; _ls = 'KK'; _sg = 'Credit'; _mp = '231.3141.01'; }
+                        else if (_isLoan){ _rs = 2710; _re = 2724; _rt = 'LIABILITY'; _ls = 'KK'; _sg = 'Credit'; _mp = '231.3140.01'; }
+                        else if (_isFin) { _rs = 2850; _re = 2880; _rt = 'LIABILITY'; _ls = 'KK'; _sg = 'Credit'; _mp = '231.3140.51'; }
+                        else if (_isSav) { _rs = 1035; _re = 1040; _rt = 'ASSET'; _ls = 'A'; _sg = 'Debit'; _mp = 111; }
+                        else if (_isUSD) { _rs = 1030; _re = 1034; _rt = 'ASSET'; _ls = 'A'; _sg = 'Debit'; _mp = 111; }
+                        else             { _rs = 1000; _re = 1029; _rt = 'ASSET'; _ls = 'A'; _sg = 'Debit'; _mp = 111; }
+
+                        for (let _c = _rs; _c <= _re; _c++) {
+                            const _cs = String(_c);
+                            const _ex = state.coa[_cs];
+                            if (!_ex) {
+                                // Empty slot — create it
+                                state.coa[_cs] = {
+                                    code: _cs, name: acc.name || 'New Account', root: _rt,
+                                    leadsheet: _ls, sign: _sg, type: 'Balance sheet',
+                                    ls: _ls, mapNo: _mp, balance: 0, sourceAccountId: acc.id
+                                };
+                                acc.coaCode = _cs;
+                                console.log(`[MIGRATE] Assigned COA ${_cs} to ${acc.id} (${acc.name})`);
+                                _migDirty = true;
+                                break;
+                            }
+                            if (_ex.sourceAccountId) continue; // Already claimed
+                            if (_ex.leadsheet === _ls) {
+                                // Unclaimed template with matching L/S — claim it
+                                _ex.name = acc.name || 'New Account';
+                                _ex.sourceAccountId = acc.id;
+                                acc.coaCode = _cs;
+                                console.log(`[MIGRATE] Claimed COA ${_cs} for ${acc.id} (${acc.name})`);
+                                _migDirty = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Step 3: Sync COA entry name to acc.name
+                    if (acc.coaCode && acc.name && state.coa[acc.coaCode]) {
+                        if (state.coa[acc.coaCode].name !== acc.name) {
+                            console.log(`[MIGRATE] COA name: ${acc.coaCode} "${state.coa[acc.coaCode].name}" → "${acc.name}"`);
+                            state.coa[acc.coaCode].name = acc.name;
+                            _migDirty = true;
                         }
                     }
                 }
-
-                // ── Step 2: Assign COA code if missing ──
-                // Accounts created before COA auto-assignment was added have no coaCode.
-                // Assign one now so they appear in the Trial Balance.
-                if (!acc.coaCode) {
-                    Accounts._assignCOACode(acc);
-                    if (acc.coaCode) {
-                        _coaCodesAssigned++;
-                        console.log(`[COA] Backfill: assigned ${acc.coaCode} to account ${acc.id} (${acc.name})`);
-                    }
+                if (_migDirty) {
+                    save();
+                    console.log('[MIGRATE] Account names + COA entries synced and saved');
                 }
-
-                // ── Step 3: Sync COA entry name to acc.name ──
-                if (acc.coaCode && acc.name && state.coa[acc.coaCode]) {
-                    const coaEntry = state.coa[acc.coaCode];
-                    if (coaEntry.name !== acc.name) {
-                        console.log(`[COA] Migrate name: ${acc.coaCode} "${coaEntry.name}" → "${acc.name}"`);
-                        coaEntry.name = acc.name;
-                        _coaNameSynced++;
-                    }
-                }
-            }
-            if (_coaCodesAssigned > 0) {
-                console.log(`[COA] Backfilled ${_coaCodesAssigned} missing COA codes`);
-            }
-            if (_coaNameSynced > 0) {
-                console.log(`[COA] Synced ${_coaNameSynced} COA entry names to match account names`);
-            }
-            if (_coaCodesAssigned > 0 || _coaNameSynced > 0) {
-                save();
+            } catch (migErr) {
+                console.error('[MIGRATE] Migration error (non-fatal):', migErr);
             }
 
             if (window.RuleEngine?.updateTransactionContext) {

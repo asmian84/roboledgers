@@ -61,54 +61,80 @@ class ReportGenerator {
         // Aggregate by account
         const accountBalances = {};
 
-        transactions.forEach(tx => {
-            // Use category if set, otherwise use uncategorized code
-            const category = tx.category || UNCATEGORIZED_CODE;
-
-            if (!accountBalances[category]) {
-                // Ensure category is string for COA lookup (try both string and numeric)
-                const account = this.coa.get(String(category)) || this.coa.get(parseInt(category));
-                const leadsheet = this.coa.getLeadsheet ? this.coa.getLeadsheet(category) : null;
-                accountBalances[category] = {
-                    code: category,
-                    name: category === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name && account.name.trim() !== '' ? account.name : `Account ${category}`),
+        // Helper: ensure a COA bucket exists in accountBalances
+        const ensureBucket = (code) => {
+            if (!accountBalances[code]) {
+                const account = this.coa.get(String(code)) || this.coa.get(parseInt(code));
+                const leadsheet = this.coa.getLeadsheet ? this.coa.getLeadsheet(code) : null;
+                accountBalances[code] = {
+                    code,
+                    name: code === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name && account.name.trim() !== '' ? account.name : `Account ${code}`),
                     leadsheet: leadsheet || '',
-                    root: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(category) : ''),
+                    root: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(code) : ''),
                     debit: 0,
                     credit: 0,
                     balance: 0
                 };
             }
+        };
+
+        // Pre-build account_id → coaCode lookup for contra entries.
+        // Each imported bank/CC account is linked to a COA code via coaCode.
+        // We use the Accounts service (exposed on window.RoboLedger) to get all accounts.
+        const acctCoaMap = {};
+        const allAccounts = window.RoboLedger?.Accounts?.getAll?.() || [];
+        for (const acct of allAccounts) {
+            if (acct.id && acct.coaCode) {
+                acctCoaMap[acct.id] = acct.coaCode;
+            }
+        }
+
+        transactions.forEach(tx => {
+            // Use category if set, otherwise use uncategorized code
+            const category = tx.category || UNCATEGORIZED_CODE;
+            ensureBucket(category);
 
             // Use amount_cents + polarity (the actual transaction schema)
             const amount = (tx.amount_cents || 0) / 100;
             const effPolarity = this._effectivePolarity(tx);
 
+            // ─── Side 1: Category account (expense/revenue/etc.) ───
             if (effPolarity === 'DEBIT') {
                 accountBalances[category].debit += amount;
             } else if (effPolarity === 'CREDIT') {
                 accountBalances[category].credit += amount;
             }
 
+            // ─── Side 2: Source bank/CC account (contra entry) ───
+            // Double-entry: every transaction hits two accounts.
+            // The source account (CHQ, SAV, CC) gets the opposite side.
+            const sourceCoaCode = acctCoaMap[tx.account_id];
+            if (sourceCoaCode && sourceCoaCode !== category) {
+                ensureBucket(sourceCoaCode);
+                // Contra = opposite of the category side
+                if (effPolarity === 'DEBIT') {
+                    accountBalances[sourceCoaCode].credit += amount;
+                } else if (effPolarity === 'CREDIT') {
+                    accountBalances[sourceCoaCode].debit += amount;
+                }
+            }
+
             // GST ACCOUNTING: Add GST entry if enabled
             if (tx.gst_enabled && tx.gst_account && tx.tax_cents) {
                 const gstAccount = tx.gst_account;
                 const gstAmount = (tx.tax_cents || 0) / 100;
+                ensureBucket(gstAccount);
 
-                if (!accountBalances[gstAccount]) {
-                    const account = this.coa?.get(String(gstAccount)) || this.coa?.get(parseInt(gstAccount));
-
-                    accountBalances[gstAccount] = {
-                        code: gstAccount,
-                        name: (account?.name && account.name.trim()) || `GST Account ${gstAccount}`,
-                        debit: 0,
-                        credit: 0,
-                        balance: 0
-                    };
-                }
-
-                // GST is always a credit to liability accounts (2150, 2160)
+                // GST ITC (2150) = debit (asset-like), GST collected (2160) = credit (liability)
+                // For expense transactions: DR 2150 (ITC paid on purchase)
+                // For revenue transactions: CR 2160 (GST collected on sale)
                 accountBalances[gstAccount].credit += gstAmount;
+
+                // GST also reduces the source bank account (contra for GST portion)
+                if (sourceCoaCode) {
+                    ensureBucket(sourceCoaCode);
+                    accountBalances[sourceCoaCode].credit += gstAmount;
+                }
             }
         });
 

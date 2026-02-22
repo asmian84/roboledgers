@@ -107,7 +107,7 @@ RBC VISA FORMAT:
                 // Check if this line has an amount (sometimes lines wrap and amount is on next line)
                 const extracted = this.extractTransaction(trimmed, '', line);
                 if (extracted && extracted.amount) {
-                    extracted.date = transactions[transactions.length - 1]?.date || '1900-01-01';
+                    extracted.date = transactions[transactions.length - 1]?.date || `${currentYear}-01-01`;
                     extracted.description = pendingDescription + ' ' + extracted.description;
                     extracted.rawText = [...pendingRawLines, line].join('\n');
                     extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, this.getSpatialMetadata(line)]);
