@@ -4692,6 +4692,90 @@
   };
   // ─── END ROADMAP PAGE ─────────────────────────────────────────────────────────
 
+  /**
+   * Compute live balances for all COA accounts from transaction data.
+   * Groups transactions by COA code (via category field or sourceAccountId),
+   * applies effectivePolarity to get correct debit/credit treatment.
+   * Returns a Map<coaCode, balanceDollars>.
+   */
+  function computeCOABalances() {
+    const balances = new Map();
+    const allAccounts = window.RoboLedger?.COA?.getAll() || [];
+    const ledger = window.RoboLedger;
+    if (!ledger) return balances;
+
+    // Initialize all COA codes to 0
+    allAccounts.forEach(a => balances.set(a.code, 0));
+
+    // Build a reverse lookup: accountId → coaCode (for bank/CC source accounts)
+    const accountToCoaCode = new Map();
+    allAccounts.forEach(a => {
+      if (a.sourceAccountId) {
+        accountToCoaCode.set(a.sourceAccountId, a.code);
+      }
+    });
+
+    // Also check account objects for coaCode — retroactively assign if missing
+    const allBankAccounts = ledger.Accounts?.getAll() || [];
+    allBankAccounts.forEach(acc => {
+      // Retroactively assign COA code to accounts imported before this feature existed
+      if (!acc.coaCode && ledger.Accounts._assignCOACode) {
+        ledger.Accounts._assignCOACode(acc);
+      }
+      if (acc.coaCode && !accountToCoaCode.has(acc.id)) {
+        accountToCoaCode.set(acc.id, acc.coaCode);
+      }
+    });
+
+    // Helper: detect if source account is credit-normal (CC)
+    function isSourceCreditNormal(accountId) {
+      const acc = ledger.Accounts?.get(accountId);
+      if (!acc) return false;
+      if ((acc.accountType || '').toLowerCase() === 'creditcard') return true;
+      if (acc.cardNetwork || acc.brand) return true;
+      return false;
+    }
+
+    // Iterate all transactions
+    const txns = ledger.Transactions?.getAll() || [];
+    for (const tx of txns) {
+      const isCCSource = isSourceCreditNormal(tx.account_id);
+      const absAmount = (tx.amount_cents || 0) / 100;
+
+      // === BALANCE SHEET side: always credit the SOURCE BANK/CC ACCOUNT ===
+      // Every transaction that flows through an account affects its balance.
+      // Chequing (debit-normal): CREDIT = outflow (negative), DEBIT = inflow (positive)
+      // CC (credit-normal): CREDIT = charge (positive liability), DEBIT = payment (negative liability)
+      const sourceCoaCode = accountToCoaCode.get(tx.account_id);
+      if (sourceCoaCode) {
+        let sourceSignedAmount;
+        if (isCCSource) {
+          // CC balance (liability): CREDIT = charge increases liability (+), DEBIT = payment reduces (-)
+          sourceSignedAmount = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+        } else {
+          // Chequing balance (asset): DEBIT = deposit increases (+), CREDIT = withdrawal reduces (-)
+          sourceSignedAmount = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
+        }
+        balances.set(sourceCoaCode, (balances.get(sourceCoaCode) || 0) + sourceSignedAmount);
+      }
+
+      // === INCOME STATEMENT side: accumulate by tx.category (expense/revenue codes) ===
+      const catCode = tx.category;
+      if (!catCode || catCode === 'uncategorized' || catCode === '9970') continue;
+
+      // Skip if same as source (avoid double-counting when category = balance sheet code)
+      if (catCode === sourceCoaCode) continue;
+
+      // For expense/revenue: always use raw polarity (no CC flip — the polarity is already canonical)
+      const effPolarity = tx.polarity;
+      const signedAmount = effPolarity === 'DEBIT' ? absAmount : -absAmount;
+
+      balances.set(catCode, (balances.get(catCode) || 0) + signedAmount);
+    }
+
+    return balances;
+  }
+
   function renderCOAPage() {
     const categories = [
       { id: 'asset', label: 'Assets', sub: 'Cash, Inventory, Equipment', theme: 'theme-asset' },
@@ -4761,25 +4845,32 @@
       layout: "fitColumns",
       placeholder: "No Accounts Found",
       columns: [
-        { title: "Account #", field: "code", width: 120, sorter: "number", headerSortStartingDir: "asc" },
+        { title: "Account #", field: "code", width: 100, sorter: "number", headerSortStartingDir: "asc",
+          formatter: (cell) => `<span style="font-family:monospace;font-weight:600;color:#1e293b;">${cell.getValue()}</span>` },
         { title: "Account Name", field: "name", widthGrow: 1, headerSort: false },
-        { title: "Type", field: "root", width: 120, formatter: (cell) => cell.getValue()?.toUpperCase() },
+        { title: "Sign", field: "sign", width: 80, hozAlign: "center",
+          formatter: (cell) => {
+            const v = cell.getValue();
+            if (!v) return '-';
+            const color = v === 'Debit' ? '#059669' : '#dc2626';
+            return `<span style="color:${color};font-size:11px;font-weight:600;">${v}</span>`;
+          }
+        },
+        { title: "Type", field: "type", width: 130, headerSort: false,
+          formatter: (cell) => `<span style="font-size:11px;color:#64748b;">${cell.getValue() || '-'}</span>` },
+        { title: "L/S", field: "ls", width: 60, hozAlign: "center",
+          formatter: (cell) => `<span style="font-family:monospace;font-size:11px;font-weight:600;color:#6366f1;">${cell.getValue() || '-'}</span>` },
         {
           title: "Balance",
           field: "balance",
           width: 140,
           hozAlign: "right",
-          formatter: "money",
-          formatterParams: { symbol: "$", decimal: ".", thousand: "," }
-        },
-        { title: "Tx", field: "tx_count", width: 80, hozAlign: "center", formatter: (cell) => cell.getValue() || "-" },
-        {
-          title: "",
-          field: "actions",
-          width: 60,
-          headerSort: false,
-          hozAlign: "center",
-          formatter: () => `<button class="btn-coa-delete"><i class="ph ph-x"></i></button>`
+          formatter: (cell) => {
+            const val = cell.getValue() || 0;
+            const formatted = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Math.abs(val));
+            const color = val > 0 ? '#059669' : val < 0 ? '#dc2626' : '#94a3b8';
+            return `<span style="font-family:monospace;font-weight:600;color:${color};">${val < 0 ? '(' + formatted + ')' : formatted}</span>`;
+          }
         }
       ]
     });
@@ -4818,9 +4909,18 @@
 
       if (!window.coaTable) initCOAGrid();
 
-      // Update grid data
+      // Compute live balances from transactions
+      const liveBalances = computeCOABalances();
+
+      // Update grid data with live balances
       const allAccounts = window.RoboLedger.COA.getAll();
-      const filtered = allAccounts.filter(a => a.root.toLowerCase() === catId);
+      const filtered = allAccounts
+        .filter(a => a.root.toLowerCase() === catId)
+        .map(a => ({
+          ...a,
+          balance: liveBalances.get(a.code) || 0
+        }))
+        .sort((a, b) => parseInt(a.code) - parseInt(b.code));
 
       if (window.coaTable) {
         // Use a small delay to ensure container is fully rendered
