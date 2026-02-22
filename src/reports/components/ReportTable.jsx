@@ -1,8 +1,8 @@
 import React from 'react';
 
 /**
- * ReportTable - Professional 3-column table matching Caseware/Jazzit format
- * Supports year-over-year comparison with proper typography and borders
+ * ReportTable - Professional table matching Caseware/Jazzit format
+ * Uses em-based sizing so zoom/text-size controls from parent properly scale content
  */
 export function ReportTable({
     columns = [],  // Array of column configs: { label, width, bold }
@@ -20,19 +20,20 @@ export function ReportTable({
     };
 
     return (
-        <div className={`report-table ${className}`} style={{ fontFamily: 'Arial, sans-serif' }}>
-            <table className="w-full border-collapse">
+        <div className={`report-table ${className}`}>
+            <table className="w-full border-collapse" style={{ fontSize: 'inherit', fontFamily: 'inherit' }}>
                 {/* Column Headers */}
                 <thead>
                     <tr className="border-b border-gray-400" style={{ borderBottomWidth: '1.3px' }}>
                         {columns.map((col, idx) => (
                             <th
                                 key={idx}
-                                className={`pb-2 ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : 'font-semibold'}`}
+                                className={`pb-1.5 ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : 'font-semibold'}`}
                                 style={{
                                     width: col.width || 'auto',
-                                    fontSize: '10pt',
-                                    fontWeight: col.bold ? 700 : 600
+                                    fontSize: '0.85em',
+                                    fontWeight: col.bold ? 700 : 600,
+                                    color: col.color || 'inherit'
                                 }}
                             >
                                 {col.label}
@@ -62,10 +63,10 @@ export function ReportTable({
                             >
                                 {/* Description column */}
                                 <td
-                                    className={`py-1 ${isSection || isTotal ? 'font-bold uppercase' : ''} ${isSubtotal ? 'font-semibold' : ''}`}
+                                    className={`py-0.5 ${isSection || isTotal ? 'font-bold uppercase' : ''} ${isSubtotal ? 'font-semibold' : ''}`}
                                     style={{
-                                        paddingLeft: `${indent * 14.4}px`,
-                                        fontSize: '10pt',
+                                        paddingLeft: `${indent * 1.1}em`,
+                                        fontSize: '1em',
                                         fontWeight: isSection || isTotal ? 700 : isSubtotal ? 600 : 400
                                     }}
                                 >
@@ -74,17 +75,18 @@ export function ReportTable({
 
                                 {/* Value columns */}
                                 {row.values && row.values.map((value, valIdx) => {
-                                    const showDollar = (rowIdx === 0 && valIdx === 0) || isTotal || isSubtotal;
                                     const formattedValue = typeof value === 'number' ? formatCurrency(value) : value;
+                                    const col = columns[valIdx + 1];
 
                                     return (
                                         <td
                                             key={valIdx}
-                                            className={`py-1 text-right tabular-nums ${columns[valIdx + 1]?.bold ? 'font-bold' : ''}`}
+                                            className={`py-0.5 text-right tabular-nums ${col?.bold ? 'font-bold' : ''}`}
                                             style={{
-                                                fontSize: '10pt',
+                                                fontSize: '1em',
                                                 fontFamily: '"Courier New", Courier, monospace',
-                                                fontWeight: columns[valIdx + 1]?.bold ? 700 : 400
+                                                fontWeight: col?.bold ? 700 : 400,
+                                                color: col?.color || 'inherit'
                                             }}
                                         >
                                             {formattedValue}

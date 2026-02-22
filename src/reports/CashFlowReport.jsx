@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import { ReportFilters } from './components/ReportFilters.jsx';
 import ReportHeader from './components/ReportHeader.jsx';
-import ReportFooter from './components/ReportFooter.jsx';
+
 
 /**
  * CashFlowReport - Statement of Cash Flows (Indirect Method)
@@ -193,7 +193,6 @@ export function CashFlowReport() {
                         </button>
                     </div>
 
-                    <ReportFooter />
                 </div>
             )}
         </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import ReportHeader from './components/ReportHeader.jsx';
-import ReportFooter from './components/ReportFooter.jsx';
+
 
 /**
  * ComparativeReport - Current Year vs Prior Year Trial Balance Comparison
@@ -233,7 +233,6 @@ export function ComparativeReport() {
                         </table>
                     </div>
 
-                    <ReportFooter />
                 </div>
             )}
         </div>

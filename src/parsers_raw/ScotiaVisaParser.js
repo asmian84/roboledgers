@@ -115,7 +115,8 @@ SCOTIABANK VISA FORMAT:
     };
 
     extractTransaction(text, isoDate, originalLine) {
-        const amounts = text.match(/([\d,]+\.\d{2})/g);
+        // Capture trailing minus if present (Scotia format: "123.45-")
+        const amounts = text.match(/([\d,]+\.\d{2}-?)/g);
         if (!amounts || amounts.length < 1) return null;
 
         const firstAmtIdx = text.search(/[\d,]+\.\d{2}/);
@@ -126,9 +127,20 @@ SCOTIABANK VISA FORMAT:
             "INTEREST", "INTEREST CHARGE", "ANNUAL FEE", "FEE", "FOREIGN TRANSACTION FEE"
         ]);
 
-        const amount = parseFloat(amounts[0].replace(/,/g, ''));
-        const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-        const isPayment = /payment|credit|refund|THANK YOU|REWARD/i.test(description);
+        let rawAmt = amounts[0];
+        // Scotia CC PDF convention: trailing minus = payment/refund/credit (reduces liability)
+        const isTrailingMinus = rawAmt.endsWith('-');
+        const amount = parseFloat(rawAmt.replace(/[,-]/g, ''));
+        const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/[,-]/g, '')) : 0;
+        // Negative prefix (e.g. "-19.41")
+        const negativeMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegativePrefix = negativeMatch && parseFloat(negativeMatch[1].replace(/,/g, '')) === amount;
+        // CR suffix (e.g. "1,419.47CR")
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback for payment language
+        const isPaymentKeyword = /payment|paiement|merci|refund|THANK YOU|REWARD/i.test(description);
+        // Any sign indicator or payment keyword → reduces liability → debit
+        const reducesLiability = isTrailingMinus || isNegativePrefix || hasCR || isPaymentKeyword;
 
         const auditData = this.buildAuditData(originalLine, 'ScotiaVisaParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
@@ -136,8 +148,8 @@ SCOTIABANK VISA FORMAT:
             date: isoDate,
             description,
             amount,
-            debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
-            credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
+            debit: reducesLiability ? amount : 0,     // Payment / refund → DEBIT (reduces liability)
+            credit: reducesLiability ? 0 : amount,    // Purchase → CREDIT (increases liability)
             balance,
             _brand: 'Scotiabank',
             _tag: 'Visa',

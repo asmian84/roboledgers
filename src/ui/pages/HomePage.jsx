@@ -9,6 +9,7 @@ const HomePage = () => {
         monthlyData: [],
         fiscalYear: null,
     });
+    const [selectedQuarter, setSelectedQuarter] = useState(null);
 
     useEffect(() => {
         const compute = () => {
@@ -52,13 +53,13 @@ const HomePage = () => {
                 // Find last import date
                 const dates = accTxns.map(t => t.date).filter(Boolean).sort();
                 const lastDate = dates.length > 0 ? dates[dates.length - 1] : null;
-                // Resolve icon based on account type
+                // Resolve icon based on account type (use inline styles — Tailwind purges dynamic classes)
                 const brand = (acc.brand || acc.cardNetwork || '').toUpperCase();
-                let accIcon = 'ph-bank', accIconBg = 'bg-indigo-100', accIconColor = 'text-indigo-600';
+                let accIcon = 'ph-bank', accIconBg = '#e0e7ff', accIconColor = '#4f46e5'; // indigo
                 if (brand.includes('VISA') || brand.includes('MC') || brand.includes('MASTERCARD') || brand.includes('AMEX') || acc.accountType === 'CreditCard') {
-                    accIcon = 'ph-credit-card'; accIconBg = 'bg-purple-100'; accIconColor = 'text-purple-600';
+                    accIcon = 'ph-credit-card'; accIconBg = '#f3e8ff'; accIconColor = '#9333ea'; // purple
                 } else if (acc.accountType === 'SAVINGS') {
-                    accIcon = 'ph-piggy-bank'; accIconBg = 'bg-emerald-100'; accIconColor = 'text-emerald-600';
+                    accIcon = 'ph-piggy-bank'; accIconBg = '#d1fae5'; accIconColor = '#059669'; // emerald
                 }
                 return {
                     id: acc.id,
@@ -99,14 +100,23 @@ const HomePage = () => {
             const fyEnd = activeClient?.fiscalYearEnd || 12; // 1-12, default December
             const now = new Date();
             const fyEndMonth = fyEnd; // month number 1-12
-            // Determine current FY start: if we're past the FY end month, FY started this year; otherwise last year
+
+            // Derive FY from the TRANSACTION DATA, not today's date
+            // Use the latest transaction date to determine which FY the data belongs to
+            const txDates = allTxns.map(t => t.date).filter(Boolean).sort();
+            const refDate = txDates.length > 0 ? new Date(txDates[txDates.length - 1]) : now;
+            const refMonth = refDate.getMonth() + 1; // 1-12
+            const refYear = refDate.getFullYear();
+
             let fyStartYear, fyEndYear;
-            if (now.getMonth() + 1 > fyEndMonth) {
-                fyStartYear = now.getFullYear();
-                fyEndYear = now.getFullYear() + 1;
+            if (refMonth > fyEndMonth) {
+                // Past FY end month → FY started this year, ends next year
+                fyStartYear = refYear;
+                fyEndYear = refYear + 1;
             } else {
-                fyStartYear = now.getFullYear() - 1;
-                fyEndYear = now.getFullYear();
+                // Before or at FY end month → FY started last year, ends this year
+                fyStartYear = refYear - 1;
+                fyEndYear = refYear;
             }
             // FY start = month after FY end of previous year
             const fyStartMonth = (fyEndMonth % 12) + 1; // e.g. if FY end = Dec(12), start = Jan(1)
@@ -133,7 +143,40 @@ const HomePage = () => {
                     return d >= qStart && d <= qEnd;
                 });
                 const qCategorized = qTxns.filter(t => t.category && String(t.category) !== '9970').length;
+                const qUncategorized = qTxns.length - qCategorized;
                 const qPct = qTxns.length > 0 ? Math.round((qCategorized / qTxns.length) * 100) : 0;
+
+                // Quarter financials for drill-down
+                const qDebits = qTxns.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
+                const qCredits = qTxns.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
+                let qRevenue = 0, qExpenses = 0;
+                const qExpByCat = {};
+                qTxns.forEach(t => {
+                    const code = parseInt(t.category) || 0;
+                    const amt = Math.abs((t.amount_cents || 0) / 100);
+                    if (code >= 4000 && code < 5000) qRevenue += amt;
+                    if (code >= 5000 && code < 9970) {
+                        qExpenses += amt;
+                        const catName = t.category_name || coa[code]?.name || `Code ${code}`;
+                        qExpByCat[catName] = (qExpByCat[catName] || 0) + amt;
+                    }
+                });
+                const qTopExpenses = Object.entries(qExpByCat)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5)
+                    .map(([name, amount]) => ({ name, amount }));
+
+                // Per-month breakdown within the quarter
+                const qMonthly = [0,1,2].map(mi => {
+                    const m = (qStartMonth + mi) % 12;
+                    const y = qStartYear + Math.floor((qStartMonth + mi) / 12);
+                    const mKey = `${y}-${String(m + 1).padStart(2, '0')}`;
+                    const mTxns = qTxns.filter(t => t.date && t.date.startsWith(mKey));
+                    const mDebits = mTxns.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
+                    const mCredits = mTxns.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
+                    const mCat = mTxns.filter(t => t.category && String(t.category) !== '9970').length;
+                    return { month: MNAMES[m], txCount: mTxns.length, debits: mDebits, credits: mCredits, catPct: mTxns.length > 0 ? Math.round((mCat / mTxns.length) * 100) : 0 };
+                });
 
                 // Period locked?
                 const lockedPeriods = window.RoboLedger?.Ledger?.getLockedPeriods?.() || [];
@@ -146,7 +189,16 @@ const HomePage = () => {
                 const someLocked = qMonthKeys.some(mk => lockedPeriods.some(lp => lp.period === mk));
                 const status = allLocked ? 'locked' : someLocked ? 'partial' : 'open';
 
-                return { label, range, txCount: qTxns.length, catPct: qPct, status, isCurrent: now >= qStart && now <= qEnd };
+                return {
+                    label, range, txCount: qTxns.length, catPct: qPct, status,
+                    isCurrent: refDate >= qStart && refDate <= qEnd,
+                    // Drill-down data
+                    debits: qDebits, credits: qCredits, revenue: qRevenue, expenses: qExpenses,
+                    netIncome: qRevenue - qExpenses, uncategorized: qUncategorized,
+                    topExpenses: qTopExpenses, monthly: qMonthly,
+                    startDate: qStart.toISOString().split('T')[0],
+                    endDate: qEnd.toISOString().split('T')[0],
+                };
             });
 
             const MNAMES_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -194,7 +246,7 @@ const HomePage = () => {
 
             {/* ── Compact Header ────────────────────────────────────────── */}
             <div className="bg-[#1e293b] text-white px-8 py-5">
-                <div className="max-w-6xl mx-auto flex items-center justify-between gap-6">
+                <div className="flex items-center justify-between gap-6">
                     <div>
                         <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
@@ -254,9 +306,12 @@ const HomePage = () => {
                                 <span className="text-[11px] text-slate-500">
                                     {stats.fiscalYear.startLabel} — {stats.fiscalYear.endLabel}
                                 </span>
-                                <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                                    {stats.fiscalYear.daysRemaining} days left
-                                </span>
+                                {selectedQuarter !== null && (
+                                    <button onClick={() => setSelectedQuarter(null)}
+                                        className="text-[10px] font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-1">
+                                        <i className="ph ph-x text-[9px]"></i> Close
+                                    </button>
+                                )}
                             </div>
                         </div>
                         <div className="grid grid-cols-4 gap-2">
@@ -267,8 +322,13 @@ const HomePage = () => {
                                     open:    { bg: 'bg-slate-50', border: 'border-slate-200', badge: 'bg-blue-50 text-blue-600', icon: 'ph-lock-open' },
                                 };
                                 const sc = statusColors[q.status] || statusColors.open;
+                                const isSelected = selectedQuarter === i;
                                 return (
-                                    <div key={i} className={`${sc.bg} border ${sc.border} rounded-lg p-3 relative ${q.isCurrent ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}>
+                                    <div key={i}
+                                        onClick={() => setSelectedQuarter(isSelected ? null : i)}
+                                        className={`${sc.bg} border ${sc.border} rounded-lg p-3 relative cursor-pointer transition-all duration-200 hover:shadow-md ${
+                                            q.isCurrent && !isSelected ? 'ring-2 ring-blue-400 ring-offset-1' : ''
+                                        } ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 shadow-md' : ''}`}>
                                         <div className="flex items-center justify-between mb-1.5">
                                             <span className="text-[12px] font-bold text-slate-800">{q.label}</span>
                                             <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${sc.badge}`}>
@@ -295,6 +355,110 @@ const HomePage = () => {
                                 );
                             })}
                         </div>
+
+                        {/* ── Quarter Drill-Down Panel ─────────────────────── */}
+                        {selectedQuarter !== null && stats.fiscalYear.quarters[selectedQuarter] && (() => {
+                            const q = stats.fiscalYear.quarters[selectedQuarter];
+                            const qNet = q.revenue - q.expenses;
+                            const maxExp = q.topExpenses[0]?.amount || 1;
+                            return (
+                                <div className="mt-3 pt-3 border-t border-slate-200 animate-in">
+                                    {/* Quarter Header */}
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[12px] font-bold text-indigo-700">{q.label} Breakdown</span>
+                                            <span className="text-[10px] text-slate-400">{q.range} · {q.startDate} to {q.endDate}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* KPI Row */}
+                                    <div className="grid grid-cols-5 gap-2 mb-3">
+                                        <div className="bg-green-50 rounded-lg px-3 py-2">
+                                            <div className="text-[9px] font-semibold text-green-600 uppercase">Revenue</div>
+                                            <div className="text-[13px] font-bold text-green-700 tabular-nums">{fmt(q.revenue)}</div>
+                                        </div>
+                                        <div className="bg-red-50 rounded-lg px-3 py-2">
+                                            <div className="text-[9px] font-semibold text-red-500 uppercase">Expenses</div>
+                                            <div className="text-[13px] font-bold text-red-600 tabular-nums">{fmt(q.expenses)}</div>
+                                        </div>
+                                        <div className={`${qNet >= 0 ? 'bg-blue-50' : 'bg-red-50'} rounded-lg px-3 py-2`}>
+                                            <div className={`text-[9px] font-semibold ${qNet >= 0 ? 'text-blue-600' : 'text-red-500'} uppercase`}>Net Income</div>
+                                            <div className={`text-[13px] font-bold ${qNet >= 0 ? 'text-blue-700' : 'text-red-600'} tabular-nums`}>{fmt(qNet)}</div>
+                                        </div>
+                                        <div className="bg-slate-50 rounded-lg px-3 py-2">
+                                            <div className="text-[9px] font-semibold text-slate-500 uppercase">Debits</div>
+                                            <div className="text-[13px] font-bold text-red-500 tabular-nums">{fmt(q.debits)}</div>
+                                        </div>
+                                        <div className="bg-slate-50 rounded-lg px-3 py-2">
+                                            <div className="text-[9px] font-semibold text-slate-500 uppercase">Credits</div>
+                                            <div className="text-[13px] font-bold text-green-600 tabular-nums">{fmt(q.credits)}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Two columns: Monthly breakdown + Top Expenses */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {/* Monthly Breakdown */}
+                                        <div className="bg-slate-50 rounded-lg p-3">
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Monthly Breakdown</div>
+                                            <div className="space-y-2">
+                                                {q.monthly.map((m, mi) => (
+                                                    <div key={mi} className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-semibold text-slate-600 w-8">{m.month}</span>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center justify-between mb-0.5">
+                                                                <span className="text-[9px] text-slate-400">{m.txCount} txns</span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[9px] font-mono text-red-500">-{fmt(m.debits)}</span>
+                                                                    <span className="text-[9px] font-mono text-green-600">+{fmt(m.credits)}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="h-1 bg-white rounded-full overflow-hidden">
+                                                                <div className={`h-full rounded-full ${
+                                                                    m.catPct >= 90 ? 'bg-green-400' : m.catPct >= 50 ? 'bg-blue-400' : 'bg-amber-400'
+                                                                }`} style={{ width: `${m.catPct}%` }}></div>
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-[9px] font-semibold text-slate-500 w-7 text-right">{m.catPct}%</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Top Expenses */}
+                                        <div className="bg-slate-50 rounded-lg p-3">
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Top Expenses</div>
+                                            {q.topExpenses.length > 0 ? (
+                                                <div className="space-y-1.5">
+                                                    {q.topExpenses.map((cat, ci) => {
+                                                        const pct = Math.round((cat.amount / maxExp) * 100);
+                                                        const barColors = ['bg-blue-500','bg-indigo-500','bg-purple-500','bg-pink-500','bg-slate-400'];
+                                                        return (
+                                                            <div key={cat.name}>
+                                                                <div className="flex items-center justify-between mb-0.5">
+                                                                    <span className="text-[9px] text-slate-600 truncate max-w-[55%]">{cat.name}</span>
+                                                                    <span className="text-[9px] font-mono font-semibold text-slate-600">{fmt(cat.amount)}</span>
+                                                                </div>
+                                                                <div className="h-1 bg-white rounded-full overflow-hidden">
+                                                                    <div className={`h-full ${barColors[ci] || barColors[4]} rounded-full`} style={{ width: `${pct}%` }}></div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="text-[10px] text-slate-400 py-3 text-center">No categorized expenses</div>
+                                            )}
+                                            {q.uncategorized > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-slate-200 flex items-center justify-between">
+                                                    <span className="text-[9px] text-amber-600 font-semibold">Uncategorized</span>
+                                                    <span className="text-[9px] font-semibold text-amber-600">{q.uncategorized} txns</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 
@@ -404,6 +568,17 @@ const HomePage = () => {
                                     )}
                                 </div>
                             </div>
+
+                            {/* Quick Actions */}
+                            <div className="bg-white border border-slate-200 rounded-xl p-5">
+                                <SectionLabel>Quick Actions</SectionLabel>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <ActionCard icon="ph-upload-simple" label="Import" color="blue" onClick={() => goto('import')} />
+                                    <ActionCard icon="ph-rows" label="Transactions" color="indigo" onClick={() => goto('import')} />
+                                    <ActionCard icon="ph-chart-pie-slice" label="Reports" color="green" onClick={() => goto('reports')} />
+                                    <ActionCard icon="ph-gear-six" label="Settings" color="slate" onClick={() => goto('settings')} />
+                                </div>
+                            </div>
                         </div>
 
                         {/* Right Column: 2/5 */}
@@ -441,8 +616,10 @@ const HomePage = () => {
                                     <div className="space-y-2.5">
                                         {stats.accountSummaries.map(acc => (
                                             <div key={acc.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                                                <div className={`w-8 h-8 rounded-lg ${acc.accIconBg || 'bg-indigo-100'} flex items-center justify-center shrink-0`}>
-                                                    <i className={`ph ${acc.accIcon || 'ph-bank'} ${acc.accIconColor || 'text-indigo-600'} text-sm`}></i>
+                                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                                                    style={{ backgroundColor: acc.accIconBg || '#e0e7ff' }}>
+                                                    <i className={`ph ${acc.accIcon || 'ph-bank'}`}
+                                                        style={{ color: acc.accIconColor || '#4f46e5', fontSize: '16px' }}></i>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-[11px] font-semibold text-slate-800 truncate">{acc.name}</div>
@@ -459,16 +636,6 @@ const HomePage = () => {
                                 </div>
                             )}
 
-                            {/* Quick Actions */}
-                            <div className="bg-white border border-slate-200 rounded-xl p-5">
-                                <SectionLabel>Quick Actions</SectionLabel>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <ActionCard icon="ph-upload-simple" label="Import" color="blue" onClick={() => goto('import')} />
-                                    <ActionCard icon="ph-rows" label="Transactions" color="indigo" onClick={() => goto('import')} />
-                                    <ActionCard icon="ph-chart-pie-slice" label="Reports" color="green" onClick={() => goto('reports')} />
-                                    <ActionCard icon="ph-gear-six" label="Settings" color="slate" onClick={() => goto('settings')} />
-                                </div>
-                            </div>
                         </div>
                     </div>
                 )}

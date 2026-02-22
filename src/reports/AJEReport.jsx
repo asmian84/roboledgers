@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReportHeader from './components/ReportHeader.jsx';
-import ReportFooter from './components/ReportFooter.jsx';
+
 
 /**
  * AJEReport - Adjusting Journal Entries Manager
@@ -354,7 +354,6 @@ export function AJEReport() {
                     ))}
                 </div>
 
-                <ReportFooter />
             </div>
         </div>
     );

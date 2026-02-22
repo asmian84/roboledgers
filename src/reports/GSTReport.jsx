@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
+import { ReportControlsBar, FONTS } from './components/ReportControlsBar.jsx';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(n ?? 0);
@@ -132,29 +133,29 @@ function TxTable({ rows, gstColor, gstLabel, accentClass }) {
             <table className="w-full text-xs">
                 <thead>
                     <tr className="border-b border-gray-100">
-                        <th className="text-left py-2 px-3 font-semibold text-gray-500 w-24">Date</th>
-                        <th className="text-left py-2 px-3 font-semibold text-gray-500">Description</th>
-                        <th className="text-left py-2 px-3 font-semibold text-gray-500 w-28">Account</th>
-                        <th className="text-right py-2 px-3 font-semibold text-gray-500 w-28">Amount</th>
-                        <th className={`text-right py-2 px-3 font-semibold w-24 ${gstColor}`}>{gstLabel}</th>
+                        <th className="text-left py-1.5 px-2 font-semibold text-gray-500 w-20">Date</th>
+                        <th className="text-left py-1.5 px-2 font-semibold text-gray-500">Description</th>
+                        <th className="text-left py-1.5 px-2 font-semibold text-gray-500 w-24">Account</th>
+                        <th className="text-right py-1.5 px-2 font-semibold text-gray-500 w-24">Amount</th>
+                        <th className={`text-right py-1.5 px-2 font-semibold w-20 ${gstColor}`}>{gstLabel}</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                     {visible.map((tx, i) => (
                         <tr key={i} className="hover:bg-gray-50 transition-colors">
-                            <td className="py-1.5 px-3 font-mono text-gray-500">{tx.date}</td>
-                            <td className="py-1.5 px-3 text-gray-800 truncate max-w-xs">{tx.description}</td>
-                            <td className="py-1.5 px-3 text-gray-500 truncate">{tx.accountName || tx.ref || '—'}</td>
-                            <td className="py-1.5 px-3 text-right font-mono text-gray-700">{fmt(tx.amount)}</td>
-                            <td className={`py-1.5 px-3 text-right font-mono font-semibold ${gstColor}`}>{fmt(tx.gst)}</td>
+                            <td className="py-1 px-2 font-mono text-gray-500">{tx.date}</td>
+                            <td className="py-1 px-2 text-gray-800 truncate max-w-xs">{tx.description}</td>
+                            <td className="py-1 px-2 text-gray-500 truncate">{tx.accountName || tx.ref || '—'}</td>
+                            <td className="py-1 px-2 text-right font-mono text-gray-700">{fmt(tx.amount)}</td>
+                            <td className={`py-1 px-2 text-right font-mono font-semibold ${gstColor}`}>{fmt(tx.gst)}</td>
                         </tr>
                     ))}
                 </tbody>
                 <tfoot>
                     <tr className={`border-t-2 ${accentClass}`}>
-                        <td colSpan={3} className="py-2 px-3 text-xs font-bold text-gray-600">{rows.length} transactions</td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-gray-800">{fmt(totalAmt)}</td>
-                        <td className={`py-2 px-3 text-right font-mono font-bold ${gstColor}`}>{fmt(totalGst)}</td>
+                        <td colSpan={3} className="py-1.5 px-2 text-xs font-bold text-gray-600">{rows.length} transactions</td>
+                        <td className="py-1.5 px-2 text-right font-mono font-bold text-gray-800">{fmt(totalAmt)}</td>
+                        <td className={`py-1.5 px-2 text-right font-mono font-bold ${gstColor}`}>{fmt(totalGst)}</td>
                     </tr>
                 </tfoot>
             </table>
@@ -181,6 +182,10 @@ export function GSTReport() {
     const [error, setError]           = useState(null);
     const [loading, setLoading]       = useState(false);
     const [activeTab, setActiveTab]   = useState('itc'); // 'itc' | 'collected' | 'both'
+    const [zoom, setZoom]             = useState(100);
+    const [textSize, setTextSize]     = useState(13);
+    const [fontFamily, setFontFamily] = useState('system');
+    const fontStack = FONTS[fontFamily]?.stack || FONTS.system.stack;
 
     // Auto-detect date range from ledger
     const detectedPeriod = useMemo(() => {
@@ -325,6 +330,14 @@ export function GSTReport() {
                 </div>
             </div>
 
+            {/* ── Shared Report Controls Bar ──────────────────────────────── */}
+            <ReportControlsBar
+                zoom={zoom} setZoom={setZoom}
+                textSize={textSize} setTextSize={setTextSize}
+                fontFamily={fontFamily} setFontFamily={setFontFamily}
+                accentColor="emerald"
+            />
+
             {/* ── Controls bar ─────────────────────────────────────────────── */}
             <ReportControls
                 taxRate={taxRate}        setTaxRate={setTaxRate}
@@ -336,7 +349,7 @@ export function GSTReport() {
             />
 
             {/* ── Body ─────────────────────────────────────────────────────── */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ fontSize: `${(textSize * zoom) / 100}px`, fontFamily: fontStack }}>
 
                 {/* Error */}
                 {error && (

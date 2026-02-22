@@ -11,6 +11,46 @@ class ReportGenerator {
     }
 
     /**
+     * DOUBLE-ENTRY POLARITY FLIP for credit-normal (liability) source accounts.
+     *
+     * ACCOUNTING FUNDAMENTALS — Normal balance direction from COA:
+     *   ASSET     → Debit-normal   (1000-1999)
+     *   LIABILITY → Credit-normal  (2000-2999)  ← includes all credit cards
+     *   EQUITY    → Credit-normal  (3000-3999)
+     *   REVENUE   → Credit-normal  (4000-4999)
+     *   EXPENSE   → Debit-normal   (5000-9999)
+     *
+     * Transaction polarity is from the SOURCE ACCOUNT's perspective:
+     *   CC  CREDIT = purchase (increases liability)
+     *   CC  DEBIT  = payment  (decreases liability)
+     *   CHQ DEBIT  = withdrawal (decreases asset)
+     *   CHQ CREDIT = deposit    (increases asset)
+     *
+     * For the CATEGORIZED (target) account in reports, credit-normal source
+     * accounts need polarity flipped:
+     *   CC purchase  (CREDIT on CC) → DEBIT  the expense account
+     *   CC payment   (DEBIT  on CC) → CREDIT the clearing account
+     *   CHQ withdrawal (DEBIT)      → DEBIT  the expense account (no flip)
+     *   CHQ deposit    (CREDIT)     → CREDIT the revenue account (no flip)
+     */
+    _isSourceCreditNormal(tx) {
+        const sourceAcct = this.ledger.getAccount?.(tx.account_id);
+        if (!sourceAcct) return false;
+        // Primary: accountType — set by every CC parser (CreditCard)
+        if ((sourceAcct.accountType || '').toLowerCase() === 'creditcard') return true;
+        // Secondary: cardNetwork / brand — set by CC parsers
+        if (sourceAcct.cardNetwork || sourceAcct.brand) return true;
+        return false;
+    }
+
+    _effectivePolarity(tx) {
+        if (this._isSourceCreditNormal(tx)) {
+            return tx.polarity === 'CREDIT' ? 'DEBIT' : 'CREDIT';
+        }
+        return tx.polarity;
+    }
+
+    /**
      * Generate Trial Balance
      * Verifies that total debits = total credits across all accounts
      */
@@ -42,10 +82,11 @@ class ReportGenerator {
 
             // Use amount_cents + polarity (the actual transaction schema)
             const amount = (tx.amount_cents || 0) / 100;
+            const effPolarity = this._effectivePolarity(tx);
 
-            if (tx.polarity === 'DEBIT') {
+            if (effPolarity === 'DEBIT') {
                 accountBalances[category].debit += amount;
-            } else if (tx.polarity === 'CREDIT') {
+            } else if (effPolarity === 'CREDIT') {
                 accountBalances[category].credit += amount;
             }
 
@@ -140,9 +181,10 @@ class ReportGenerator {
         // Sort by date
         transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Enrich with account names
+        // Enrich with account names + effective polarity for display
         const enriched = transactions.map(tx => ({
             ...tx,
+            effPolarity: this._effectivePolarity(tx),
             account_name: this.coa.get(tx.category)?.name || 'Uncategorized',
             account_code: tx.category || '',
             source_account: this.ledger.getAccount?.(tx.account_id)?.name || tx.account_id
@@ -170,26 +212,28 @@ class ReportGenerator {
 
         const account = this.coa.get(coaCode);
 
-        // Calculate running balance using amount_cents + polarity (the actual transaction schema)
+        // Calculate running balance using effective polarity (flipped for CC accounts)
         let runningBalance = 0;
         const enriched = filtered.map(tx => {
             const amount = (tx.amount_cents || 0) / 100;
-            if (tx.polarity === 'DEBIT') {
+            const eff = this._effectivePolarity(tx);
+            if (eff === 'DEBIT') {
                 runningBalance += amount;
-            } else if (tx.polarity === 'CREDIT') {
+            } else if (eff === 'CREDIT') {
                 runningBalance -= amount;
             }
             return {
                 ...tx,
+                effPolarity: eff,
                 balance: runningBalance
             };
         });
 
         const totalDebit = filtered.reduce((sum, tx) => {
-            return tx.polarity === 'DEBIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
+            return this._effectivePolarity(tx) === 'DEBIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
         }, 0);
         const totalCredit = filtered.reduce((sum, tx) => {
-            return tx.polarity === 'CREDIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
+            return this._effectivePolarity(tx) === 'CREDIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
         }, 0);
 
         // Calculate opening balance: sum all transactions for this COA code BEFORE startDate
@@ -201,8 +245,9 @@ class ReportGenerator {
             allTxsForCode.forEach(tx => {
                 if (new Date(tx.date) < new Date(startDate)) {
                     const amt = (tx.amount_cents || 0) / 100;
-                    if (tx.polarity === 'DEBIT') openingBalance += amt;
-                    else if (tx.polarity === 'CREDIT') openingBalance -= amt;
+                    const eff = this._effectivePolarity(tx);
+                    if (eff === 'DEBIT') openingBalance += amt;
+                    else if (eff === 'CREDIT') openingBalance -= amt;
                 }
             });
         }
@@ -243,20 +288,30 @@ class ReportGenerator {
             const account = this.coa.get(tx.category);
             if (!account) return;
 
-            // Use canonical schema: amount_cents + polarity
+            // Use canonical schema: amount_cents + effective polarity
             const absAmount = (tx.amount_cents || 0) / 100;
+            const eff = this._effectivePolarity(tx);
 
-            // REVENUE accounts (4000-4999) — Credits = income earned
+            // REVENUE accounts (4000-4999) — Credit-normal
+            //   effPolarity CREDIT → adds to revenue (normal)
+            //   effPolarity DEBIT  → reduces revenue (refund/reversal)
             if (account.root === 'REVENUE') {
-                this.addToCategory(revenue, tx.category, account.name, absAmount);
+                const signed = eff === 'CREDIT' ? absAmount : -absAmount;
+                this.addToCategory(revenue, tx.category, account.name, signed);
             }
-            // COGS accounts (5000-5999) - Cost of Goods Sold — Debits = costs incurred
+            // COGS accounts (5000-5999) - Cost of Goods Sold — Debit-normal
+            //   effPolarity DEBIT  → adds to COGS (normal)
+            //   effPolarity CREDIT → reduces COGS (refund/reversal)
             else if (account.class === 'COGS') {
-                this.addToCategory(cogs, tx.category, account.name, absAmount);
+                const signed = eff === 'DEBIT' ? absAmount : -absAmount;
+                this.addToCategory(cogs, tx.category, account.name, signed);
             }
-            // EXPENSE accounts (6000-9999) — Debits = expenses incurred
+            // EXPENSE accounts (6000-9999) — Debit-normal
+            //   effPolarity DEBIT  → adds to expense (normal)
+            //   effPolarity CREDIT → reduces expense (refund/reversal)
             else if (account.root === 'EXPENSE') {
-                this.addToCategory(expenses, tx.category, account.name, absAmount);
+                const signed = eff === 'DEBIT' ? absAmount : -absAmount;
+                this.addToCategory(expenses, tx.category, account.name, signed);
             }
         });
 
@@ -302,18 +357,19 @@ class ReportGenerator {
             if (!account) return;
 
             const absAmount = (tx.amount_cents || 0) / 100;
+            const eff = this._effectivePolarity(tx);
 
             if (account.root === 'ASSET') {
                 // Assets: DEBIT increases (+), CREDIT decreases (-)
-                const signed = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
+                const signed = eff === 'DEBIT' ? absAmount : -absAmount;
                 this.addToCategory(assets, tx.category, account.name, signed);
             } else if (account.root === 'LIABILITY') {
                 // Liabilities: CREDIT increases (+), DEBIT decreases (-)
-                const signed = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+                const signed = eff === 'CREDIT' ? absAmount : -absAmount;
                 this.addToCategory(liabilities, tx.category, account.name, signed);
             } else if (account.root === 'EQUITY') {
                 // Equity: CREDIT increases (+), DEBIT decreases (-)
-                const signed = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+                const signed = eff === 'CREDIT' ? absAmount : -absAmount;
                 this.addToCategory(equity, tx.category, account.name, signed);
             }
         });
@@ -363,9 +419,10 @@ class ReportGenerator {
 
             summary[tx.category].count++;
             const amount = (tx.amount_cents || 0) / 100;
-            if (tx.polarity === 'DEBIT') {
+            const eff = this._effectivePolarity(tx);
+            if (eff === 'DEBIT') {
                 summary[tx.category].debit += amount;
-            } else if (tx.polarity === 'CREDIT') {
+            } else if (eff === 'CREDIT') {
                 summary[tx.category].credit += amount;
             }
         });
@@ -622,7 +679,9 @@ class ReportGenerator {
 
             const absAmount = (tx.amount_cents || 0) / 100;
             // Net cash effect: credits are inflows, debits are outflows
-            const cashEffect = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+            // For CC accounts, flip polarity (CC CREDIT = purchase = outflow)
+            const eff = this._effectivePolarity(tx);
+            const cashEffect = eff === 'CREDIT' ? absAmount : -absAmount;
 
             // OPERATING: Revenue (4000-4999), COGS (5000-5999), Operating Expenses (6000-8999)
             // Also includes changes in working capital: AR (1210-1299), AP (2000-2499), Inventory (1300-1399)

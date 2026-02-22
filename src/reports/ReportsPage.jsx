@@ -490,8 +490,7 @@ export function ReportsPage() {
         { id: 'balance-sheet',       icon: 'ph-stack',                  title: 'Balance Sheet',       description: 'Assets, liabilities, equity',        color: 'cyan',   ready: true,  component: BalanceSheetReport },
         { id: 'cash-flow',           icon: 'ph-currency-circle-dollar', title: 'Cash Flow',           description: 'Operating, investing, financing',    color: 'teal',   ready: true,  component: CashFlowReport },
         { id: 'comparative',         icon: 'ph-arrows-left-right',      title: 'Comparative',         description: 'Current vs prior year',              color: 'amber',  ready: true,  component: ComparativeReport },
-        { id: 'bank-reconciliation', icon: 'ph-bank',                   title: 'Bank Reconciliation', description: 'Reconcile bank to books',            color: 'sky',    ready: true,  component: BankReconciliationReport },
-        { id: 'aje',                 icon: 'ph-notebook',               title: 'Journal Entries',     description: 'AJE, RJE, closing entries',          color: 'rose',   ready: true,  component: AJEReport },
+{ id: 'aje',                 icon: 'ph-notebook',               title: 'Journal Entries',     description: 'AJE, RJE, closing entries',          color: 'rose',   ready: true,  component: AJEReport },
         { id: 'gst-report',          icon: 'ph-percent',                title: 'GST/HST Report',      description: 'Tax collected vs paid',              color: 'red',    ready: true,  component: GSTReport },
         { id: 'general-ledger',      icon: 'ph-list-bullets',           title: 'General Ledger',      description: 'Account-specific history',           color: 'indigo', ready: true,  component: GeneralLedgerReport },
         { id: 'general-journal',     icon: 'ph-book',                   title: 'General Journal',     description: 'Transaction log',                    color: 'purple', ready: true,  component: GeneralJournalReport },
@@ -517,9 +516,14 @@ export function ReportsPage() {
     };
 
     // Expose global back-to-hub function for sub-reports
+    // Also expose direct opener for Bank Reconciliation (used by FilterToolbar shortcut button)
     React.useEffect(() => {
         window.__reportsGoBack = () => setSelectedReport(null);
-        return () => { delete window.__reportsGoBack; };
+        window.__openBankReconciliation = () => setSelectedReport('bank-reconciliation');
+        return () => {
+            delete window.__reportsGoBack;
+            delete window.__openBankReconciliation;
+        };
     }, []);
 
     // ─── File import handlers ─────────────────────────────────────────────────

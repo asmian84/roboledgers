@@ -279,6 +279,34 @@ export function FilterToolbar({
                 >
                     <i className="ph ph-gear-six text-[14px] text-[#6b7280]"></i>
                 </button>
+
+                {/* Divider */}
+                <div className="w-px h-5 bg-[#e5e7eb]"></div>
+
+                {/* Bank Reconciliation Shortcut */}
+                <button
+                    onClick={() => {
+                        if (window.navigateTo) window.navigateTo('reports');
+                        // Small delay to let ReportsPage mount and register __openBankReconciliation
+                        setTimeout(() => window.__openBankReconciliation?.(), 80);
+                    }}
+                    className={btnClass}
+                    title="Bank Reconciliation"
+                >
+                    <i className="ph ph-bank text-[14px] text-[#6b7280]"></i>
+                </button>
+
+                {/* Divider */}
+                <div className="w-px h-5 bg-[#e5e7eb]"></div>
+
+                {/* Clear Grid */}
+                <button
+                    onClick={() => window.clearGrid?.()}
+                    className="h-[30px] px-2 border border-[#fecaca] bg-white rounded-md cursor-pointer flex items-center gap-1 transition-all hover:bg-[#fef2f2] hover:border-[#fca5a5] active:bg-[#fee2e2]"
+                    title="Clear Grid — removes all transactions (keeps client profile)"
+                >
+                    <i className="ph ph-trash text-[14px] text-[#ef4444]"></i>
+                </button>
             </div>
         </div>
     );

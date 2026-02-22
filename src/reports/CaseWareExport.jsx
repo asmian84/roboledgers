@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import { ReportFilters } from './components/ReportFilters.jsx';
 import ReportHeader from './components/ReportHeader.jsx';
-import ReportFooter from './components/ReportFooter.jsx';
+
 
 /**
  * CaseWareExport - Full Working Paper Export for CaseWare
@@ -112,8 +112,8 @@ export function CaseWareExport() {
                 `"${tx.account_name || ''}"`,
                 '', // Leadsheet can be looked up from COA
                 `"${(tx.description || tx.payee || '').replace(/"/g, '""')}"`,
-                tx.polarity === 'DEBIT' ? amt.toFixed(2) : '',
-                tx.polarity === 'CREDIT' ? amt.toFixed(2) : '',
+                (tx.effPolarity || tx.polarity) === 'DEBIT' ? amt.toFixed(2) : '',
+                (tx.effPolarity || tx.polarity) === 'CREDIT' ? amt.toFixed(2) : '',
                 `"${tx.source_account || ''}"`,
             ]);
         });
@@ -293,7 +293,6 @@ export function CaseWareExport() {
                         )}
                     </div>
 
-                    <ReportFooter />
                 </div>
             )}
         </div>

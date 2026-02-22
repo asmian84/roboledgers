@@ -116,7 +116,13 @@ SCOTIABANK AMEX FORMAT:
 
         const amount = parseFloat(amounts[0].replace(/,/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-        const isPayment = /payment|credit|refund/i.test(description);
+        // Detect negative prefix, trailing minus, CR suffix — bulletproof sign detection
+        const negMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegPrefix = negMatch && parseFloat(negMatch[1].replace(/,/g, '')) === amount;
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback — avoid bare "credit" which appears in "CREDIT PURCHASE"
+        const isPaymentKeyword = /payment|paiement|merci|refund|thank you|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+        const isPayment = isNegPrefix || hasCR || isPaymentKeyword;
 
         const auditData = this.buildAuditData(originalLine, 'ScotiaAmexParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
@@ -124,8 +130,8 @@ SCOTIABANK AMEX FORMAT:
             date: isoDate,
             description,
             amount,
-            debit: isPayment ? 0 : amount,
-            credit: isPayment ? amount : 0,
+            debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
+            credit: isPayment ? 0 : amount,  // Purchases INCREASE liability (credit)
             balance,
             rawText: this.cleanRawText(originalLine),
             parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),

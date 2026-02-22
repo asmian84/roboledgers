@@ -132,10 +132,17 @@ class ScotiaCreditCardParser extends BaseBankParser {
         }
 
         let rawAmt = amounts[0];
-        const isNegative = rawAmt.endsWith('-');
+        // Scotia CC PDF convention: trailing minus = payment/refund/credit (e.g. "79.00-")
+        const isTrailingMinus = rawAmt.endsWith('-');
         const amount = parseFloat(rawAmt.replace(/[,-]/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/[,-]/g, '')) : 0;
-        const isPayment = isNegative || /payment|credit|refund/i.test(description);
+        // Negative prefix (defensive), CR suffix (defensive)
+        const negMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegPrefix = negMatch && parseFloat(negMatch[1].replace(/,/g, '')) === amount;
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback — NOTE: avoid bare "credit" which appears in "CREDIT PURCHASE"
+        const isPaymentKeyword = /payment|paiement|merci|refund|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+        const isPayment = isTrailingMinus || isNegPrefix || hasCR || isPaymentKeyword;
 
         const auditData = this.buildAuditData(originalLine, 'ScotiaCreditCardParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 

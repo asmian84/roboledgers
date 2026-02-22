@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import ReportFilters from './components/ReportFilters.jsx';
+import { ReportControlsBar, FONTS } from './components/ReportControlsBar.jsx';
 
 /**
  * TrialBalanceReport - Multiple view modes inspired by Caseware Working Papers
@@ -399,6 +400,9 @@ export function TrialBalanceReport() {
     const [loading, setLoading]                 = useState(false);
     const [viewMode, setViewMode]               = useState('leadsheet'); // 'leadsheet' | 'account' | 'type'
     const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+    const [zoom, setZoom] = useState(100);
+    const [textSize, setTextSize] = useState(13); // px base
+    const [fontFamily, setFontFamily] = useState('system'); // system, serif, mono, caseware
     // Opening balances (comparative prior-year column)
     const [openingBalances, setOpeningBalancesState] = useState(getOpeningBalances());
     const [showImport, setShowImport]           = useState(false);
@@ -590,7 +594,7 @@ export function TrialBalanceReport() {
         if (!reportData) return;
         const groups = getGroupedAccounts();
         const hasOB = Object.keys(openingBalances).length > 0;
-        const rows = [['Group', 'Account Code', 'Account Name', ...(hasOB ? ['Prior Year'] : []), 'Amount', 'DR/CR']];
+        const rows = [['Group', 'Account Code', 'Account Name', ...(hasOB ? ['Prior Year'] : []), 'Debit', 'Credit']];
         groups.forEach(group => {
             if (viewMode !== 'account') rows.push([`[${group.code}] ${group.name}`, '', '', ...(hasOB ? [''] : []), '', '']);
             group.accounts.forEach(acc => {
@@ -600,16 +604,21 @@ export function TrialBalanceReport() {
                     viewMode === 'account' ? '' : '',
                     acc.code, acc.name,
                     ...(hasOB ? [ob !== '' ? ob.toFixed(2) : ''] : []),
-                    Math.abs(net).toFixed(2), net > 0 ? 'DR' : net < 0 ? 'CR' : ''
+                    net > 0 ? Math.abs(net).toFixed(2) : '',
+                    net < 0 ? Math.abs(net).toFixed(2) : ''
                 ]);
             });
             if (viewMode !== 'account') {
-                const subNet = group.totalDebit - group.totalCredit;
-                rows.push(['', '', `Subtotal: ${group.name}`, ...(hasOB ? [''] : []), Math.abs(subNet).toFixed(2), subNet > 0 ? 'DR' : subNet < 0 ? 'CR' : '']);
+                rows.push(['', '', `Subtotal: ${group.name}`, ...(hasOB ? [''] : []),
+                    group.totalDebit > 0 ? group.totalDebit.toFixed(2) : '',
+                    group.totalCredit > 0 ? group.totalCredit.toFixed(2) : ''
+                ]);
             }
         });
-        const grandNet = reportData.totals.debit - reportData.totals.credit;
-        rows.push(['', '', 'GRAND TOTAL', ...(hasOB ? [''] : []), Math.abs(grandNet).toFixed(2), grandNet > 0 ? 'DR' : grandNet < 0 ? 'CR' : 'BALANCED']);
+        rows.push(['', '', 'GRAND TOTAL', ...(hasOB ? [''] : []),
+            reportData.totals.debit.toFixed(2),
+            reportData.totals.credit.toFixed(2)
+        ]);
         const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
@@ -685,9 +694,12 @@ export function TrialBalanceReport() {
     const groups = reportData ? getGroupedAccounts() : [];
     const hasOB  = Object.keys(openingBalances).length > 0;
 
+    const fontStack = FONTS[fontFamily]?.stack || FONTS.system.stack;
+
     // Column count depends on view mode + comparative column
-    const baseColCount = viewMode === 'leadsheet' ? 3 : viewMode === 'type' ? 4 : 2;
-    const numericCols  = hasOB ? 2 : 1; // Prior Year + Amount, or just Amount
+    // Base: L/S has (LS + Code + Name = 3), Type has (Code + Name + Type = 3), Account has (Code + Name = 2)
+    const baseColCount = viewMode === 'leadsheet' ? 3 : viewMode === 'type' ? 3 : 2;
+    const numericCols  = hasOB ? 3 : 2; // Prior Year + Debit + Credit, or just Debit + Credit
     const colCount     = baseColCount + numericCols;
 
     // ─── View Mode Labels ─────────────────────────────────────────────────────
@@ -700,7 +712,7 @@ export function TrialBalanceReport() {
     return (
         <div className="min-h-screen bg-gray-50 p-8">
             {/* Header */}
-            <div className="max-w-7xl mx-auto mb-6">
+            <div className="max-w-6xl mx-auto mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <button onClick={() => window.__reportsGoBack?.()} className="text-gray-600 hover:text-gray-900 mr-2">
                         <i className="ph ph-arrow-left text-2xl"></i>
@@ -712,13 +724,13 @@ export function TrialBalanceReport() {
             </div>
 
             {/* Filters */}
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-6xl mx-auto">
                 <ReportFilters onFilterChange={generateReport} />
             </div>
 
             {/* Loading */}
             {loading && (
-                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow p-12 text-center">
+                <div className="max-w-6xl mx-auto bg-white rounded-lg shadow p-12 text-center">
                     <i className="ph ph-spinner-gap animate-spin text-4xl text-blue-600 mb-4"></i>
                     <p className="text-gray-600">Generating report...</p>
                 </div>
@@ -726,7 +738,7 @@ export function TrialBalanceReport() {
 
             {/* Empty state */}
             {!loading && !reportData && (
-                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow p-16 text-center">
+                <div className="max-w-6xl mx-auto bg-white rounded-lg shadow p-16 text-center">
                     <i className="ph ph-upload-simple text-6xl text-gray-200 mb-5 block"></i>
                     <p className="text-lg font-semibold text-gray-500 mb-1">Upload statements to get started</p>
                     <p className="text-sm text-gray-400 mb-6">Import your bank statements to generate this report</p>
@@ -742,7 +754,7 @@ export function TrialBalanceReport() {
 
             {/* Report */}
             {!loading && reportData && (
-                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow">
+                <div className="max-w-6xl mx-auto bg-white rounded-lg shadow">
                     {/* Report Header + View Tabs */}
                     <div className="border-b border-gray-200 p-5">
                         <div className="flex items-center justify-between mb-4">
@@ -780,7 +792,7 @@ export function TrialBalanceReport() {
                             </div>
                         </div>
 
-                        {/* View mode tabs + collapse controls + import button */}
+                        {/* View mode tabs + import + collapse controls */}
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
                                 {viewModes.map(v => (
@@ -819,26 +831,43 @@ export function TrialBalanceReport() {
                         </div>
                     </div>
 
+                    {/* Shared Report Controls Bar */}
+                    <ReportControlsBar
+                        zoom={zoom} setZoom={setZoom}
+                        textSize={textSize} setTextSize={setTextSize}
+                        fontFamily={fontFamily} setFontFamily={setFontFamily}
+                        accentColor="blue"
+                    />
+
                     {/* Table */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
+                    <div className="overflow-x-auto" style={{ fontSize: `${(textSize * zoom) / 100}px`, fontFamily: fontStack }}>
+                        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                            <colgroup>
+                                {viewMode === 'leadsheet' && <col style={{ width: '50px' }} />}
+                                <col style={{ width: '72px' }} />
+                                <col />
+                                {viewMode === 'type' && <col style={{ width: '70px' }} />}
+                                {hasOB && <col style={{ width: '140px' }} />}
+                                <col style={{ width: '150px' }} />
+                                <col style={{ width: '150px' }} />
+                            </colgroup>
+                            <thead>
+                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                                     {viewMode === 'leadsheet' && (
-                                        <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[54px]">L/S</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>L/S</th>
                                     )}
-                                    <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[80px]">Code</th>
-                                    <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Account Name</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Code</th>
+                                    <th style={{ padding: '8px 16px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account Name</th>
                                     {viewMode === 'type' && (
-                                        <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[80px]">Type</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type</th>
                                     )}
-                                    {/* Prior Year (comparative) column — only shown when opening balances imported */}
                                     {hasOB && (
-                                        <th className="px-8 py-3 text-right text-[10px] font-bold text-purple-500 uppercase tracking-wider w-[150px]">
+                                        <th style={{ padding: '8px 20px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#9333ea', textTransform: 'uppercase', letterSpacing: '0.05em', borderLeft: '1px solid #e2e8f0' }}>
                                             Prior Year
                                         </th>
                                     )}
-                                    <th className="px-8 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[180px]">Amount</th>
+                                    <th style={{ padding: '8px 20px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em', borderLeft: '1px solid #e2e8f0' }}>Debit</th>
+                                    <th style={{ padding: '8px 20px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', borderLeft: '1px solid #e2e8f0' }}>Credit</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -851,25 +880,24 @@ export function TrialBalanceReport() {
                                             {/* Group Header */}
                                             {viewMode !== 'account' && (
                                                 <tr
-                                                    className={`${colors.bg} border-t-2 ${colors.border} cursor-pointer select-none`}
+                                                    className={`${colors.bg} cursor-pointer select-none`}
                                                     onClick={() => toggleGroup(group.code)}
+                                                    style={{ borderTop: '2px solid', borderColor: 'inherit' }}
                                                 >
-                                                    <td className="px-4 py-2" colSpan={colCount}>
-                                                        <div className="flex items-center gap-2.5">
-                                                            <i className={`ph ${isCollapsed ? 'ph-caret-right' : 'ph-caret-down'} text-[11px] text-gray-500`}></i>
-                                                            <span className={`inline-flex items-center justify-center min-w-[28px] px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide text-white ${colors.badge}`}>
+                                                    <td style={{ padding: '7px 12px' }} colSpan={colCount}>
+                                                        <div className="flex items-center gap-2">
+                                                            <i className={`ph ${isCollapsed ? 'ph-caret-right' : 'ph-caret-down'}`} style={{ fontSize: '0.7em', color: '#64748b' }}></i>
+                                                            <span className={`inline-flex items-center justify-center min-w-[26px] px-1.5 py-0.5 rounded text-white ${colors.badge}`} style={{ fontSize: '0.65em', fontWeight: 700, letterSpacing: '0.03em' }}>
                                                                 {group.code}
                                                             </span>
-                                                            <span className="text-[12px] font-semibold text-gray-800">{group.name}</span>
-                                                            <span className="text-[10px] text-gray-400 ml-1">({group.accounts.length})</span>
-                                                            {isCollapsed && (() => {
-                                                                const net = group.totalDebit - group.totalCredit;
-                                                                return (
-                                                                    <span className={`ml-auto text-[11px] font-mono tabular-nums ${net > 0 ? 'text-blue-600' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                                                                        {net !== 0 ? <>{fmtAbs(net)} {net > 0 ? 'DR' : 'CR'}</> : '—'}
-                                                                    </span>
-                                                                );
-                                                            })()}
+                                                            <span style={{ fontSize: '0.85em', fontWeight: 600, color: '#1e293b' }}>{group.name}</span>
+                                                            <span style={{ fontSize: '0.7em', color: '#94a3b8', marginLeft: '2px' }}>({group.accounts.length})</span>
+                                                            {isCollapsed && (
+                                                                <span className="ml-auto flex items-center" style={{ gap: '24px', fontFamily: 'monospace' }}>
+                                                                    <span style={{ fontSize: '0.8em', color: '#2563eb', fontWeight: 600 }}>{fmtAbs(group.totalDebit)}</span>
+                                                                    <span style={{ fontSize: '0.8em', color: '#dc2626', fontWeight: 600 }}>{fmtAbs(group.totalCredit)}</span>
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -879,119 +907,110 @@ export function TrialBalanceReport() {
                                             {!isCollapsed && group.accounts.map(acc => {
                                                 const priorBal = hasOB ? (openingBalances[String(acc.code)] ?? null) : null;
                                                 const movement = priorBal !== null ? (acc.balance - priorBal) : null;
+                                                const net = acc.debit - acc.credit;
                                                 return (
                                                     <tr key={`${group.code}-${acc.code}`}
-                                                        className={`hover:bg-gray-50/80 border-b border-gray-100 ${acc._fromOpening ? 'opacity-70 italic' : ''}`}
+                                                        className={acc._fromOpening ? 'opacity-70 italic' : ''}
+                                                        style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = ''}
                                                         title={acc._isRetainedEarnings
                                                             ? `Retained Earnings: Opening ${fmt(acc._openingRE)} + Net Income ${fmt(acc._netIncome)} = ${fmt((acc._openingRE || 0) + (acc._netIncome || 0))}`
                                                             : acc._fromOpening ? 'From opening balances (no current-year transactions)' : ''}
                                                     >
                                                         {viewMode === 'leadsheet' && (
-                                                            <td className="px-4 py-2 text-[10px] text-gray-300 font-mono"></td>
+                                                            <td style={{ padding: '6px 12px', fontSize: '0.75em', color: '#cbd5e1', fontFamily: 'monospace' }}></td>
                                                         )}
-                                                        <td className="px-4 py-2.5 text-[12px] font-mono text-gray-600 font-medium">
+                                                        <td style={{ padding: '6px 12px', fontSize: '0.8em', fontFamily: 'monospace', color: '#64748b', fontWeight: 500 }}>
                                                             {acc.code}
-                                                            {acc._isRetainedEarnings && <span className="ml-1 text-[9px] text-purple-400 font-sans not-italic">RE</span>}
+                                                            {acc._isRetainedEarnings && <span style={{ marginLeft: '4px', fontSize: '0.75em', color: '#a78bfa', fontFamily: 'sans-serif', fontStyle: 'normal' }}>RE</span>}
                                                         </td>
-                                                        <td className="px-4 py-2.5 text-[12px] text-gray-800">
+                                                        <td style={{ padding: '6px 16px', fontSize: '0.8em', color: '#1e293b' }}>
                                                             {acc.name}
                                                             {acc._isRetainedEarnings && (
-                                                                <span className="ml-2 text-[10px] text-purple-500 not-italic font-normal">
+                                                                <span style={{ marginLeft: '8px', fontSize: '0.8em', color: '#a78bfa', fontStyle: 'normal', fontWeight: 400 }}>
                                                                     (Opening {fmt(acc._openingRE || 0)} + NI {fmt(acc._netIncome || 0)})
                                                                 </span>
                                                             )}
                                                         </td>
                                                         {viewMode === 'type' && (
-                                                            <td className="px-4 py-2.5 text-[10px] text-gray-400 uppercase font-medium">{(acc.root || '').slice(0, 5)}</td>
+                                                            <td style={{ padding: '6px 12px', fontSize: '0.7em', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 500 }}>{(acc.root || '').slice(0, 5)}</td>
                                                         )}
                                                         {/* Prior Year column */}
                                                         {hasOB && (
-                                                            <td className="px-8 py-2.5 text-[12px] text-right tabular-nums font-mono text-purple-600">
+                                                            <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', color: '#9333ea', borderLeft: '1px solid #f1f5f9' }}>
                                                                 {priorBal !== null
                                                                     ? <span title={movement !== null ? `Movement: ${movement >= 0 ? '+' : ''}${fmt(movement)}` : ''}>
                                                                         {fmt(priorBal)}
                                                                       </span>
-                                                                    : <span className="text-gray-300">—</span>
+                                                                    : <span style={{ color: '#cbd5e1' }}>—</span>
                                                                 }
                                                             </td>
                                                         )}
-                                                        {(() => {
-                                                            const net = acc.debit - acc.credit;
-                                                            const isDebit = net > 0;
-                                                            const isCredit = net < 0;
-                                                            return (
-                                                                <td className={`px-8 py-2.5 text-[12px] text-right tabular-nums font-mono font-semibold ${isDebit ? 'text-blue-700' : isCredit ? 'text-red-600' : 'text-gray-400'}`}>
-                                                                    {net !== 0
-                                                                        ? <>{fmtAbs(net)} <span className="text-[10px] font-normal ml-1">{isDebit ? 'DR' : 'CR'}</span></>
-                                                                        : '—'}
-                                                                </td>
-                                                            );
-                                                        })()}
+                                                        {/* Debit column */}
+                                                        <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', borderLeft: '1px solid #f1f5f9' }}>
+                                                            {net > 0 ? fmtAbs(net) : ''}
+                                                        </td>
+                                                        {/* Credit column */}
+                                                        <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#dc2626', borderLeft: '1px solid #f1f5f9' }}>
+                                                            {net < 0 ? fmtAbs(net) : ''}
+                                                        </td>
                                                     </tr>
                                                 );
                                             })}
 
                                             {/* Subtotal Row */}
                                             {viewMode !== 'account' && !isCollapsed && (
-                                                <tr className={`${colors.sub} border-b-2`}>
-                                                    <td className="px-4 py-2" colSpan={baseColCount}>
-                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                                    <td style={{ padding: '6px 12px' }} colSpan={baseColCount}>
+                                                        <span style={{ fontSize: '0.7em', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                                                             Subtotal — {group.code}
                                                         </span>
                                                     </td>
-                                                    {hasOB && <td className="px-8 py-2"></td>}
-                                                    {(() => {
-                                                        const net = group.totalDebit - group.totalCredit;
-                                                        const isDebit = net > 0;
-                                                        const isCredit = net < 0;
-                                                        return (
-                                                            <td className={`px-8 py-2 text-[12px] text-right tabular-nums font-mono font-bold ${isDebit ? 'text-blue-700' : isCredit ? 'text-red-600' : 'text-gray-400'}`}>
-                                                                {net !== 0
-                                                                    ? <>{fmtAbs(net)} <span className="text-[10px] font-normal ml-1">{isDebit ? 'DR' : 'CR'}</span></>
-                                                                    : '—'}
-                                                            </td>
-                                                        );
-                                                    })()}
+                                                    {hasOB && <td style={{ padding: '6px 20px', borderLeft: '1px solid #e2e8f0' }}></td>}
+                                                    <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8', borderLeft: '1px solid #e2e8f0' }}>
+                                                        {group.totalDebit > 0 ? fmtAbs(group.totalDebit) : ''}
+                                                    </td>
+                                                    <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#dc2626', borderLeft: '1px solid #e2e8f0' }}>
+                                                        {group.totalCredit > 0 ? fmtAbs(group.totalCredit) : ''}
+                                                    </td>
                                                 </tr>
                                             )}
                                         </React.Fragment>
                                     );
                                 })}
                             </tbody>
-                            <tfoot className="bg-gray-800 text-white">
-                                <tr>
-                                    <td colSpan={baseColCount} className="px-4 py-3.5 text-[12px] font-bold uppercase tracking-wide">
+                            <tfoot>
+                                <tr style={{ background: '#1e293b', color: 'white' }}>
+                                    <td colSpan={baseColCount} style={{ padding: '10px 12px', fontSize: '0.8em', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         Grand Total
                                     </td>
-                                    {hasOB && <td className="px-8 py-3.5"></td>}
-                                    {(() => {
-                                        const net = reportData.totals.debit - reportData.totals.credit;
-                                        const isDebit = net > 0;
-                                        const isCredit = net < 0;
-                                        return (
-                                            <td className={`px-8 py-3.5 text-[12px] text-right tabular-nums font-mono font-bold ${net === 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                                {net === 0
-                                                    ? '$0.00 — Balanced'
-                                                    : <>{fmtAbs(net)} <span className="text-[10px] font-normal ml-1">{isDebit ? 'DR' : 'CR'}</span> — Out of Balance</>}
-                                            </td>
-                                        );
-                                    })()}
+                                    {hasOB && <td style={{ padding: '10px 20px', borderLeft: '1px solid #334155' }}></td>}
+                                    <td style={{ padding: '10px 20px', fontSize: '0.85em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderLeft: '1px solid #334155' }}>
+                                        {fmtAbs(reportData.totals.debit)}
+                                    </td>
+                                    <td style={{ padding: '10px 20px', fontSize: '0.85em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderLeft: '1px solid #334155' }}>
+                                        {fmtAbs(reportData.totals.credit)}
+                                        {reportData.isBalanced
+                                            ? <span style={{ marginLeft: '10px', fontSize: '0.8em', fontWeight: 400, color: '#4ade80' }}>✓ Balanced</span>
+                                            : <span style={{ marginLeft: '10px', fontSize: '0.8em', fontWeight: 400, color: '#f87171' }}>⚠ Off by {fmtAbs(reportData.difference)}</span>}
+                                    </td>
                                 </tr>
                             </tfoot>
                         </table>
                     </div>
 
                     {/* Export Actions */}
-                    <div className="border-t border-gray-200 p-5 flex items-center justify-between">
+                    <div className="border-t border-gray-200 px-5 py-3 flex items-center justify-between">
                         <div className="text-[11px] text-gray-400">
                             View: {viewModes.find(v => v.id === viewMode)?.title} — {reportData.accounts.length} accounts
                             {hasOB && ` · Prior Year: ${Object.keys(openingBalances).length} accounts`}
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={exportCSV} className="px-3.5 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center gap-1.5 text-[12px]">
+                            <button onClick={exportCSV} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center gap-1.5 text-[12px]">
                                 <i className="ph ph-download-simple text-[13px]"></i>Export CSV
                             </button>
-                            <button onClick={() => window.print()} className="px-3.5 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-semibold flex items-center gap-1.5 text-[12px]">
+                            <button onClick={() => window.print()} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-semibold flex items-center gap-1.5 text-[12px]">
                                 <i className="ph ph-printer text-[13px]"></i>Print
                             </button>
                         </div>

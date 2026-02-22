@@ -120,7 +120,13 @@ BMO MASTERCARD FORMAT:
 
     const amount = parseFloat(amounts[0].replace(/,/g, ''));
     const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-    const isPayment = /payment|credit|refund/i.test(description);
+
+    // BMO CC PDF convention: amounts are POSITIVE for purchases (no suffix),
+    // and suffixed with "CR" for payments/refunds (e.g. "1,419.47CR").
+    // CR = reduces liability (payment received, refund) → debit column.
+    // No CR = increases liability (purchase/charge) → credit column.
+    const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+    const isCredit = hasCR || /payment|refund/i.test(description);
 
     const auditData = this.buildAuditData(originalLine, 'BMOMastercardParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
@@ -128,8 +134,8 @@ BMO MASTERCARD FORMAT:
       date: isoDate,
       description,
       amount,
-      debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
-      credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
+      debit: isCredit ? amount : 0,     // CR / payment / refund → DEBIT (reduces liability)
+      credit: isCredit ? 0 : amount,    // No CR → CREDIT (purchase increases liability)
       balance,
       rawText: this.cleanRawText(originalLine),
       parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),

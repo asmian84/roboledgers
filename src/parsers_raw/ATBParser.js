@@ -102,13 +102,38 @@ ATB FINANCIAL FORMAT:
             }
         }
 
+        const parsedMetadata = isMastercard
+            ? {
+                _acct: '-----',
+                accountNumber: '-----',
+                _tag: 'Mastercard',
+                cardNetwork: 'Mastercard',
+                accountType: 'CreditCard',
+                bankName: 'ATB',
+                bankIcon: 'ATB',
+                networkIcon: 'MC',
+                brand: 'MC',
+                bankCode: 'MC',
+                institution: 'MC'
+            }
+            : {
+                _brand: 'ATB',
+                _tag: 'Chequing',
+                accountType: 'Chequing',
+                bankName: 'ATB',
+                institutionCode: '---'
+            };
+
+        // Extract account number from statement text if present
+        const acctMatch = statementText.match(/Account\s*(?:Number)?[:#]?\s*([\d*xX]{4}[\s\d*xX]+[\d*xX]{4})/i);
+        if (acctMatch) {
+            parsedMetadata._acct = acctMatch[1].replace(/\s+/g, '');
+            parsedMetadata.accountNumber = parsedMetadata._acct;
+        }
+
         return {
             transactions,
-            metadata: {
-                _brand: 'ATB',
-                _tag: tag,
-                institutionCode: '---'
-            }
+            metadata: parsedMetadata
         };
     }
 
@@ -118,15 +143,24 @@ ATB FINANCIAL FORMAT:
 
         const firstAmtIdx = text.search(/[\d,]+\.\d{2}/);
         let description = text.substring(0, firstAmtIdx).trim();
+        // Clean trailing minus that was part of negative amount prefix (e.g. "THANK YOU -" → "THANK YOU")
+        // Only strip a standalone trailing dash, not dashes within description like "PAYMENT - THANK YOU"
+        description = description.replace(/\s+-$/, '').trim();
 
         const amount = parseFloat(amounts[0].replace(/,/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
 
         let debit = 0, credit = 0;
         if (isMastercard) {
-            const isPayment = /payment|credit|refund/i.test(description);
-            debit = isPayment ? 0 : amount;
-            credit = isPayment ? amount : 0;
+            // Detect negative prefix, trailing minus, CR suffix — bulletproof sign detection
+            const negMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+            const isNegPrefix = negMatch && parseFloat(negMatch[1].replace(/,/g, '')) === amount;
+            const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+            const isPaymentKeyword = /payment|paiement|merci|refund|thank you|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+            const isPayment = isNegPrefix || hasCR || isPaymentKeyword;
+            // MAJORITY CONVENTION: payment → debit (reduces liability), purchase → credit (increases liability)
+            debit = isPayment ? amount : 0;
+            credit = isPayment ? 0 : amount;
         } else {
             // Chequing format: Date Description Withdrawal Deposit Balance
             // If text has two amounts before balance, first is withdrawal

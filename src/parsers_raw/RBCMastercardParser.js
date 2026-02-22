@@ -178,9 +178,12 @@ RBC MASTERCARD FORMAT:
             cleanDesc = cleanDesc.replace(/FEE/gi, '').trim() || "Bank Fee";
         }
 
-        // 6. DEBIT/CREDIT Logic (User Validated)
-        // RBC: "-$100.00" or "$100.00-" is a PAYMENT -> DEBIT
-        // RBC: "$100.00" is a PURCHASE -> CREDIT
+        // 6. DEBIT/CREDIT Logic
+        // RBC PDF convention: positive = purchase/charge, negative = payment/refund
+        // RoboLedger CC convention (matches 10/12 parsers):
+        //   debit  = payment (reduces liability)
+        //   credit = purchase/charge (increases liability)
+        // This ensures all CC parsers emit consistent polarity downstream.
 
         let valStr = pending.rawAmt.replace(/[$,]/g, '');
         let isNegative = false;
@@ -198,12 +201,12 @@ RBC MASTERCARD FORMAT:
         let credit = 0;
 
         if (isNegative) {
-            // Payment/Refund -> MONEY IN -> CREDIT
-            credit = value;
+            // Negative on RBC CC PDF = payment/refund → debit column (reduces liability)
+            debit = value;
             if (type === "Purchase") type = "Refund";
         } else {
-            // Expense -> MONEY OUT -> DEBIT
-            debit = value;
+            // Positive on RBC CC PDF = purchase/charge → credit column (increases liability)
+            credit = value;
         }
 
         // 7. ENSURE 2-LINE FORMAT

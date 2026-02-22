@@ -438,7 +438,9 @@ AMEX FORMAT:
             "INTEREST CHARGE", "MEMBERSHIP FEE", "LATE FEE", "FOREIGN TRANSACTION FEE"
         ]);
 
-        const isPayment = amount < 0 || /payment|credit|thank you/i.test(description);
+        // Amex PDF: negative amount = payment/refund; avoid bare "credit" which appears in "CREDIT PURCHASE"
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        const isPayment = amount < 0 || hasCR || /payment|refund|thank you|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
         const absAmount = Math.abs(amount);
 
         // Build audit data for source document viewing

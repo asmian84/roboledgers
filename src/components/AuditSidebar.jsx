@@ -572,6 +572,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                 pdfUrl={transaction.source_pdf.url}
                                 page={transaction.source_pdf.page || 1}
                                 linePosition={transaction.source_pdf.line_position}
+                                sourceFileId={transaction.sourceFileId}
                             />
                         </div>
                     )}

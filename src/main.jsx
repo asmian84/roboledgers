@@ -73,10 +73,9 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
         if (_SS) _SS.remove('roboledger_column_prefs'); else localStorage.removeItem('roboledger_column_prefs');
     }
     const columnVisibility = {
-        // TanStack Grid uses INVERTED logic in state: false = visible, true = hidden
-        // If user enabled tax (savedPrefs.tax_cents === true), pass false to TanStack (visible)
-        // If user disabled tax (savedPrefs.tax_cents === false/undefined), pass true to TanStack (hidden)
-        tax_cents: savedPrefs.tax_cents !== true
+        // TanStack columnVisibility: false = hidden, true = visible (normal logic)
+        // tax_cents defaults to hidden (false) unless user explicitly checked it (true)
+        tax_cents: savedPrefs.tax_cents === true
     };
     // Restore any active drill-down filter from UI_STATE so it survives re-renders
     const activeDrillFilter = window.UI_STATE?.activeCategoryFilter || null;

@@ -137,7 +137,7 @@ export function GeneralLedgerReport() {
                             <tbody className="divide-y divide-gray-200">
                                 {reportData.transactions.map((tx, i) => {
                                     const amount = (tx.amount_cents || 0) / 100;
-                                    const isCredit = tx.polarity === 'CREDIT';
+                                    const isCredit = (tx.effPolarity || tx.polarity) === 'CREDIT';
                                     const net = isCredit ? -amount : amount;
                                     return (
                                         <tr key={tx.tx_id || i} className="hover:bg-gray-50">

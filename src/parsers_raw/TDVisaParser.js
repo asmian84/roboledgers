@@ -129,8 +129,13 @@ TD VISA FORMAT:
         // Parse amount (remove $ and - signs, keep just the number)
         const amountStr = amounts[0].replace(/[\$-]/g, '');
         const amount = parseFloat(amountStr.replace(/,/g, ''));
+        // TD Visa PDF: negative prefix (e.g. "-$1.00") = payment/refund
         const isNegative = amounts[0].includes('-');
-        const isPayment = /payment|credit|refund/i.test(description) || isNegative;
+        // CR suffix (defensive — some TD products may use it)
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback — avoid bare "credit" which appears in "CREDIT PURCHASE"
+        const isPaymentKeyword = /payment|paiement|merci|refund|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+        const isPayment = isNegative || hasCR || isPaymentKeyword;
 
         const auditData = this.buildAuditData(originalLine, 'TDVisaParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 

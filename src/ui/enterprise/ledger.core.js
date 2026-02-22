@@ -691,35 +691,55 @@ window.RoboLedger = (function () {
     // COA codes must match the client's actual chart of accounts.
     // Only rules with HIGH confidence (>= 0.85) should set status 'auto_categorized'.
     // Rules below 0.60 are excluded — SignalFusion handles those better.
+    // Helper: detect if a transaction is from a credit card / liability account
+    // Used by AUTO_CATEGORIZE_RULES test functions to guard revenue rules.
+    function _isLiabilityTx(tx) {
+        // Detects if a transaction came from a credit-normal (liability) source account.
+        // Credit cards are liability accounts (Sign = Credit in COA).
+        // Chequing/Savings are asset accounts (Sign = Debit in COA).
+        const acct = state.accounts.find(a => a.id === tx.account_id);
+        if (!acct) return !!(tx.metadata?.brand || tx.metadata?.cardNetwork);
+        // Primary: accountType set by every CC parser
+        if ((acct.accountType || '').toLowerCase() === 'creditcard') return true;
+        // Secondary: cardNetwork / brand set by CC parsers
+        if (acct.cardNetwork || acct.brand) return true;
+        return false;
+    }
+
     const AUTO_CATEGORIZE_RULES = [
         // ── REVENUE ─────────────────────────────────────────────────────────────
+        // IMPORTANT: Revenue rules must ONLY fire on CHQ/SAV accounts.
+        // On CC accounts: CREDIT = payment (reduces balance owed), not income.
+        // On CHQ/SAV: CREDIT = deposit/income (money received).
         {
             pattern: /airbnb|vrbo|booking\.com/i,
-            test: (tx) => tx.polarity === 'CREDIT',
-            category: '4900', // Rental Revenue
+            test: (tx) => tx.polarity === 'CREDIT' && !_isLiabilityTx(tx),
+            category: '4900', // Rental Revenue — CHQ/SAV only
             confidence: 0.90,
             status: 'auto_categorized'
         },
         {
             pattern: /e-transfer.*autodeposit|autodeposit.*e-transfer/i,
-            test: (tx) => tx.polarity === 'CREDIT',
-            category: '4900', // Rental Revenue (Airbnb autodeposit)
+            test: (tx) => tx.polarity === 'CREDIT' && !_isLiabilityTx(tx),
+            category: '4900', // Rental Revenue (Airbnb autodeposit) — CHQ/SAV only
             confidence: 0.85,
             status: 'auto_categorized'
         },
         {
             pattern: /e-transfer|interac.*e-trf|e-trf.*interac/i,
-            test: (tx) => tx.polarity === 'CREDIT',
-            category: '4900', // Rental Revenue (e-transfer income)
+            test: (tx) => tx.polarity === 'CREDIT' && !_isLiabilityTx(tx),
+            category: '4900', // Rental Revenue (e-transfer income) — CHQ/SAV only
             confidence: 0.70,
             status: 'needs_review'
         },
 
         // ── BALANCE SHEET / CLEARING ─────────────────────────────────────────
+        // CC payment: DEBIT polarity on a CC account = payment received (reduces liability)
+        // CHQ payment to CC: DEBIT polarity on CHQ = outflow → already routed to 9971 by description match
         {
             pattern: /payment\s*-?\s*thank\s*you|paiement\s*-?\s*merci|payment received|autopay/i,
-            test: (tx) => tx.polarity === 'CREDIT',
-            category: '9971', // CC Payment clearing
+            test: (tx) => tx.polarity === 'DEBIT' && _isLiabilityTx(tx),
+            category: '9971', // CC Payment clearing — CC account only
             confidence: 0.92,
             status: 'auto_categorized'
         },
@@ -2318,13 +2338,21 @@ window.RoboLedger = (function () {
                 })();
                 const isLoanAsset = acctRootForCat === 'ASSET' && /LOAN|MORTGAGE|RECEIVABLE|LINE OF CREDIT|LOC/i.test(metadata.name || '');
 
-                // If parser didn't provide polarity, detect it
+                // If parser didn't provide polarity, detect it from the amount sign.
+                //
+                // RoboLedger CC polarity convention (matches 12/12 parsers after alignment):
+                //   CC credit column = purchase/charge → polarity CREDIT
+                //   CC debit column  = payment/refund → polarity DEBIT
+                //
+                // CSV amount-only fallback:
+                //   CC CSV: positive = payment (DEBIT), negative = purchase (CREDIT)
+                //   CHQ CSV: positive = deposit (CREDIT), negative = withdrawal (DEBIT)
                 if (!polarity) {
                     if (isLiabilityAcct) {
-                        // CREDIT CARD: positive amount = DEBIT (spent), negative = CREDIT (payment)
+                        // CC: positive amount = payment (DEBIT), negative = purchase (CREDIT)
                         polarity = amount >= 0 ? Polarity.DEBIT : Polarity.CREDIT;
                     } else {
-                        // BANK ACCOUNT (CHEQUING/SAVINGS): positive amount = CREDIT (deposit), negative = DEBIT (withdrawal)
+                        // CHQ/SAV: positive = deposit (CREDIT), negative = withdrawal (DEBIT)
                         polarity = amount >= 0 ? Polarity.CREDIT : Polarity.DEBIT;
                     }
                 }
@@ -2339,12 +2367,15 @@ window.RoboLedger = (function () {
 
                     if (isLiabilityAcct) {
                         // Credit card keyword set — narrow: only unambiguous payment language
-                        const ccDebitKeywords  = ['PURCHASE', 'INTEREST CHARGE', 'ANNUAL FEE', 'FX RATE', 'FOREIGN TRANSACTION'];
-                        const ccCreditKeywords = ['PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'PAYMENT RECEIVED', 'AUTOPAY'];
-                        if (ccDebitKeywords.some(k => upperDesc.includes(k))) {
-                            polarity = Polarity.DEBIT;
-                        } else if (ccCreditKeywords.some(k => upperDesc.includes(k))) {
+                        // MAJORITY CONVENTION: CC credit column = purchase (CREDIT), CC debit column = payment (DEBIT)
+                        // So: purchase/charge keywords → CREDIT (increases liability)
+                        //     payment language        → DEBIT  (decreases liability)
+                        const ccCreditKeywords = ['PURCHASE', 'INTEREST CHARGE', 'ANNUAL FEE', 'FX RATE', 'FOREIGN TRANSACTION'];
+                        const ccDebitKeywords  = ['PAYMENT - THANK YOU', 'PAIEMENT - MERCI', 'PAYMENT RECEIVED', 'AUTOPAY'];
+                        if (ccCreditKeywords.some(k => upperDesc.includes(k))) {
                             polarity = Polarity.CREDIT;
+                        } else if (ccDebitKeywords.some(k => upperDesc.includes(k))) {
+                            polarity = Polarity.DEBIT;
                         }
                         // All other CC descriptions: keep polarity as derived from debit/credit columns above
                     } else {
@@ -2377,17 +2408,21 @@ window.RoboLedger = (function () {
                 // We detect refunds via the raw_description / transaction_type_label from the parser.
                 // RBCMastercardParser appends "\nRefund" as the type; other parsers include "Refund" in text.
                 const upperDescForGuard = (raw_description || clean_description || '').toUpperCase();
+                // MAJORITY CONVENTION: CC DEBIT = payment/refund (decreases liability)
+                //                      CC CREDIT = purchase/charge (increases liability)
                 const isCCRefund = isLiabilityAcct
-                    && polarity === Polarity.CREDIT
+                    && polarity === Polarity.DEBIT
                     && /\bREFUND\b/.test(upperDescForGuard);
                 const isCashBack = isLiabilityAcct
-                    && polarity === Polarity.CREDIT
+                    && polarity === Polarity.DEBIT
                     && /CASH\s*BACK|CASHBACK|REWARD/i.test(upperDescForGuard);
                 // Rebates apply on any account type (e.g. chequing bank fee rebate, CC annual fee rebate)
-                const isBankRebate = polarity === Polarity.CREDIT
-                    && /\bREBATE\b/i.test(upperDescForGuard);
+                // On CC accounts: rebates reduce liability → DEBIT; on CHQ accounts: rebates = credits
+                const isBankRebate = isLiabilityAcct
+                    ? (polarity === Polarity.DEBIT && /\bREBATE\b/i.test(upperDescForGuard))
+                    : (polarity === Polarity.CREDIT && /\bREBATE\b/i.test(upperDescForGuard));
                 const isCCPayment = isLiabilityAcct
-                    && polarity === Polarity.CREDIT
+                    && polarity === Polarity.DEBIT
                     && !isCCRefund
                     && !isCashBack
                     && !isBankRebate;
@@ -2400,7 +2435,7 @@ window.RoboLedger = (function () {
                         predicted_code = '7700';
                     } else if (isLiabilityAcct) {
                         if (isCCPayment) {
-                            // CREDIT on a credit card = payment received (chequing → card)
+                            // DEBIT on a credit card = payment received (chequing → card)
                             // This is a clearing entry, not revenue. Force 9971.
                             predicted_code = '9971'; // Credit card payment
                         } else if (isCashBack) {
@@ -2414,11 +2449,11 @@ window.RoboLedger = (function () {
                             }
                             // EXPENSE prediction for a refund = correct contra-expense, keep it
                         } else if (predictedRoot === 'REVENUE') {
-                            // DEBIT on a credit card = a charge/purchase — never revenue
+                            // CREDIT on a credit card = a charge/purchase — never revenue
                             // Clear the brain prediction; let it fall to needs_review/9970
                             predicted_code = null;
                         }
-                        // EXPENSE and LIABILITY predictions on a credit card DEBIT are valid — keep them
+                        // EXPENSE and LIABILITY predictions on CC CREDIT (purchases) are valid — keep them
                     } else if (isLoanAsset) {
                         if (polarity === Polarity.CREDIT) {
                             // Credit to a loan receivable = repayment received — not revenue
@@ -2427,12 +2462,13 @@ window.RoboLedger = (function () {
                             predicted_code = null; // Loan drawdown is not revenue
                         }
                     }
-                } else if (polarity === Polarity.CREDIT) {
-                    // No brain prediction path
+                } else {
+                    // No brain prediction path — use guard flags to assign special codes
                     if (isBankRebate) {
                         predicted_code = '7700'; // Rebate always → contra bank charges
                     } else if (isLiabilityAcct) {
                         if (isCCPayment) {
+                            // CC DEBIT with payment language → clearing account
                             const upperDesc2 = (raw_description || '').toUpperCase();
                             if (/PAYMENT|THANK YOU|MERCI|PAIEMENT/i.test(upperDesc2)) {
                                 predicted_code = '9971';

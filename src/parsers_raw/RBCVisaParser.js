@@ -139,7 +139,14 @@ RBC VISA FORMAT:
 
         const amount = parseFloat(amounts[0].replace(/,/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-        const isPayment = /payment|credit|refund|THANK YOU|REWARD/i.test(description);
+        // Detect negative prefix, trailing minus, CR suffix — bulletproof sign detection
+        const negMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegPrefix = negMatch && parseFloat(negMatch[1].replace(/,/g, '')) === amount;
+        const isTrailingMinus = text.match(new RegExp(amounts[0].replace(/[.]/g, '\\.') + '\\s*-'));
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback — avoid bare "credit" which appears in "CREDIT PURCHASE"/"ONLINE CREDIT"
+        const isPaymentKeyword = /payment|paiement|merci|refund|thank you|reward|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+        const isPayment = isNegPrefix || !!isTrailingMinus || hasCR || isPaymentKeyword;
 
         const auditData = this.buildAuditData(originalLine, 'RBCVisaParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 

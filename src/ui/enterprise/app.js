@@ -501,17 +501,21 @@
       }
     }
 
-    // Final update - 100% complete
-    await window.updateProgressBar(100, 100, 'All files processed!', `${totalImported} transactions imported`, totalImported);
+    // ── POST-PARSE PROCESSING with live progress feedback ─────────────────
+    // After PDF parsing hits 100%, there's ~5s of categorization / rule engine
+    // work. Keep the progress bar alive so the user knows it's still working.
 
+    // Phase 1: Parsing complete
+    await window.updateProgressBar(100, 100, 'All files processed!', `${totalImported} transactions parsed — finalizing...`, totalImported);
 
-    // Hide progress bar after brief delay, then refresh grid
     // Use async IIFE so we can await auto-categorization before rendering the grid.
     // This ensures the grid shows categorized data on first paint (no flicker from 9970 → categorized).
     setTimeout(async () => {
       try {
-        // CRITICAL: Clean up any empty accounts before rendering
-        // (prevents hangover accounts from failed uploads or zero-transaction files)
+        // ── Step 1: Cleanup (fast) ──────────────────────────────────────
+        await window.updateProgressBar(100, 100, 'All files processed!', 'Cleaning up accounts...', totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
         cleanupEmptyAccounts();
 
         // AUTO-SET REF# prefix for the newly imported account
@@ -528,14 +532,29 @@
         // Prune any ghost accounts created by this import (metadata stubs with 0 transactions)
         window.RoboLedger?.Accounts?.pruneGhosts?.();
 
-        // Retroactively fix any CC refunds/cashback mis-categorized as revenue
+        // ── Step 2: Fix CC polarity issues (fast) ───────────────────────
+        await window.updateProgressBar(100, 100, 'All files processed!', 'Fixing credit card classifications...', totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
         window.fixCCRefunds?.();
 
-        // Auto-categorize all uncategorized transactions — AWAIT so grid renders with categories already applied
-        await window._runAutoCatOnExisting();
+        // ── Step 3: Auto-categorize — THE SLOW PART ─────────────────────
+        // Use the onProgress callback from RuleEngine.bulkCategorize to
+        // drive the progress bar in real time.
+        await window.updateProgressBar(100, 100, 'All files processed!', 'Categorizing transactions...', totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-        // Seed GST data for all newly imported transactions (after auto-cat so COA codes are correct)
+        await window._runAutoCatOnExistingWithProgress(totalImported);
+
+        // ── Step 4: GST calculation ─────────────────────────────────────
+        await window.updateProgressBar(100, 100, 'All files processed!', 'Calculating sales tax...', totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
         window.initGSTOnTransactions?.();
+
+        // ── Step 5: Done — final message ────────────────────────────────
+        await window.updateProgressBar(100, 100, 'Import complete ✓', `${totalImported} transactions ready`, totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         // Render - this will naturally exclude progress bar since isIngesting is false
         render();
@@ -1587,6 +1606,62 @@
     if (window.updateWorkspace) window.updateWorkspace();
   };
 
+  /**
+   * Same as _runAutoCatOnExisting but drives the progress bar during bulk categorization.
+   * Called from the post-import flow so the user sees real-time feedback.
+   */
+  window._runAutoCatOnExistingWithProgress = async function(totalImported) {
+    // RuleEngine is a deferred ES module — wait up to 5s
+    if (!window.RuleEngine) {
+      await window.updateProgressBar(100, 100, 'All files processed!', 'Waiting for Rule Engine...', totalImported);
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const start = Date.now();
+      await new Promise(resolve => {
+        const poll = setInterval(() => {
+          if (window.RuleEngine || Date.now() - start > 5000) {
+            clearInterval(poll);
+            resolve();
+          }
+        }, 50);
+      });
+      if (!window.RuleEngine) {
+        console.warn('[AUTO-CAT] RuleEngine never loaded — skipping');
+        return;
+      }
+    }
+    await window.RuleEngine.ready;
+
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    const uncategorized = allTxns.filter(tx =>
+      tx.category_source !== 'user' && (
+        !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW' || tx.category === '9970'
+      )
+    );
+
+    if (uncategorized.length === 0) {
+      await window.updateProgressBar(100, 100, 'All files processed!', 'All transactions already categorized ✓', totalImported);
+      return;
+    }
+
+    const total = uncategorized.length;
+    console.log(`[AUTO-CAT+PROGRESS] ${total} transactions to categorize`);
+
+    // Pass onProgress callback to bulkCategorize — updates progress bar in real time
+    const result = await window.RuleEngine.bulkCategorize(uncategorized, {
+      onProgress: async (done, count) => {
+        const pct = Math.round((done / count) * 100);
+        const stage = `Categorizing transactions... ${pct}% (${done}/${count})`;
+        await window.updateProgressBar(100, 100, 'All files processed!', stage, totalImported);
+      }
+    });
+
+    console.log(`[AUTO-CAT+PROGRESS] Done: ${result.categorized} categorized, ${result.flagged} flagged, ${result.skipped} skipped`);
+    await window.updateProgressBar(100, 100, 'All files processed!', `${result.categorized} transactions categorized ✓`, totalImported);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    if (window.updateWorkspace) window.updateWorkspace();
+  };
+
   function init() {
     const _SS = window.StorageService;
     // Helper: read from StorageService (parsed objects) or localStorage (JSON strings)
@@ -1715,6 +1790,9 @@
     }
 
     UI_STATE.currentRoute = route;
+
+    // Toggle no-stage-padding class for routes that need edge-to-edge layout (home)
+    document.body.classList.toggle('route-home', route === 'home');
 
     // ACCOUNTANT LAYER: clear drill-down state when navigating back to admin top
     if (route === 'accountants') {

@@ -356,6 +356,11 @@ body.sidebar-collapsed .stage {
     padding: 0;
 }
 
+/* HOME ROUTE: Remove stage padding so header bar sits flush */
+body.route-home .stage {
+    padding: 0;
+}
+
 /* Breadcrumb Bar */
 .breadcrumb-bar {
     width: 100%;

@@ -45,12 +45,15 @@ class BMOCreditCardParser extends BaseBankParser {
             const description = remainder.substring(0, firstAmt).trim();
             if (!description) continue;
 
-            // Credit card: positive = charge (debit), negative = payment (credit)
+            // BMO CC PDF convention: amounts are POSITIVE for purchases (no suffix),
+            // and suffixed with "CR" for payments/refunds (e.g. "1,419.47CR").
+            // CR = reduces liability (payment received, refund) → debit column.
+            // No CR = increases liability (purchase/charge) → credit column.
             const amount = parseFloat(amounts[0].replace(/,/g, ''));
             const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
 
-            // Determine type by keywords
-            const isPayment = /payment|credit|refund/i.test(description);
+            const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(remainder);
+            const isCredit = hasCR || /payment|refund/i.test(description);
 
             const auditData = this.buildAuditData(line, 'BMOCreditCardParser', { statementId: this._getStmtId(), lineNumber: ++this._txSeq });
 
@@ -58,8 +61,8 @@ class BMOCreditCardParser extends BaseBankParser {
                 date: isoDate,
                 description,
                 amount,
-                debit: isPayment ? amount : 0,   // Payments REDUCE liability (debit)
-                credit: isPayment ? 0 : amount,  // Purchases INCREASE liability (credit)
+                debit: isCredit ? amount : 0,    // CR / payment / refund → DEBIT (reduces liability)
+                credit: isCredit ? 0 : amount,   // No CR → CREDIT (purchase increases liability)
                 balance,
                 _brand: 'BMO',
                 _tag: 'CreditCard',
