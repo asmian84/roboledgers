@@ -2737,7 +2737,17 @@ window.RoboLedger = (function () {
         },
         // Register a dynamic COA account (e.g., auto-created for an imported bank/CC account)
         register: function (code, name, root, leadsheet, sign, opts = {}) {
-            if (state.coa[code]) return state.coa[code]; // Already exists
+            const sourceAccountId = opts.sourceAccountId || null;
+            if (state.coa[code]) {
+                // If existing entry is an unclaimed template (no sourceAccountId), claim it
+                if (!state.coa[code].sourceAccountId && sourceAccountId) {
+                    state.coa[code].name = name;
+                    state.coa[code].sourceAccountId = sourceAccountId;
+                    save();
+                    console.log(`[COA] Claimed template account: ${code} - ${name} → linked to account ${sourceAccountId}`);
+                }
+                return state.coa[code];
+            }
             const entry = {
                 code,
                 name,
@@ -2748,7 +2758,7 @@ window.RoboLedger = (function () {
                 ls: opts.ls || leadsheet,
                 mapNo: opts.mapNo || '',
                 balance: 0,
-                sourceAccountId: opts.sourceAccountId || null // Link to imported bank account
+                sourceAccountId // Link to imported bank account
             };
             state.coa[code] = entry;
             save();

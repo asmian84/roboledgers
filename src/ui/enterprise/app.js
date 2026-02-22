@@ -4699,35 +4699,38 @@
    * Returns a Map<coaCode, balanceDollars>.
    */
   function computeCOABalances() {
-    const balances = new Map();
-    const allAccounts = window.RoboLedger?.COA?.getAll() || [];
     const ledger = window.RoboLedger;
-    if (!ledger) return balances;
+    if (!ledger) return new Map();
 
-    // Initialize all COA codes to 0
-    allAccounts.forEach(a => balances.set(a.code, 0));
-
-    // Build a reverse lookup: accountId → coaCode (for bank/CC source accounts)
-    const accountToCoaCode = new Map();
-    allAccounts.forEach(a => {
-      if (a.sourceAccountId) {
-        accountToCoaCode.set(a.sourceAccountId, a.code);
-      }
-    });
-
-    // Also check account objects for coaCode — retroactively assign if missing
+    // === STEP 1: Retroactively assign COA codes to accounts that predate this feature ===
     const allBankAccounts = ledger.Accounts?.getAll() || [];
     allBankAccounts.forEach(acc => {
-      // Retroactively assign COA code to accounts imported before this feature existed
       if (!acc.coaCode && ledger.Accounts._assignCOACode) {
         ledger.Accounts._assignCOACode(acc);
       }
+    });
+
+    // === STEP 2: Build reverse lookup AFTER assignment so new codes are captured ===
+    const allCOAAccounts = ledger.COA?.getAll() || [];
+    const balances = new Map();
+    allCOAAccounts.forEach(a => balances.set(a.code, 0));
+
+    const accountToCoaCode = new Map();
+    // From COA entries with sourceAccountId (set by _assignCOACode)
+    allCOAAccounts.forEach(a => {
+      if (a.sourceAccountId) accountToCoaCode.set(a.sourceAccountId, a.code);
+    });
+    // From bank account objects with coaCode (belt-and-suspenders)
+    allBankAccounts.forEach(acc => {
       if (acc.coaCode && !accountToCoaCode.has(acc.id)) {
         accountToCoaCode.set(acc.id, acc.coaCode);
+        if (!balances.has(acc.coaCode)) balances.set(acc.coaCode, 0);
       }
     });
 
-    // Helper: detect if source account is credit-normal (CC)
+    console.log(`[COA] accountToCoaCode map: ${accountToCoaCode.size} entries`, [...accountToCoaCode.entries()]);
+
+    // Helper: detect credit-normal source (CC = liability account)
     function isSourceCreditNormal(accountId) {
       const acc = ledger.Accounts?.get(accountId);
       if (!acc) return false;
@@ -4736,40 +4739,36 @@
       return false;
     }
 
-    // Iterate all transactions
-    const txns = ledger.Transactions?.getAll() || [];
+    // === STEP 3: Iterate all transactions ===
+    const txns = ledger.Ledger?.getAll() || [];
     for (const tx of txns) {
       const isCCSource = isSourceCreditNormal(tx.account_id);
       const absAmount = (tx.amount_cents || 0) / 100;
+      if (!absAmount) continue;
 
-      // === BALANCE SHEET side: always credit the SOURCE BANK/CC ACCOUNT ===
-      // Every transaction that flows through an account affects its balance.
-      // Chequing (debit-normal): CREDIT = outflow (negative), DEBIT = inflow (positive)
-      // CC (credit-normal): CREDIT = charge (positive liability), DEBIT = payment (negative liability)
+      // ── Balance Sheet side: accumulate into the SOURCE BANK/CC account's COA code ──
+      // This gives the running balance of each bank/CC account on the COA page.
       const sourceCoaCode = accountToCoaCode.get(tx.account_id);
       if (sourceCoaCode) {
-        let sourceSignedAmount;
+        let delta;
         if (isCCSource) {
-          // CC balance (liability): CREDIT = charge increases liability (+), DEBIT = payment reduces (-)
-          sourceSignedAmount = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+          // CC (liability): CREDIT = new charge → liability increases (+)
+          //                 DEBIT  = payment   → liability decreases (-)
+          delta = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
         } else {
-          // Chequing balance (asset): DEBIT = deposit increases (+), CREDIT = withdrawal reduces (-)
-          sourceSignedAmount = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
+          // CHQ/SAV (asset): DEBIT  = deposit    → balance increases (+)
+          //                  CREDIT = withdrawal → balance decreases (-)
+          delta = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
         }
-        balances.set(sourceCoaCode, (balances.get(sourceCoaCode) || 0) + sourceSignedAmount);
+        balances.set(sourceCoaCode, (balances.get(sourceCoaCode) || 0) + delta);
       }
 
-      // === INCOME STATEMENT side: accumulate by tx.category (expense/revenue codes) ===
+      // ── Income Statement side: accumulate by tx.category ──
       const catCode = tx.category;
       if (!catCode || catCode === 'uncategorized' || catCode === '9970') continue;
+      if (catCode === sourceCoaCode) continue; // avoid double-counting
 
-      // Skip if same as source (avoid double-counting when category = balance sheet code)
-      if (catCode === sourceCoaCode) continue;
-
-      // For expense/revenue: always use raw polarity (no CC flip — the polarity is already canonical)
-      const effPolarity = tx.polarity;
-      const signedAmount = effPolarity === 'DEBIT' ? absAmount : -absAmount;
-
+      const signedAmount = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
       balances.set(catCode, (balances.get(catCode) || 0) + signedAmount);
     }
 
