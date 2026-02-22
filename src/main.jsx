@@ -4,6 +4,7 @@ import { TransactionsTable } from './TransactionsTable2.jsx';  // TESTING EXPERI
 import { ReportsPage } from './reports/ReportsPage';
 import HomePage from './ui/pages/HomePage.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { BankReconciliationReport } from './reports/BankReconciliationReport.jsx';
 // Import TransactionExporter so it bundles with xlsx and registers window.TransactionExporter
 import './services/TransactionExporter.js';
 
@@ -311,6 +312,46 @@ window.unmountReportsPage = () => {
         }
         window._reportsRoot = null;
         window._reportsRootContainer = null;
+    }
+};
+
+/**
+ * Mount BankReconciliationReport React component as a standalone page
+ */
+window.mountBankRecPage = () => {
+    const container = document.getElementById('bankrec-container');
+    if (!container) {
+        console.error('[MAIN.JSX] Bank rec container not found');
+        return;
+    }
+
+    if (window._bankRecRoot && window._bankRecRootContainer && !document.body.contains(window._bankRecRootContainer)) {
+        try { window._bankRecRoot.unmount(); } catch (e) { /* ignore */ }
+        window._bankRecRoot = null;
+        window._bankRecRootContainer = null;
+    }
+
+    if (!window._bankRecRoot) {
+        window._bankRecRoot = ReactDOM.createRoot(container);
+        window._bankRecRootContainer = container;
+    }
+
+    window._bankRecRoot.render(
+        <React.StrictMode>
+            <BankReconciliationReport />
+        </React.StrictMode>
+    );
+};
+
+window.unmountBankRecPage = () => {
+    if (window._bankRecRoot) {
+        try {
+            window._bankRecRoot.unmount();
+        } catch (e) {
+            console.warn('[MAIN.JSX] ⚠ Bank rec unmount error:', e);
+        }
+        window._bankRecRoot = null;
+        window._bankRecRootContainer = null;
     }
 };
 
