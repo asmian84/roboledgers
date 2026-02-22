@@ -333,6 +333,7 @@ body {
     display: flex;
     flex-direction: column;
     transition: margin-left 0.3s ease, max-width 0.3s ease;
+    padding-bottom: 300px; /* Ensures native <select> dropdowns always open downward */
 }
 
 .workbench-active .main-wrapper {
@@ -4728,3 +4729,4 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
         margin: 0 12px;
     }
 }
+
