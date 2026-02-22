@@ -485,7 +485,7 @@ class ReportGenerator {
 
         // Check if account is in exempt range (e.g., equity accounts)
         const accountCode = account.code;
-        if (accountCode >= '3000' && accountCode < '4000') {  // Equity
+        if (parseInt(accountCode) >= 3000 && parseInt(accountCode) < 4000) {  // Equity
             return true;
         }
 

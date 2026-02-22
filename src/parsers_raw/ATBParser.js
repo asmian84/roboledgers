@@ -189,7 +189,8 @@ ATB FINANCIAL FORMAT:
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit,
             _brand: 'ATB',
-            _tag: isMastercard ? 'Mastercard' : 'Chequing'
+            _tag: isMastercard ? 'Mastercard' : 'Chequing',
+            _accountType: isMastercard ? 'CreditCard' : 'Chequing'
         };
     }
     // ── Audit identity helpers (Amex parity) ─────────────────────────────────
