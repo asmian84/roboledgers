@@ -432,16 +432,21 @@ window.RoboLedger = (function () {
                 save();
             }
 
-            // MIGRATION: Rebuild stale account display names and sync COA entries.
+            // MIGRATION: Rebuild stale names, assign missing COA codes, and sync COA entries.
             //
-            // Two related issues fixed here:
+            // Three issues fixed here:
             // 1. acc.name may be stale (e.g. "TD - Chequing") if the account was first
             //    imported with wrong bank data that was later corrected. Rebuild the name
             //    whenever bankName is available and disagrees with the name.
-            // 2. COA entry names were never updated when acc.name changed. Sync them.
+            // 2. Some accounts were created before COA auto-assignment existed — they
+            //    have no coaCode. Assign one now using _assignCOACode().
+            // 3. COA entry names were never updated when acc.name changed. Sync them.
             //
             // This pass runs on every load — idempotent and cheap.
+            // NOTE: Accounts object is defined later in the file but is already
+            // available at runtime when loadFromKey() is called.
             let _coaNameSynced = 0;
+            let _coaCodesAssigned = 0;
             for (const acc of state.accounts) {
                 // ── Step 1: Rebuild acc.name if bankName disagrees with current name ──
                 if (acc.bankName && acc.name) {
@@ -465,7 +470,18 @@ window.RoboLedger = (function () {
                     }
                 }
 
-                // ── Step 2: Sync COA entry name to acc.name ──
+                // ── Step 2: Assign COA code if missing ──
+                // Accounts created before COA auto-assignment was added have no coaCode.
+                // Assign one now so they appear in the Trial Balance.
+                if (!acc.coaCode) {
+                    Accounts._assignCOACode(acc);
+                    if (acc.coaCode) {
+                        _coaCodesAssigned++;
+                        console.log(`[COA] Backfill: assigned ${acc.coaCode} to account ${acc.id} (${acc.name})`);
+                    }
+                }
+
+                // ── Step 3: Sync COA entry name to acc.name ──
                 if (acc.coaCode && acc.name && state.coa[acc.coaCode]) {
                     const coaEntry = state.coa[acc.coaCode];
                     if (coaEntry.name !== acc.name) {
@@ -475,8 +491,13 @@ window.RoboLedger = (function () {
                     }
                 }
             }
+            if (_coaCodesAssigned > 0) {
+                console.log(`[COA] Backfilled ${_coaCodesAssigned} missing COA codes`);
+            }
             if (_coaNameSynced > 0) {
                 console.log(`[COA] Synced ${_coaNameSynced} COA entry names to match account names`);
+            }
+            if (_coaCodesAssigned > 0 || _coaNameSynced > 0) {
                 save();
             }
 
