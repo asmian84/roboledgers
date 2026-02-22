@@ -908,9 +908,14 @@ window.RoboLedger = (function () {
 
             if (matches && testPasses) {
                 const coaEntry = state.coa[rule.category];
+                if (!coaEntry) {
+                    // Rule references a COA code that doesn't exist — skip to prevent silent corruption
+                    console.warn(`[LEDGER AUTO-CAT] Rule category '${rule.category}' not in COA — skipping rule for "${desc.slice(0, 45)}"`);
+                    continue;
+                }
                 const result = {
                     gl_account_code: rule.category,
-                    gl_account_name: coaEntry ? coaEntry.name : 'Unknown',
+                    gl_account_name: coaEntry.name,
                     confidence: rule.confidence,
                     status: rule.status
                 };
@@ -1660,12 +1665,44 @@ window.RoboLedger = (function () {
          */
         parseCSV: function (text) {
             const lines = text.split('\n').filter(l => l.trim());
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            if (!lines.length) return [];
+
+            // RFC 4180-compliant quoted-field parser — handles "1,234.56" inside quotes
+            const parseCSVLine = (line) => {
+                const fields = [];
+                let field = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const ch = line[i];
+                    if (inQuotes) {
+                        if (ch === '"' && line[i + 1] === '"') {
+                            field += '"'; i++; // Escaped double-quote
+                        } else if (ch === '"') {
+                            inQuotes = false;
+                        } else {
+                            field += ch;
+                        }
+                    } else {
+                        if (ch === '"') {
+                            inQuotes = true;
+                        } else if (ch === ',') {
+                            fields.push(field.trim());
+                            field = '';
+                        } else {
+                            field += ch;
+                        }
+                    }
+                }
+                fields.push(field.trim()); // push last field
+                return fields;
+            };
+
+            const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
 
             return lines.slice(1).map(line => {
-                const values = line.split(',').map(v => v.trim());
+                const values = parseCSVLine(line);
                 const entry = {};
-                headers.forEach((h, i) => entry[h] = values[i]);
+                headers.forEach((h, i) => entry[h] = values[i] ?? '');
                 return entry;
             });
         },
@@ -1806,13 +1843,13 @@ window.RoboLedger = (function () {
                 if (upper.includes('SAVINGS ACCOUNT') || upper.includes('BUSINESS ESSENTIALS') && upper.includes('SAVINGS')) {
                     console.log('[PARSER] Routing to RBC Savings Parser');
                     if (window.rbcSavingsParser) {
-                        result = await window.rbcSavingsParser.parseWithRegex(text);
+                        result = await window.rbcSavingsParser.parse(text);
                         if (result) console.log('[PARSER] RBC Savings returned:', result);
                     }
                 } else if (upper.includes('BUSINESS ACCOUNT STATEMENT') || upper.includes('CHEQU')) {
                     console.log('[PARSER] Routing to RBC Chequing Parser');
                     if (window.rbcChequingParser) {
-                        result = await window.rbcChequingParser.parseWithRegex(text);
+                        result = await window.rbcChequingParser.parse(text);
                         if (result) console.log('[PARSER] RBC Chequing returned:', result);
                     }
                 } else if (upper.includes('MASTERCARD') || upper.includes('BUSINESS CASH BACK')) {
@@ -2820,11 +2857,16 @@ window.RoboLedger = (function () {
     // --- CATEGORIZATION BRAIN ---
     const Brain = {
         rules: [
-            { pattern: /adobe|google|aws|github/i, code: '4000' },
-            { pattern: /starbucks|uber|tim hortons/i, code: '8500' },
-            { pattern: /rent|lease|office/i, code: '8100' },
-            { pattern: /salary|payroll|wage/i, code: '6000' },
-            { pattern: /monthly fee|service charge/i, code: '8800' }
+            // Software subscriptions → 6800 (Computer & internet expenses)
+            { pattern: /adobe|google workspace|aws|github|dropbox|microsoft 365/i, code: '6800' },
+            // Meals/coffee/food → 6415 (Meals and entertainment)
+            { pattern: /starbucks|uber eats|tim hortons|mcdonald|subway|boston pizza/i, code: '6415' },
+            // Rent/lease → 7500 (Rent)
+            { pattern: /\brent\b|\blease\b/i, code: '7500' },
+            // Wages/payroll → 9800 (Wages, salaries and benefits)
+            { pattern: /salary|payroll|\bwage\b/i, code: '9800' },
+            // Bank service charges → 7700 (Bank charges and interest)
+            { pattern: /monthly fee|service charge|bank fee/i, code: '7700' }
         ],
 
         predict: function (description) {

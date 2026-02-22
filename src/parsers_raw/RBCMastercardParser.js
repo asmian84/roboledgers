@@ -231,7 +231,7 @@ RBC MASTERCARD FORMAT:
             _accountType: 'CreditCard',
             _inst: '003',
             _transit: '00000',
-            _acct: pending.accountNumber || '',
+            _acct: rawAcct || '',
             rawText: pending.fullRaw,
             parser_ref: this._getStmtId() + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,

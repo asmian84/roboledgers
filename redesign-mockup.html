@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboLedger — Redesign Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/regular/style.css">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Inter',system-ui,sans-serif; background:#0c0f1a; color:#e2e8f0; min-height:100vh; display:flex; }
+
+/* ─── Sidebar ─── */
+.sidebar {
+  width:68px; min-height:100vh; background:#0f1225;
+  border-right:1px solid rgba(255,255,255,0.06);
+  display:flex; flex-direction:column; align-items:center;
+  padding:16px 0; gap:4px; position:fixed; z-index:50;
+  transition: width 0.2s ease;
+}
+.sidebar:hover { width:220px; }
+.sidebar:hover .nav-label { opacity:1; width:auto; }
+.sidebar:hover .sidebar-logo span { opacity:1; width:auto; margin-left:10px; }
+.sidebar:hover .sidebar-section-label { opacity:1; height:auto; margin:12px 0 4px 16px; }
+.sidebar:hover .sidebar-bottom .client-name { opacity:1; width:auto; margin-left:10px; }
+
+.sidebar-logo {
+  display:flex; align-items:center; padding:4px 0 16px; width:100%; justify-content:center;
+}
+.sidebar:hover .sidebar-logo { justify-content:flex-start; padding-left:16px; }
+.sidebar-logo .logo-mark {
+  width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6); font-size:18px; color:white; flex-shrink:0;
+}
+.sidebar-logo span { opacity:0; width:0; overflow:hidden; white-space:nowrap; font-weight:700; font-size:15px; letter-spacing:-0.3px; transition:all 0.15s; color:#f1f5f9; }
+
+.sidebar-section-label {
+  font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;
+  color:#475569; opacity:0; height:0; overflow:hidden; transition:all 0.15s; width:100%;
+}
+
+.nav-item {
+  display:flex; align-items:center; gap:0; width:100%; padding:10px 0;
+  justify-content:center; cursor:pointer; border-radius:8px; margin:1px 8px;
+  transition:all 0.12s; position:relative; color:#64748b;
+}
+.sidebar:hover .nav-item { justify-content:flex-start; padding-left:16px; }
+.nav-item:hover { background:rgba(255,255,255,0.05); color:#e2e8f0; }
+.nav-item.active { color:#818cf8; background:rgba(99,102,241,0.1); }
+.nav-item.active::before {
+  content:''; position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:3px; height:20px; background:#818cf8; border-radius:0 3px 3px 0;
+}
+.nav-item i { font-size:20px; flex-shrink:0; width:20px; text-align:center; }
+.nav-label { opacity:0; width:0; overflow:hidden; white-space:nowrap; font-size:13px; font-weight:500; transition:all 0.15s; margin-left:12px; }
+
+.sidebar-bottom {
+  margin-top:auto; width:100%; display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px 0;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.sidebar-bottom .client-avatar {
+  width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,#3b82f6,#2563eb);
+  display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:white; flex-shrink:0;
+}
+.sidebar-bottom .client-name { opacity:0; width:0; overflow:hidden; white-space:nowrap; font-size:12px; font-weight:600; transition:all 0.15s; }
+.sidebar-bottom .client-sub { font-size:10px; color:#64748b; }
+
+/* ─── Main Content ─── */
+.main { margin-left:68px; flex:1; min-height:100vh; padding:0; }
+
+/* ─── Top Bar ─── */
+.topbar {
+  display:flex; align-items:center; justify-content:space-between; padding:14px 28px;
+  border-bottom:1px solid rgba(255,255,255,0.06); background:#0c0f1a;
+  position:sticky; top:0; z-index:40;
+}
+.topbar-left { display:flex; align-items:center; gap:16px; }
+.topbar-left h1 { font-size:17px; font-weight:700; color:#f1f5f9; letter-spacing:-0.3px; }
+.topbar-left .breadcrumb { font-size:11px; color:#64748b; display:flex; align-items:center; gap:6px; }
+.topbar-left .breadcrumb span { color:#94a3b8; }
+.topbar-right { display:flex; align-items:center; gap:10px; }
+.topbar-btn {
+  display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px;
+  font-size:12px; font-weight:600; cursor:pointer; border:none; transition:all 0.12s;
+}
+.topbar-btn.ghost { background:transparent; color:#94a3b8; border:1px solid rgba(255,255,255,0.08); }
+.topbar-btn.ghost:hover { background:rgba(255,255,255,0.05); color:#e2e8f0; }
+.topbar-btn.primary { background:#6366f1; color:white; }
+.topbar-btn.primary:hover { background:#818cf8; }
+.cmd-k {
+  display:flex; align-items:center; gap:8px; padding:7px 14px; border-radius:8px;
+  background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+  color:#64748b; font-size:12px; cursor:pointer; min-width:200px;
+}
+.cmd-k:hover { border-color:rgba(255,255,255,0.15); }
+.cmd-k kbd { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 5px; border-radius:4px; background:rgba(255,255,255,0.06); margin-left:auto; }
+
+/* ─── Dashboard Grid ─── */
+.dashboard { padding:24px 28px; display:flex; flex-direction:column; gap:20px; }
+
+/* KPI Strip */
+.kpi-strip { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+.kpi-card {
+  background:#12152a; border:1px solid rgba(255,255,255,0.06); border-radius:14px;
+  padding:18px 20px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden;
+}
+.kpi-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+}
+.kpi-card.green::before { background:linear-gradient(90deg,#10b981,#34d399); }
+.kpi-card.red::before { background:linear-gradient(90deg,#ef4444,#f87171); }
+.kpi-card.blue::before { background:linear-gradient(90deg,#3b82f6,#60a5fa); }
+.kpi-card.indigo::before { background:linear-gradient(90deg,#6366f1,#818cf8); }
+.kpi-card.amber::before { background:linear-gradient(90deg,#f59e0b,#fbbf24); }
+.kpi-top { display:flex; align-items:center; justify-content:space-between; }
+.kpi-label { font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; }
+.kpi-icon { font-size:16px; }
+.kpi-card.green .kpi-icon { color:#34d399; }
+.kpi-card.red .kpi-icon { color:#f87171; }
+.kpi-card.blue .kpi-icon { color:#60a5fa; }
+.kpi-card.indigo .kpi-icon { color:#818cf8; }
+.kpi-card.amber .kpi-icon { color:#fbbf24; }
+.kpi-value { font-size:22px; font-weight:800; color:#f1f5f9; letter-spacing:-0.5px; font-family:'JetBrains Mono','Inter',monospace; }
+.kpi-sub { font-size:10px; color:#475569; font-weight:500; }
+.kpi-sparkline { display:flex; align-items:flex-end; gap:2px; height:28px; margin-top:4px; }
+.kpi-sparkline .bar { width:100%; border-radius:2px 2px 0 0; min-height:3px; }
+.kpi-card.green .bar { background:rgba(16,185,129,0.3); }
+.kpi-card.red .bar { background:rgba(239,68,68,0.3); }
+
+/* ─── Main Grid ─── */
+.content-grid { display:grid; grid-template-columns:1fr 340px; gap:16px; }
+
+/* ─── Cards ─── */
+.card {
+  background:#12152a; border:1px solid rgba(255,255,255,0.06); border-radius:14px;
+  padding:20px; display:flex; flex-direction:column;
+}
+.card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.card-title { font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em; }
+.card-action { font-size:11px; color:#6366f1; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px; }
+.card-action:hover { color:#818cf8; }
+
+/* ─── Timeline / Fiscal Year ─── */
+.fy-timeline { padding:20px; }
+.fy-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.fy-title { font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em; }
+.fy-range { font-size:11px; color:#475569; font-family:'JetBrains Mono',monospace; }
+.quarters { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.quarter-card {
+  background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);
+  border-radius:12px; padding:16px; cursor:pointer; transition:all 0.15s; position:relative;
+}
+.quarter-card:hover { border-color:rgba(255,255,255,0.12); background:rgba(255,255,255,0.04); }
+.quarter-card.current { border-color:rgba(99,102,241,0.3); background:rgba(99,102,241,0.05); }
+.quarter-card.current::after {
+  content:'Current'; position:absolute; top:-8px; left:50%; transform:translateX(-50%);
+  font-size:9px; font-weight:700; background:#6366f1; color:white; padding:2px 8px; border-radius:10px;
+  text-transform:uppercase; letter-spacing:0.05em;
+}
+.q-label { font-size:14px; font-weight:800; color:#e2e8f0; margin-bottom:8px; }
+.q-months { font-size:10px; color:#475569; margin-bottom:10px; }
+.q-stats { display:flex; flex-direction:column; gap:4px; }
+.q-stat { display:flex; justify-content:space-between; font-size:11px; }
+.q-stat .q-stat-label { color:#64748b; }
+.q-stat .q-stat-val { font-family:'JetBrains Mono',monospace; font-weight:600; font-size:11px; }
+.q-stat .q-stat-val.pos { color:#34d399; }
+.q-stat .q-stat-val.neg { color:#f87171; }
+.q-progress { height:3px; background:rgba(255,255,255,0.06); border-radius:3px; margin-top:10px; overflow:hidden; }
+.q-progress-fill { height:100%; border-radius:3px; }
+.q-progress-fill.green { background:#10b981; }
+.q-progress-fill.amber { background:#f59e0b; }
+.q-progress-fill.blue { background:#3b82f6; }
+
+/* ─── Categorization Bar ─── */
+.cat-bar-wrap { padding:0 0 4px; }
+.cat-bar-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.cat-bar-label { font-size:11px; font-weight:600; color:#64748b; }
+.cat-bar-pct { font-size:12px; font-weight:700; color:#34d399; font-family:'JetBrains Mono',monospace; }
+.cat-bar { height:6px; background:rgba(255,255,255,0.06); border-radius:6px; overflow:hidden; }
+.cat-bar-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,#6366f1,#818cf8,#a78bfa); transition:width 0.6s ease; }
+
+/* ─── Cash Flow Chart ─── */
+.cashflow-chart { display:flex; align-items:flex-end; gap:6px; height:140px; padding:8px 0; }
+.cashflow-month { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+.cashflow-bars { display:flex; align-items:flex-end; gap:3px; width:100%; justify-content:center; height:110px; }
+.cashflow-bars .cf-bar { width:40%; border-radius:3px 3px 0 0; min-height:4px; transition:height 0.4s ease; }
+.cf-bar.inflow { background:linear-gradient(to top,rgba(16,185,129,0.5),rgba(16,185,129,0.2)); }
+.cf-bar.outflow { background:linear-gradient(to top,rgba(239,68,68,0.5),rgba(239,68,68,0.2)); }
+.cashflow-label { font-size:9px; color:#475569; font-weight:600; }
+.cf-legend { display:flex; gap:14px; margin-top:8px; }
+.cf-legend-item { display:flex; align-items:center; gap:5px; font-size:10px; color:#64748b; }
+.cf-legend-dot { width:8px; height:8px; border-radius:3px; }
+.cf-legend-dot.in { background:#10b981; }
+.cf-legend-dot.out { background:#ef4444; }
+
+/* ─── Transactions List ─── */
+.tx-list { display:flex; flex-direction:column; }
+.tx-row {
+  display:flex; align-items:center; gap:12px; padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition:all 0.1s;
+}
+.tx-row:hover { background:rgba(255,255,255,0.02); margin:0 -12px; padding:10px 12px; border-radius:8px; }
+.tx-row:last-child { border-bottom:none; }
+.tx-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.tx-dot.cat { background:#10b981; }
+.tx-dot.uncat { background:#f59e0b; }
+.tx-info { flex:1; min-width:0; }
+.tx-payee { font-size:12px; font-weight:600; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tx-date { font-size:10px; color:#475569; margin-top:1px; }
+.tx-amount { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; white-space:nowrap; }
+.tx-amount.debit { color:#f87171; }
+.tx-amount.credit { color:#34d399; }
+
+/* ─── Expense Categories ─── */
+.expense-row { margin-bottom:12px; }
+.expense-row:last-child { margin-bottom:0; }
+.expense-header { display:flex; justify-content:space-between; margin-bottom:4px; }
+.expense-name { font-size:11px; font-weight:500; color:#94a3b8; }
+.expense-val { font-size:11px; font-family:'JetBrains Mono',monospace; font-weight:600; color:#e2e8f0; }
+.expense-bar { height:4px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; }
+.expense-bar-fill { height:100%; border-radius:4px; }
+
+/* ─── Account Balances ─── */
+.account-row {
+  display:flex; align-items:center; gap:12px; padding:10px 12px;
+  background:rgba(255,255,255,0.02); border-radius:10px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.04);
+}
+.account-row:last-child { margin-bottom:0; }
+.account-icon {
+  width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0;
+}
+.account-info { flex:1; min-width:0; }
+.account-name { font-size:12px; font-weight:600; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.account-meta { font-size:10px; color:#475569; margin-top:1px; }
+.account-bal { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; }
+.account-bal.pos { color:#34d399; }
+.account-bal.neg { color:#f87171; }
+
+/* ─── Quick Actions ─── */
+.quick-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.qa-card {
+  display:flex; align-items:center; gap:10px; padding:12px 14px;
+  background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);
+  border-radius:10px; cursor:pointer; transition:all 0.12s;
+}
+.qa-card:hover { background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.1); transform:translateY(-1px); }
+.qa-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; }
+.qa-label { font-size:12px; font-weight:600; color:#e2e8f0; }
+.qa-desc { font-size:10px; color:#475569; margin-top:1px; }
+
+/* ─── Page Labels ─── */
+.page-label {
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:10px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.06em;
+  margin-bottom:6px;
+}
+.page-label i { font-size:12px; }
+
+/* ─── Status Pill ─── */
+.status-pill {
+  display:inline-flex; align-items:center; gap:4px; padding:3px 10px;
+  border-radius:100px; font-size:10px; font-weight:700; letter-spacing:0.02em;
+}
+.status-pill.live { background:rgba(16,185,129,0.12); color:#34d399; }
+.status-pill.live::before { content:''; width:6px; height:6px; border-radius:50%; background:#10b981; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,0.15); }
+</style>
+</head>
+<body>
+
+<!-- ─── Sidebar ─── -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark"><i class="ph ph-hexagon"></i></div>
+    <span>RoboLedger</span>
+  </div>
+
+  <div class="sidebar-section-label">Main</div>
+  <div class="nav-item active"><i class="ph ph-house"></i><span class="nav-label">Home</span></div>
+  <div class="nav-item"><i class="ph ph-rows"></i><span class="nav-label">Transactions</span></div>
+  <div class="nav-item"><i class="ph ph-upload-simple"></i><span class="nav-label">Import</span></div>
+
+  <div class="sidebar-section-label">Analysis</div>
+  <div class="nav-item"><i class="ph ph-chart-pie-slice"></i><span class="nav-label">Reports</span></div>
+  <div class="nav-item"><i class="ph ph-book-open"></i><span class="nav-label">Chart of Accounts</span></div>
+  <div class="nav-item"><i class="ph ph-receipt"></i><span class="nav-label">GST / HST</span></div>
+
+  <div class="sidebar-section-label">System</div>
+  <div class="nav-item"><i class="ph ph-gear"></i><span class="nav-label">Settings</span></div>
+  <div class="nav-item"><i class="ph ph-brain"></i><span class="nav-label">AI Audit</span></div>
+
+  <div class="sidebar-bottom">
+    <div style="display:flex;align-items:center;cursor:pointer;">
+      <div class="client-avatar">AC</div>
+      <div class="client-name">
+        <div style="font-size:12px;font-weight:600;color:#e2e8f0;">ABC Corp</div>
+        <div style="font-size:10px;color:#475569;">FY 2024</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── Main ─── -->
+<div class="main">
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="breadcrumb">
+          <span>ABC Corp</span> · <span>3 accounts</span> · <span>1,247 transactions</span>
+          <span class="status-pill live">Live</span>
+        </div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="cmd-k">
+        <i class="ph ph-magnifying-glass" style="font-size:14px;"></i>
+        Search anything...
+        <kbd>⌘K</kbd>
+      </div>
+      <button class="topbar-btn ghost"><i class="ph ph-bell" style="font-size:15px;"></i></button>
+      <button class="topbar-btn primary"><i class="ph ph-upload-simple"></i> Import</button>
+    </div>
+  </div>
+
+  <!-- Dashboard Content -->
+  <div class="dashboard">
+
+    <!-- KPI Cards -->
+    <div class="kpi-strip">
+      <div class="kpi-card green">
+        <div class="kpi-top"><span class="kpi-label">Revenue</span><i class="ph ph-trend-up kpi-icon"></i></div>
+        <div class="kpi-value">$284,320</div>
+        <div class="kpi-sub">4000-series · ↑ 12% vs prior</div>
+        <div class="kpi-sparkline">
+          <div class="bar" style="height:40%"></div><div class="bar" style="height:55%"></div>
+          <div class="bar" style="height:45%"></div><div class="bar" style="height:65%"></div>
+          <div class="bar" style="height:80%"></div><div class="bar" style="height:100%"></div>
+        </div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-top"><span class="kpi-label">Expenses</span><i class="ph ph-trend-down kpi-icon"></i></div>
+        <div class="kpi-value">$198,450</div>
+        <div class="kpi-sub">5000-9000 series</div>
+        <div class="kpi-sparkline">
+          <div class="bar" style="height:70%"></div><div class="bar" style="height:60%"></div>
+          <div class="bar" style="height:85%"></div><div class="bar" style="height:75%"></div>
+          <div class="bar" style="height:90%"></div><div class="bar" style="height:80%"></div>
+        </div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-top"><span class="kpi-label">Net Income</span><i class="ph ph-scales kpi-icon"></i></div>
+        <div class="kpi-value">$85,870</div>
+        <div class="kpi-sub">Profit · 30.2% margin</div>
+      </div>
+      <div class="kpi-card indigo">
+        <div class="kpi-top"><span class="kpi-label">Transactions</span><i class="ph ph-receipt kpi-icon"></i></div>
+        <div class="kpi-value">1,247</div>
+        <div class="kpi-sub">Across 3 accounts</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-top"><span class="kpi-label">Categorized</span><i class="ph ph-check-circle kpi-icon"></i></div>
+        <div class="kpi-value">87%</div>
+        <div class="kpi-sub">162 remaining</div>
+      </div>
+    </div>
+
+    <!-- Fiscal Year Timeline -->
+    <div class="card fy-timeline">
+      <div class="fy-header">
+        <span class="fy-title"><i class="ph ph-calendar-blank" style="margin-right:6px;font-size:13px;vertical-align:-1px;"></i>Fiscal Year Timeline</span>
+        <span class="fy-range">Jan 1, 2024 — Dec 31, 2024</span>
+      </div>
+      <div class="quarters">
+        <div class="quarter-card">
+          <div class="q-label">Q1</div>
+          <div class="q-months">Jan — Mar</div>
+          <div class="q-stats">
+            <div class="q-stat"><span class="q-stat-label">Revenue</span><span class="q-stat-val pos">$62,100</span></div>
+            <div class="q-stat"><span class="q-stat-label">Expenses</span><span class="q-stat-val neg">$48,200</span></div>
+            <div class="q-stat"><span class="q-stat-label">Net</span><span class="q-stat-val pos">$13,900</span></div>
+          </div>
+          <div class="q-progress"><div class="q-progress-fill green" style="width:100%"></div></div>
+        </div>
+        <div class="quarter-card">
+          <div class="q-label">Q2</div>
+          <div class="q-months">Apr — Jun</div>
+          <div class="q-stats">
+            <div class="q-stat"><span class="q-stat-label">Revenue</span><span class="q-stat-val pos">$78,400</span></div>
+            <div class="q-stat"><span class="q-stat-label">Expenses</span><span class="q-stat-val neg">$52,300</span></div>
+            <div class="q-stat"><span class="q-stat-label">Net</span><span class="q-stat-val pos">$26,100</span></div>
+          </div>
+          <div class="q-progress"><div class="q-progress-fill green" style="width:95%"></div></div>
+        </div>
+        <div class="quarter-card current">
+          <div class="q-label">Q3</div>
+          <div class="q-months">Jul — Sep</div>
+          <div class="q-stats">
+            <div class="q-stat"><span class="q-stat-label">Revenue</span><span class="q-stat-val pos">$89,200</span></div>
+            <div class="q-stat"><span class="q-stat-label">Expenses</span><span class="q-stat-val neg">$61,400</span></div>
+            <div class="q-stat"><span class="q-stat-label">Net</span><span class="q-stat-val pos">$27,800</span></div>
+          </div>
+          <div class="q-progress"><div class="q-progress-fill amber" style="width:72%"></div></div>
+        </div>
+        <div class="quarter-card">
+          <div class="q-label">Q4</div>
+          <div class="q-months">Oct — Dec</div>
+          <div class="q-stats">
+            <div class="q-stat"><span class="q-stat-label">Revenue</span><span class="q-stat-val pos">$54,620</span></div>
+            <div class="q-stat"><span class="q-stat-label">Expenses</span><span class="q-stat-val neg">$36,550</span></div>
+            <div class="q-stat"><span class="q-stat-label">Net</span><span class="q-stat-val pos">$18,070</span></div>
+          </div>
+          <div class="q-progress"><div class="q-progress-fill blue" style="width:40%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Categorization Bar -->
+    <div class="cat-bar-wrap">
+      <div class="cat-bar-header">
+        <span class="cat-bar-label"><i class="ph ph-check-circle" style="margin-right:4px;font-size:12px;vertical-align:-1px;color:#6366f1;"></i>Categorization Progress</span>
+        <span class="cat-bar-pct">87% · 162 remaining</span>
+      </div>
+      <div class="cat-bar"><div class="cat-bar-fill" style="width:87%"></div></div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="content-grid">
+
+      <!-- Left Column -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Cash Flow -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="ph ph-chart-bar" style="margin-right:5px;font-size:13px;vertical-align:-1px;"></i>Monthly Cash Flow</span>
+            <span class="card-action">Last 6 months <i class="ph ph-arrow-right" style="font-size:10px;"></i></span>
+          </div>
+          <div class="cashflow-chart">
+            <div class="cashflow-month">
+              <div class="cashflow-bars"><div class="cf-bar inflow" style="height:50%"></div><div class="cf-bar outflow" style="height:38%"></div></div>
+              <span class="cashflow-label">Sep</span>
+            </div>
+            <div class="cashflow-month">
+              <div class="cashflow-bars"><div class="cf-bar inflow" style="height:62%"></div><div class="cf-bar outflow" style="height:48%"></div></div>
+              <span class="cashflow-label">Oct</span>
+            </div>
+            <div class="cashflow-month">
+              <div class="cashflow-bars"><div class="cf-bar inflow" style="height:55%"></div><div class="cf-bar outflow" style="height:60%"></div></div>
+              <span class="cashflow-label">Nov</span>
+            </div>
+            <div class="cashflow-month">
+              <div class="cashflow-bars"><div class="cf-bar inflow" style="height:78%"></div><div class="cf-bar outflow" style="height:52%"></div></div>
+              <span class="cashflow-label">Dec</span>
+            </div>
+            <div class="cashflow-month">
+              <div class="cashflow-bars"><div class="cf-bar inflow" style="height:90%"></div><div class="cf-bar outflow" style="height:65%"></div></div>
+              <span class="cashflow-label">Jan</span>
+            </div>
+            <div class="cashflow-month">
+              <div class="cashflow-bars"><div class="cf-bar inflow" style="height:100%"></div><div class="cf-bar outflow" style="height:70%"></div></div>
+              <span class="cashflow-label">Feb</span>
+            </div>
+          </div>
+          <div class="cf-legend">
+            <div class="cf-legend-item"><div class="cf-legend-dot in"></div>Inflow (Credits)</div>
+            <div class="cf-legend-item"><div class="cf-legend-dot out"></div>Outflow (Debits)</div>
+          </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="ph ph-list-dashes" style="margin-right:5px;font-size:13px;vertical-align:-1px;"></i>Recent Transactions</span>
+            <span class="card-action">View All <i class="ph ph-arrow-right" style="font-size:10px;"></i></span>
+          </div>
+          <div class="tx-list">
+            <div class="tx-row">
+              <div class="tx-dot cat"></div>
+              <div class="tx-info"><div class="tx-payee">Shopify Monthly Plan</div><div class="tx-date">Feb 18, 2024</div></div>
+              <div class="tx-amount debit">-$79.00</div>
+            </div>
+            <div class="tx-row">
+              <div class="tx-dot cat"></div>
+              <div class="tx-info"><div class="tx-payee">Client Payment — Invoice #4821</div><div class="tx-date">Feb 17, 2024</div></div>
+              <div class="tx-amount credit">+$4,200.00</div>
+            </div>
+            <div class="tx-row">
+              <div class="tx-dot uncat"></div>
+              <div class="tx-info"><div class="tx-payee">INTERAC E-TRANSFER FROM J SMITH</div><div class="tx-date">Feb 16, 2024</div></div>
+              <div class="tx-amount credit">+$850.00</div>
+            </div>
+            <div class="tx-row">
+              <div class="tx-dot cat"></div>
+              <div class="tx-info"><div class="tx-payee">AWS Cloud Services</div><div class="tx-date">Feb 15, 2024</div></div>
+              <div class="tx-amount debit">-$342.18</div>
+            </div>
+            <div class="tx-row">
+              <div class="tx-dot cat"></div>
+              <div class="tx-info"><div class="tx-payee">Bell Canada — Internet</div><div class="tx-date">Feb 14, 2024</div></div>
+              <div class="tx-amount debit">-$119.95</div>
+            </div>
+            <div class="tx-row">
+              <div class="tx-dot uncat"></div>
+              <div class="tx-info"><div class="tx-payee">STRIPE PAYOUT TRSFR</div><div class="tx-date">Feb 13, 2024</div></div>
+              <div class="tx-amount credit">+$2,180.50</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="ph ph-lightning" style="margin-right:5px;font-size:13px;vertical-align:-1px;"></i>Quick Actions</span>
+          </div>
+          <div class="quick-actions">
+            <div class="qa-card">
+              <div class="qa-icon" style="background:rgba(59,130,246,0.12);color:#60a5fa;"><i class="ph ph-upload-simple"></i></div>
+              <div><div class="qa-label">Import</div><div class="qa-desc">CSV, PDF</div></div>
+            </div>
+            <div class="qa-card">
+              <div class="qa-icon" style="background:rgba(99,102,241,0.12);color:#818cf8;"><i class="ph ph-rows"></i></div>
+              <div><div class="qa-label">Transactions</div><div class="qa-desc">View & categorize</div></div>
+            </div>
+            <div class="qa-card">
+              <div class="qa-icon" style="background:rgba(16,185,129,0.12);color:#34d399;"><i class="ph ph-chart-pie-slice"></i></div>
+              <div><div class="qa-label">Reports</div><div class="qa-desc">TB, P&L, GST</div></div>
+            </div>
+            <div class="qa-card">
+              <div class="qa-icon" style="background:rgba(100,116,139,0.12);color:#94a3b8;"><i class="ph ph-gear-six"></i></div>
+              <div><div class="qa-label">Settings</div><div class="qa-desc">Province, tax</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Top Expenses -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="ph ph-chart-bar-horizontal" style="margin-right:5px;font-size:13px;vertical-align:-1px;"></i>Top Expenses</span>
+          </div>
+          <div>
+            <div class="expense-row">
+              <div class="expense-header"><span class="expense-name">Advertising & Marketing</span><span class="expense-val">$34,200</span></div>
+              <div class="expense-bar"><div class="expense-bar-fill" style="width:100%;background:linear-gradient(90deg,#6366f1,#818cf8);"></div></div>
+            </div>
+            <div class="expense-row">
+              <div class="expense-header"><span class="expense-name">Professional Services</span><span class="expense-val">$28,900</span></div>
+              <div class="expense-bar"><div class="expense-bar-fill" style="width:84%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);"></div></div>
+            </div>
+            <div class="expense-row">
+              <div class="expense-header"><span class="expense-name">Office Supplies</span><span class="expense-val">$18,450</span></div>
+              <div class="expense-bar"><div class="expense-bar-fill" style="width:54%;background:linear-gradient(90deg,#ec4899,#f472b6);"></div></div>
+            </div>
+            <div class="expense-row">
+              <div class="expense-header"><span class="expense-name">Software & SaaS</span><span class="expense-val">$12,300</span></div>
+              <div class="expense-bar"><div class="expense-bar-fill" style="width:36%;background:linear-gradient(90deg,#f59e0b,#fbbf24);"></div></div>
+            </div>
+            <div class="expense-row">
+              <div class="expense-header"><span class="expense-name">Insurance</span><span class="expense-val">$8,600</span></div>
+              <div class="expense-bar"><div class="expense-bar-fill" style="width:25%;background:linear-gradient(90deg,#64748b,#94a3b8);"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Account Balances -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="ph ph-bank" style="margin-right:5px;font-size:13px;vertical-align:-1px;"></i>Account Balances</span>
+          </div>
+          <div>
+            <div class="account-row">
+              <div class="account-icon" style="background:rgba(99,102,241,0.12);color:#818cf8;"><i class="ph ph-bank"></i></div>
+              <div class="account-info">
+                <div class="account-name">RBC Business Chequing</div>
+                <div class="account-meta">423 txns · Last: Feb 18</div>
+              </div>
+              <div class="account-bal pos">$42,180</div>
+            </div>
+            <div class="account-row">
+              <div class="account-icon" style="background:rgba(168,85,247,0.12);color:#a78bfa;"><i class="ph ph-credit-card"></i></div>
+              <div class="account-info">
+                <div class="account-name">BMO Mastercard</div>
+                <div class="account-meta">318 txns · Last: Feb 17</div>
+              </div>
+              <div class="account-bal neg">-$3,420</div>
+            </div>
+            <div class="account-row">
+              <div class="account-icon" style="background:rgba(16,185,129,0.12);color:#34d399;"><i class="ph ph-piggy-bank"></i></div>
+              <div class="account-info">
+                <div class="account-name">TD Savings</div>
+                <div class="account-meta">506 txns · Last: Feb 15</div>
+              </div>
+              <div class="account-bal pos">$128,940</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GST Summary -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="ph ph-receipt" style="margin-right:5px;font-size:13px;vertical-align:-1px;"></i>GST / HST Summary</span>
+            <span class="card-action">Full Report <i class="ph ph-arrow-right" style="font-size:10px;"></i></span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(239,68,68,0.06);border-radius:8px;">
+              <span style="font-size:11px;color:#94a3b8;font-weight:500;">Collected</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#f87171;">$36,962</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(16,185,129,0.06);border-radius:8px;">
+              <span style="font-size:11px;color:#94a3b8;font-weight:500;">ITC (Paid)</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#34d399;">$25,799</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(99,102,241,0.08);border-radius:8px;border:1px solid rgba(99,102,241,0.15);">
+              <span style="font-size:11px;color:#818cf8;font-weight:700;">Net Payable to CRA</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;color:#f1f5f9;">$11,163</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

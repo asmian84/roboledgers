@@ -137,9 +137,12 @@ BMO MASTERCARD FORMAT:
       debit: isCredit ? amount : 0,     // CR / payment / refund → DEBIT (reduces liability)
       credit: isCredit ? 0 : amount,    // No CR → CREDIT (purchase increases liability)
       balance,
+      _brand: 'BMO',
+      _tag: 'Mastercard',
+      _accountType: 'CreditCard',
       rawText: this.cleanRawText(originalLine),
       parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
-            pdfLocation: auditData.pdfLocation,
+      pdfLocation: auditData.pdfLocation,
       audit: auditData.audit
     };
   }

@@ -26,7 +26,7 @@ SMART PARSING RULES:
    * KEY INSIGHT: Multiple transactions can occur on the same date
    * A new transaction starts when we see an AMOUNT (not a new date)
    */
-  parseWithRegex(text, metadata = null, lineMetadata = []) {
+  async parse(text, metadata = null, lineMetadata = []) {
         // ── AUDIT IDENTITY: statement ID + sequence counter ──────────────────
         // Produces parser_ref like "RBCSAV-2024NOV-001" on every transaction.
         // Mirrors AmexParser audit structure for consistent audit drawer display.

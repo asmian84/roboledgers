@@ -1853,6 +1853,30 @@
       } else {
         UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
       }
+    } else if (route === 'reconciliation') {
+      const _reconAcc = UI_STATE.selectedAccount !== 'ALL'
+        ? (window.RoboLedger?.Accounts?.getAll?.() || []).find(a => a.id === UI_STATE.selectedAccount)
+        : null;
+      const _reconAccLabel = _reconAcc ? (_reconAcc.name || _reconAcc.ref || 'Account') : null;
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        const base = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: 'Transactions', route: 'import' },
+          { label: 'Bank Reconciliation', ...(_reconAccLabel ? { route: 'reconciliation' } : { active: true }) },
+        ];
+        if (_reconAccLabel) base.push({ label: _reconAccLabel, active: true });
+        UI_STATE.breadcrumbs = base;
+      } else {
+        const base = [
+          { label: 'Home' },
+          { label: 'Transactions', route: 'import' },
+          { label: 'Bank Reconciliation', ...(_reconAccLabel ? { route: 'reconciliation' } : { active: true }) },
+        ];
+        if (_reconAccLabel) base.push({ label: _reconAccLabel, active: true });
+        UI_STATE.breadcrumbs = base;
+      }
     } else {
       const label = route.charAt(0).toUpperCase() + route.slice(1);
       if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
@@ -2908,6 +2932,7 @@
       case 'import': return renderTransactionsRestored();
       case 'coa': return renderCOAPage();
       case 'reports': return renderReportsPage();
+      case 'reconciliation': return renderBankRecPage();
       case 'roadmap': return renderRoadmapPage();
       case 'accountants': setTimeout(() => window.openContextDrawer(), 0); return '';
       case 'clients':     setTimeout(() => window.openContextDrawer(), 0); return '';
@@ -4768,7 +4793,14 @@
       if (!catCode || catCode === 'uncategorized' || catCode === '9970') continue;
       if (catCode === sourceCoaCode) continue; // avoid double-counting
 
-      const signedAmount = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
+      // Use COA sign field to determine credit-normal vs debit-normal
+      // Revenue (credit-normal): CREDIT increases balance (+), DEBIT decreases (-)
+      // Expense (debit-normal):  DEBIT increases balance (+), CREDIT decreases (-)
+      const coaEntry = allCOAAccounts.find(a => a.code === catCode);
+      const isCatCreditNormal = coaEntry?.sign === 'Credit';
+      const signedAmount = tx.polarity === 'DEBIT'
+        ? (isCatCreditNormal ? -absAmount : absAmount)
+        : (isCatCreditNormal ? absAmount : -absAmount);
       balances.set(catCode, (balances.get(catCode) || 0) + signedAmount);
     }
 
@@ -4825,6 +4857,27 @@
               `).join('')}
           </div>
       </div>
+    `;
+  }
+
+  // ─── BANK RECONCILIATION PAGE ─────────────────────────────────────────────
+  function renderBankRecPage() {
+    // Mount the React BankReconciliationReport component after a brief delay
+    // to ensure the DOM shell is ready
+    setTimeout(() => {
+      if (window.mountBankRecPage) {
+        window.mountBankRecPage();
+      } else {
+        // Fallback: if React bridge not yet available, show a loading state
+        const container = document.getElementById('bankrec-container');
+        if (container) {
+          container.innerHTML = '<div style="padding:40px;text-align:center;color:#64748b;">Loading reconciliation...</div>';
+        }
+      }
+    }, 50);
+
+    return `
+      <div id="bankrec-container" style="width:100%;height:100%;display:flex;flex-direction:column;"></div>
     `;
   }
 
@@ -4979,12 +5032,15 @@
       totalUncat += uncatCount;
 
       // Revenue (4000-series) and Expenses (5000-9000 series)
+      // Use canonical amount_cents + polarity (debit/credit fields are deprecated)
       txList.forEach(t => {
         const code = parseInt(t.category) || 0;
-        const debit  = parseFloat(t.debit)  || 0;
-        const credit = parseFloat(t.credit) || 0;
-        if (code >= 4000 && code < 5000) totalRevenue  += credit - debit;
-        if (code >= 5000 && code < 9970) totalExpenses += debit - credit;
+        const absAmt = (t.amount_cents || 0) / 100;
+        const isDebit = t.polarity === 'DEBIT';
+        // Revenue is credit-normal: CREDIT increases revenue, DEBIT decreases
+        if (code >= 4000 && code < 5000) totalRevenue  += isDebit ? -absAmt : absAmt;
+        // Expenses are debit-normal: DEBIT increases expense, CREDIT decreases
+        if (code >= 5000 && code < 9970) totalExpenses += isDebit ? absAmt : -absAmt;
       });
 
       // Health
@@ -5397,10 +5453,10 @@
         const ledger = (typeof raw === 'string') ? JSON.parse(raw) : raw;
         Object.values(ledger.transactions || {}).forEach(t => {
           const code = parseInt(t.category) || 0;
-          const debit  = parseFloat(t.debit)  || 0;
-          const credit = parseFloat(t.credit) || 0;
-          if (code >= 4000 && code < 5000) _portalRevenue  += credit - debit;
-          if (code >= 5000 && code < 9970) _portalExpenses += debit - credit;
+          const absAmt = (t.amount_cents || 0) / 100;
+          const isDebit = t.polarity === 'DEBIT';
+          if (code >= 4000 && code < 5000) _portalRevenue  += isDebit ? -absAmt : absAmt;
+          if (code >= 5000 && code < 9970) _portalExpenses += isDebit ? absAmt : -absAmt;
         });
       } catch {}
     });

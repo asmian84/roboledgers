@@ -26,7 +26,7 @@ SMART PARSING RULES:
    * KEY INSIGHT: Multiple transactions can occur on the same date
    * A new transaction starts when we see an AMOUNT (not a new date)
    */
-  parseWithRegex(text, metadata = null, lineMetadata = []) {
+  async parse(text, metadata = null, lineMetadata = []) {
         // ── AUDIT IDENTITY: statement ID + sequence counter ──────────────────
         // Produces parser_ref like "RBCCHQ-2024NOV-001" on every transaction.
         // Mirrors AmexParser audit structure for consistent audit drawer display.
@@ -362,7 +362,8 @@ SMART PARSING RULES:
           debit: g.isCredit ? 0 : g.amount,
           credit: g.isCredit ? g.amount : 0,
           balance: runningBalance,
-          _brand: 'RBC', _tag: 'Chequing',
+          _brand: 'RBC', _tag: 'Chequing', _accountType: 'Chequing',
+          rawText: this.cleanRawText ? this.cleanRawText(g.line) : (g.line || ''),
           parser_ref: _auditRef1.parser_ref,
           pdfLocation: _auditRef1.pdfLocation,
           audit: _auditRef1.audit,
@@ -392,6 +393,7 @@ SMART PARSING RULES:
               credit: g.isCredit ? g.amount : 0,
               balance: runningBalance,
               _brand: 'RBC', _tag: 'Chequing', _accountType: 'Chequing',
+              rawText: this.cleanRawText ? this.cleanRawText(g.line) : (g.line || ''),
               parser_ref: _auditRef2.parser_ref,
               pdfLocation: _auditRef2.pdfLocation,
               audit: _auditRef2.audit,
@@ -424,6 +426,7 @@ SMART PARSING RULES:
           credit: isCredit ? row.amount : 0,
           balance: runningBalance,
           _brand: 'RBC', _tag: 'Chequing', _accountType: 'Chequing',
+          rawText: this.cleanRawText ? this.cleanRawText(row.line) : (row.line || ''),
           parser_ref: _auditRef3.parser_ref,
           pdfLocation: _auditRef3.pdfLocation,
           audit: _auditRef3.audit,
@@ -450,7 +453,8 @@ SMART PARSING RULES:
           debit: isCredit ? 0 : g.amount,
           credit: isCredit ? g.amount : 0,
           balance: runningBalance,
-          _brand: 'RBC', _tag: 'Chequing',
+          _brand: 'RBC', _tag: 'Chequing', _accountType: 'Chequing',
+          rawText: this.cleanRawText ? this.cleanRawText(g.line) : (g.line || ''),
           parser_ref: _auditRef4.parser_ref,
           pdfLocation: _auditRef4.pdfLocation,
           audit: _auditRef4.audit,
@@ -765,6 +769,21 @@ SMART PARSING RULES:
 
     return desc;
   }
+
+  // ── Audit identity helpers (parity with other parsers) ────────────────────
+  _getStmtId(text) {
+    if (this._cachedStmtId) return this._cachedStmtId;
+    let year = new Date().getFullYear().toString();
+    let month = 'UNK';
+    const ym = (text || '').match(/20\d{2}/);
+    if (ym) year = ym[0];
+    const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+    if (mm) month = mm[1].substring(0, 3).toUpperCase();
+    this._cachedStmtId = 'RBCCHQ-' + year + month;
+    this._txSeq = 0;
+    return this._cachedStmtId;
+  }
+  _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
 }
 
 // Expose to window for file:// compatibility

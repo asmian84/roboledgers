@@ -286,9 +286,7 @@ export function FilterToolbar({
                 {/* Bank Reconciliation Shortcut */}
                 <button
                     onClick={() => {
-                        if (window.navigateTo) window.navigateTo('reports');
-                        // Small delay to let ReportsPage mount and register __openBankReconciliation
-                        setTimeout(() => window.__openBankReconciliation?.(), 80);
+                        if (window.navigateTo) window.navigateTo('reconciliation');
                     }}
                     className={btnClass}
                     title="Bank Reconciliation"

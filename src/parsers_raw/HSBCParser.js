@@ -102,13 +102,23 @@ HSBC BANK FORMAT:
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
 
         let debit = 0, credit = 0;
-        // HSBC usually has Withdrawal then Deposit columns
+        // HSBC format: Date | Description | Withdrawal | Deposit | Balance
+        // When 3+ amounts: withdrawal=amounts[0], deposit=amounts[1], balance=amounts[last]
+        // When 2 amounts:  only one column is populated; balance=amounts[last], amount=amounts[0]
+        //   → use keyword heuristics to determine which column is non-zero
         if (amounts.length >= 3) {
-            debit = amount;
+            // Both withdrawal and deposit present on same row (rare: interest + balance)
+            // amounts[0]=withdrawal, amounts[1]=deposit, amounts[last]=balance
+            debit  = parseFloat(amounts[0].replace(/,/g, ''));
             credit = parseFloat(amounts[1].replace(/,/g, ''));
         } else {
-            // Heuristic or user adjustment
-            debit = amount;
+            // Only one non-zero column — use description keywords to classify
+            const isDeposit = /deposit|credit|interest earned|payroll|transfer from|e-transfer.*rec|refund|direct deposit|autodeposit/i.test(description);
+            if (isDeposit) {
+                credit = amount;
+            } else {
+                debit = amount;
+            }
         }
 
         const auditData = this.buildAuditData(originalLine, 'HSBCParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
