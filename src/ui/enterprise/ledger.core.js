@@ -413,6 +413,55 @@ window.RoboLedger = (function () {
 
             // Re-seed COA defaults (backfills any missing entries after client switch)
             COA.init();
+
+            // MIGRATION: Rebuild stale account display names and sync COA entries.
+            //
+            // Two related issues fixed here:
+            // 1. acc.name may be stale (e.g. "TD - Chequing") if the account was first
+            //    imported with wrong bank data that was later corrected. Rebuild the name
+            //    whenever bankName is available and disagrees with the name.
+            // 2. COA entry names were never updated when acc.name changed. Sync them.
+            //
+            // This pass runs on every load — idempotent and cheap.
+            let _coaNameSynced = 0;
+            for (const acc of state.accounts) {
+                // ── Step 1: Rebuild acc.name if bankName disagrees with current name ──
+                if (acc.bankName && acc.name) {
+                    const bankShortLookup = {
+                        'Royal Bank of Canada': 'RBC', 'RBC Royal Bank': 'RBC', 'RBC': 'RBC',
+                        'Toronto-Dominion Bank': 'TD', 'TD Canada Trust': 'TD', 'TD': 'TD',
+                        'Canadian Imperial Bank of Commerce': 'CIBC', 'CIBC': 'CIBC',
+                        'Bank of Montreal': 'BMO', 'BMO Bank of Montreal': 'BMO', 'BMO': 'BMO',
+                        'Scotiabank': 'Scotia', 'The Bank of Nova Scotia': 'Scotia',
+                        'ATB Financial': 'ATB', 'ATB': 'ATB', 'HSBC': 'HSBC'
+                    };
+                    const instCodeMap = { '003': 'RBC', '001': 'BMO', '004': 'TD', '002': 'Scotia', '010': 'CIBC', '016': 'HSBC' };
+                    const expectedBank = bankShortLookup[acc.bankName] || acc.bankName || instCodeMap[acc.inst] || '';
+                    // Check if the name starts with the right bank abbreviation
+                    if (expectedBank && !acc.name.toLowerCase().startsWith(expectedBank.toLowerCase())) {
+                        const rebuilt = Accounts._buildCleanAccountName(acc);
+                        if (rebuilt && rebuilt !== acc.name && !rebuilt.startsWith('Bank -')) {
+                            console.log(`[ACCOUNTS] Rebuilt stale name for ${acc.id}: "${acc.name}" → "${rebuilt}"`);
+                            acc.name = rebuilt;
+                        }
+                    }
+                }
+
+                // ── Step 2: Sync COA entry name to acc.name ──
+                if (acc.coaCode && acc.name && state.coa[acc.coaCode]) {
+                    const coaEntry = state.coa[acc.coaCode];
+                    if (coaEntry.name !== acc.name) {
+                        console.log(`[COA] Migrate name: ${acc.coaCode} "${coaEntry.name}" → "${acc.name}"`);
+                        coaEntry.name = acc.name;
+                        _coaNameSynced++;
+                    }
+                }
+            }
+            if (_coaNameSynced > 0) {
+                console.log(`[COA] Synced ${_coaNameSynced} COA entry names to match account names`);
+                save();
+            }
+
             if (window.RuleEngine?.updateTransactionContext) {
                 window.RuleEngine.updateTransactionContext(Object.values(state.transactions));
             }
@@ -1441,6 +1490,10 @@ window.RoboLedger = (function () {
                     const newName = this._buildCleanAccountName(acc);
                     console.log(`[ACCOUNTS] Renamed malformed account ${acc.id}: "${acc.name}" → "${newName}"`);
                     acc.name = newName;
+                    // Also sync COA entry name if linked
+                    if (acc.coaCode && state.coa[acc.coaCode]) {
+                        state.coa[acc.coaCode].name = newName;
+                    }
                     save();
                 }
                 // Must have a real, non-empty name (not placeholder junk)
@@ -1593,6 +1646,10 @@ window.RoboLedger = (function () {
             else if (metadata._bank !== undefined && !acc.bankName) acc.bankName = metadata._bank;
             else if (metadata.name !== undefined && !acc.bankName) acc.bankName = metadata.name;
 
+            // Bank/network icons — persist these so UI can render logos without re-deriving
+            if (metadata.bankIcon !== undefined) acc.bankIcon = metadata.bankIcon;
+            if (metadata.networkIcon !== undefined) acc.networkIcon = metadata.networkIcon;
+
             if (metadata.statementClosingDay !== undefined) acc.statementClosingDay = metadata.statementClosingDay;
             if (metadata.currency !== undefined) acc.currency = metadata.currency;
             if (!acc.currency) acc.currency = 'CAD';
@@ -1663,6 +1720,19 @@ window.RoboLedger = (function () {
                 this._assignCOACode(acc);
             }
 
+            // ── Retroactively sync COA display name for existing linked accounts ──
+            // When an account is re-imported, its acc.name may be updated (e.g. bank
+            // name resolved, last4 digits added) but the linked COA entry still has
+            // the old template name ("Bank - chequing", "Savings account #2", etc.).
+            // Sync it here so the Trial Balance always shows the real account name.
+            if (!isNewAccount && acc.coaCode && state.coa[acc.coaCode]) {
+                const oldCoaName = state.coa[acc.coaCode].name;
+                if (oldCoaName !== acc.name) {
+                    state.coa[acc.coaCode].name = acc.name;
+                    console.log(`[COA] Synced COA name: ${acc.coaCode} "${oldCoaName}" → "${acc.name}"`);
+                }
+            }
+
             save();
         },
 
@@ -1679,7 +1749,9 @@ window.RoboLedger = (function () {
             let rangeStart, rangeEnd, root, leadsheet, sign, templateMapNo;
 
             if (isCC) {
-                rangeStart = 2101; rangeEnd = 2199;
+                // 2101 = "Visa payable" template, 2103 = "Bonus Payable" template — skip to 2104
+                // 2104-2119 is a clean range reserved for imported CC accounts
+                rangeStart = 2104; rangeEnd = 2119;
                 root = 'LIABILITY'; leadsheet = 'BB'; sign = 'Credit'; templateMapNo = 215;
             } else if (isSavings) {
                 rangeStart = 1035; rangeEnd = 1099;
@@ -1691,15 +1763,31 @@ window.RoboLedger = (function () {
             }
 
             // Find first unused code in range
+            // CC_TEMPLATE_NAMES: generic placeholder names that can safely be claimed for CC accounts.
+            // Any COA entry with a different name is a real accounting entry and must NOT be clobbered.
+            const CC_TEMPLATE_NAMES = /visa payable|mastercard payable|amex payable|credit card|cc payable/i;
             let assignedCode = null;
             for (let code = rangeStart; code <= rangeEnd; code++) {
                 const codeStr = String(code);
-                if (!state.coa[codeStr] || !state.coa[codeStr].sourceAccountId) {
-                    // Check if this default entry is a "template" (no sourceAccountId) — we can claim it
-                    // OR it doesn't exist yet — create it
+                const existing = state.coa[codeStr];
+                if (!existing) {
+                    // Slot doesn't exist yet — can create it
                     assignedCode = codeStr;
                     break;
                 }
+                if (existing.sourceAccountId) {
+                    // Already claimed by a real imported account — skip
+                    continue;
+                }
+                // Unclaimed but existing entry: only claim if it's a generic CC/bank placeholder name
+                // or if it's in the CHQ/SAV ranges (those are always bank slot templates)
+                const isChqSavRange = (code >= 1000 && code <= 1099);
+                const isCCPlaceholder = CC_TEMPLATE_NAMES.test(existing.name || '');
+                if (isChqSavRange || isCCPlaceholder) {
+                    assignedCode = codeStr;
+                    break;
+                }
+                // Otherwise skip — it's a real accounting entry (e.g. "Bonus Payable")
             }
 
             if (!assignedCode) {

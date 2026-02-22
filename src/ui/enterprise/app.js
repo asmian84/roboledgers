@@ -6205,19 +6205,22 @@
             <div style="display: flex; align-items: center; gap: 8px;">
               ${(() => {
                 if (!acc) return '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
-                const _bank = (acc.bankIcon || acc.bankName || '').toLowerCase();
+                // Check bankIcon, bankName, AND account name — account name is most reliable since it's always set
+                const _bank = (acc.bankIcon || acc.bankName || acc.name || '').toLowerCase();
                 const _brand = (acc.brand || acc.cardNetwork || '').toLowerCase();
-                const _ref = (acc.ref || '').toLowerCase();
+                const _ref = (acc.ref || '').toUpperCase();
                 const _is = `width:24px;height:24px;border-radius:4px;object-fit:contain;`;
                 const _bp = '/logos/';
-                if (_brand.includes('visa') || _ref.includes('visa')) return `<img src="${_bp}visa.png" style="${_is}" />`;
-                if (_brand.includes('mc') || _brand.includes('mastercard') || _ref.includes('mc')) return `<img src="${_bp}mastercard.png" style="${_is}" />`;
-                if (_brand.includes('amex') || _ref.includes('amex')) return `<img src="${_bp}amex.png" style="${_is}" />`;
-                if (_bank.includes('rbc') || _bank.includes('royal')) return `<img src="${_bp}rbc.png" style="${_is}" />`;
-                if (_bank.includes('td') || _bank.includes('dominion')) return `<img src="${_bp}td.png" style="${_is}" />`;
-                if (_bank.includes('bmo') || _bank.includes('montreal')) return `<img src="${_bp}bmo.png" style="${_is}" />`;
-                if (_bank.includes('scotia')) return `<img src="${_bp}scotia.png" style="${_is}" />`;
-                if (_bank.includes('cibc')) return `<img src="${_bp}cibc.png" style="${_is}" />`;
+                // Card networks — check brand first, then ref prefix
+                if (_brand.includes('visa') || _ref.startsWith('VISA')) return `<img src="${_bp}visa.png" style="${_is}" />`;
+                if (_brand.includes('mc') || _brand.includes('mastercard') || _ref.startsWith('MC')) return `<img src="${_bp}mastercard.png" style="${_is}" />`;
+                if (_brand.includes('amex') || _ref.startsWith('AMEX')) return `<img src="${_bp}amex.png" style="${_is}" />`;
+                // Banks — check name/bankName, then ref prefix
+                if (_bank.includes('rbc') || _bank.includes('royal') || _ref.startsWith('CHQ') || _ref.startsWith('SAV')) return `<img src="${_bp}rbc.png" style="${_is}" />`;
+                if (_bank.includes('td') || _bank.includes('dominion') || _ref.startsWith('TD')) return `<img src="${_bp}td.png" style="${_is}" />`;
+                if (_bank.includes('bmo') || _bank.includes('montreal') || _ref.startsWith('BMO')) return `<img src="${_bp}bmo.png" style="${_is}" />`;
+                if (_bank.includes('scotia') || _ref.startsWith('SCOTIA')) return `<img src="${_bp}scotia.png" style="${_is}" />`;
+                if (_bank.includes('cibc') || _ref.startsWith('CIBC')) return `<img src="${_bp}cibc.png" style="${_is}" />`;
                 return '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
               })()}
               <select id="account-selector" onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 4px 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase; outline: none; transition: opacity 0.2s;">

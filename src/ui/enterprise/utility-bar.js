@@ -584,9 +584,18 @@ window.updateUtilityBar = function () {
             if (bankName.includes('cibc'))
                 return `<img src="${basePath}cibc.png" alt="CIBC" style="${imgStyle}" />`;
 
-            // Fallback: try to match from account ref prefix
-            if (ref.startsWith('CHQ') || ref.startsWith('SAV') || ref.startsWith('TD'))
-                return `<i class="ph ph-bank" style="font-size:${size}px;flex-shrink:0;"></i>`;
+            // Fallback: derive icon from account name or ref prefix
+            const accName = (acc.name || '').toLowerCase();
+            if (accName.includes('rbc') || accName.includes('royal') || ref.startsWith('CHQ') || ref.startsWith('SAV'))
+                return `<img src="${basePath}rbc.png" alt="RBC" style="${imgStyle}" />`;
+            if (accName.includes(' td ') || accName.startsWith('td ') || ref.startsWith('TD'))
+                return `<img src="${basePath}td.png" alt="TD" style="${imgStyle}" />`;
+            if (accName.includes('bmo') || ref.startsWith('BMO'))
+                return `<img src="${basePath}bmo.png" alt="BMO" style="${imgStyle}" />`;
+            if (accName.includes('scotia') || ref.startsWith('SCOTIA'))
+                return `<img src="${basePath}scotia.png" alt="Scotia" style="${imgStyle}" />`;
+            if (accName.includes('cibc') || ref.startsWith('CIBC'))
+                return `<img src="${basePath}cibc.png" alt="CIBC" style="${imgStyle}" />`;
 
             return `<i class="ph ph-bank" style="font-size:${size}px;flex-shrink:0;"></i>`;
         }
