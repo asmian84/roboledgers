@@ -1581,7 +1581,16 @@ window.RoboLedger = (function () {
                 return last4 ? `${bankLabel} - ${brandShort} #${last4}` : `${bankLabel} - ${brandShort}`;
             }
 
-            const typeStr = acc.accountType === 'SAVINGS' ? 'Savings' : 'Chequing';
+            // Determine account type label for display
+            const typeUpper = (acc.accountType || '').toUpperCase();
+            let typeStr;
+            if (typeUpper === 'SAVINGS') typeStr = 'Savings';
+            else if (typeUpper === 'LOC' || typeUpper === 'LINE_OF_CREDIT' || typeUpper === 'LINEOFCREDIT') typeStr = 'Line of Credit';
+            else if (typeUpper === 'MORTGAGE') typeStr = 'Mortgage';
+            else if (typeUpper === 'LOAN' || typeUpper === 'BANK_LOAN' || typeUpper === 'BANKLOAN') typeStr = 'Loan';
+            else if (typeUpper === 'FINANCE_CONTRACT' || typeUpper === 'FINANCECONTRACT') typeStr = 'Finance Contract';
+            else typeStr = 'Chequing';
+
             const bankLabel = bankShort || 'Bank';
             return last4 ? `${bankLabel} - ${typeStr} #${last4}` : `${bankLabel} - ${typeStr}`;
         },
@@ -1660,10 +1669,15 @@ window.RoboLedger = (function () {
                 const accountName = (acc.name || acc.bankName || '').toUpperCase();
                 let refPrefix = 'CHQ'; // Default
 
+                const _aType = (acc.accountType || '').toUpperCase();
                 if (brand.includes('MASTERCARD') || brand.includes('MC')) refPrefix = 'MC';
                 else if (brand.includes('VISA')) refPrefix = 'VISA';
                 else if (brand.includes('AMEX')) refPrefix = 'AMEX';
-                else if (acc.accountType === 'SAVINGS' || accountName.includes('SAVINGS')) refPrefix = 'SAV';
+                else if (_aType === 'SAVINGS' || accountName.includes('SAVINGS')) refPrefix = 'SAV';
+                else if (_aType === 'LOC' || _aType === 'LINE_OF_CREDIT' || _aType === 'LINEOFCREDIT') refPrefix = 'LOC';
+                else if (_aType === 'MORTGAGE') refPrefix = 'MTG';
+                else if (_aType === 'LOAN' || _aType === 'BANK_LOAN' || _aType === 'BANKLOAN') refPrefix = 'LOAN';
+                else if (_aType === 'FINANCE_CONTRACT' || _aType === 'FINANCECONTRACT') refPrefix = 'FIN';
 
                 // Count existing accounts with same prefix
                 const existing = state.accounts.filter(a =>
@@ -1710,8 +1724,15 @@ window.RoboLedger = (function () {
                 const brandShort = brand === 'MASTERCARD' ? 'MC' : brand === 'Mastercard' ? 'MC' : brand;
                 acc.name = last4 ? `${bankShort} - ${brandShort} #${last4}` : `${bankShort} - ${brandShort}`;
             } else {
-                // Bank Account
-                const typeShort = acc.accountType === 'SAVINGS' ? 'Savings' : 'Chequing';
+                // Bank / Loan / LOC / Mortgage — use accountType for display label
+                const _typeUpper = (acc.accountType || '').toUpperCase();
+                let typeShort;
+                if (_typeUpper === 'SAVINGS') typeShort = 'Savings';
+                else if (_typeUpper === 'LOC' || _typeUpper === 'LINE_OF_CREDIT' || _typeUpper === 'LINEOFCREDIT') typeShort = 'Line of Credit';
+                else if (_typeUpper === 'MORTGAGE') typeShort = 'Mortgage';
+                else if (_typeUpper === 'LOAN' || _typeUpper === 'BANK_LOAN' || _typeUpper === 'BANKLOAN') typeShort = 'Loan';
+                else if (_typeUpper === 'FINANCE_CONTRACT' || _typeUpper === 'FINANCECONTRACT') typeShort = 'Finance Contract';
+                else typeShort = 'Chequing';
                 acc.name = last4 ? `${bankShort} - ${typeShort} #${last4}` : `${bankShort} - ${typeShort}`;
             }
 
@@ -1737,22 +1758,53 @@ window.RoboLedger = (function () {
         },
 
         /**
-         * Auto-assign a unique COA code to a new bank/CC account.
-         * Credit cards → 2101-2199, Chequing → 1000-1034, Savings → 1035-1099
-         * Clones the template COA entry (same root, leadsheet, sign) but with unique code.
+         * Auto-assign a unique COA code to a new bank/CC/loan account.
+         * Routes by accountType to the correct COA range, preserving the
+         * template's leadsheet, GIFI (mapNo), and sign. Each range has
+         * template slots in COA_DEFAULTS that get claimed with the real
+         * account display name.
+         *
+         * Ranges (matching CaseWare / Profile COA structure):
+         *   Chequing        → 1000-1034  (Asset, L/S=A,  GIFI 111)
+         *   Savings          → 1035-1099  (Asset, L/S=A,  GIFI 111)
+         *   Credit Card      → 2104-2119  (Liability, L/S=BB, GIFI 215)
+         *   Line of Credit   → 2010-2039  (Liability, L/S=AA, GIFI 213)
+         *   Bank Loan        → 2710-2724  (Liability, L/S=KK, GIFI 231.3140.xx)
+         *   Mortgage         → 2800-2830  (Liability, L/S=KK, GIFI 231.3141.xx)
+         *   Finance Contract → 2850-2880  (Liability, L/S=KK, GIFI 231.3140.5x)
          */
         _assignCOACode: function (acc) {
-            const isCC = acc.accountType === 'CreditCard' || acc.brand || acc.cardNetwork;
-            const isSavings = (acc.accountType || '').toUpperCase() === 'SAVINGS' ||
-                              (acc.name || '').toUpperCase().includes('SAVINGS');
+            const type = (acc.accountType || '').toUpperCase();
+            const nameUpper = (acc.name || '').toUpperCase();
+            const isCC = type === 'CREDITCARD' || acc.brand || acc.cardNetwork;
+            const isSavings = type === 'SAVINGS' || nameUpper.includes('SAVINGS');
+            const isLOC = type === 'LOC' || type === 'LINE_OF_CREDIT' || type === 'LINEOFCREDIT' ||
+                          nameUpper.includes('LINE OF CREDIT') || nameUpper.includes('LOC');
+            const isLoan = type === 'LOAN' || type === 'BANK_LOAN' || type === 'BANKLOAN' ||
+                           nameUpper.includes('BANK LOAN');
+            const isMortgage = type === 'MORTGAGE' || nameUpper.includes('MORTGAGE');
+            const isFinanceContract = type === 'FINANCE_CONTRACT' || type === 'FINANCECONTRACT' ||
+                                      nameUpper.includes('FINANCE CONTRACT') || nameUpper.includes('LEASE');
 
-            let rangeStart, rangeEnd, root, leadsheet, sign, templateMapNo;
+            // Route to the correct COA range with proper root/leadsheet/sign/GIFI
+            let rangeStart, rangeEnd, root, leadsheet, sign, templateMapNo, bsType;
+            bsType = 'Balance sheet';
 
             if (isCC) {
-                // 2101 = "Visa payable" template, 2103 = "Bonus Payable" template — skip to 2104
-                // 2104-2119 is a clean range reserved for imported CC accounts
                 rangeStart = 2104; rangeEnd = 2119;
                 root = 'LIABILITY'; leadsheet = 'BB'; sign = 'Credit'; templateMapNo = 215;
+            } else if (isLOC) {
+                rangeStart = 2010; rangeEnd = 2039;
+                root = 'LIABILITY'; leadsheet = 'AA'; sign = 'Credit'; templateMapNo = 213;
+            } else if (isMortgage) {
+                rangeStart = 2800; rangeEnd = 2830;
+                root = 'LIABILITY'; leadsheet = 'KK'; sign = 'Credit'; templateMapNo = '231.3141.01';
+            } else if (isLoan) {
+                rangeStart = 2710; rangeEnd = 2724;
+                root = 'LIABILITY'; leadsheet = 'KK'; sign = 'Credit'; templateMapNo = '231.3140.01';
+            } else if (isFinanceContract) {
+                rangeStart = 2850; rangeEnd = 2880;
+                root = 'LIABILITY'; leadsheet = 'KK'; sign = 'Credit'; templateMapNo = '231.3140.51';
             } else if (isSavings) {
                 rangeStart = 1035; rangeEnd = 1099;
                 root = 'ASSET'; leadsheet = 'A'; sign = 'Debit'; templateMapNo = 111;
@@ -1762,10 +1814,11 @@ window.RoboLedger = (function () {
                 root = 'ASSET'; leadsheet = 'A'; sign = 'Debit'; templateMapNo = 111;
             }
 
-            // Find first unused code in range
-            // CC_TEMPLATE_NAMES: generic placeholder names that can safely be claimed for CC accounts.
-            // Any COA entry with a different name is a real accounting entry and must NOT be clobbered.
-            const CC_TEMPLATE_NAMES = /visa payable|mastercard payable|amex payable|credit card|cc payable/i;
+            // Find first unused code in range.
+            // An entry is "unused" if it doesn't exist yet, or if it's an unclaimed
+            // template (has no sourceAccountId). We never clobber entries that belong
+            // to a different leadsheet or root — those are real accounting entries that
+            // happen to sit in the same numeric range.
             let assignedCode = null;
             for (let code = rangeStart; code <= rangeEnd; code++) {
                 const codeStr = String(code);
@@ -1779,15 +1832,14 @@ window.RoboLedger = (function () {
                     // Already claimed by a real imported account — skip
                     continue;
                 }
-                // Unclaimed but existing entry: only claim if it's a generic CC/bank placeholder name
-                // or if it's in the CHQ/SAV ranges (those are always bank slot templates)
-                const isChqSavRange = (code >= 1000 && code <= 1099);
-                const isCCPlaceholder = CC_TEMPLATE_NAMES.test(existing.name || '');
-                if (isChqSavRange || isCCPlaceholder) {
+                // Unclaimed existing entry: only claim if its leadsheet matches our target
+                // (avoids clobbering "Bonus Payable" L/S=BB when routing CC to L/S=BB,
+                //  but Bonus Payable won't be in 2104+ range anyway)
+                if (existing.leadsheet === leadsheet) {
                     assignedCode = codeStr;
                     break;
                 }
-                // Otherwise skip — it's a real accounting entry (e.g. "Bonus Payable")
+                // Different leadsheet → real entry, skip
             }
 
             if (!assignedCode) {
