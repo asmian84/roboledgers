@@ -129,7 +129,7 @@ window.RoboLedger = (function () {
         { code: '2030', name: 'Demand loan', root: 'LIABILITY', leadsheet: 'AA', sign: 'Credit', type: 'Balance sheet', ls: 'AA', mapNo: 213, balance: 0 },
         { code: '2100', name: 'Accounts payable', root: 'LIABILITY', leadsheet: 'BB', sign: 'Credit', type: 'Balance sheet', ls: 'BB', mapNo: 215, balance: 0 },
         { code: '2101', name: 'Visa payable', root: 'LIABILITY', leadsheet: 'BB', sign: 'Credit', type: 'Balance sheet', ls: 'BB', mapNo: 215, balance: 0 },
-        { code: '2103', name: 'Bonus Payable', root: 'LIABILITY', leadsheet: 'BB', sign: 'Credit', type: 'Balance sheet', ls: 'BB', mapNo: 215, balance: 0 },
+        { code: '2119', name: 'Bonus Payable', root: 'LIABILITY', leadsheet: 'BB', sign: 'Credit', type: 'Balance sheet', ls: 'BB', mapNo: 215, balance: 0 },
         { code: '2120', name: 'Unearned revenue', root: 'LIABILITY', leadsheet: 'HH', sign: 'Credit', type: 'Balance sheet', ls: 'HH', mapNo: 218, balance: 0 },
         { code: '2140', name: 'Accrued liabilities', root: 'LIABILITY', leadsheet: 'BB', sign: 'Credit', type: 'Balance sheet', ls: 'BB', mapNo: 215, balance: 0 },
         { code: '2148', name: 'GST balance from prior year', root: 'LIABILITY', leadsheet: 'CC', sign: 'Credit', type: 'Balance sheet', ls: 'CC', mapNo: '217.2680.10', balance: 0 },
@@ -413,6 +413,24 @@ window.RoboLedger = (function () {
 
             // Re-seed COA defaults (backfills any missing entries after client switch)
             COA.init();
+
+            // MIGRATION: Move Bonus Payable 2103 → 2119 (free up 2103 for CC auto-assign)
+            if (state.coa['2103'] && !state.coa['2103'].sourceAccountId &&
+                (state.coa['2103'].name || '').toLowerCase().includes('bonus')) {
+                const old2103 = state.coa['2103'];
+                state.coa['2119'] = { ...old2103, code: '2119' };
+                delete state.coa['2103'];
+                console.log('[COA] Migrated Bonus Payable: 2103 → 2119');
+                // Remap any transactions categorized to 2103
+                for (const txId in state.transactions) {
+                    const tx = state.transactions[txId];
+                    if (tx.coa_code === '2103' || tx.category_code === '2103') {
+                        if (tx.coa_code === '2103') tx.coa_code = '2119';
+                        if (tx.category_code === '2103') tx.category_code = '2119';
+                    }
+                }
+                save();
+            }
 
             // MIGRATION: Rebuild stale account display names and sync COA entries.
             //
@@ -1589,6 +1607,7 @@ window.RoboLedger = (function () {
             else if (typeUpper === 'MORTGAGE') typeStr = 'Mortgage';
             else if (typeUpper === 'LOAN' || typeUpper === 'BANK_LOAN' || typeUpper === 'BANKLOAN') typeStr = 'Loan';
             else if (typeUpper === 'FINANCE_CONTRACT' || typeUpper === 'FINANCECONTRACT') typeStr = 'Finance Contract';
+            else if (typeUpper === 'USD' || typeUpper === 'FOREIGN' || (acc.currency && acc.currency !== 'CAD')) typeStr = 'USD Account';
             else typeStr = 'Chequing';
 
             const bankLabel = bankShort || 'Bank';
@@ -1670,6 +1689,7 @@ window.RoboLedger = (function () {
                 let refPrefix = 'CHQ'; // Default
 
                 const _aType = (acc.accountType || '').toUpperCase();
+                const _isUSD = _aType === 'USD' || _aType === 'FOREIGN' || (acc.currency && acc.currency !== 'CAD');
                 if (brand.includes('MASTERCARD') || brand.includes('MC')) refPrefix = 'MC';
                 else if (brand.includes('VISA')) refPrefix = 'VISA';
                 else if (brand.includes('AMEX')) refPrefix = 'AMEX';
@@ -1678,6 +1698,7 @@ window.RoboLedger = (function () {
                 else if (_aType === 'MORTGAGE') refPrefix = 'MTG';
                 else if (_aType === 'LOAN' || _aType === 'BANK_LOAN' || _aType === 'BANKLOAN') refPrefix = 'LOAN';
                 else if (_aType === 'FINANCE_CONTRACT' || _aType === 'FINANCECONTRACT') refPrefix = 'FIN';
+                else if (_isUSD) refPrefix = 'USD';
 
                 // Count existing accounts with same prefix
                 const existing = state.accounts.filter(a =>
@@ -1732,6 +1753,7 @@ window.RoboLedger = (function () {
                 else if (_typeUpper === 'MORTGAGE') typeShort = 'Mortgage';
                 else if (_typeUpper === 'LOAN' || _typeUpper === 'BANK_LOAN' || _typeUpper === 'BANKLOAN') typeShort = 'Loan';
                 else if (_typeUpper === 'FINANCE_CONTRACT' || _typeUpper === 'FINANCECONTRACT') typeShort = 'Finance Contract';
+                else if (_typeUpper === 'USD' || _typeUpper === 'FOREIGN' || (acc.currency && acc.currency !== 'CAD')) typeShort = 'USD Account';
                 else typeShort = 'Chequing';
                 acc.name = last4 ? `${bankShort} - ${typeShort} #${last4}` : `${bankShort} - ${typeShort}`;
             }
@@ -1760,24 +1782,28 @@ window.RoboLedger = (function () {
         /**
          * Auto-assign a unique COA code to a new bank/CC/loan account.
          * Routes by accountType to the correct COA range, preserving the
-         * template's leadsheet, GIFI (mapNo), and sign. Each range has
-         * template slots in COA_DEFAULTS that get claimed with the real
-         * account display name.
+         * template's leadsheet, GIFI (mapNo), and sign. All accounts in
+         * a range share the same L/S and mapNo so they aggregate to the
+         * same sub-total on the Trial Balance.
          *
          * Ranges (matching CaseWare / Profile COA structure):
-         *   Chequing        → 1000-1034  (Asset, L/S=A,  GIFI 111)
-         *   Savings          → 1035-1099  (Asset, L/S=A,  GIFI 111)
-         *   Credit Card      → 2104-2119  (Liability, L/S=BB, GIFI 215)
-         *   Line of Credit   → 2010-2039  (Liability, L/S=AA, GIFI 213)
-         *   Bank Loan        → 2710-2724  (Liability, L/S=KK, GIFI 231.3140.xx)
-         *   Mortgage         → 2800-2830  (Liability, L/S=KK, GIFI 231.3141.xx)
-         *   Finance Contract → 2850-2880  (Liability, L/S=KK, GIFI 231.3140.5x)
+         *   Chequing         → 1000-1029  (Asset, L/S=A,  GIFI 111)
+         *   USD / Foreign     → 1030-1034  (Asset, L/S=A,  GIFI 111)
+         *   Savings           → 1035-1040  (Asset, L/S=A,  GIFI 111)
+         *   Credit Card       → 2101-2118  (Liability, L/S=BB, GIFI 215)
+         *   Line of Credit    → 2010-2039  (Liability, L/S=AA, GIFI 213)
+         *   Bank Loan         → 2710-2724  (Liability, L/S=KK, GIFI 231.3140.xx)
+         *   Mortgage          → 2800-2830  (Liability, L/S=KK, GIFI 231.3141.xx)
+         *   Finance Contract  → 2850-2880  (Liability, L/S=KK, GIFI 231.3140.5x)
          */
         _assignCOACode: function (acc) {
             const type = (acc.accountType || '').toUpperCase();
             const nameUpper = (acc.name || '').toUpperCase();
             const isCC = type === 'CREDITCARD' || acc.brand || acc.cardNetwork;
             const isSavings = type === 'SAVINGS' || nameUpper.includes('SAVINGS');
+            const isUSD = type === 'USD' || type === 'FOREIGN' ||
+                          (acc.currency && acc.currency !== 'CAD') ||
+                          nameUpper.includes('US ACCOUNT') || nameUpper.includes('USD');
             const isLOC = type === 'LOC' || type === 'LINE_OF_CREDIT' || type === 'LINEOFCREDIT' ||
                           nameUpper.includes('LINE OF CREDIT') || nameUpper.includes('LOC');
             const isLoan = type === 'LOAN' || type === 'BANK_LOAN' || type === 'BANKLOAN' ||
@@ -1787,11 +1813,10 @@ window.RoboLedger = (function () {
                                       nameUpper.includes('FINANCE CONTRACT') || nameUpper.includes('LEASE');
 
             // Route to the correct COA range with proper root/leadsheet/sign/GIFI
-            let rangeStart, rangeEnd, root, leadsheet, sign, templateMapNo, bsType;
-            bsType = 'Balance sheet';
+            let rangeStart, rangeEnd, root, leadsheet, sign, templateMapNo;
 
             if (isCC) {
-                rangeStart = 2104; rangeEnd = 2119;
+                rangeStart = 2101; rangeEnd = 2118;
                 root = 'LIABILITY'; leadsheet = 'BB'; sign = 'Credit'; templateMapNo = 215;
             } else if (isLOC) {
                 rangeStart = 2010; rangeEnd = 2039;
@@ -1806,11 +1831,14 @@ window.RoboLedger = (function () {
                 rangeStart = 2850; rangeEnd = 2880;
                 root = 'LIABILITY'; leadsheet = 'KK'; sign = 'Credit'; templateMapNo = '231.3140.51';
             } else if (isSavings) {
-                rangeStart = 1035; rangeEnd = 1099;
+                rangeStart = 1035; rangeEnd = 1040;
+                root = 'ASSET'; leadsheet = 'A'; sign = 'Debit'; templateMapNo = 111;
+            } else if (isUSD) {
+                rangeStart = 1030; rangeEnd = 1034;
                 root = 'ASSET'; leadsheet = 'A'; sign = 'Debit'; templateMapNo = 111;
             } else {
                 // Default: Chequing
-                rangeStart = 1000; rangeEnd = 1034;
+                rangeStart = 1000; rangeEnd = 1029;
                 root = 'ASSET'; leadsheet = 'A'; sign = 'Debit'; templateMapNo = 111;
             }
 
