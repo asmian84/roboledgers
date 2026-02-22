@@ -273,7 +273,8 @@ window.RoboLedger = (function () {
         { code: '7890', name: 'Legal fees', root: 'EXPENSE', leadsheet: '40', sign: 'Debit', type: 'Income statement', ls: '40', mapNo: 531, balance: 0 },
         { code: '8400', name: 'Management remuneration', root: 'EXPENSE', leadsheet: '40', sign: 'Debit', type: 'Income statement', ls: '40', mapNo: 537, balance: 0 },
         { code: '8450', name: 'Materials and supplies', root: 'EXPENSE', leadsheet: '40', sign: 'Debit', type: 'Income statement', ls: '40', mapNo: 541, balance: 0 },
-        { code: '8500', name: 'Miscellaneous', root: 'EXPENSE', leadsheet: '40', sign: 'Debit', type: 'Income statement', ls: '40', mapNo: 581, balance: 0 },
+        // 8500 Miscellaneous REMOVED — nothing should auto-categorize to this account.
+        // OFFICE_SVC → 8600, GENERAL_RETAIL → 9970 (flag for review)
         { code: '8600', name: 'Office supplies and postage', root: 'EXPENSE', leadsheet: '40', sign: 'Debit', type: 'Income statement', ls: '40', mapNo: 529, balance: 0 },
         { code: '8700', name: 'Professional fees', root: 'EXPENSE', leadsheet: '40', sign: 'Debit', type: 'Income statement', ls: '40', mapNo: 531, balance: 0 },
         { code: '8710', name: 'Property taxes', root: 'EXPENSE', leadsheet: '40', sign: 'Debit', type: 'Income statement', ls: '40', mapNo: 543, balance: 0 },
@@ -1244,6 +1245,27 @@ window.RoboLedger = (function () {
             save();
             return tx;
         },
+        deleteTransaction: function (tx_id) {
+            const tx = state.transactions[tx_id];
+            if (!tx) return false;
+
+            // Period locking enforcement
+            if (_isInLockedPeriod(tx)) {
+                console.error(`[LEDGER] PERIOD LOCKED: Cannot delete tx in ${tx.date?.substring(0, 7)}`);
+                return false;
+            }
+
+            // Remove from sig index
+            if (tx.txsig && state.sigIndex[tx.txsig]) {
+                delete state.sigIndex[tx.txsig];
+            }
+            // Remove transaction
+            delete state.transactions[tx_id];
+            save();
+            console.log(`[LEDGER] Deleted transaction ${tx_id}`);
+            return true;
+        },
+
         reset: function () {
             state.transactions = {};
             state.sigIndex = {};
@@ -1408,8 +1430,19 @@ window.RoboLedger = (function () {
             return state.accounts.filter(acc => {
                 // Must have at least 1 transaction
                 if (!txnCounts[acc.id]) return false;
-                // Must not be a pure GENERIC PARSER ghost
-                if (acc.name === 'GENERIC PARSER' && acc.transit === 'UNKNOWN') return false;
+                // Rename any account with a bad/generic name — don't hide them
+                const needsRename = acc.name && (
+                    acc.name.includes('GENERIC PARSER') ||
+                    acc.name === 'Unknown Bank' ||
+                    acc.name.startsWith('BANK - ') ||          // "BANK - RBC #8468" legacy malformed name
+                    /^Unknown Bank\s*[-–]/i.test(acc.name)     // "Unknown Bank - Chequing"
+                );
+                if (needsRename) {
+                    const newName = this._buildCleanAccountName(acc);
+                    console.log(`[ACCOUNTS] Renamed malformed account ${acc.id}: "${acc.name}" → "${newName}"`);
+                    acc.name = newName;
+                    save();
+                }
                 // Must have a real, non-empty name (not placeholder junk)
                 if (!acc.name || acc.name.trim() === '' || acc.name === 'New Account') return false;
                 // Must not have a placeholder account number suffix (#0000, #XXXX, #----)
@@ -1431,6 +1464,12 @@ window.RoboLedger = (function () {
             state.accounts = state.accounts.filter(acc => {
                 const hasTransactions = !!txnCounts[acc.id];
                 const hasValidName = acc.name && acc.name.trim() !== '' && acc.name !== 'New Account';
+                const isMalformedName = acc.name && (
+                    acc.name.includes('GENERIC PARSER') ||
+                    acc.name === 'Unknown Bank' ||
+                    acc.name.startsWith('BANK - ') ||         // "BANK - RBC #8468" legacy malformed
+                    /^Unknown Bank\s*[-–]/i.test(acc.name)    // "Unknown Bank - Chequing"
+                );
                 if (!hasTransactions) {
                     console.log(`[ACCOUNTS] 🗑 Pruned ghost account (0 txns): ${acc.id} — ${acc.name}`);
                     return false;
@@ -1439,6 +1478,16 @@ window.RoboLedger = (function () {
                     console.log(`[ACCOUNTS] 🗑 Pruned blank-name account: ${acc.id} — "${acc.name}"`);
                     return false;
                 }
+                // Malformed name with transactions: rename instead of prune
+                if (isMalformedName && hasTransactions) {
+                    const newName = this._buildCleanAccountName(acc);
+                    console.log(`[ACCOUNTS] Renamed malformed account: ${acc.id} — "${acc.name}" → "${newName}"`);
+                    acc.name = newName;
+                    // Also update COA entry if linked
+                    if (acc.coaCode && state.coa[acc.coaCode]) {
+                        state.coa[acc.coaCode].name = newName;
+                    }
+                }
                 return true;
             });
             const pruned = before - state.accounts.length;
@@ -1446,6 +1495,44 @@ window.RoboLedger = (function () {
             console.log(`[ACCOUNTS] pruneGhosts: removed ${pruned} ghost(s), ${state.accounts.length} remain`);
             return pruned;
         },
+        /**
+         * Build a clean, human-readable account name from all available account fields.
+         * Used for renaming GENERIC PARSER / Unknown Bank accounts.
+         */
+        _buildCleanAccountName: function (acc) {
+            const instCodeMap = { '003': 'RBC', '001': 'BMO', '004': 'TD', '002': 'Scotia', '010': 'CIBC', '016': 'HSBC', 'ATB': 'ATB', 'AMEX': 'Amex' };
+            const bankShortNames = {
+                'Royal Bank of Canada': 'RBC', 'RBC Royal Bank': 'RBC', 'RBC': 'RBC',
+                'Toronto-Dominion Bank': 'TD', 'TD Canada Trust': 'TD', 'TD': 'TD',
+                'Canadian Imperial Bank of Commerce': 'CIBC', 'CIBC': 'CIBC',
+                'Bank of Montreal': 'BMO', 'BMO Bank of Montreal': 'BMO', 'BMO': 'BMO',
+                'Scotiabank': 'Scotia', 'The Bank of Nova Scotia': 'Scotia',
+                'ATB Financial': 'ATB', 'ATB': 'ATB',
+                'HSBC': 'HSBC', 'American Express': 'Amex',
+                'Unknown Bank': ''
+            };
+
+            // Priority: bankName → inst code → account ID prefix → fallback "Bank"
+            const rawBankName = acc.bankName || '';
+            const isGeneric = rawBankName.includes('GENERIC PARSER') || rawBankName === 'GENERIC PARSER' || rawBankName === 'Unknown Bank';
+            const safeBankName = isGeneric ? '' : rawBankName;
+            const bankShort = bankShortNames[safeBankName] || safeBankName || instCodeMap[acc.inst] || '';
+
+            const last4Raw = acc.accountNumber?.replace(/[-\s]/g, '').slice(-4);
+            const last4 = (last4Raw && last4Raw.length === 4 && !/^[X\-0]+$/i.test(last4Raw)) ? last4Raw : null;
+
+            if (acc.brand || acc.cardNetwork) {
+                const brand = (acc.brand || acc.cardNetwork || '').toUpperCase();
+                const brandShort = brand.includes('MASTERCARD') ? 'MC' : brand.includes('VISA') ? 'Visa' : brand.includes('AMEX') ? 'Amex' : brand;
+                const bankLabel = bankShort || 'Bank';
+                return last4 ? `${bankLabel} - ${brandShort} #${last4}` : `${bankLabel} - ${brandShort}`;
+            }
+
+            const typeStr = acc.accountType === 'SAVINGS' ? 'Savings' : 'Chequing';
+            const bankLabel = bankShort || 'Bank';
+            return last4 ? `${bankLabel} - ${typeStr} #${last4}` : `${bankLabel} - ${typeStr}`;
+        },
+
         get: function (id) {
             return state.accounts.find(a => a.id === id);
         },
@@ -1532,15 +1619,30 @@ window.RoboLedger = (function () {
             // Generate short display name
             const bankShortNames = {
                 'Royal Bank of Canada': 'RBC',
+                'RBC Royal Bank': 'RBC',
+                'RBC': 'RBC',
                 'Toronto-Dominion Bank': 'TD',
                 'Toronto-Dominion': 'TD',
+                'TD Canada Trust': 'TD',
                 'Canadian Imperial Bank of Commerce': 'CIBC',
                 'CIBC': 'CIBC',
                 'Bank of Montreal': 'BMO',
+                'BMO Bank of Montreal': 'BMO',
+                'BMO': 'BMO',
                 'Scotiabank': 'Scotia',
-                'The Bank of Nova Scotia': 'Scotia'
+                'The Bank of Nova Scotia': 'Scotia',
+                'ATB Financial': 'ATB',
+                'ATB': 'ATB',
+                'HSBC': 'HSBC'
             };
-            const bankShort = bankShortNames[acc.bankName] || acc.bankName || metadata.name || 'Bank';
+            // NEVER use "GENERIC PARSER" or "Unknown Bank" as display names — treat as if no name provided
+            const rawBankName = acc.bankName || metadata.name || '';
+            const isGenericName = rawBankName.includes('GENERIC PARSER') || rawBankName === 'GENERIC PARSER' || rawBankName === 'Unknown Bank';
+            const safeBankName = isGenericName ? '' : rawBankName;
+            // Try to extract a bank name from the account ID (e.g. "BANK-00052-1234" → look up inst code)
+            const instCodeMap = { '003': 'RBC', '001': 'BMO', '004': 'TD', '002': 'Scotia', '010': 'CIBC', '016': 'HSBC', 'ATB': 'ATB', 'AMEX': 'Amex', 'CC': '' };
+            const instFallback = acc.inst ? (instCodeMap[acc.inst] || '') : '';
+            const bankShort = bankShortNames[safeBankName] || safeBankName || instFallback || 'Bank';
             const rawLast4 = acc.accountNumber?.replace(/[-\s]/g, '')?.slice(-4);
             // Only use last4 if it's a real account number (not placeholders like XXXX, ----, 0000)
             const last4 = (rawLast4 && rawLast4.length === 4 && !/^[X\-0]+$/i.test(rawLast4)) ? rawLast4 : null;
@@ -1548,7 +1650,7 @@ window.RoboLedger = (function () {
             if (acc.brand || acc.cardNetwork) {
                 // Credit Card
                 const brand = (acc.brand || acc.cardNetwork).split(' ')[0]; // "MASTERCARD" -> "MASTERCARD"
-                const brandShort = brand === 'MASTERCARD' ? 'MC' : brand;
+                const brandShort = brand === 'MASTERCARD' ? 'MC' : brand === 'Mastercard' ? 'MC' : brand;
                 acc.name = last4 ? `${bankShort} - ${brandShort} #${last4}` : `${bankShort} - ${brandShort}`;
             } else {
                 // Bank Account
@@ -1817,7 +1919,9 @@ window.RoboLedger = (function () {
             // CRITICAL: Must check TD before RBC because "TD" alone is too generic
             // TD Aeroplan cards say "TD® Aeroplan® Visa" not "TD CANADA TRUST"
             if ((upper.includes('TD CANADA') || upper.includes('TD TRUST') || upper.includes('AEROPLAN') ||
-                (upper.includes('TD') && upper.includes('VISA') && !upper.includes('RBC') && !upper.includes('ROYAL BANK'))) &&
+                upper.includes('TORONTO-DOMINION') || upper.includes('TORONTO DOMINION') ||
+                (upper.includes('TD') && (upper.includes('VISA') || upper.includes('CHEQUING') || upper.includes('SAVINGS') || upper.includes('MASTERCARD')) &&
+                    !upper.includes('RBC') && !upper.includes('ROYAL BANK') && !upper.includes('BMO') && !upper.includes('CIBC') && !upper.includes('SCOTIABANK'))) &&
                 !upper.includes('AMERICAN EXPRESS') && !upper.includes('AMEX BANK')) {
                 console.log('[PARSER] Detected TD statement');
 
@@ -1840,7 +1944,11 @@ window.RoboLedger = (function () {
             else if (upper.includes('RBC') || upper.includes('ROYAL BANK')) {
                 console.log('[PARSER] Detected RBC statement');
 
-                if (upper.includes('SAVINGS ACCOUNT') || upper.includes('BUSINESS ESSENTIALS') && upper.includes('SAVINGS')) {
+                if (upper.includes('SAVINGS') &&
+                    !upper.includes('MASTERCARD') && !upper.includes('MASTER CARD') &&
+                    !upper.includes('VISA') && !upper.includes('AMEX') && !upper.includes('AMERICAN EXPRESS')) {
+                    // Catches: "SAVINGS ACCOUNT", "ENHANCED SAVINGS", "HIGH INTEREST eSAVINGS",
+                    //          "BUSINESS ESSENTIALS SAVINGS", "RBC SAVINGS", etc.
                     console.log('[PARSER] Routing to RBC Savings Parser');
                     if (window.rbcSavingsParser) {
                         result = await window.rbcSavingsParser.parse(text);
@@ -1852,7 +1960,7 @@ window.RoboLedger = (function () {
                         result = await window.rbcChequingParser.parse(text);
                         if (result) console.log('[PARSER] RBC Chequing returned:', result);
                     }
-                } else if (upper.includes('MASTERCARD') || upper.includes('BUSINESS CASH BACK')) {
+                } else if (upper.includes('MASTERCARD') || upper.includes('MASTER CARD') || upper.includes('BUSINESS CASH BACK') || upper.includes('CASHBACK MASTERCARD') || (upper.includes('MC') && !upper.includes('VISA') && /5[1-5]\d{2}[\s\-\*]/.test(text))) {
                     console.log('[PARSER] Routing to RBC Mastercard Parser');
                     if (window.rbcMastercardParser) {
                         result = await window.rbcMastercardParser.parse(text);
@@ -1877,7 +1985,7 @@ window.RoboLedger = (function () {
                         result = await window.bmoChequingParser.parse(text);
                         if (result) console.log('[PARSER] BMO Chequing returned:', result);
                     }
-                } else if (upper.includes('MASTERCARD')) {
+                } else if (upper.includes('MASTERCARD') || upper.includes('MASTER CARD')) {
                     console.log('[PARSER] Routing to BMO Mastercard Parser');
                     if (window.bmoMastercardParser) {
                         result = await window.bmoMastercardParser.parse(text);
@@ -1904,11 +2012,12 @@ window.RoboLedger = (function () {
                 }
             }
 
-            // ==================== TD PARSERS ====================
-            else if (upper.includes('TD CANADA') || upper.includes('TD BANK')) {
-                console.log('[PARSER] Detected TD statement');
+            // ==================== TD PARSERS (Secondary — catches TD BANK / TORONTO DOMINION) ====================
+            // Note: The first TD block above handles most cases. This block catches any remaining patterns.
+            else if (upper.includes('TD CANADA') || upper.includes('TD BANK') || upper.includes('TORONTO-DOMINION') || upper.includes('TORONTO DOMINION')) {
+                console.log('[PARSER] Detected TD statement (secondary block)');
 
-                if (upper.includes('VISA')) {
+                if (upper.includes('VISA') || upper.includes('AEROPLAN')) {
                     console.log('[PARSER] Routing to TD Visa Parser');
                     if (window.tdVisaParser) {
                         result = await window.tdVisaParser.parse(text);
@@ -1933,7 +2042,7 @@ window.RoboLedger = (function () {
                         result = await window.scotiaAmexParser.parse(text);
                         if (result) console.log('[PARSER] Scotia Amex returned:', result);
                     }
-                } else if (upper.includes('MASTERCARD')) {
+                } else if (upper.includes('MASTERCARD') || upper.includes('MASTER CARD')) {
                     console.log('[PARSER] Routing to Scotia Mastercard Parser');
                     if (window.scotiaMastercardParser) {
                         result = await window.scotiaMastercardParser.parse(text);
@@ -2006,13 +2115,79 @@ window.RoboLedger = (function () {
                 }
             }
 
+            // ==================== MASTERCARD CATCH-ALL ====================
+            // Only fires if NO specialized parser matched at all (result is null/empty AND no metadata).
+            // If a parser ran and returned metadata (even with 0 transactions), we trust it and skip this.
+            if ((!result || !result.transactions || result.transactions.length === 0) &&
+                !result?.metadata &&   // ← don't re-run if a parser already claimed it
+                (upper.includes('MASTERCARD') || upper.includes('MASTER CARD') || /5[1-5]\d{2}[\s\-\*]/.test(text))) {
+                console.log('[PARSER] Mastercard catch-all: trying RBC Mastercard parser as format handler');
+                if (window.rbcMastercardParser) {
+                    result = await window.rbcMastercardParser.parse(text);
+                    if (result && result.transactions && result.transactions.length > 0) {
+                        console.log('[PARSER] Mastercard catch-all succeeded:', result.transactions.length, 'txns');
+                        // Fix the bank name — the MC parser always stamps 'RBC' but this may not be RBC
+                        // Detect the actual bank from the text and override
+                        if (result.metadata) {
+                            if (upper.includes('SCOTIA') || upper.includes('SCOTIABANK')) {
+                                result.metadata.bankName = 'Scotiabank';
+                                result.metadata.bankIcon = 'SCOTIA';
+                            } else if (upper.includes('BMO') || upper.includes('BANK OF MONTREAL')) {
+                                result.metadata.bankName = 'BMO';
+                                result.metadata.bankIcon = 'BMO';
+                            } else if (upper.includes('TD CANADA') || upper.includes('TD BANK') || upper.includes('TORONTO-DOMINION')) {
+                                result.metadata.bankName = 'TD';
+                                result.metadata.bankIcon = 'TD';
+                            } else if (upper.includes('CIBC')) {
+                                result.metadata.bankName = 'CIBC';
+                                result.metadata.bankIcon = 'CIBC';
+                            } else if (upper.includes('ATB')) {
+                                result.metadata.bankName = 'ATB Financial';
+                                result.metadata.bankIcon = 'ATB';
+                            } else if (upper.includes('HSBC')) {
+                                result.metadata.bankName = 'HSBC';
+                                result.metadata.bankIcon = 'HSBC';
+                            }
+                            // If still RBC (or no match found), keep as-is
+                            console.log('[PARSER] Mastercard catch-all bank resolved to:', result.metadata.bankName);
+                        }
+                    } else {
+                        result = null; // Reset so fallback runs
+                    }
+                }
+            }
+
             // Fallback to legacy regex if no parser matched or returned nothing
             if (!result || !result.transactions || result.transactions.length === 0) {
                 console.warn('[PARSER] No specialized parser matched or returned empty. Using legacy regex fallback.');
                 const legacyTransactions = this.legacyRegexParser(text);
+                const fallbackMeta = this.detectInstitution(text);
+                // NEVER propagate "GENERIC PARSER" as a metadata name — it contaminates account display names
+                if (fallbackMeta.name === 'GENERIC PARSER' || fallbackMeta.name === 'Unknown Bank') {
+                    // Try one more time to identify bank from text keywords
+                    const u = text.toUpperCase();
+                    if (u.includes('SCOTIABANK') || u.includes('SCOTIABANK')) fallbackMeta.name = 'Scotiabank';
+                    else if (u.includes('CIBC')) fallbackMeta.name = 'CIBC';
+                    else if (u.includes('ATB')) fallbackMeta.name = 'ATB Financial';
+                    else if (u.includes('HSBC')) fallbackMeta.name = 'HSBC';
+                    else if (u.includes('NATIONAL BANK') || u.includes('BANQUE NATIONALE')) fallbackMeta.name = 'National Bank';
+                    else if (u.includes('DESJARDINS')) fallbackMeta.name = 'Desjardins';
+                    else if (u.includes('LAURENTIAN')) fallbackMeta.name = 'Laurentian Bank';
+                    else fallbackMeta.name = 'Unknown Bank';
+                    console.warn(`[PARSER] detectInstitution fallback resolved to: ${fallbackMeta.name}`);
+                }
+                // Normalize legacy transactions: add debit/credit fields and a parser_ref
+                const fallbackStmtId = 'LEGACY-' + (new Date().getFullYear()) + String(new Date().getMonth() + 1).padStart(2, '0');
+                const normalizedLegacy = legacyTransactions.map((tx, idx) => ({
+                    ...tx,
+                    debit: (tx.amount && tx.amount < 0) ? Math.abs(tx.amount) : (tx.debit || 0),
+                    credit: (tx.amount && tx.amount > 0) ? tx.amount : (tx.credit || 0),
+                    parser_ref: `${fallbackStmtId}-${String(idx + 1).padStart(3, '0')}`,
+                    // No audit/pdfLocation — legacy parser has no spatial data
+                }));
                 result = {
-                    transactions: legacyTransactions,
-                    metadata: this.detectInstitution(text)
+                    transactions: normalizedLegacy,
+                    metadata: fallbackMeta
                 };
             }
 
@@ -2069,8 +2244,13 @@ window.RoboLedger = (function () {
 
             const markers = {
                 '003': { name: 'RBC Royal Bank', anchors: ['ROYAL BANK', 'RBC', 'Transit'], transitRegex: /TRANSIT\s*(\d{5})/i },
-                '001': { name: 'BMO Bank of Montreal', anchors: ['BMO', 'MONTREAL'], transitRegex: /TRANSIT\s*(\d{5})/i },
-                '004': { name: 'TD Canada Trust', anchors: ['TD CANADA'], transitRegex: /STRATFORD\s*(\d{5})/i }
+                '001': { name: 'BMO Bank of Montreal', anchors: ['BMO', 'BANK OF MONTREAL'], transitRegex: /TRANSIT\s*(\d{5})/i },
+                '004': { name: 'TD Canada Trust', anchors: ['TD CANADA', 'TD BANK', 'TORONTO-DOMINION', 'TORONTO DOMINION', 'TD AEROPLAN', 'AEROPLAN', 'TD TRUST'], transitRegex: /TRANSIT\s*(\d{5})/i },
+                '002': { name: 'Scotiabank', anchors: ['SCOTIABANK', 'BANK OF NOVA SCOTIA', 'SCOTIA'], transitRegex: /TRANSIT\s*(\d{5})/i },
+                '010': { name: 'CIBC', anchors: ['CIBC', 'CANADIAN IMPERIAL'], transitRegex: /TRANSIT\s*(\d{5})/i },
+                '016': { name: 'HSBC', anchors: ['HSBC'], transitRegex: /TRANSIT\s*(\d{5})/i },
+                'ATB': { name: 'ATB Financial', anchors: ['ATB FINANCIAL', 'ATB'], transitRegex: /TRANSIT\s*(\d{5})/i },
+                'AMEX': { name: 'American Express', anchors: ['AMERICAN EXPRESS', 'AMEX BANK'], transitRegex: null }
             };
 
             for (const [id, info] of Object.entries(markers)) {
@@ -2101,7 +2281,8 @@ window.RoboLedger = (function () {
                 return { id: 'CC', name: matchedBrand, brand: matchedBrand, accountNumber: matchedAcc, transit: 'N/A' };
             }
 
-            return { id: '000', name: 'GENERIC PARSER', transit: 'UNKNOWN' };
+            // Never return 'GENERIC PARSER' — use 'Unknown Bank' as the safe fallback
+            return { id: '000', name: 'Unknown Bank', transit: 'UNKNOWN' };
         },
 
         // Generate unique account ID based on metadata
@@ -2247,6 +2428,11 @@ window.RoboLedger = (function () {
                         // Fallback to old detection method
                         console.warn('[INGEST] ⚠️ Parser returned no metadata, using fallback detection');
                         metadata = this.detectInstitution(text);
+                        // NEVER propagate "GENERIC PARSER" — it contaminates display names
+                        if (metadata.name === 'GENERIC PARSER') {
+                            metadata.name = 'Unknown Bank';
+                            console.warn('[INGEST] detectInstitution returned GENERIC PARSER — replaced with "Unknown Bank"');
+                        }
                         rows = parseResult || [];
                     }
                 } catch (pdfError) {
@@ -2260,16 +2446,34 @@ window.RoboLedger = (function () {
                 // NOW with coordinate matching for highlights!
                 rows = rows.map(r => {
                     // Try to find matching coordinate for this transaction
-                    const searchText = (r.description || '').substring(0, 30);
-                    const searchAmount = r.debit || r.credit || '';
+                    // Use first 25 chars of description for broader matching
+                    const searchText = (r.description || '').substring(0, 25).trim();
+                    // Amount: try debit, credit, then raw amount field
+                    const rawAmt = r.debit || r.credit || r.amount || '';
+                    const searchAmount = rawAmt ? String(rawAmt).replace(/[$,]/g, '').trim() : '';
 
                     let matchedCoord = null;
                     for (const coord of lineCoordinates) {
-                        // Match if line contains description or amount
-                        if ((searchText && coord.text.includes(searchText)) ||
-                            (searchAmount && coord.text.includes(searchAmount))) {
+                        const coordText = coord.text || '';
+                        // 1. Match by description substring (strongest signal)
+                        if (searchText && searchText.length > 5 && coordText.includes(searchText)) {
                             matchedCoord = coord;
                             break;
+                        }
+                        // 2. Match by amount (only if we have a meaningful amount)
+                        if (searchAmount && searchAmount.length > 3 && coordText.includes(searchAmount)) {
+                            matchedCoord = coord;
+                            break;
+                        }
+                    }
+                    // 3. If still no match, try shorter description prefix (10 chars)
+                    if (!matchedCoord && searchText.length > 10) {
+                        const shortSearch = searchText.substring(0, 10);
+                        for (const coord of lineCoordinates) {
+                            if (coord.text && coord.text.includes(shortSearch)) {
+                                matchedCoord = coord;
+                                break;
+                            }
                         }
                     }
 
@@ -2279,14 +2483,19 @@ window.RoboLedger = (function () {
                         source_pdf: {
                             url: pdfBlobUrl,
                             filename: file.name,
-                            page: matchedCoord?.page || 1,
-                            raw_line: r.raw_line || `${r.date} ${r.description} ${r.debit || r.credit}`,
+                            page: matchedCoord?.page || r.pdfLocation?.page || 1,
+                            raw_line: r.rawText || r.raw_line || (matchedCoord?.text) || `${r.date} ${r.description} ${r.debit || r.credit || r.amount || ''}`.trim(),
                             line_position: matchedCoord ? {
                                 top: matchedCoord.y,
                                 left: 50,
                                 width: 500,
                                 height: matchedCoord.height
-                            } : null
+                            } : (r.pdfLocation ? {
+                                top: r.pdfLocation.top,
+                                left: r.pdfLocation.left || 50,
+                                width: r.pdfLocation.width || 500,
+                                height: r.pdfLocation.height || 12
+                            } : null)
                         }
                     };
                 });
@@ -2851,6 +3060,14 @@ window.RoboLedger = (function () {
         getLeadsheetOrder: function () {
             return LEADSHEET_ORDER;
         },
+        setName: function (code, newName) {
+            const entry = state.coa[code] || state.coa[String(code)];
+            if (!entry) return false;
+            entry.name = newName;
+            save();
+            return true;
+        },
+        save: function () { save(); },
         inferRoot: inferRoot
     };
 

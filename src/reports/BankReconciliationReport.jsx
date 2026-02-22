@@ -7,9 +7,15 @@ import React, { useState, useEffect, useMemo } from 'react';
  *   'setup'    — account / date / statement balance form
  *   'clearing' — two-panel: transaction checkboxes (left) + live summary (right)
  *   'history'  — past completed reconciliations table
+ *
+ * Features:
+ *   - Resume in-progress reconciliation (persisted to storage)
+ *   - Side-by-side debit/credit clearing panels
+ *   - All accounts available in dropdown
  */
 
 const STORAGE_KEY = 'roboledger_reconciliation_history';
+const WIP_STORAGE_KEY = 'roboledger_reconciliation_wip';
 
 function ssGet(key) {
     try {
@@ -72,8 +78,26 @@ function computeSummary(transactions, checkedIds, statementBalance, account) {
     return { bookBalance, clearedDeposits, clearedPayments, clearedDepositCount, clearedPaymentCount, adjustedBalance, variance, isReconciled };
 }
 
+// Helper: Get small bank logo for account
+function getBankLogoUrl(acc) {
+    if (!acc) return null;
+    const brand = (acc.brand || acc.cardNetwork || '').toLowerCase();
+    const bank = (acc.bankName || acc.bankIcon || '').toLowerCase();
+    const ref = (acc.ref || '').toLowerCase();
+    const bp = '/logos/';
+    if (brand.includes('visa') || ref.includes('visa')) return `${bp}visa.png`;
+    if (brand.includes('mc') || brand.includes('mastercard') || ref.includes('mc')) return `${bp}mastercard.png`;
+    if (brand.includes('amex') || ref.includes('amex')) return `${bp}amex.png`;
+    if (bank.includes('rbc') || bank.includes('royal')) return `${bp}rbc.png`;
+    if (bank.includes('td') || bank.includes('dominion')) return `${bp}td.png`;
+    if (bank.includes('bmo') || bank.includes('montreal')) return `${bp}bmo.png`;
+    if (bank.includes('scotia')) return `${bp}scotia.png`;
+    if (bank.includes('cibc')) return `${bp}cibc.png`;
+    return null;
+}
+
 // ─── Setup Screen ─────────────────────────────────────────────────────────
-function SetupScreen({ accounts, onStart, onHistory }) {
+function SetupScreen({ accounts, onStart, onHistory, onResume, wipData }) {
     const [accountId, setAccountId] = useState(accounts[0]?.id || '');
     const [statementDate, setStatementDate] = useState(new Date().toISOString().split('T')[0]);
     const [statementBalance, setStatementBalance] = useState('');
@@ -82,6 +106,13 @@ function SetupScreen({ accounts, onStart, onHistory }) {
     const lastForAccount = history
         .filter(h => h.accountId === accountId)
         .sort((a, b) => b.completedAt > a.completedAt ? 1 : -1)[0];
+
+    // Check if there's a WIP for the currently selected account
+    const hasWip = wipData && wipData.accountId === accountId;
+
+    // The start button is enabled when we have an account, date, and the user has typed SOMETHING in the balance field
+    // We use statementBalance !== '' to check — but also accept '0' or '0.00' as valid
+    const canStart = !!accountId && !!statementDate && statementBalance !== '';
 
     return (
         <div style={{ maxWidth: 700, margin: '0 auto', padding: 32 }}>
@@ -111,6 +142,32 @@ function SetupScreen({ accounts, onStart, onHistory }) {
                 )}
             </div>
 
+            {/* Resume WIP banner */}
+            {wipData && (
+                <div style={{
+                    background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 12, padding: '14px 18px', marginBottom: 16,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <i className="ph ph-clock-countdown" style={{ fontSize: 20, color: '#d97706' }}></i>
+                        <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>In-Progress Reconciliation</div>
+                            <div style={{ fontSize: 11, color: '#b45309' }}>
+                                {accounts.find(a => a.id === wipData.accountId)?.name || wipData.accountId} — Statement {fmtDate(wipData.statementDate)} — {Object.values(wipData.checkedIds || {}).filter(Boolean).length} items cleared
+                            </div>
+                        </div>
+                    </div>
+                    <button onClick={onResume}
+                        style={{
+                            padding: '8px 16px', background: '#d97706', color: 'white', border: 'none', borderRadius: 8,
+                            fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                            whiteSpace: 'nowrap',
+                        }}>
+                        <i className="ph ph-play-circle"></i> Resume
+                    </button>
+                </div>
+            )}
+
             {/* Setup Card */}
             <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
@@ -121,12 +178,21 @@ function SetupScreen({ accounts, onStart, onHistory }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                         <div>
                             <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account</label>
-                            <select value={accountId} onChange={e => setAccountId(e.target.value)}
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#0f172a', background: 'white' }}>
-                                {accounts.map(acc => (
-                                    <option key={acc.id} value={acc.id}>{acc.name || acc.id}</option>
-                                ))}
-                            </select>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {(() => {
+                                    const selectedAcc = accounts.find(a => a.id === accountId);
+                                    const logoUrl = getBankLogoUrl(selectedAcc);
+                                    return logoUrl
+                                        ? <img src={logoUrl} alt="" style={{ width: 22, height: 22, borderRadius: 4, objectFit: 'contain', flexShrink: 0 }} />
+                                        : <i className="ph ph-bank" style={{ fontSize: 18, color: '#64748b', flexShrink: 0 }}></i>;
+                                })()}
+                                <select value={accountId} onChange={e => setAccountId(e.target.value)}
+                                    style={{ flex: 1, padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#0f172a', background: 'white' }}>
+                                    {accounts.map(acc => (
+                                        <option key={acc.id} value={acc.id}>{acc.name || acc.id}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                         <div>
                             <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Statement Ending Date</label>
@@ -138,7 +204,9 @@ function SetupScreen({ accounts, onStart, onHistory }) {
                         <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bank Statement Ending Balance</label>
                         <div style={{ position: 'relative' }}>
                             <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>$</span>
-                            <input type="number" value={statementBalance} onChange={e => setStatementBalance(e.target.value)}
+                            <input type="number" value={statementBalance}
+                                onChange={e => setStatementBalance(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter' && canStart) onStart({ accountId, statementDate, statementBalance: parseFloat(statementBalance) || 0 }); }}
                                 placeholder="0.00" step="0.01"
                                 style={{ width: '100%', padding: '9px 12px 9px 24px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14, fontWeight: 600, boxSizing: 'border-box' }} />
                         </div>
@@ -154,8 +222,8 @@ function SetupScreen({ accounts, onStart, onHistory }) {
 
                     <button
                         onClick={() => onStart({ accountId, statementDate, statementBalance: parseFloat(statementBalance) || 0 })}
-                        disabled={!accountId || !statementDate || statementBalance === ''}
-                        style={{ width: '100%', padding: '11px', background: accountId && statementDate && statementBalance !== '' ? '#1e293b' : '#94a3b8', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: accountId && statementDate && statementBalance !== '' ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                        disabled={!canStart}
+                        style={{ width: '100%', padding: '11px', background: canStart ? '#1e293b' : '#94a3b8', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: canStart ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                         <i className="ph ph-check-square"></i> Start Reconciling
                     </button>
                 </div>
@@ -171,7 +239,6 @@ function TxRow({ tx, checked, onToggle, dimmed }) {
 
     const handleViewInLedger = (e) => {
         e.stopPropagation(); // don't toggle the checkbox
-        // Select the transaction (opens inspector panel) then navigate to the ledger
         if (window.selectTransaction) window.selectTransaction(tx.tx_id);
         if (window.navigateTo) window.navigateTo('import');
     };
@@ -226,7 +293,7 @@ function TxRow({ tx, checked, onToggle, dimmed }) {
 }
 
 // ─── Clearing Screen ──────────────────────────────────────────────────────
-function ClearingScreen({ setupData, accounts, onBack, onFinish }) {
+function ClearingScreen({ setupData, accounts, onBack, onFinish, initialCheckedIds }) {
     const { accountId, statementDate, statementBalance } = setupData;
     const account = accounts.find(a => a.id === accountId);
     const accountName = account?.name || accountId;
@@ -240,12 +307,28 @@ function ClearingScreen({ setupData, accounts, onBack, onFinish }) {
             .sort((a, b) => a.date > b.date ? 1 : -1);
     }, [accountId, statementDate]);
 
-    // Pre-check previously reconciled transactions
+    // Pre-check previously reconciled transactions + any restored WIP
     const [checkedIds, setCheckedIds] = useState(() => {
         const init = {};
         allTxns.forEach(tx => { if (tx.status === 'RECONCILED') init[tx.tx_id] = true; });
+        // Merge in any restored WIP checked items
+        if (initialCheckedIds) {
+            Object.entries(initialCheckedIds).forEach(([k, v]) => { if (v) init[k] = true; });
+        }
         return init;
     });
+
+    // Auto-save WIP whenever checkedIds changes
+    useEffect(() => {
+        const wip = {
+            accountId,
+            statementDate,
+            statementBalance,
+            checkedIds,
+            savedAt: new Date().toISOString(),
+        };
+        ssSet(WIP_STORAGE_KEY, wip);
+    }, [checkedIds, accountId, statementDate, statementBalance]);
 
     const deposits = allTxns.filter(tx => tx.polarity === 'CREDIT');
     const payments = allTxns.filter(tx => tx.polarity === 'DEBIT');
@@ -306,7 +389,15 @@ function ClearingScreen({ setupData, accounts, onBack, onFinish }) {
         });
         ssSet(STORAGE_KEY, history);
 
+        // Clear WIP since reconciliation is complete
+        ssSet(WIP_STORAGE_KEY, null);
+
         onFinish();
+    };
+
+    const handleBack = () => {
+        // WIP is already auto-saved via the useEffect above
+        onBack();
     };
 
     const col = { dep: '#16a34a', pmt: '#dc2626' };
@@ -317,7 +408,7 @@ function ClearingScreen({ setupData, accounts, onBack, onFinish }) {
             {/* Top bar */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #e2e8f0', background: '#1e293b', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <button onClick={onBack}
+                    <button onClick={handleBack}
                         style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#94a3b8', padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
                         <i className="ph ph-arrow-left"></i> Back
                     </button>
@@ -349,61 +440,67 @@ function ClearingScreen({ setupData, accounts, onBack, onFinish }) {
                 </div>
             </div>
 
-            {/* Two-panel body */}
+            {/* Main body: side-by-side debits/credits on left, summary on right */}
             <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
-                {/* ── LEFT: Transaction Lists ── */}
+                {/* ── LEFT: Side-by-Side Transaction Lists ── */}
                 <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: '#f8fafc' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, minHeight: '100%' }}>
 
-                    {/* Payments / Debits */}
-                    <div style={{ background: 'white', margin: 16, marginBottom: 8, borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: '1px solid #f1f5f9', background: '#fef2f2' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <i className="ph ph-arrow-up-right" style={{ color: col.pmt, fontSize: 15 }}></i>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payments & Other Withdrawals</span>
-                                <span style={{ fontSize: 11, color: '#94a3b8' }}>({payments.length})</span>
+                        {/* Payments / Debits — LEFT COLUMN */}
+                        <div style={{ borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: '1px solid #f1f5f9', background: '#fef2f2', flexShrink: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <i className="ph ph-arrow-up-right" style={{ color: col.pmt, fontSize: 15 }}></i>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payments</span>
+                                    <span style={{ fontSize: 11, color: '#94a3b8' }}>({payments.length})</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <button onClick={() => selectAll(payments)} style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>All</button>
+                                    <button onClick={() => clearAll(payments)} style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>None</button>
+                                </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                                <button onClick={() => selectAll(payments)} style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>All</button>
-                                <button onClick={() => clearAll(payments)} style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>None</button>
+                            <div style={{ flex: 1, overflow: 'auto' }}>
+                                {payments.length === 0 ? (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No payment transactions</div>
+                                ) : (
+                                    payments.map(tx => (
+                                        <TxRow key={tx.tx_id} tx={tx} checked={!!checkedIds[tx.tx_id]} onToggle={toggle} dimmed={false} />
+                                    ))
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                                <span style={{ color: '#64748b' }}>{summary.clearedPaymentCount} of {payments.length} cleared</span>
+                                <span style={{ color: col.pmt, fontFamily: 'monospace' }}>−{fmt(summary.clearedPayments)}</span>
                             </div>
                         </div>
-                        {payments.length === 0 ? (
-                            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No payment transactions</div>
-                        ) : (
-                            payments.map(tx => (
-                                <TxRow key={tx.tx_id} tx={tx} checked={!!checkedIds[tx.tx_id]} onToggle={toggle} dimmed={false} />
-                            ))
-                        )}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontSize: 12, fontWeight: 700 }}>
-                            <span style={{ color: '#64748b' }}>{summary.clearedPaymentCount} of {payments.length} cleared</span>
-                            <span style={{ color: col.pmt, fontFamily: 'monospace' }}>−{fmt(summary.clearedPayments)}</span>
-                        </div>
-                    </div>
 
-                    {/* Deposits / Credits */}
-                    <div style={{ background: 'white', margin: 16, marginTop: 8, borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: '1px solid #f1f5f9', background: '#f0fdf4' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <i className="ph ph-arrow-down-left" style={{ color: col.dep, fontSize: 15 }}></i>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deposits & Other Credits</span>
-                                <span style={{ fontSize: 11, color: '#94a3b8' }}>({deposits.length})</span>
+                        {/* Deposits / Credits — RIGHT COLUMN */}
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: '1px solid #f1f5f9', background: '#f0fdf4', flexShrink: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <i className="ph ph-arrow-down-left" style={{ color: col.dep, fontSize: 15 }}></i>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deposits</span>
+                                    <span style={{ fontSize: 11, color: '#94a3b8' }}>({deposits.length})</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <button onClick={() => selectAll(deposits)} style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>All</button>
+                                    <button onClick={() => clearAll(deposits)} style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>None</button>
+                                </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                                <button onClick={() => selectAll(deposits)} style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>All</button>
-                                <button onClick={() => clearAll(deposits)} style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', cursor: 'pointer' }}>None</button>
+                            <div style={{ flex: 1, overflow: 'auto' }}>
+                                {deposits.length === 0 ? (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No deposit transactions</div>
+                                ) : (
+                                    deposits.map(tx => (
+                                        <TxRow key={tx.tx_id} tx={tx} checked={!!checkedIds[tx.tx_id]} onToggle={toggle} dimmed={false} />
+                                    ))
+                                )}
                             </div>
-                        </div>
-                        {deposits.length === 0 ? (
-                            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No deposit transactions</div>
-                        ) : (
-                            deposits.map(tx => (
-                                <TxRow key={tx.tx_id} tx={tx} checked={!!checkedIds[tx.tx_id]} onToggle={toggle} dimmed={false} />
-                            ))
-                        )}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontSize: 12, fontWeight: 700 }}>
-                            <span style={{ color: '#64748b' }}>{summary.clearedDepositCount} of {deposits.length} cleared</span>
-                            <span style={{ color: col.dep, fontFamily: 'monospace' }}>+{fmt(summary.clearedDeposits)}</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                                <span style={{ color: '#64748b' }}>{summary.clearedDepositCount} of {deposits.length} cleared</span>
+                                <span style={{ color: col.dep, fontFamily: 'monospace' }}>+{fmt(summary.clearedDeposits)}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -586,16 +683,35 @@ export function BankReconciliationReport() {
     const [phase, setPhase] = useState('setup'); // 'setup' | 'clearing' | 'history'
     const [setupData, setSetupData] = useState(null);
     const [accounts, setAccounts] = useState([]);
+    const [wipData, setWipData] = useState(null);
+    const [initialCheckedIds, setInitialCheckedIds] = useState(null);
 
     useEffect(() => {
-        // Use same source + filter as the main transactions dropdown:
-        //   getActive() (prunes GENERIC PARSER ghosts) → filter out blank/placeholder names
-        const raw = window.RoboLedger?.Accounts?.getActive?.()
-            || window.RoboLedger?.Accounts?.getAll?.()
+        // Load ALL accounts — no filtering out blank names or "New Account"
+        // Every account the user has should be available for reconciliation
+        const raw = window.RoboLedger?.Accounts?.getAll?.()
+            || window.RoboLedger?.Accounts?.getActive?.()
             || [];
-        const accs = raw.filter(a => a.name && a.name.trim() !== '' && a.name !== 'New Account');
+        const accs = raw.filter(a => a.id); // just make sure there's an id
         setAccounts(accs);
+
+        // Check for WIP (in-progress reconciliation)
+        const saved = ssGet(WIP_STORAGE_KEY);
+        if (saved && saved.accountId && saved.checkedIds) {
+            setWipData(saved);
+        }
     }, []);
+
+    const handleResume = () => {
+        if (!wipData) return;
+        setSetupData({
+            accountId: wipData.accountId,
+            statementDate: wipData.statementDate,
+            statementBalance: wipData.statementBalance,
+        });
+        setInitialCheckedIds(wipData.checkedIds);
+        setPhase('clearing');
+    };
 
     if (phase === 'history') {
         return <HistoryScreen accounts={accounts} onBack={() => setPhase('setup')} />;
@@ -606,8 +722,9 @@ export function BankReconciliationReport() {
             <ClearingScreen
                 setupData={setupData}
                 accounts={accounts}
-                onBack={() => setPhase('setup')}
-                onFinish={() => setPhase('setup')}
+                initialCheckedIds={initialCheckedIds}
+                onBack={() => { setPhase('setup'); setInitialCheckedIds(null); }}
+                onFinish={() => { setPhase('setup'); setSetupData(null); setInitialCheckedIds(null); setWipData(null); }}
             />
         );
     }
@@ -615,8 +732,10 @@ export function BankReconciliationReport() {
     return (
         <SetupScreen
             accounts={accounts}
-            onStart={(data) => { setSetupData(data); setPhase('clearing'); }}
+            wipData={wipData}
+            onStart={(data) => { setSetupData(data); setInitialCheckedIds(null); setPhase('clearing'); }}
             onHistory={() => setPhase('history')}
+            onResume={handleResume}
         />
     );
 }

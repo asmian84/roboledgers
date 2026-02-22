@@ -496,7 +496,7 @@ function DescriptionCell({ row }) {
 
 // Number formatting helper
 function formatCurrency(value) {
-    if (!value && value !== 0) return '-';
+    if (!value && value !== 0) return '';
     // Fix negative zero: -0.00 should display as 0.00
     const displayValue = Object.is(value, -0) || value === 0 ? 0 : value;
     return `$${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1069,6 +1069,11 @@ export function TransactionsTable({
     const [auditSidebarOpen, setAuditSidebarOpen] = useState(false);
     const [selectedAuditTransaction, setSelectedAuditTransaction] = useState(null);
 
+    // EXCEL-LIKE: Cell focus & inline editing state
+    const [focusedCell, setFocusedCell] = useState(null); // { rowIndex, columnId }
+    const [editingCell, setEditingCell] = useState(null);  // { rowIndex, columnId, value }
+    const editInputRef = useRef(null);
+
     // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
     const [activePanel, setActivePanel] = useState(null);
 
@@ -1097,6 +1102,251 @@ export function TransactionsTable({
     useEffect(() => {
         setGlobalFilter(initialGlobalFilter || '');
     }, [initialGlobalFilter]);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EXCEL-LIKE KEYBOARD NAVIGATION & INLINE EDITING
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Columns that support keyboard navigation (order matters for Tab/arrow keys)
+    const NAV_COLUMNS = useMemo(() => ['date', 'description', 'debit', 'credit', 'category'], []);
+    // Columns that are inline-editable (double-click or Enter)
+    const EDITABLE_COLUMNS = useMemo(() => new Set(['date', 'description', 'debit', 'credit']), []);
+
+    // Focus the edit input when editing starts
+    useEffect(() => {
+        if (editingCell && editInputRef.current) {
+            editInputRef.current.focus();
+            editInputRef.current.select();
+        }
+    }, [editingCell]);
+
+    // Commit edit value to ledger with full audit trail
+    const commitCellEdit = (rowIndex, columnId, value) => {
+        const rows = table.getRowModel().rows;
+        const row = rows[rowIndex];
+        if (!row) return;
+        const txId = row.original.tx_id;
+        if (!txId) return;
+
+        const tx = window.RoboLedger?.Ledger?.get?.(txId);
+        if (!tx) return;
+
+        // Build audit history entry
+        const historyEntry = {
+            field: columnId,
+            old_value: null,
+            new_value: value,
+            timestamp: new Date().toISOString(),
+            edited_by: 'user'
+        };
+
+        if (columnId === 'debit' || columnId === 'credit') {
+            const numVal = parseFloat(String(value).replace(/[$,]/g, '')) || 0;
+            const cents = Math.round(numVal * 100);
+            const oldAmount = tx.amount_cents || 0;
+            const oldPolarity = tx.polarity;
+
+            historyEntry.old_value = `${oldPolarity} $${(oldAmount / 100).toFixed(2)}`;
+
+            if (columnId === 'debit' && numVal > 0) {
+                historyEntry.new_value = `DEBIT $${numVal.toFixed(2)}`;
+                window.RoboLedger.Ledger.updateTransaction(txId, {
+                    amount_cents: cents,
+                    polarity: 'DEBIT',
+                    edit_history: [...(tx.edit_history || []), historyEntry]
+                });
+            } else if (columnId === 'credit' && numVal > 0) {
+                historyEntry.new_value = `CREDIT $${numVal.toFixed(2)}`;
+                window.RoboLedger.Ledger.updateTransaction(txId, {
+                    amount_cents: cents,
+                    polarity: 'CREDIT',
+                    edit_history: [...(tx.edit_history || []), historyEntry]
+                });
+            } else if (numVal === 0) {
+                // Clear the field — keep opposite polarity or zero out
+                historyEntry.new_value = `${columnId.toUpperCase()} $0.00`;
+                window.RoboLedger.Ledger.updateTransaction(txId, {
+                    amount_cents: 0,
+                    polarity: columnId === 'debit' ? 'DEBIT' : 'CREDIT',
+                    edit_history: [...(tx.edit_history || []), historyEntry]
+                });
+            }
+        } else if (columnId === 'date') {
+            historyEntry.old_value = tx.date || tx.date_iso || '';
+            historyEntry.new_value = value;
+            // Validate date format
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (dateRegex.test(value)) {
+                window.RoboLedger.Ledger.updateTransaction(txId, {
+                    date: value,
+                    date_iso: value,
+                    edit_history: [...(tx.edit_history || []), historyEntry]
+                });
+            } else {
+                if (window.showToast) window.showToast('Invalid date format. Use YYYY-MM-DD', 'error');
+                return;
+            }
+        } else if (columnId === 'description') {
+            // Description already has its own edit handler via DescriptionCell
+            window.RoboLedger.Ledger.updateDescription(txId, value);
+            setEditingCell(null);
+            if (window.updateWorkspace) window.updateWorkspace();
+            return;
+        }
+
+        setEditingCell(null);
+        // Refresh data
+        if (window.updateWorkspace) window.updateWorkspace();
+        else setData([...data]);
+    };
+
+    // Start editing current focused cell
+    const startEditing = (rowIndex, columnId) => {
+        if (!EDITABLE_COLUMNS.has(columnId)) return;
+        const rows = table.getRowModel().rows;
+        const row = rows[rowIndex];
+        if (!row) return;
+
+        let currentValue = '';
+        if (columnId === 'debit') {
+            currentValue = row.original.debit ? String(row.original.debit) : '';
+        } else if (columnId === 'credit') {
+            currentValue = row.original.credit ? String(row.original.credit) : '';
+        } else if (columnId === 'date') {
+            currentValue = row.original.date_iso || row.original.date || '';
+        } else if (columnId === 'description') {
+            currentValue = row.original.payee || row.original.description || '';
+        }
+
+        setEditingCell({ rowIndex, columnId, value: currentValue });
+    };
+
+    // Keyboard handler for grid navigation
+    const handleGridKeyDown = (e) => {
+        // Global shortcuts that work regardless of focus state
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'N') {
+            e.preventDefault();
+            handleAddTransaction();
+            return;
+        }
+
+        // Don't intercept if user is typing in an input/textarea/select that's NOT our edit cell
+        const tag = e.target.tagName?.toLowerCase();
+        if ((tag === 'input' || tag === 'textarea' || tag === 'select') && !e.target.dataset?.gridEdit) return;
+
+        if (!focusedCell) return;
+
+        const rows = table.getRowModel().rows;
+        const { rowIndex, columnId } = focusedCell;
+        const colIdx = NAV_COLUMNS.indexOf(columnId);
+
+        switch (e.key) {
+            case 'ArrowDown': {
+                e.preventDefault();
+                const nextRow = Math.min(rowIndex + 1, rows.length - 1);
+                setFocusedCell({ rowIndex: nextRow, columnId });
+                // Scroll into view
+                rowVirtualizer.scrollToIndex(nextRow, { align: 'auto' });
+                break;
+            }
+            case 'ArrowUp': {
+                e.preventDefault();
+                const prevRow = Math.max(rowIndex - 1, 0);
+                setFocusedCell({ rowIndex: prevRow, columnId });
+                rowVirtualizer.scrollToIndex(prevRow, { align: 'auto' });
+                break;
+            }
+            case 'ArrowRight': {
+                e.preventDefault();
+                if (colIdx < NAV_COLUMNS.length - 1) {
+                    setFocusedCell({ rowIndex, columnId: NAV_COLUMNS[colIdx + 1] });
+                }
+                break;
+            }
+            case 'ArrowLeft': {
+                e.preventDefault();
+                if (colIdx > 0) {
+                    setFocusedCell({ rowIndex, columnId: NAV_COLUMNS[colIdx - 1] });
+                }
+                break;
+            }
+            case 'Tab': {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    // Move left or to previous row
+                    if (colIdx > 0) {
+                        setFocusedCell({ rowIndex, columnId: NAV_COLUMNS[colIdx - 1] });
+                    } else if (rowIndex > 0) {
+                        setFocusedCell({ rowIndex: rowIndex - 1, columnId: NAV_COLUMNS[NAV_COLUMNS.length - 1] });
+                    }
+                } else {
+                    // Move right or to next row
+                    if (colIdx < NAV_COLUMNS.length - 1) {
+                        setFocusedCell({ rowIndex, columnId: NAV_COLUMNS[colIdx + 1] });
+                    } else if (rowIndex < rows.length - 1) {
+                        setFocusedCell({ rowIndex: rowIndex + 1, columnId: NAV_COLUMNS[0] });
+                    }
+                }
+                break;
+            }
+            case 'Enter': {
+                e.preventDefault();
+                if (editingCell) {
+                    // Commit and move down
+                    commitCellEdit(editingCell.rowIndex, editingCell.columnId, editingCell.value);
+                    const nextRow = Math.min(rowIndex + 1, rows.length - 1);
+                    setFocusedCell({ rowIndex: nextRow, columnId });
+                } else {
+                    startEditing(rowIndex, columnId);
+                }
+                break;
+            }
+            case 'Escape': {
+                e.preventDefault();
+                if (editingCell) {
+                    setEditingCell(null);
+                } else {
+                    setFocusedCell(null);
+                }
+                break;
+            }
+            case 'F2': {
+                e.preventDefault();
+                startEditing(rowIndex, columnId);
+                break;
+            }
+            case 'Delete':
+            case 'Backspace': {
+                if (!editingCell && EDITABLE_COLUMNS.has(columnId)) {
+                    e.preventDefault();
+                    // Clear cell and start editing
+                    setEditingCell({ rowIndex, columnId, value: '' });
+                }
+                break;
+            }
+            default: {
+                // If user starts typing alphanumeric, enter edit mode
+                if (!editingCell && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    if (EDITABLE_COLUMNS.has(columnId)) {
+                        e.preventDefault();
+                        setEditingCell({ rowIndex, columnId, value: e.key });
+                    }
+                }
+                break;
+            }
+        }
+    };
+
+    // ADD TRANSACTION: Insert a new manual transaction row
+    const handleAddTransaction = () => {
+        const accountId = window.UI_STATE?.selectedAccount;
+        const tx = window.RoboLedger?.Ledger?.createManual?.(accountId !== 'ALL' ? accountId : undefined);
+        if (tx) {
+            if (window.showToast) window.showToast('New transaction added', 'success');
+            if (window.updateWorkspace) window.updateWorkspace();
+            else setData([...data]);
+        }
+    };
 
     // DIRECT BRIDGE: Expose setData so utility-bar and setTxGridFilter can drive
     // the grid without going through the stale React root reference.
@@ -1358,11 +1608,14 @@ export function TransactionsTable({
     return (
         <div
             className="bg-white relative"
+            tabIndex={0}
+            onKeyDown={handleGridKeyDown}
             style={{
                 height: 'calc(100vh - 60px)', // Fixed height minus nav
                 overflow: 'hidden',
                 display: 'flex',
-                flexDirection: activePanel ? 'row' : 'column'
+                flexDirection: activePanel ? 'row' : 'column',
+                outline: 'none',
             }}
         >
             {/* Scrolling container with fixed height */}
@@ -1507,7 +1760,8 @@ export function TransactionsTable({
                 )}
 
                 {/* Filter Toolbar - STICKY: Freezes at top when scrolling */}
-                <div style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#fff' }}>
+                <div style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#fff', display: 'flex', alignItems: 'stretch' }}>
+                    <div style={{ flex: 1 }}>
                     <FilterToolbar
                         refPrefix={window.UI_STATE?.refPrefix || 'CHQ1'}
                         searchQuery={window.UI_STATE?.searchQuery || ''}
@@ -1583,6 +1837,32 @@ export function TransactionsTable({
                         }}
                         onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
                     />
+                    </div>
+                    {/* Add Transaction button — next to FilterToolbar */}
+                    <button
+                        onClick={handleAddTransaction}
+                        title="Add a new manual transaction (Ctrl+Shift+N)"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            padding: '0 14px',
+                            background: 'none',
+                            border: 'none',
+                            borderLeft: '1px solid #e2e8f0',
+                            color: '#64748b',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.background = '#eff6ff'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = 'none'; }}
+                    >
+                        <i className="ph ph-plus-circle" style={{ fontSize: '15px' }}></i>
+                        Add
+                    </button>
                 </div>
 
                 {/* Grid Header */}
@@ -1705,28 +1985,96 @@ export function TransactionsTable({
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = rowBg}
                                     >
-                                        {row.getVisibleCells().map(cell => (
+                                        {row.getVisibleCells().map(cell => {
+                                            const colId = cell.column.id;
+                                            const isFocused = focusedCell && focusedCell.rowIndex === virtualRow.index && focusedCell.columnId === colId;
+                                            const isEditing = editingCell && editingCell.rowIndex === virtualRow.index && editingCell.columnId === colId;
+                                            const isNavigable = NAV_COLUMNS.includes(colId);
+                                            const isEditable = EDITABLE_COLUMNS.has(colId);
+
+                                            return (
                                             <div
                                                 key={cell.id}
-                                                className={`flex items-center ${cell.column.id === 'category' ? 'overflow-visible' : 'overflow-hidden'} ${getStickyClass(cell.column.id)}`}
+                                                className={`flex items-center ${colId === 'category' ? 'overflow-visible' : 'overflow-hidden'} ${getStickyClass(colId)}`}
+                                                onClick={() => {
+                                                    if (isNavigable) setFocusedCell({ rowIndex: virtualRow.index, columnId: colId });
+                                                }}
+                                                onDoubleClick={() => {
+                                                    if (isEditable) {
+                                                        setFocusedCell({ rowIndex: virtualRow.index, columnId: colId });
+                                                        startEditing(virtualRow.index, colId);
+                                                    }
+                                                }}
                                                 style={{
-                                                    width: cell.column.id === 'description' ? undefined : cell.column.getSize(),
-                                                    flex: cell.column.id === 'description' ? '1 1 0' : undefined,
-                                                    minWidth: cell.column.id === 'description' ? '250px' : undefined,
+                                                    width: colId === 'description' ? undefined : cell.column.getSize(),
+                                                    flex: colId === 'description' ? '1 1 0' : undefined,
+                                                    minWidth: colId === 'description' ? '250px' : undefined,
                                                     flexShrink: 0,
                                                     // Custom padding per column
-                                                    padding: cell.column.id === 'select' ? '0 4px 0 12px' :  // Checkbox: 12px left padding
-                                                        cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
+                                                    padding: colId === 'select' ? '0 4px 0 12px' :  // Checkbox: 12px left padding
+                                                        colId === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
                                                             '0 8px 0 2px',                               // Others: minimal left, standard right
                                                     borderRight: `1px solid ${TK.borderColor}`,
-                                                    position: cell.column.id === 'category' ? 'relative' : undefined
+                                                    position: colId === 'category' ? 'relative' : undefined,
+                                                    // Focus indicator
+                                                    ...(isFocused ? {
+                                                        boxShadow: 'inset 0 0 0 2px #3b82f6',
+                                                        borderRadius: '2px',
+                                                    } : {}),
                                                 }}
                                             >
+                                                {isEditing ? (
+                                                    <input
+                                                        ref={editInputRef}
+                                                        data-grid-edit="true"
+                                                        type={colId === 'date' ? 'date' : colId === 'debit' || colId === 'credit' ? 'number' : 'text'}
+                                                        step={colId === 'debit' || colId === 'credit' ? '0.01' : undefined}
+                                                        value={editingCell.value}
+                                                        onChange={(e) => setEditingCell(prev => ({ ...prev, value: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                commitCellEdit(editingCell.rowIndex, editingCell.columnId, editingCell.value);
+                                                                const nextRow = Math.min(virtualRow.index + 1, table.getRowModel().rows.length - 1);
+                                                                setFocusedCell({ rowIndex: nextRow, columnId: colId });
+                                                            } else if (e.key === 'Escape') {
+                                                                e.preventDefault();
+                                                                setEditingCell(null);
+                                                            } else if (e.key === 'Tab') {
+                                                                e.preventDefault();
+                                                                commitCellEdit(editingCell.rowIndex, editingCell.columnId, editingCell.value);
+                                                                const ci = NAV_COLUMNS.indexOf(colId);
+                                                                if (e.shiftKey) {
+                                                                    if (ci > 0) setFocusedCell({ rowIndex: virtualRow.index, columnId: NAV_COLUMNS[ci - 1] });
+                                                                } else {
+                                                                    if (ci < NAV_COLUMNS.length - 1) setFocusedCell({ rowIndex: virtualRow.index, columnId: NAV_COLUMNS[ci + 1] });
+                                                                }
+                                                            }
+                                                        }}
+                                                        onBlur={() => {
+                                                            commitCellEdit(editingCell.rowIndex, editingCell.columnId, editingCell.value);
+                                                        }}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            border: 'none',
+                                                            outline: 'none',
+                                                            background: '#eff6ff',
+                                                            padding: '4px 6px',
+                                                            fontSize: TK.cellFontSize,
+                                                            fontFamily: colId === 'debit' || colId === 'credit' ? 'JetBrains Mono, monospace' : TK.fontFamily,
+                                                            textAlign: colId === 'debit' || colId === 'credit' ? 'right' : 'left',
+                                                            boxSizing: 'border-box',
+                                                        }}
+                                                    />
+                                                ) : (
                                                 <div className="w-full text-left">
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </div>
+                                                )}
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 );
                             })}
@@ -1735,7 +2083,26 @@ export function TransactionsTable({
                         <div className="flex flex-col items-center justify-center h-full py-20">
                             <i className="ph ph-database text-[#cbd5e1] text-[64px] mb-4"></i>
                             <h3 className="text-[16px] font-semibold text-[#64748b] mb-2">No transactions found</h3>
-                            <p className="text-[13px] text-[#94a3b8]">Import a bank statement to get started</p>
+                            <p className="text-[13px] text-[#94a3b8] mb-4">Import a bank statement to get started</p>
+                            <button
+                                onClick={handleAddTransaction}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 20px',
+                                    background: '#3b82f6',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    color: 'white',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <i className="ph ph-plus-circle" style={{ fontSize: '15px' }}></i>
+                                Add Manual Transaction
+                            </button>
                         </div>
                     )}
                 </div>

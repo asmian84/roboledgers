@@ -36,6 +36,7 @@ RBC MASTERCARD FORMAT:
             statementText.match(/(\d{4}[\s-]+\d{2}\*\*[\s-]+\*{4}[\s-]+\d{4})/i);
 
         const rawAcct = acctMatch ? acctMatch[1].replace(/-/g, ' ') : 'XXXX XXXX XXXX XXXX'; // Normalize to spaces
+        this._rawAcct = rawAcct; // Store on instance so finalizeTransaction() can access it
 
         const parsedMetadata = {
             _acct: rawAcct,
@@ -231,7 +232,7 @@ RBC MASTERCARD FORMAT:
             _accountType: 'CreditCard',
             _inst: '003',
             _transit: '00000',
-            _acct: rawAcct || '',
+            _acct: this._rawAcct || '',
             rawText: pending.fullRaw,
             parser_ref: this._getStmtId() + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
@@ -251,7 +252,7 @@ RBC MASTERCARD FORMAT:
         this._txSeq = 0; // Reset sequence for new statement
         return this._cachedStmtId;
     }
-    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; this._rawAcct = null; }
 
 }
 

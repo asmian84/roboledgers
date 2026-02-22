@@ -144,12 +144,15 @@ SMART PARSING RULES:
     // Capture metadata
     this.metadata = {
       institutionCode: '003',
+      inst: '003',
       transit: transit,
       accountNumber: acctFromText,
-      brand: 'RBC',
+      // NOTE: Do NOT set `brand` here — brand is for card networks (MASTERCARD, VISA).
+      // Setting brand: 'RBC' caused updateMetadata() to treat this as a credit card.
+      bankName: 'RBC',          // ← correct field for the issuing bank
       bank: 'RBC',
       tag: 'Savings',
-      accountType: 'SAVINGS', // [NEW] Added for downstream categorization
+      accountType: 'SAVINGS',   // downstream name builder uses this for "RBC - Savings #XXXX"
       openingBalance: openingBalance,
       debug_raw_header: headerLines // Store for UI debugging
     };

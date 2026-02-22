@@ -357,8 +357,22 @@ window.ubDrillAccount = function(accountId, accountRef) {
 
 window.updateUtilityBar = function () {
     const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    // Sort accounts by type group (CHQ, SAV, VISA, MC, AMEX) then by number within each group
+    const _ubTypeOrder = { 'CHQ': 1, 'SAV': 2, 'TD': 3, 'VISA': 4, 'MC': 5, 'AMEX': 6 };
+    const _ubParseRef = (ref) => {
+        const match = (ref || '').match(/^([A-Za-z]+)(\d*)$/);
+        if (!match) return { type: ref || '', num: 0 };
+        return { type: match[1].toUpperCase(), num: parseInt(match[2] || '0', 10) };
+    };
     const accounts = (window.RoboLedger?.Accounts?.getActive?.() || window.RoboLedger?.Accounts?.getAll() || [])
-        .slice().sort((a, b) => (a.ref || a.name || '').localeCompare(b.ref || b.name || ''));
+        .slice().sort((a, b) => {
+            const ra = _ubParseRef(a.ref || a.name);
+            const rb = _ubParseRef(b.ref || b.name);
+            const orderA = _ubTypeOrder[ra.type] || 99;
+            const orderB = _ubTypeOrder[rb.type] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return ra.num - rb.num;
+        });
 
     console.log(`[UB] updateUtilityBar() called — ${allTxns.length} txns, ${accounts.length} accounts`);
     if (allTxns.length === 0) { console.log('[UB] No transactions — skipping render'); return; }
@@ -542,28 +556,52 @@ window.updateUtilityBar = function () {
     if (activeAccounts.length > 0) {
         const accountColors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
 
-        // Resolve icon class for account type
-        function _accIcon(acc) {
+        // Resolve bank logo image for account
+        function _accLogoHtml(acc, size = 14) {
             const brand = (acc.brand || acc.cardNetwork || '').toUpperCase();
-            if (brand.includes('VISA'))       return 'ph-credit-card';
-            if (brand.includes('MC') || brand.includes('MASTERCARD')) return 'ph-credit-card';
-            if (brand.includes('AMEX'))       return 'ph-credit-card';
-            if (acc.accountType === 'CreditCard') return 'ph-credit-card';
-            if (acc.accountType === 'SAVINGS') return 'ph-piggy-bank';
-            return 'ph-bank';  // Chequing / default
+            const bankName = (acc.bankName || acc.bankIcon || '').toLowerCase();
+            const ref = (acc.ref || '').toUpperCase();
+            const imgStyle = `width:${size}px;height:${size}px;border-radius:2px;object-fit:contain;flex-shrink:0;`;
+            const basePath = '/logos/';
+
+            // Card network logos
+            if (brand.includes('VISA') || ref.includes('VISA'))
+                return `<img src="${basePath}visa.png" alt="Visa" style="${imgStyle}" />`;
+            if (brand.includes('MC') || brand.includes('MASTERCARD') || ref.includes('MC'))
+                return `<img src="${basePath}mastercard.png" alt="MC" style="${imgStyle}" />`;
+            if (brand.includes('AMEX') || ref.includes('AMEX'))
+                return `<img src="${basePath}amex.png" alt="Amex" style="${imgStyle}" />`;
+
+            // Bank logos
+            if (bankName.includes('rbc') || bankName.includes('royal'))
+                return `<img src="${basePath}rbc.png" alt="RBC" style="${imgStyle}" />`;
+            if (bankName.includes('td') || bankName.includes('dominion'))
+                return `<img src="${basePath}td.png" alt="TD" style="${imgStyle}" />`;
+            if (bankName.includes('bmo') || bankName.includes('montreal'))
+                return `<img src="${basePath}bmo.png" alt="BMO" style="${imgStyle}" />`;
+            if (bankName.includes('scotia'))
+                return `<img src="${basePath}scotia.png" alt="Scotia" style="${imgStyle}" />`;
+            if (bankName.includes('cibc'))
+                return `<img src="${basePath}cibc.png" alt="CIBC" style="${imgStyle}" />`;
+
+            // Fallback: try to match from account ref prefix
+            if (ref.startsWith('CHQ') || ref.startsWith('SAV') || ref.startsWith('TD'))
+                return `<i class="ph ph-bank" style="font-size:${size}px;flex-shrink:0;"></i>`;
+
+            return `<i class="ph ph-bank" style="font-size:${size}px;flex-shrink:0;"></i>`;
         }
 
         badgesContainer.innerHTML = activeAccounts.slice(0, 8).map((acc, idx) => {
             const txCount = allTxns.filter(t => t.account_id === acc.id).length;
             const label = acc.ref || acc.name || acc.id;
-            const icon = _accIcon(acc);
+            const logo = _accLogoHtml(acc, 14);
             const color = accountColors[idx % accountColors.length];
             return `<div
               class="utility-badge"
               style="background:${color};cursor:pointer;display:flex;align-items:center;gap:5px;"
               title="${acc.name || label} · ${txCount} txns — click to drill"
               onclick="window.ubDrillAccount('${acc.id}','${label.replace(/'/g, "\\'")}')"
-            ><i class="ph ${icon}" style="font-size:12px;flex-shrink:0;"></i>${label}</div>`;
+            >${logo}${label}</div>`;
         }).join('');
     } else {
         badgesContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:11px;">No active accounts</div>';

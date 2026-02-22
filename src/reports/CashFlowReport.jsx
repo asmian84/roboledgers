@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import { ReportFilters } from './components/ReportFilters.jsx';
 import ReportHeader from './components/ReportHeader.jsx';
+import { AccountDrillDown } from './components/AccountDrillDown.jsx';
 
 
 /**
@@ -12,6 +13,7 @@ export function CashFlowReport() {
     const [reportData, setReportData] = useState(null);
     const [dateRange, setDateRange] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [expandedAccount, setExpandedAccount] = useState(null);
 
     const generateReport = (range) => {
         if (!range?.start || !range?.end) return;
@@ -103,10 +105,20 @@ export function CashFlowReport() {
                                         Adjustments to reconcile:
                                     </div>
                                     {reportData.operating.adjustments.map((item, i) => (
-                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 4px 16px', fontSize: 12, color: '#475569' }}>
-                                            <span>{item.name}</span>
+                                        <React.Fragment key={i}>
+                                        <div
+                                            style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 4px 16px', fontSize: 12, color: '#475569', cursor: item.code ? 'pointer' : 'default', background: expandedAccount === item.code ? '#eef2ff' : 'transparent', borderRadius: 4 }}
+                                            onClick={() => item.code && setExpandedAccount(expandedAccount === item.code ? null : item.code)}
+                                        >
+                                            <span>{item.code && <i className={`ph ${expandedAccount === item.code ? 'ph-caret-down' : 'ph-caret-right'} text-[9px] mr-1 text-gray-400`}></i>}{item.name}</span>
                                             <span style={{ fontFamily: 'monospace' }}>{fmt(item.amount)}</span>
                                         </div>
+                                        {expandedAccount === item.code && dateRange && (
+                                            <table className="w-full"><tbody>
+                                            <AccountDrillDown coaCode={item.code} accountName={item.name} startDate={dateRange.start} endDate={dateRange.end} onClose={() => setExpandedAccount(null)} accentColor="emerald" />
+                                            </tbody></table>
+                                        )}
+                                        </React.Fragment>
                                     ))}
                                 </>
                             )}
@@ -127,10 +139,20 @@ export function CashFlowReport() {
                                 <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>No investing activities</div>
                             )}
                             {reportData.investing.items.map((item, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 4px 16px', fontSize: 12, color: '#475569' }}>
-                                    <span>{item.name}</span>
+                                <React.Fragment key={i}>
+                                <div
+                                    style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 4px 16px', fontSize: 12, color: '#475569', cursor: item.code ? 'pointer' : 'default', background: expandedAccount === item.code ? '#eef2ff' : 'transparent', borderRadius: 4 }}
+                                    onClick={() => item.code && setExpandedAccount(expandedAccount === item.code ? null : item.code)}
+                                >
+                                    <span>{item.code && <i className={`ph ${expandedAccount === item.code ? 'ph-caret-down' : 'ph-caret-right'} text-[9px] mr-1 text-gray-400`}></i>}{item.name}</span>
                                     <span style={{ fontFamily: 'monospace' }}>{fmt(item.amount)}</span>
                                 </div>
+                                {expandedAccount === item.code && dateRange && (
+                                    <table className="w-full"><tbody>
+                                    <AccountDrillDown coaCode={item.code} accountName={item.name} startDate={dateRange.start} endDate={dateRange.end} onClose={() => setExpandedAccount(null)} accentColor="emerald" />
+                                    </tbody></table>
+                                )}
+                                </React.Fragment>
                             ))}
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #e2e8f0', fontSize: 13, fontWeight: 700 }}>
                                 <span>Net Cash from Investing Activities</span>
@@ -149,10 +171,20 @@ export function CashFlowReport() {
                                 <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>No financing activities</div>
                             )}
                             {reportData.financing.items.map((item, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 4px 16px', fontSize: 12, color: '#475569' }}>
-                                    <span>{item.name}</span>
+                                <React.Fragment key={i}>
+                                <div
+                                    style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 4px 16px', fontSize: 12, color: '#475569', cursor: item.code ? 'pointer' : 'default', background: expandedAccount === item.code ? '#eef2ff' : 'transparent', borderRadius: 4 }}
+                                    onClick={() => item.code && setExpandedAccount(expandedAccount === item.code ? null : item.code)}
+                                >
+                                    <span>{item.code && <i className={`ph ${expandedAccount === item.code ? 'ph-caret-down' : 'ph-caret-right'} text-[9px] mr-1 text-gray-400`}></i>}{item.name}</span>
                                     <span style={{ fontFamily: 'monospace' }}>{fmt(item.amount)}</span>
                                 </div>
+                                {expandedAccount === item.code && dateRange && (
+                                    <table className="w-full"><tbody>
+                                    <AccountDrillDown coaCode={item.code} accountName={item.name} startDate={dateRange.start} endDate={dateRange.end} onClose={() => setExpandedAccount(null)} accentColor="emerald" />
+                                    </tbody></table>
+                                )}
+                                </React.Fragment>
                             ))}
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #e2e8f0', fontSize: 13, fontWeight: 700 }}>
                                 <span>Net Cash from Financing Activities</span>

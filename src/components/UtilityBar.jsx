@@ -534,6 +534,46 @@ export function UtilityBar({
                 </div>
             </div>
 
+            {/* ── BANK ACCOUNTS ICONS ─────────────────────────────────────── */}
+            {accounts.length > 0 && (
+                <div className="p-3 bg-white border-b border-gray-200">
+                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Bank Accounts</h3>
+                    <div className="flex flex-wrap gap-2">
+                        {accounts.map(acc => {
+                            const isSelected = selectedAccount === acc.id;
+                            // Calculate account balance from transactions
+                            const accTxs = transactions.filter(t => t.account_id === acc.id);
+                            const bal = accTxs.reduce((sum, t) => {
+                                const amt = (t.amount_cents || 0) / 100;
+                                return t.polarity === 'DEBIT' ? sum - amt : sum + amt;
+                            }, 0);
+                            return (
+                                <div
+                                    key={acc.id}
+                                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-all ${
+                                        isSelected
+                                            ? 'bg-indigo-50 border border-indigo-300 ring-1 ring-indigo-200'
+                                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                    onClick={() => onAccountChange?.(isSelected ? 'ALL' : acc.id)}
+                                    title={`${acc.name || acc.ref} — ${accTxs.length} transactions`}
+                                >
+                                    <BankIcon account={acc} size={22} />
+                                    <div className="leading-tight">
+                                        <div className="text-[10px] font-semibold text-gray-700 truncate max-w-[70px]">
+                                            {(acc.ref || acc.name || '').slice(0, 10)}
+                                        </div>
+                                        <div className="text-[9px] font-mono text-gray-400">
+                                            {accTxs.length}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* ── GST SUMMARY ─────────────────────────────────────────────── */}
             <div className="p-4 bg-white border-b border-gray-200">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">GST / HST Summary</h3>

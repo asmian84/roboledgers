@@ -205,9 +205,19 @@ class ReportGenerator {
         const transactions = this.ledger.getTransactionsByDateRange?.(startDate, endDate) ||
             this.ledger.getAllTransactions();
 
-        // Filter by COA code
+        // For bank/CC COA codes (1000-2199), also match by source account_id via sourceAccountId linkage
+        const coaEntry = this.coa.get(coaCode);
+        const sourceAccountId = coaEntry?.sourceAccountId || null;
+
+        // Filter by COA code OR by source bank account
         const filtered = transactions
-            .filter(tx => tx.category === coaCode)
+            .filter(tx => {
+                // Direct category match (expense/revenue accounts)
+                if (tx.category === coaCode || tx.category_code === coaCode || tx.gl_account_code === coaCode) return true;
+                // Source account match (bank/CC accounts linked via COA.sourceAccountId)
+                if (sourceAccountId && tx.account_id === sourceAccountId) return true;
+                return false;
+            })
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const account = this.coa.get(coaCode);
@@ -240,7 +250,11 @@ class ReportGenerator {
         let openingBalance = 0;
         if (startDate) {
             const allTxsForCode = this.ledger.getAllTransactions
-                ? this.ledger.getAllTransactions().filter(tx => tx.category === coaCode)
+                ? this.ledger.getAllTransactions().filter(tx => {
+                    if (tx.category === coaCode || tx.category_code === coaCode || tx.gl_account_code === coaCode) return true;
+                    if (sourceAccountId && tx.account_id === sourceAccountId) return true;
+                    return false;
+                })
                 : [];
             allTxsForCode.forEach(tx => {
                 if (new Date(tx.date) < new Date(startDate)) {

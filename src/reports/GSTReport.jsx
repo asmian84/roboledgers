@@ -11,10 +11,23 @@ const fmtDate = (iso) => {
 };
 
 const TAX_RATES = [
-    { label: '5% GST',          value: 0.05 },
-    { label: '13% HST (ON)',     value: 0.13 },
-    { label: '15% HST (NS/NB/NL)', value: 0.15 },
-    { label: '12% HST (BC)',     value: 0.12 },
+    // HST provinces (single blended rate)
+    { label: '13% HST — Ontario',              value: 0.13  },
+    { label: '15% HST — Nova Scotia',          value: 0.15  },
+    { label: '15% HST — New Brunswick',        value: 0.15  },
+    { label: '15% HST — Newfoundland & Labrador', value: 0.15 },
+    { label: '15% HST — PEI',                  value: 0.15  },
+    { label: '12% HST — British Columbia',     value: 0.12  },
+    // GST-only provinces (5% federal + provincial sales tax billed separately)
+    { label: '5% GST — Alberta',               value: 0.05  },
+    { label: '5% GST — Saskatchewan',          value: 0.05  },
+    { label: '5% GST — Manitoba',              value: 0.05  },
+    { label: '5% GST — Quebec (GST portion)',  value: 0.05  },
+    { label: '5% GST — Territories',           value: 0.05  },
+    // Combined rates for common cross-province blends
+    { label: '14.975% QST+GST — Quebec',       value: 0.14975 },
+    { label: '13% PST+GST — Saskatchewan',     value: 0.11  }, // 5% + 6% PST
+    { label: '12% PST+GST — Manitoba',         value: 0.12  }, // 5% + 7% PST
 ];
 
 // ─── Slim controls bar ────────────────────────────────────────────────────────
@@ -115,45 +128,100 @@ function ReportControls({ taxRate, setTaxRate, periodMode, setPeriodMode,
 // ─── Transaction table ────────────────────────────────────────────────────────
 function TxTable({ rows, gstColor, gstLabel, accentClass }) {
     const [showAll, setShowAll] = useState(false);
-    const visible = showAll ? rows : rows.slice(0, 15);
+    const [sortField, setSortField] = useState('date');
+    const [sortDir, setSortDir] = useState('asc');
 
     if (rows.length === 0) {
         return (
-            <div className="py-8 text-center text-sm text-gray-400">
+            <div className="py-8 text-center text-gray-400" style={{ fontSize: '0.9em' }}>
                 No transactions in this period
             </div>
         );
     }
 
+    const sorted = [...rows].sort((a, b) => {
+        let av = sortField === 'date' ? (a.date || '') :
+                 sortField === 'amount' ? (a.amount || 0) :
+                 sortField === 'gst' ? (a.gst || 0) :
+                 sortField === 'category' ? (a.categoryName || a.accountName || '').toLowerCase() :
+                 (a.description || '').toLowerCase();
+        let bv = sortField === 'date' ? (b.date || '') :
+                 sortField === 'amount' ? (b.amount || 0) :
+                 sortField === 'gst' ? (b.gst || 0) :
+                 sortField === 'category' ? (b.categoryName || b.accountName || '').toLowerCase() :
+                 (b.description || '').toLowerCase();
+        if (av < bv) return sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    const visible = showAll ? sorted : sorted.slice(0, 15);
     const totalAmt = rows.reduce((s, r) => s + r.amount, 0);
     const totalGst = rows.reduce((s, r) => s + r.gst, 0);
 
+    const toggleSort = (field) => {
+        if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        else { setSortField(field); setSortDir('asc'); }
+    };
+
+    const SortIcon = ({ field }) => {
+        if (sortField !== field) return <i className="ph ph-caret-up-down opacity-30 text-[0.7em] ml-0.5"></i>;
+        return sortDir === 'asc'
+            ? <i className="ph ph-caret-up text-[0.7em] ml-0.5"></i>
+            : <i className="ph ph-caret-down text-[0.7em] ml-0.5"></i>;
+    };
+
     return (
         <div>
-            <table className="w-full text-xs">
+            <table className="w-full" style={{ fontSize: '0.88em' }}>
                 <thead>
-                    <tr className="border-b border-gray-100">
-                        <th className="text-left py-1.5 px-2 font-semibold text-gray-500 w-20">Date</th>
-                        <th className="text-left py-1.5 px-2 font-semibold text-gray-500">Description</th>
-                        <th className="text-left py-1.5 px-2 font-semibold text-gray-500 w-24">Account</th>
-                        <th className="text-right py-1.5 px-2 font-semibold text-gray-500 w-24">Amount</th>
-                        <th className={`text-right py-1.5 px-2 font-semibold w-20 ${gstColor}`}>{gstLabel}</th>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                        <th
+                            className="text-left py-1.5 px-2 font-semibold text-gray-500 cursor-pointer hover:text-gray-700 select-none whitespace-nowrap"
+                            style={{ width: '8em' }}
+                            onClick={() => toggleSort('date')}
+                        >Date <SortIcon field="date" /></th>
+                        <th
+                            className="text-left py-1.5 px-2 font-semibold text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                            onClick={() => toggleSort('description')}
+                        >Description <SortIcon field="description" /></th>
+                        <th
+                            className="text-left py-1.5 px-2 font-semibold text-gray-500 cursor-pointer hover:text-gray-700 select-none whitespace-nowrap"
+                            style={{ width: '10em' }}
+                            onClick={() => toggleSort('category')}
+                        >Category <SortIcon field="category" /></th>
+                        <th
+                            className="text-right py-1.5 px-2 font-semibold text-gray-500 cursor-pointer hover:text-gray-700 select-none whitespace-nowrap"
+                            style={{ width: '7em' }}
+                            onClick={() => toggleSort('amount')}
+                        >Amount <SortIcon field="amount" /></th>
+                        <th
+                            className={`text-right py-1.5 px-2 font-semibold cursor-pointer select-none whitespace-nowrap ${gstColor}`}
+                            style={{ width: '6em' }}
+                            onClick={() => toggleSort('gst')}
+                        >{gstLabel} <SortIcon field="gst" /></th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                     {visible.map((tx, i) => (
                         <tr key={i} className="hover:bg-gray-50 transition-colors">
-                            <td className="py-1 px-2 font-mono text-gray-500">{tx.date}</td>
-                            <td className="py-1 px-2 text-gray-800 truncate max-w-xs">{tx.description}</td>
-                            <td className="py-1 px-2 text-gray-500 truncate">{tx.accountName || tx.ref || '—'}</td>
-                            <td className="py-1 px-2 text-right font-mono text-gray-700">{fmt(tx.amount)}</td>
-                            <td className={`py-1 px-2 text-right font-mono font-semibold ${gstColor}`}>{fmt(tx.gst)}</td>
+                            <td className="py-1 px-2 font-mono text-gray-500 whitespace-nowrap">
+                                {fmtDate(tx.date)}
+                            </td>
+                            <td className="py-1 px-2 text-gray-800 truncate max-w-[200px]" title={tx.description}>
+                                {tx.description}
+                            </td>
+                            <td className="py-1 px-2 text-gray-500 truncate" title={tx.categoryName || tx.accountName || '—'}>
+                                {tx.categoryName || tx.accountName || '—'}
+                            </td>
+                            <td className="py-1 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{fmt(tx.amount)}</td>
+                            <td className={`py-1 px-2 text-right font-mono font-semibold whitespace-nowrap ${gstColor}`}>{fmt(tx.gst)}</td>
                         </tr>
                     ))}
                 </tbody>
                 <tfoot>
                     <tr className={`border-t-2 ${accentClass}`}>
-                        <td colSpan={3} className="py-1.5 px-2 text-xs font-bold text-gray-600">{rows.length} transactions</td>
+                        <td colSpan={3} className="py-1.5 px-2 font-bold text-gray-600">{rows.length} transactions</td>
                         <td className="py-1.5 px-2 text-right font-mono font-bold text-gray-800">{fmt(totalAmt)}</td>
                         <td className={`py-1.5 px-2 text-right font-mono font-bold ${gstColor}`}>{fmt(totalGst)}</td>
                     </tr>
@@ -163,7 +231,8 @@ function TxTable({ rows, gstColor, gstLabel, accentClass }) {
             {rows.length > 15 && !showAll && (
                 <button
                     onClick={() => setShowAll(true)}
-                    className="w-full py-2 text-xs text-blue-600 hover:text-blue-700 font-semibold text-center border-t border-gray-100 hover:bg-blue-50 transition-colors"
+                    className="w-full py-2 text-blue-600 hover:text-blue-700 font-semibold text-center border-t border-gray-100 hover:bg-blue-50 transition-colors"
+                    style={{ fontSize: '0.85em' }}
                 >
                     Show {rows.length - 15} more…
                 </button>
@@ -238,11 +307,17 @@ export function GSTReport() {
             const gen  = new ReportGenerator(ledger, coa);
             const data = gen.generateGSTReport(activeRange.start, activeRange.end, taxRate);
 
-            // Enrich with account names
-            const enrich = (txArr) => txArr.map(tx => ({
-                ...tx,
-                accountName: coa.get(tx.category)?.name || tx.category || '',
-            }));
+            // Enrich with account names and category names
+            const accounts = window.RoboLedger?.Accounts;
+            const enrich = (txArr) => txArr.map(tx => {
+                // categoryName = the COA expense/revenue category (e.g. "Office Supplies", "Fuel")
+                const catEntry = coa.get(tx.category);
+                const categoryName = catEntry?.name || (tx.category ? `[${tx.category}]` : '—');
+                // accountName = the source bank/CC account name (where the money came from)
+                const srcAccount = accounts?.get?.(tx.account_id);
+                const accountName = srcAccount?.name || srcAccount?.ref || tx.account_id || '';
+                return { ...tx, accountName, categoryName };
+            });
             data.details.revenueTransactions  = enrich(data.details.revenueTransactions);
             data.details.expenseTransactions  = enrich(data.details.expenseTransactions);
 
@@ -458,7 +533,7 @@ export function GSTReport() {
 
                                 {/* Period + rate summary on right */}
                                 <div className="ml-auto text-[10px] text-gray-300 font-mono pr-1">
-                                    {activeRange.start} – {activeRange.end} · {(taxRate * 100).toFixed(0)}%
+                                    {fmtDate(activeRange.start)} – {fmtDate(activeRange.end)} · {(taxRate * 100).toFixed(2).replace(/\.?0+$/, '')}%
                                 </div>
                             </div>
 

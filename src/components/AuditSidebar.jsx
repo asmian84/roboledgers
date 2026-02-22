@@ -446,10 +446,21 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         const acct = window.RoboLedger?.Accounts?.get?.(transaction.account_id);
                         if (!acct) return null;
                         const maskNum = (n) => n ? '••••' + String(n).slice(-4) : '—';
+                        // Build bank display: use bankName field, fallback to parsing it from account name
+                        const bankDisplay = (() => {
+                            if (acct.bankName && !acct.bankName.includes('GENERIC') && acct.bankName !== 'Unknown Bank') return acct.bankName;
+                            // Extract bank prefix from name like "RBC - Visa #1234" → "RBC"
+                            if (acct.name) {
+                                const parts = acct.name.split(' - ');
+                                if (parts.length > 1 && parts[0].length < 20) return parts[0];
+                                return acct.name;
+                            }
+                            return '—';
+                        })();
                         const rows = [
                             { label: 'Account', value: acct.ref || acct.id },
-                            { label: 'Bank', value: acct.bank || acct.name || '—' },
-                            { label: 'Type', value: acct.type || acct.accountType || '—' },
+                            { label: 'Bank', value: bankDisplay },
+                            { label: 'Type', value: acct.accountType || acct.brand || acct.cardNetwork || '—' },
                             { label: 'Number', value: maskNum(acct.accountNumber) },
                             acct.statementPeriod ? { label: 'Period', value: acct.statementPeriod } : null,
                             acct.openingBalance != null ? { label: 'Opening Bal', value: `$${Number(acct.openingBalance).toFixed(2)}` } : null,

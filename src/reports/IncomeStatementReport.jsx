@@ -74,7 +74,7 @@ export function IncomeStatementReport() {
         // Revenue line items
         if (reportData.revenue && reportData.revenue.length > 0) {
             reportData.revenue.forEach(item => {
-                rows.push({ description: item.name, values: [item.amount], indent: 1 });
+                rows.push({ description: item.name, values: [item.amount], indent: 1, coaCode: item.code });
             });
         }
 
@@ -89,7 +89,7 @@ export function IncomeStatementReport() {
 
         if (reportData.cogs && reportData.cogs.length > 0) {
             reportData.cogs.forEach(item => {
-                rows.push({ description: item.name, values: [item.amount], indent: 1 });
+                rows.push({ description: item.name, values: [item.amount], indent: 1, coaCode: item.code });
             });
         }
 
@@ -106,7 +106,7 @@ export function IncomeStatementReport() {
 
         if (reportData.expenses && reportData.expenses.length > 0) {
             reportData.expenses.forEach(exp => {
-                rows.push({ description: exp.name, values: [exp.amount], indent: 1 });
+                rows.push({ description: exp.name, values: [exp.amount], indent: 1, coaCode: exp.code });
             });
         }
 
@@ -189,6 +189,8 @@ export function IncomeStatementReport() {
                         ]}
                         rows={buildTableRows()}
                         className="mt-4"
+                        dateRange={dateRange}
+                        accentColor="green"
                     />
 
                     {/* Export Actions */}

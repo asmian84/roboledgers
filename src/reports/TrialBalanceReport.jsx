@@ -1,7 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import ReportFilters from './components/ReportFilters.jsx';
 import { ReportControlsBar, FONTS } from './components/ReportControlsBar.jsx';
+import { AJEFormPanel } from './components/AJEFormPanel.jsx';
+import { AnnotationPopover } from './components/AnnotationPopover.jsx';
+import { AccountDrillDown } from './components/AccountDrillDown.jsx';
 
 /**
  * TrialBalanceReport - Multiple view modes inspired by Caseware Working Papers
@@ -411,6 +414,151 @@ export function TrialBalanceReport() {
     const [importParsing, setImportParsing]     = useState(false); // PDF extraction in progress
     const fileRef = useRef(null);
 
+    // ─── Phase 1: Split-screen AJE Panel ───────────────────────────────────────
+    const [showAJEPanel, setShowAJEPanel] = useState(false);
+    const [showAdjustments, setShowAdjustments] = useState(false);
+    const [ajeVersion, setAjeVersion] = useState(0); // bump to force TB refresh after posting
+
+    // ─── Phase 2: Annotations + Editable Names + Comparative Toggle ────────────
+    const [annotations, setAnnotations] = useState(() => {
+        try {
+            const stored = window.RoboLedger?._tbAnnotations;
+            return stored || {};
+        } catch { return {}; }
+    });
+    const [editingAccountCode, setEditingAccountCode] = useState(null);
+    const [editValue, setEditValue] = useState('');
+    const [showComparative, setShowComparative] = useState(true); // toggle for comparative columns
+
+    // ─── Phase 3: GIFI + Profile Export ────────────────────────────────────────
+    const [showGIFI, setShowGIFI] = useState(false);
+    const [expandedAccount, setExpandedAccount] = useState(null); // COA code for drill-down
+
+    // ─── Keyboard shortcut: Shift+A toggles AJE panel ──────────────────────────
+    useEffect(() => {
+        const handler = (e) => {
+            if (e.shiftKey && e.key === 'A' && !e.ctrlKey && !e.metaKey) {
+                // Don't trigger when typing in an input
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                e.preventDefault();
+                setShowAJEPanel(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, []);
+
+    // ─── Persist annotations ───────────────────────────────────────────────────
+    const updateAnnotation = useCallback((code, ann) => {
+        setAnnotations(prev => {
+            const next = { ...prev };
+            if (!ann) { delete next[code]; } else { next[code] = ann; }
+            // Persist
+            if (!window.RoboLedger) window.RoboLedger = {};
+            window.RoboLedger._tbAnnotations = next;
+            try {
+                const _SS = window.StorageService;
+                if (_SS) _SS.set('roboledger_tb_annotations', next);
+                else localStorage.setItem('roboledger_tb_annotations', JSON.stringify(next));
+            } catch (e) { /* ignore */ }
+            return next;
+        });
+    }, []);
+
+    // ─── Load annotations from storage on mount ────────────────────────────────
+    useEffect(() => {
+        try {
+            const _SS = window.StorageService;
+            const stored = _SS ? _SS.get('roboledger_tb_annotations') : JSON.parse(localStorage.getItem('roboledger_tb_annotations') || '{}');
+            if (stored && Object.keys(stored).length > 0) {
+                setAnnotations(stored);
+                if (!window.RoboLedger) window.RoboLedger = {};
+                window.RoboLedger._tbAnnotations = stored;
+            }
+        } catch { /* ignore */ }
+    }, []);
+
+    // ─── Editable account name handler ─────────────────────────────────────────
+    const startEditName = (code, currentName) => {
+        setEditingAccountCode(code);
+        setEditValue(currentName);
+    };
+    const saveEditName = (code) => {
+        if (!editValue.trim()) { setEditingAccountCode(null); return; }
+        const coa = window.RoboLedger?.COA;
+        if (coa?.setName) {
+            coa.setName(code, editValue.trim());
+        } else if (coa?.get) {
+            const entry = coa.get(code);
+            if (entry) { entry.name = editValue.trim(); coa.save?.(); }
+        }
+        setEditingAccountCode(null);
+        // Force re-render
+        if (dateRange) generateReport(dateRange);
+    };
+
+    // ─── AJE Impact computation ────────────────────────────────────────────────
+    const getAJEImpact = useCallback(() => {
+        const impact = {}; // { [coaCode]: { debit: number, credit: number } }
+        const entries = window.RoboLedger?.Ledger?.getJournalEntries?.() || [];
+        for (const entry of entries) {
+            if (!entry.lines) continue;
+            // Filter by period if we have a date range
+            if (dateRange && (entry.date < dateRange.start || entry.date > dateRange.end)) continue;
+            for (const line of entry.lines) {
+                const code = line.account_code;
+                if (!code) continue;
+                if (!impact[code]) impact[code] = { debit: 0, credit: 0 };
+                impact[code].debit += (line.debit || 0);
+                impact[code].credit += (line.credit || 0);
+            }
+        }
+        return impact;
+    }, [dateRange, ajeVersion]);
+
+    // ─── Profile (Intuit Tax Software) Export ──────────────────────────────────
+    const exportForProfile = () => {
+        if (!reportData) return;
+        const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+        const groups = getGroupedAccounts();
+        const allAccounts = groups.flatMap(g => g.accounts);
+        const ajeImpact = showAdjustments ? getAJEImpact() : {};
+
+        const rows = [['GIFI Code', 'Account Code', 'Account Name', 'Debit', 'Credit', 'Adjusted Balance']];
+        allAccounts
+            .filter(acc => {
+                const net = acc.debit - acc.credit;
+                const adj = ajeImpact[String(acc.code)] || { debit: 0, credit: 0 };
+                const adjustedBal = net + adj.debit - adj.credit;
+                return Math.abs(adjustedBal) > 0.005;
+            })
+            .sort((a, b) => {
+                const aGifi = String(allCOA.find(c => String(c.code) === String(a.code))?.mapNo || '');
+                const bGifi = String(allCOA.find(c => String(c.code) === String(b.code))?.mapNo || '');
+                return aGifi.localeCompare(bGifi);
+            })
+            .forEach(acc => {
+                const coaEntry = allCOA.find(c => String(c.code) === String(acc.code));
+                const gifi = coaEntry?.mapNo || '';
+                const net = acc.debit - acc.credit;
+                const adj = ajeImpact[String(acc.code)] || { debit: 0, credit: 0 };
+                const adjustedBal = net + adj.debit - adj.credit;
+                rows.push([
+                    gifi, acc.code, acc.name,
+                    adjustedBal > 0 ? adjustedBal.toFixed(2) : '',
+                    adjustedBal < 0 ? Math.abs(adjustedBal).toFixed(2) : '',
+                    adjustedBal.toFixed(2)
+                ]);
+            });
+
+        const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `trial-balance-profile-export-${dateRange?.end || 'current'}.csv`;
+        a.click();
+    };
+
     const generateReport = (range) => {
         if (!range?.start || !range?.end) return;
         setLoading(true);
@@ -696,11 +844,14 @@ export function TrialBalanceReport() {
 
     const fontStack = FONTS[fontFamily]?.stack || FONTS.system.stack;
 
-    // Column count depends on view mode + comparative column
-    // Base: L/S has (LS + Code + Name = 3), Type has (Code + Name + Type = 3), Account has (Code + Name = 2)
+    // Column count depends on view mode + enabled feature toggles
     const baseColCount = viewMode === 'leadsheet' ? 3 : viewMode === 'type' ? 3 : 2;
-    const numericCols  = hasOB ? 3 : 2; // Prior Year + Debit + Credit, or just Debit + Credit
-    const colCount     = baseColCount + numericCols;
+    const hasComparative = hasOB && showComparative;
+    const numericCols  = (hasComparative ? 1 : 0) + 2 + (showAdjustments ? 3 : 0); // Prior + DR/CR + AdjDR/AdjCR/AdjBal
+    const annotationCols = 1; // annotation column always present
+    const gifiCols = showGIFI ? 1 : 0;
+    const colCount     = baseColCount + gifiCols + numericCols + annotationCols;
+    const ajeImpact = showAdjustments ? getAJEImpact() : {};
 
     // ─── View Mode Labels ─────────────────────────────────────────────────────
     const viewModes = [
@@ -711,26 +862,41 @@ export function TrialBalanceReport() {
 
     return (
         <div className="min-h-screen bg-gray-50 p-8">
+            {/* Print stylesheet */}
+            <style>{`
+                @media print {
+                    body { background: white !important; }
+                    .min-h-screen { padding: 0 !important; background: white !important; }
+                    .shadow, .shadow-sm { box-shadow: none !important; }
+                    .border-gray-200, .border-gray-100 { border-color: #d1d5db !important; }
+                    .rounded-lg { border-radius: 0 !important; }
+                    button, .no-print { display: none !important; }
+                    table { font-size: 9pt !important; }
+                    th, td { padding: 3px 8px !important; }
+                    @page { margin: 0.5in; size: landscape; }
+                }
+            `}</style>
             {/* Header */}
-            <div className="max-w-6xl mx-auto mb-6">
+            <div style={{ maxWidth: showAJEPanel ? '100%' : '72rem', margin: '0 auto', marginBottom: '1.5rem' }}>
                 <div className="flex items-center gap-3 mb-2">
                     <button onClick={() => window.__reportsGoBack?.()} className="text-gray-600 hover:text-gray-900 mr-2">
                         <i className="ph ph-arrow-left text-2xl"></i>
                     </button>
                     <i className="ph ph-scales text-3xl text-blue-600"></i>
                     <h1 className="text-3xl font-bold text-gray-900">Trial Balance</h1>
+                    <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8, fontStyle: 'italic' }}>Shift+A to toggle entries panel</span>
                 </div>
                 <p className="text-gray-600">Verify debits equal credits — multiple view modes</p>
             </div>
 
             {/* Filters */}
-            <div className="max-w-6xl mx-auto">
+            <div style={{ maxWidth: showAJEPanel ? '100%' : '72rem', margin: '0 auto' }}>
                 <ReportFilters onFilterChange={generateReport} />
             </div>
 
             {/* Loading */}
             {loading && (
-                <div className="max-w-6xl mx-auto bg-white rounded-lg shadow p-12 text-center">
+                <div style={{ maxWidth: showAJEPanel ? '100%' : '72rem', margin: '0 auto' }} className="bg-white rounded-lg shadow p-12 text-center">
                     <i className="ph ph-spinner-gap animate-spin text-4xl text-blue-600 mb-4"></i>
                     <p className="text-gray-600">Generating report...</p>
                 </div>
@@ -738,7 +904,7 @@ export function TrialBalanceReport() {
 
             {/* Empty state */}
             {!loading && !reportData && (
-                <div className="max-w-6xl mx-auto bg-white rounded-lg shadow p-16 text-center">
+                <div style={{ maxWidth: showAJEPanel ? '100%' : '72rem', margin: '0 auto' }} className="bg-white rounded-lg shadow p-16 text-center">
                     <i className="ph ph-upload-simple text-6xl text-gray-200 mb-5 block"></i>
                     <p className="text-lg font-semibold text-gray-500 mb-1">Upload statements to get started</p>
                     <p className="text-sm text-gray-400 mb-6">Import your bank statements to generate this report</p>
@@ -752,9 +918,21 @@ export function TrialBalanceReport() {
                 </div>
             )}
 
-            {/* Report */}
+            {/* Report — 70/30 Split Screen */}
             {!loading && reportData && (
-                <div className="max-w-6xl mx-auto bg-white rounded-lg shadow">
+                <div style={{
+                    maxWidth: showAJEPanel ? '100%' : '72rem',
+                    margin: '0 auto',
+                    display: 'flex',
+                    gap: showAJEPanel ? 12 : 0,
+                    alignItems: 'flex-start',
+                }}>
+                {/* ═══ LEFT PANEL: Trial Balance (70% or 100%) ═══ */}
+                <div style={{
+                    flex: showAJEPanel ? '0 0 70%' : '1 1 100%',
+                    transition: 'flex 0.3s ease',
+                    minWidth: 0,
+                }} className="bg-white rounded-lg shadow">
                     {/* Report Header + View Tabs */}
                     <div className="border-b border-gray-200 p-5">
                         <div className="flex items-center justify-between mb-4">
@@ -792,8 +970,8 @@ export function TrialBalanceReport() {
                             </div>
                         </div>
 
-                        {/* View mode tabs + import + collapse controls */}
-                        <div className="flex items-center justify-between">
+                        {/* View mode tabs + feature toggles + controls */}
+                        <div className="flex items-center justify-between flex-wrap gap-2">
                             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
                                 {viewModes.map(v => (
                                     <button
@@ -810,22 +988,58 @@ export function TrialBalanceReport() {
                                     </button>
                                 ))}
                             </div>
-                            <div className="flex items-center gap-3">
-                                {/* Import Prior Year / Opening Balances */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {/* Feature toggles */}
+                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer select-none"
+                                    title="Show GIFI/Map codes from CRA mapping">
+                                    <input type="checkbox" checked={showGIFI} onChange={e => setShowGIFI(e.target.checked)}
+                                        style={{ accentColor: '#6366f1', width: 14, height: 14 }} />
+                                    GIFI
+                                </label>
+                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer select-none"
+                                    title="Show adjusting journal entry columns">
+                                    <input type="checkbox" checked={showAdjustments} onChange={e => setShowAdjustments(e.target.checked)}
+                                        style={{ accentColor: '#7c3aed', width: 14, height: 14 }} />
+                                    Adjustments
+                                </label>
+                                {hasOB && (
+                                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer select-none"
+                                        title="Show comparative prior-year column">
+                                        <input type="checkbox" checked={showComparative} onChange={e => setShowComparative(e.target.checked)}
+                                            style={{ accentColor: '#9333ea', width: 14, height: 14 }} />
+                                        Comparative
+                                    </label>
+                                )}
+                                <span className="text-gray-200">|</span>
+                                {/* AJE Panel toggle */}
+                                <button
+                                    onClick={() => setShowAJEPanel(prev => !prev)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${
+                                        showAJEPanel
+                                            ? 'text-purple-700 bg-purple-100 border border-purple-300'
+                                            : 'text-gray-500 bg-gray-50 border border-gray-200 hover:bg-purple-50 hover:text-purple-600'
+                                    }`}
+                                    title="Toggle journal entries panel (Shift+A)"
+                                >
+                                    <i className="ph ph-notebook text-[13px]"></i>
+                                    {showAJEPanel ? 'Hide' : 'Show'} AJE Panel
+                                </button>
+                                <span className="text-gray-200">|</span>
+                                {/* Import Prior Year */}
                                 <button
                                     onClick={() => setShowImport(true)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
                                     title="Import opening balances from QuickBooks or Caseware CSV"
                                 >
-                                    <i className="ph ph-arrow-square-in text-[13px]"></i>
+                                    <i className="ph ph-arrow-square-in text-[12px]"></i>
                                     Import Prior Year
                                 </button>
                                 {viewMode !== 'account' && (
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={expandAll} className="text-[11px] text-gray-500 hover:text-blue-600 font-medium">Expand All</button>
+                                    <>
+                                        <button onClick={expandAll} className="text-[11px] text-gray-500 hover:text-blue-600 font-medium">Expand</button>
                                         <span className="text-gray-300">|</span>
-                                        <button onClick={collapseAll} className="text-[11px] text-gray-500 hover:text-blue-600 font-medium">Collapse All</button>
-                                    </div>
+                                        <button onClick={collapseAll} className="text-[11px] text-gray-500 hover:text-blue-600 font-medium">Collapse</button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -841,33 +1055,53 @@ export function TrialBalanceReport() {
 
                     {/* Table */}
                     <div className="overflow-x-auto" style={{ fontSize: `${(textSize * zoom) / 100}px`, fontFamily: fontStack }}>
-                        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                        <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
                             <colgroup>
-                                {viewMode === 'leadsheet' && <col style={{ width: '50px' }} />}
-                                <col style={{ width: '72px' }} />
-                                <col />
-                                {viewMode === 'type' && <col style={{ width: '70px' }} />}
-                                {hasOB && <col style={{ width: '140px' }} />}
-                                <col style={{ width: '150px' }} />
-                                <col style={{ width: '150px' }} />
+                                {viewMode === 'leadsheet' && <col style={{ width: '48px' }} />}
+                                <col style={{ width: '68px' }} />
+                                <col style={{ width: 'auto' }} />
+                                {viewMode === 'type' && <col style={{ width: '64px' }} />}
+                                {showGIFI && <col style={{ width: '64px' }} />}
+                                {hasComparative && <col style={{ width: '120px' }} />}
+                                <col style={{ width: '130px' }} />
+                                <col style={{ width: '130px' }} />
+                                {showAdjustments && <col style={{ width: '105px' }} />}
+                                {showAdjustments && <col style={{ width: '105px' }} />}
+                                {showAdjustments && <col style={{ width: '120px' }} />}
+                                <col style={{ width: '54px' }} />
                             </colgroup>
                             <thead>
-                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #cbd5e1' }}>
                                     {viewMode === 'leadsheet' && (
-                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>L/S</th>
+                                        <th style={{ padding: '8px 8px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>L/S</th>
                                     )}
-                                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Code</th>
-                                    <th style={{ padding: '8px 16px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account Name</th>
+                                    <th style={{ padding: '8px 8px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Code</th>
+                                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Account Name</th>
                                     {viewMode === 'type' && (
-                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type</th>
+                                        <th style={{ padding: '8px 8px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Type</th>
                                     )}
-                                    {hasOB && (
-                                        <th style={{ padding: '8px 20px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#9333ea', textTransform: 'uppercase', letterSpacing: '0.05em', borderLeft: '1px solid #e2e8f0' }}>
+                                    {showGIFI && (
+                                        <th style={{ padding: '8px 6px', textAlign: 'center', fontSize: '0.65em', fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0' }}>GIFI</th>
+                                    )}
+                                    {hasComparative && (
+                                        <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#9333ea', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '2px solid #e2e8f0' }}>
                                             Prior Year
                                         </th>
                                     )}
-                                    <th style={{ padding: '8px 20px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em', borderLeft: '1px solid #e2e8f0' }}>Debit</th>
-                                    <th style={{ padding: '8px 20px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', borderLeft: '1px solid #e2e8f0' }}>Credit</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '2px solid #e2e8f0' }}>Debit</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>Credit</th>
+                                    {showAdjustments && (
+                                        <th style={{ padding: '8px 8px', textAlign: 'right', fontSize: '0.65em', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '2px solid #e9d5ff' }}>Adj DR</th>
+                                    )}
+                                    {showAdjustments && (
+                                        <th style={{ padding: '8px 8px', textAlign: 'right', fontSize: '0.65em', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0' }}>Adj CR</th>
+                                    )}
+                                    {showAdjustments && (
+                                        <th style={{ padding: '8px 8px', textAlign: 'right', fontSize: '0.65em', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>Adjusted</th>
+                                    )}
+                                    <th style={{ padding: '8px 4px', textAlign: 'center', fontSize: '0.65em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }} title="Annotations">
+                                        <i className="ph ph-note-pencil"></i>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -905,40 +1139,79 @@ export function TrialBalanceReport() {
 
                                             {/* Account Rows */}
                                             {!isCollapsed && group.accounts.map(acc => {
-                                                const priorBal = hasOB ? (openingBalances[String(acc.code)] ?? null) : null;
+                                                const accCode = String(acc.code);
+                                                const priorBal = hasComparative ? (openingBalances[accCode] ?? null) : null;
                                                 const movement = priorBal !== null ? (acc.balance - priorBal) : null;
                                                 const net = acc.debit - acc.credit;
+                                                const adj = showAdjustments ? (ajeImpact[accCode] || { debit: 0, credit: 0 }) : { debit: 0, credit: 0 };
+                                                const adjustedBalance = net + adj.debit - adj.credit;
+                                                const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+                                                const coaEntry = allCOA.find(c => String(c.code) === accCode);
+                                                const ann = annotations[accCode];
                                                 return (
+                                                    <React.Fragment key={`${group.code}-${acc.code}-wrap`}>
                                                     <tr key={`${group.code}-${acc.code}`}
-                                                        className={acc._fromOpening ? 'opacity-70 italic' : ''}
-                                                        style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }}
-                                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                                        onMouseLeave={e => e.currentTarget.style.background = ''}
+                                                        className={`${acc._fromOpening ? 'opacity-70 italic' : ''} cursor-pointer`}
+                                                        style={{
+                                                            borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s',
+                                                            background: expandedAccount === accCode ? '#eef2ff' : ann?.checked ? '#f0fdf4' : '',
+                                                        }}
+                                                        onClick={() => setExpandedAccount(expandedAccount === accCode ? null : accCode)}
+                                                        onMouseEnter={e => e.currentTarget.style.background = expandedAccount === accCode ? '#eef2ff' : ann?.checked ? '#dcfce7' : '#f8fafc'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = expandedAccount === accCode ? '#eef2ff' : ann?.checked ? '#f0fdf4' : ''}
                                                         title={acc._isRetainedEarnings
                                                             ? `Retained Earnings: Opening ${fmt(acc._openingRE)} + Net Income ${fmt(acc._netIncome)} = ${fmt((acc._openingRE || 0) + (acc._netIncome || 0))}`
                                                             : acc._fromOpening ? 'From opening balances (no current-year transactions)' : ''}
                                                     >
                                                         {viewMode === 'leadsheet' && (
-                                                            <td style={{ padding: '6px 12px', fontSize: '0.75em', color: '#cbd5e1', fontFamily: 'monospace' }}></td>
+                                                            <td style={{ padding: '5px 8px', fontSize: '0.75em', color: '#cbd5e1', fontFamily: 'monospace', borderRight: '1px solid #f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}></td>
                                                         )}
-                                                        <td style={{ padding: '6px 12px', fontSize: '0.8em', fontFamily: 'monospace', color: '#64748b', fontWeight: 500 }}>
+                                                        <td style={{ padding: '5px 8px', fontSize: '0.8em', fontFamily: 'monospace', color: '#64748b', fontWeight: 500, borderRight: '1px solid #f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                             {acc.code}
                                                             {acc._isRetainedEarnings && <span style={{ marginLeft: '4px', fontSize: '0.75em', color: '#a78bfa', fontFamily: 'sans-serif', fontStyle: 'normal' }}>RE</span>}
                                                         </td>
-                                                        <td style={{ padding: '6px 16px', fontSize: '0.8em', color: '#1e293b' }}>
-                                                            {acc.name}
-                                                            {acc._isRetainedEarnings && (
-                                                                <span style={{ marginLeft: '8px', fontSize: '0.8em', color: '#a78bfa', fontStyle: 'normal', fontWeight: 400 }}>
-                                                                    (Opening {fmt(acc._openingRE || 0)} + NI {fmt(acc._netIncome || 0)})
-                                                                </span>
+                                                        {/* Account Name — double-click to edit */}
+                                                        <td style={{ padding: '5px 10px', fontSize: '0.8em', color: '#1e293b', cursor: 'pointer', borderRight: '1px solid #f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                                            onDoubleClick={() => startEditName(accCode, acc.name)}
+                                                            title={`${acc.name} — Double-click to rename`}
+                                                        >
+                                                            {editingAccountCode === accCode ? (
+                                                                <input
+                                                                    type="text"
+                                                                    value={editValue}
+                                                                    onChange={e => setEditValue(e.target.value)}
+                                                                    onBlur={() => saveEditName(accCode)}
+                                                                    onKeyDown={e => { if (e.key === 'Enter') saveEditName(accCode); if (e.key === 'Escape') setEditingAccountCode(null); }}
+                                                                    autoFocus
+                                                                    style={{
+                                                                        width: '100%', padding: '2px 6px', border: '1.5px solid #6366f1',
+                                                                        borderRadius: 4, fontSize: 'inherit', fontFamily: 'inherit',
+                                                                        background: '#eef2ff', outline: 'none',
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <>
+                                                                    {acc.name}
+                                                                    {acc._isRetainedEarnings && (
+                                                                        <span style={{ marginLeft: '8px', fontSize: '0.8em', color: '#a78bfa', fontStyle: 'normal', fontWeight: 400 }}>
+                                                                            (Opening {fmt(acc._openingRE || 0)} + NI {fmt(acc._netIncome || 0)})
+                                                                        </span>
+                                                                    )}
+                                                                </>
                                                             )}
                                                         </td>
                                                         {viewMode === 'type' && (
-                                                            <td style={{ padding: '6px 12px', fontSize: '0.7em', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 500 }}>{(acc.root || '').slice(0, 5)}</td>
+                                                            <td style={{ padding: '5px 8px', fontSize: '0.7em', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 500, borderRight: '1px solid #f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(acc.root || '').slice(0, 5)}</td>
+                                                        )}
+                                                        {/* GIFI column */}
+                                                        {showGIFI && (
+                                                            <td style={{ padding: '5px 6px', fontSize: '0.7em', textAlign: 'center', fontFamily: 'monospace', color: '#6366f1', fontWeight: 600, borderRight: '1px solid #f1f5f9' }}>
+                                                                {coaEntry?.mapNo || ''}
+                                                            </td>
                                                         )}
                                                         {/* Prior Year column */}
-                                                        {hasOB && (
-                                                            <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', color: '#9333ea', borderLeft: '1px solid #f1f5f9' }}>
+                                                        {hasComparative && (
+                                                            <td style={{ padding: '5px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', color: '#9333ea', borderLeft: '2px solid #e2e8f0', borderRight: '1px solid #f1f5f9' }}>
                                                                 {priorBal !== null
                                                                     ? <span title={movement !== null ? `Movement: ${movement >= 0 ? '+' : ''}${fmt(movement)}` : ''}>
                                                                         {fmt(priorBal)}
@@ -948,54 +1221,141 @@ export function TrialBalanceReport() {
                                                             </td>
                                                         )}
                                                         {/* Debit column */}
-                                                        <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', borderLeft: '1px solid #f1f5f9' }}>
+                                                        <td style={{ padding: '5px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', borderLeft: '2px solid #e2e8f0', borderRight: '1px solid #f1f5f9' }}>
                                                             {net > 0 ? fmtAbs(net) : ''}
                                                         </td>
                                                         {/* Credit column */}
-                                                        <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#dc2626', borderLeft: '1px solid #f1f5f9' }}>
+                                                        <td style={{ padding: '5px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#dc2626', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #f1f5f9' }}>
                                                             {net < 0 ? fmtAbs(net) : ''}
                                                         </td>
+                                                        {/* AJE Adjustment columns */}
+                                                        {showAdjustments && (
+                                                            <td style={{ padding: '5px 8px', fontSize: '0.75em', textAlign: 'right', fontFamily: 'monospace', color: adj.debit > 0 ? '#7c3aed' : '#cbd5e1', borderLeft: '2px solid #e9d5ff', borderRight: '1px solid #f5f3ff' }}>
+                                                                {adj.debit > 0 ? fmtAbs(adj.debit) : ''}
+                                                            </td>
+                                                        )}
+                                                        {showAdjustments && (
+                                                            <td style={{ padding: '5px 8px', fontSize: '0.75em', textAlign: 'right', fontFamily: 'monospace', color: adj.credit > 0 ? '#7c3aed' : '#cbd5e1', borderRight: '1px solid #f5f3ff' }}>
+                                                                {adj.credit > 0 ? fmtAbs(adj.credit) : ''}
+                                                            </td>
+                                                        )}
+                                                        {showAdjustments && (
+                                                            <td style={{
+                                                                padding: '5px 8px', fontSize: '0.8em', textAlign: 'right',
+                                                                fontFamily: 'monospace', fontWeight: 700, borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #f1f5f9',
+                                                                color: adjustedBalance > 0 ? '#059669' : adjustedBalance < 0 ? '#dc2626' : '#94a3b8',
+                                                            }}>
+                                                                {adjustedBalance !== 0 ? fmt(adjustedBalance) : ''}
+                                                            </td>
+                                                        )}
+                                                        {/* Annotation column */}
+                                                        <td style={{ padding: '3px 4px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                                            <AnnotationPopover
+                                                                accountCode={accCode}
+                                                                annotation={ann}
+                                                                onUpdate={updateAnnotation}
+                                                                compact={showAJEPanel}
+                                                            />
+                                                        </td>
                                                     </tr>
+                                                    {expandedAccount === accCode && dateRange && (
+                                                        <AccountDrillDown
+                                                            coaCode={accCode}
+                                                            accountName={acc.name}
+                                                            startDate={dateRange.start}
+                                                            endDate={dateRange.end}
+                                                            onClose={() => setExpandedAccount(null)}
+                                                            accentColor="green"
+                                                        />
+                                                    )}
+                                                    </React.Fragment>
                                                 );
                                             })}
 
                                             {/* Subtotal Row */}
-                                            {viewMode !== 'account' && !isCollapsed && (
+                                            {viewMode !== 'account' && !isCollapsed && (() => {
+                                                const grpAdjDR = showAdjustments ? group.accounts.reduce((s, a) => s + ((ajeImpact[String(a.code)] || {}).debit || 0), 0) : 0;
+                                                const grpAdjCR = showAdjustments ? group.accounts.reduce((s, a) => s + ((ajeImpact[String(a.code)] || {}).credit || 0), 0) : 0;
+                                                const grpAdjBal = showAdjustments ? group.accounts.reduce((s, a) => {
+                                                    const net = a.debit - a.credit;
+                                                    const adj = ajeImpact[String(a.code)] || { debit: 0, credit: 0 };
+                                                    return s + net + adj.debit - adj.credit;
+                                                }, 0) : 0;
+                                                return (
                                                 <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                                                    <td style={{ padding: '6px 12px' }} colSpan={baseColCount}>
+                                                    <td style={{ padding: '6px 12px', borderRight: '1px solid #e2e8f0' }} colSpan={baseColCount}>
                                                         <span style={{ fontSize: '0.7em', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                                                             Subtotal — {group.code}
                                                         </span>
                                                     </td>
-                                                    {hasOB && <td style={{ padding: '6px 20px', borderLeft: '1px solid #e2e8f0' }}></td>}
-                                                    <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8', borderLeft: '1px solid #e2e8f0' }}>
+                                                    {showGIFI && <td style={{ borderRight: '1px solid #e2e8f0' }}></td>}
+                                                    {hasComparative && <td style={{ borderLeft: '2px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}></td>}
+                                                    <td style={{ padding: '6px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8', borderLeft: hasComparative ? '1px solid #e2e8f0' : '2px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
                                                         {group.totalDebit > 0 ? fmtAbs(group.totalDebit) : ''}
                                                     </td>
-                                                    <td style={{ padding: '6px 20px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#dc2626', borderLeft: '1px solid #e2e8f0' }}>
+                                                    <td style={{ padding: '6px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#dc2626', borderRight: '1px solid #e2e8f0' }}>
                                                         {group.totalCredit > 0 ? fmtAbs(group.totalCredit) : ''}
                                                     </td>
+                                                    {showAdjustments && (
+                                                        <td style={{ padding: '6px 12px', fontSize: '0.75em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#7c3aed', borderLeft: '2px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                                                            {grpAdjDR > 0 ? fmtAbs(grpAdjDR) : ''}
+                                                        </td>
+                                                    )}
+                                                    {showAdjustments && (
+                                                        <td style={{ padding: '6px 12px', fontSize: '0.75em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#7c3aed', borderRight: '1px solid #e2e8f0' }}>
+                                                            {grpAdjCR > 0 ? fmtAbs(grpAdjCR) : ''}
+                                                        </td>
+                                                    )}
+                                                    {showAdjustments && (
+                                                        <td style={{ padding: '6px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: grpAdjBal > 0 ? '#059669' : grpAdjBal < 0 ? '#dc2626' : '#94a3b8', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                                                            {grpAdjBal !== 0 ? fmt(grpAdjBal) : ''}
+                                                        </td>
+                                                    )}
+                                                    <td style={{ borderRight: '1px solid #e2e8f0' }}></td>{/* annotation placeholder */}
                                                 </tr>
-                                            )}
+                                                );
+                                            })()}
                                         </React.Fragment>
                                     );
                                 })}
                             </tbody>
                             <tfoot>
+                                {(() => {
+                                    const grandAdjDR = showAdjustments ? Object.values(ajeImpact).reduce((s, v) => s + (v.debit || 0), 0) : 0;
+                                    const grandAdjCR = showAdjustments ? Object.values(ajeImpact).reduce((s, v) => s + (v.credit || 0), 0) : 0;
+                                    return (
                                 <tr style={{ background: '#1e293b', color: 'white' }}>
-                                    <td colSpan={baseColCount} style={{ padding: '10px 12px', fontSize: '0.8em', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <td colSpan={baseColCount} style={{ padding: '10px 12px', fontSize: '0.8em', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #334155' }}>
                                         Grand Total
                                     </td>
-                                    {hasOB && <td style={{ padding: '10px 20px', borderLeft: '1px solid #334155' }}></td>}
-                                    <td style={{ padding: '10px 20px', fontSize: '0.85em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderLeft: '1px solid #334155' }}>
+                                    {showGIFI && <td style={{ borderRight: '1px solid #334155' }}></td>}
+                                    {hasComparative && <td style={{ padding: '10px 12px', borderLeft: '2px solid #475569', borderRight: '1px solid #334155' }}></td>}
+                                    <td style={{ padding: '10px 12px', fontSize: '0.85em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderLeft: hasComparative ? '1px solid #334155' : '2px solid #475569', borderRight: '1px solid #334155' }}>
                                         {fmtAbs(reportData.totals.debit)}
                                     </td>
-                                    <td style={{ padding: '10px 20px', fontSize: '0.85em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderLeft: '1px solid #334155' }}>
+                                    <td style={{ padding: '10px 12px', fontSize: '0.85em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderRight: '1px solid #334155' }}>
                                         {fmtAbs(reportData.totals.credit)}
                                         {reportData.isBalanced
                                             ? <span style={{ marginLeft: '10px', fontSize: '0.8em', fontWeight: 400, color: '#4ade80' }}>✓ Balanced</span>
                                             : <span style={{ marginLeft: '10px', fontSize: '0.8em', fontWeight: 400, color: '#f87171' }}>⚠ Off by {fmtAbs(reportData.difference)}</span>}
                                     </td>
+                                    {showAdjustments && (
+                                        <td style={{ padding: '10px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderLeft: '2px solid #475569', borderRight: '1px solid #334155' }}>
+                                            {grandAdjDR > 0 ? fmtAbs(grandAdjDR) : ''}
+                                        </td>
+                                    )}
+                                    {showAdjustments && (
+                                        <td style={{ padding: '10px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderRight: '1px solid #334155' }}>
+                                            {grandAdjCR > 0 ? fmtAbs(grandAdjCR) : ''}
+                                        </td>
+                                    )}
+                                    {showAdjustments && (
+                                        <td style={{ padding: '10px 12px', borderLeft: '1px solid #334155', borderRight: '1px solid #334155' }}></td>
+                                    )}
+                                    <td style={{ borderRight: '1px solid #334155' }}></td>{/* annotation placeholder */}
                                 </tr>
+                                    );
+                                })()}
                             </tfoot>
                         </table>
                     </div>
@@ -1010,11 +1370,44 @@ export function TrialBalanceReport() {
                             <button onClick={exportCSV} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center gap-1.5 text-[12px]">
                                 <i className="ph ph-download-simple text-[13px]"></i>Export CSV
                             </button>
+                            <button onClick={exportForProfile} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex items-center gap-1.5 text-[12px]"
+                                title="Export for Profile / Intuit Tax — sorted by GIFI code">
+                                <i className="ph ph-file-arrow-up text-[13px]"></i>Profile Export
+                            </button>
                             <button onClick={() => window.print()} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-semibold flex items-center gap-1.5 text-[12px]">
                                 <i className="ph ph-printer text-[13px]"></i>Print
                             </button>
                         </div>
                     </div>
+                </div>
+
+                {/* ═══ RIGHT PANEL: AJE Journal Entries (30%) ═══ */}
+                {showAJEPanel && (
+                    <div style={{
+                        flex: '0 0 29%',
+                        minWidth: 0,
+                        height: 'calc(100vh - 200px)',
+                        position: 'sticky',
+                        top: 16,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        background: 'white',
+                        borderRadius: 8,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04)',
+                        border: '1px solid #e2e8f0',
+                        overflow: 'hidden',
+                    }}>
+                        <AJEFormPanel
+                            compact
+                            onPost={() => {
+                                setAjeVersion(v => v + 1);
+                                if (dateRange) generateReport(dateRange);
+                            }}
+                            periodStart={dateRange?.start}
+                            periodEnd={dateRange?.end}
+                        />
+                    </div>
+                )}
                 </div>
             )}
 

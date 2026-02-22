@@ -400,25 +400,27 @@
       const totalStatements = files.length;
 
       try {
-        const baseProgress = (idx / files.length) * 100;
-        const fileProgressStep = 100 / files.length;
+        // Parsing phase = 0–70% of total bar. Each file gets an equal slice of that 70%.
+        const PARSE_BUDGET = 70; // percent reserved for file parsing
+        const baseProgress = (idx / files.length) * PARSE_BUDGET;
+        const fileProgressStep = PARSE_BUDGET / files.length;
 
-        // Stage 1: Extracting (0-40% of file progress)
+        // Stage 1: Extracting (0-40% of file slice)
         await window.updateProgressBar(
           Math.max(1, Math.round(baseProgress + (fileProgressStep * 0.1))),
           100,
           file.name,
-          `Processing statement ${statementNum} of ${totalStatements} • Extracting transaction data...`,
+          `Parsing ${statementNum} of ${totalStatements} • Extracting text...`,
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Stage 2: Parsing (40-70% of file progress)
+        // Stage 2: Parsing (40-70% of file slice)
         await window.updateProgressBar(
           Math.round(baseProgress + (fileProgressStep * 0.4)),
           100,
           file.name,
-          `Processing statement ${statementNum} of ${totalStatements} • Parsing transactions...`,
+          `Parsing ${statementNum} of ${totalStatements} • Reading transactions...`,
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -427,34 +429,15 @@
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
         totalImported += imported;
 
-        // Stage 3: Categorizing (70-85% of file progress)
+        // Stage 3: File done (90% of file slice, max 68% overall)
         await window.updateProgressBar(
-          Math.round(baseProgress + (fileProgressStep * 0.7)),
+          Math.min(68, Math.round(baseProgress + (fileProgressStep * 0.9))),
           100,
           file.name,
-          `Processing statement ${statementNum} of ${totalStatements} • Categorizing transactions...`,
+          `Statement ${statementNum} of ${totalStatements} parsed • ${imported} transactions`,
           totalImported
         );
-        await new Promise(resolve => setTimeout(resolve, 80));
-
-        // Stage 4: Cleaning (85-95% of file progress)
-        await window.updateProgressBar(
-          Math.round(baseProgress + (fileProgressStep * 0.85)),
-          100,
-          file.name,
-          `Processing statement ${statementNum} of ${totalStatements} • Cleaning data...`,
-          totalImported
-        );
-        await new Promise(resolve => setTimeout(resolve, 80));
-
-        // Stage 5: Complete (95-100% of file progress)
-        await window.updateProgressBar(
-          Math.round(baseProgress + (fileProgressStep * 0.95)),
-          100,
-          file.name,
-          `Statement ${statementNum} of ${totalStatements} complete • Imported ${imported} transactions`,
-          totalImported
-        );
+        await new Promise(resolve => setTimeout(resolve, 60));
 
       } catch (err) {
         // Special handling for PDF_TIMEOUT errors (incompatible PDF format)
@@ -502,18 +485,23 @@
     }
 
     // ── POST-PARSE PROCESSING with live progress feedback ─────────────────
-    // After PDF parsing hits 100%, there's ~5s of categorization / rule engine
-    // work. Keep the progress bar alive so the user knows it's still working.
+    // Parsing used 0–70%. Post-processing gets 70–100%:
+    //   70% → Parsing all done
+    //   75% → Cleanup / account pruning
+    //   80% → Fix CC polarity
+    //   82% → Starting categorization
+    //   82–97% → Categorization (driven by _runAutoCatOnExistingWithProgress)
+    //   98% → GST calculation
+    //  100% → Complete
 
-    // Phase 1: Parsing complete
-    await window.updateProgressBar(100, 100, 'All files processed!', `${totalImported} transactions parsed — finalizing...`, totalImported);
+    await window.updateProgressBar(70, 100, 'All files parsed', `${totalImported} transactions — categorizing...`, totalImported);
 
     // Use async IIFE so we can await auto-categorization before rendering the grid.
     // This ensures the grid shows categorized data on first paint (no flicker from 9970 → categorized).
     setTimeout(async () => {
       try {
         // ── Step 1: Cleanup (fast) ──────────────────────────────────────
-        await window.updateProgressBar(100, 100, 'All files processed!', 'Cleaning up accounts...', totalImported);
+        await window.updateProgressBar(75, 100, 'Cleaning up accounts...', `${totalImported} transactions imported`, totalImported);
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         cleanupEmptyAccounts();
@@ -533,21 +521,20 @@
         window.RoboLedger?.Accounts?.pruneGhosts?.();
 
         // ── Step 2: Fix CC polarity issues (fast) ───────────────────────
-        await window.updateProgressBar(100, 100, 'All files processed!', 'Fixing credit card classifications...', totalImported);
+        await window.updateProgressBar(80, 100, 'Fixing credit card classifications...', `${totalImported} transactions`, totalImported);
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         window.fixCCRefunds?.();
 
         // ── Step 3: Auto-categorize — THE SLOW PART ─────────────────────
-        // Use the onProgress callback from RuleEngine.bulkCategorize to
-        // drive the progress bar in real time.
-        await window.updateProgressBar(100, 100, 'All files processed!', 'Categorizing transactions...', totalImported);
+        // _runAutoCatOnExistingWithProgress drives its own progress from 82→97%
+        await window.updateProgressBar(82, 100, 'Categorizing transactions...', `Running rule engine on ${totalImported} transactions...`, totalImported);
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         await window._runAutoCatOnExistingWithProgress(totalImported);
 
         // ── Step 4: GST calculation ─────────────────────────────────────
-        await window.updateProgressBar(100, 100, 'All files processed!', 'Calculating sales tax...', totalImported);
+        await window.updateProgressBar(98, 100, 'Calculating sales tax...', `Almost done...`, totalImported);
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         window.initGSTOnTransactions?.();
@@ -1611,9 +1598,16 @@
    * Called from the post-import flow so the user sees real-time feedback.
    */
   window._runAutoCatOnExistingWithProgress = async function(totalImported) {
+    // Progress range: 82–97% (caller sets 82% before calling us, we finish at 97%)
+    const PROGRESS_START = 82;
+    const PROGRESS_END   = 97;
+    // Helper: map internal 0-100% to our 82–97% slice
+    const mapProgress = (internalPct) =>
+      PROGRESS_START + Math.round((internalPct / 100) * (PROGRESS_END - PROGRESS_START));
+
     // RuleEngine is a deferred ES module — wait up to 5s
     if (!window.RuleEngine) {
-      await window.updateProgressBar(100, 100, 'All files processed!', 'Waiting for Rule Engine...', totalImported);
+      await window.updateProgressBar(mapProgress(0), 100, 'Categorizing...', 'Waiting for Rule Engine...', totalImported);
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       const start = Date.now();
       await new Promise(resolve => {
@@ -1639,24 +1633,25 @@
     );
 
     if (uncategorized.length === 0) {
-      await window.updateProgressBar(100, 100, 'All files processed!', 'All transactions already categorized ✓', totalImported);
+      await window.updateProgressBar(PROGRESS_END, 100, 'Categorizing...', 'All transactions already categorized ✓', totalImported);
       return;
     }
 
     const total = uncategorized.length;
     console.log(`[AUTO-CAT+PROGRESS] ${total} transactions to categorize`);
 
-    // Pass onProgress callback to bulkCategorize — updates progress bar in real time
+    // Pass onProgress callback to bulkCategorize — updates progress bar in real time (82→97%)
     const result = await window.RuleEngine.bulkCategorize(uncategorized, {
       onProgress: async (done, count) => {
-        const pct = Math.round((done / count) * 100);
-        const stage = `Categorizing transactions... ${pct}% (${done}/${count})`;
-        await window.updateProgressBar(100, 100, 'All files processed!', stage, totalImported);
+        const internalPct = Math.round((done / count) * 100);
+        const mappedPct = mapProgress(internalPct);
+        const stage = `Categorizing transactions... ${internalPct}% (${done}/${count})`;
+        await window.updateProgressBar(mappedPct, 100, 'Categorizing...', stage, totalImported);
       }
     });
 
     console.log(`[AUTO-CAT+PROGRESS] Done: ${result.categorized} categorized, ${result.flagged} flagged, ${result.skipped} skipped`);
-    await window.updateProgressBar(100, 100, 'All files processed!', `${result.categorized} transactions categorized ✓`, totalImported);
+    await window.updateProgressBar(PROGRESS_END, 100, 'Categorizing...', `${result.categorized} transactions categorized ✓`, totalImported);
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     if (window.updateWorkspace) window.updateWorkspace();
@@ -5957,16 +5952,24 @@
           periodText = dates[0].toISOString().split('T')[0] + ' TO ' + dates[dates.length - 1].toISOString().split('T')[0];
         }
 
-        // Account badges
+        // Account badges — balanced row layout
         var allBadge = '<span style="background: #1e293b; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace;">ALL</span>';
-        var badgesList = accounts.map(function (a) {
+        var allBadges = [allBadge];
+        accounts.forEach(function (a) {
           var isRecon = isAccountReconciled(a);
-          return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>';
-        }).join(' ');
+          allBadges.push('<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>');
+        });
+        // Split into balanced rows: e.g. 11 items → 6+5, 7 → 4+3, 13 → 7+6
+        var badgesPerRow = Math.ceil(allBadges.length / Math.ceil(allBadges.length / 8));
+        if (badgesPerRow < 1) badgesPerRow = allBadges.length;
+        var badgeRows = '';
+        for (var bi = 0; bi < allBadges.length; bi += badgesPerRow) {
+          badgeRows += '<div style="display: flex; align-items: center; gap: 4px; margin-bottom: 3px;">' + allBadges.slice(bi, bi + badgesPerRow).join(' ') + '</div>';
+        }
 
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; min-height: 85px;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
-          '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">' + allBadge + ' ' + badgesList + '</div>' +
+          '<div style="margin-bottom: 6px;">' + badgeRows + '</div>' +
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #64748b; margin-bottom: 6px;">' +
           '<span style="color: #1e293b; font-weight: 600;">Consolidated View</span> • ' + accounts.length + ' accounts' +
           '</div>' +
@@ -6065,10 +6068,25 @@
 
   // --- WORKSPACE HTML GENERATORS ---
 
+  // Shared helpers: sort accounts by type group (CHQ, SAV, VISA, MC, AMEX, etc.) then by number
+  const _typeOrder = { 'CHQ': 1, 'SAV': 2, 'TD': 3, 'VISA': 4, 'MC': 5, 'AMEX': 6 };
+  const _parseRef = (ref) => {
+    const match = (ref || '').match(/^([A-Za-z]+)(\d*)$/);
+    if (!match) return { type: ref || '', num: 0 };
+    return { type: match[1].toUpperCase(), num: parseInt(match[2] || '0', 10) };
+  };
+
   function getAccountWorkspaceHeaderHTML() {
     const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
     const accounts = (window.RoboLedger.Accounts.getActive?.() || window.RoboLedger.Accounts.getAll())
-      .slice().sort((a, b) => (a.ref || a.name || '').localeCompare(b.ref || b.name || ''));
+      .slice().sort((a, b) => {
+        const ra = _parseRef(a.ref || a.name);
+        const rb = _parseRef(b.ref || b.name);
+        const orderA = _typeOrder[ra.type] || 99;
+        const orderB = _typeOrder[rb.type] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return ra.num - rb.num;
+      });
     const allTxns = window.RoboLedger.Ledger.getAll(); // MOVED UP: declare before use
 
     // CRITICAL: Don't render header at all if no transactions exist (empty grid)
@@ -6185,6 +6203,23 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; flex-direction: column;">
             <div style="display: flex; align-items: center; gap: 8px;">
+              ${(() => {
+                if (!acc) return '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
+                const _bank = (acc.bankIcon || acc.bankName || '').toLowerCase();
+                const _brand = (acc.brand || acc.cardNetwork || '').toLowerCase();
+                const _ref = (acc.ref || '').toLowerCase();
+                const _is = `width:24px;height:24px;border-radius:4px;object-fit:contain;`;
+                const _bp = '/logos/';
+                if (_brand.includes('visa') || _ref.includes('visa')) return `<img src="${_bp}visa.png" style="${_is}" />`;
+                if (_brand.includes('mc') || _brand.includes('mastercard') || _ref.includes('mc')) return `<img src="${_bp}mastercard.png" style="${_is}" />`;
+                if (_brand.includes('amex') || _ref.includes('amex')) return `<img src="${_bp}amex.png" style="${_is}" />`;
+                if (_bank.includes('rbc') || _bank.includes('royal')) return `<img src="${_bp}rbc.png" style="${_is}" />`;
+                if (_bank.includes('td') || _bank.includes('dominion')) return `<img src="${_bp}td.png" style="${_is}" />`;
+                if (_bank.includes('bmo') || _bank.includes('montreal')) return `<img src="${_bp}bmo.png" style="${_is}" />`;
+                if (_bank.includes('scotia')) return `<img src="${_bp}scotia.png" style="${_is}" />`;
+                if (_bank.includes('cibc')) return `<img src="${_bp}cibc.png" style="${_is}" />`;
+                return '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
+              })()}
               <select id="account-selector" onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 4px 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase; outline: none; transition: opacity 0.2s;">
                 <option value="ALL" ${UI_STATE.selectedAccount === 'ALL' ? 'selected' : ''}>ALL ACCOUNTS</option>
                 ${accounts.filter(a => a.name && a.name.trim() !== '' && a.name !== 'New Account').map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${(a.name || a.ref).toUpperCase()}</option>`).join('')}
@@ -6228,7 +6263,14 @@
 
   function getFilterToolbarHTML() {
     const accounts = (window.RoboLedger.Accounts.getActive?.() || window.RoboLedger.Accounts.getAll())
-      .slice().sort((a, b) => (a.ref || a.name || '').localeCompare(b.ref || b.name || ''));
+      .slice().sort((a, b) => {
+        const ra = _parseRef(a.ref || a.name);
+        const rb = _parseRef(b.ref || b.name);
+        const orderA = _typeOrder[ra.type] || 99;
+        const orderB = _typeOrder[rb.type] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return ra.num - rb.num;
+      });
     const refPrefix = UI_STATE.refPrefix || 'CHQ1';
 
     return `

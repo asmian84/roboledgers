@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import ReportHeader from './components/ReportHeader.jsx';
+import { AccountDrillDown } from './components/AccountDrillDown.jsx';
 
 
 /**
@@ -10,6 +11,7 @@ import ReportHeader from './components/ReportHeader.jsx';
 export function ComparativeReport() {
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [expandedAccount, setExpandedAccount] = useState(null);
     const [currentStart, setCurrentStart] = useState('');
     const [currentEnd, setCurrentEnd] = useState('');
     const [priorStart, setPriorStart] = useState('');
@@ -182,9 +184,25 @@ export function ComparativeReport() {
                                         accs.forEach(acc => {
                                             const hasVariance = Math.abs(acc.varianceAmount) > 0.01;
                                             const isLargeVariance = Math.abs(acc.variancePct) > 20;
+                                            const isExpanded = expandedAccount === acc.code;
                                             rows.push(
-                                                <tr key={acc.code} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ padding: '5px 4px', color: '#64748b', fontFamily: 'monospace', fontSize: 10 }}>{acc.code}</td>
+                                                <React.Fragment key={`${acc.code}-wrap`}>
+                                                <tr key={acc.code}
+                                                    style={{
+                                                        borderBottom: '1px solid #f1f5f9',
+                                                        cursor: 'pointer',
+                                                        background: isExpanded ? '#eef2ff' : 'transparent',
+                                                        transition: 'background 0.1s'
+                                                    }}
+                                                    onClick={() => setExpandedAccount(isExpanded ? null : acc.code)}
+                                                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = '#f8fafc'; }}
+                                                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent'; }}
+                                                    title={`Click to view transactions for ${acc.code}`}
+                                                >
+                                                    <td style={{ padding: '5px 4px', color: '#64748b', fontFamily: 'monospace', fontSize: 10 }}>
+                                                        <i className={`ph ${isExpanded ? 'ph-caret-down' : 'ph-caret-right'} text-[9px] mr-1 text-gray-400`}></i>
+                                                        {acc.code}
+                                                    </td>
                                                     <td style={{ padding: '5px 4px', color: '#0f172a' }}>{acc.name}</td>
                                                     <td style={{ padding: '5px 4px', textAlign: 'right', fontFamily: 'monospace', color: acc.currentDebit > 0 ? '#0f172a' : '#cbd5e1' }}>
                                                         {acc.currentDebit > 0 ? fmt(acc.currentDebit) : '—'}
@@ -214,6 +232,17 @@ export function ComparativeReport() {
                                                         {hasVariance ? fmtPct(acc.variancePct) : '—'}
                                                     </td>
                                                 </tr>
+                                                {isExpanded && (
+                                                    <AccountDrillDown
+                                                        coaCode={acc.code}
+                                                        accountName={acc.name}
+                                                        startDate={currentStart}
+                                                        endDate={currentEnd}
+                                                        onClose={() => setExpandedAccount(null)}
+                                                        accentColor="indigo"
+                                                    />
+                                                )}
+                                                </React.Fragment>
                                             );
                                         });
                                     });

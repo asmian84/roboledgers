@@ -5,10 +5,12 @@ import ReportHeader from './components/ReportHeader.jsx';
 /**
  * AJEReport - Adjusting Journal Entries Manager
  * Create, view, and manage journal entries (AJE, RJE, CJE)
+ * Includes a print-friendly "Review All" mode.
  */
 export function AJEReport() {
     const [entries, setEntries] = useState([]);
     const [showForm, setShowForm] = useState(false);
+    const [printView, setPrintView] = useState(false);
     const [description, setDescription] = useState('');
     const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
     const [entryType, setEntryType] = useState('AJE');
@@ -188,7 +190,126 @@ export function AJEReport() {
                             }}>
                             <i className="ph ph-lock-simple"></i> Period Manager
                         </button>
+                        <div style={{ flex: 1 }}></div>
+                        <button onClick={() => setPrintView(!printView)}
+                            style={{
+                                padding: '8px 16px', background: printView ? '#f1f5f9' : '#0f172a',
+                                color: printView ? '#475569' : 'white', border: 'none', borderRadius: 8,
+                                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 6
+                            }}>
+                            <i className={`ph ph-${printView ? 'x' : 'printer'}`}></i>
+                            {printView ? 'Exit Review' : 'Review All'}
+                        </button>
+                        <button onClick={exportCSV}
+                            style={{
+                                padding: '8px 16px', background: 'white', color: '#3b82f6',
+                                border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 13,
+                                fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                            }}>
+                            <i className="ph ph-download-simple"></i> Export CSV
+                        </button>
                     </div>
+
+                    {/* ─── Print/Review View ──────────────────────────── */}
+                    {printView && (
+                        <div style={{
+                            background: 'white', border: '2px solid #0f172a', borderRadius: 8,
+                            padding: 24, marginBottom: 20,
+                        }} className="print-aje-review">
+                            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                                <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                                    Adjusting Journal Entries — Review Report
+                                </h2>
+                                <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 0' }}>
+                                    {entries.length} entries | Generated {new Date().toLocaleDateString()}
+                                </p>
+                            </div>
+
+                            {['AJE', 'RJE', 'CJE'].map(type => {
+                                const typed = entries.filter(e => e.type === type);
+                                if (typed.length === 0) return null;
+                                const typeName = type === 'AJE' ? 'Adjusting' : type === 'RJE' ? 'Reclassifying' : 'Closing';
+                                return (
+                                    <div key={type} style={{ marginBottom: 20 }}>
+                                        <div style={{
+                                            fontSize: 13, fontWeight: 700, color: '#0f172a',
+                                            borderBottom: '2px solid #0f172a', paddingBottom: 4, marginBottom: 10,
+                                        }}>
+                                            {type} — {typeName} Journal Entries ({typed.length})
+                                        </div>
+                                        {typed.map((entry, idx) => (
+                                            <div key={entry.id} style={{ marginBottom: 12 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>{type}-{String(idx + 1).padStart(3, '0')}</span>
+                                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#0f172a' }}>{entry.description}</span>
+                                                    <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 'auto' }}>{entry.date}</span>
+                                                </div>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginLeft: 16 }}>
+                                                    <thead>
+                                                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                            <th style={{ textAlign: 'left', padding: '3px 6px', fontSize: 9, fontWeight: 600, color: '#94a3b8', width: '10%' }}>Code</th>
+                                                            <th style={{ textAlign: 'left', padding: '3px 6px', fontSize: 9, fontWeight: 600, color: '#94a3b8', width: '45%' }}>Account</th>
+                                                            <th style={{ textAlign: 'right', padding: '3px 6px', fontSize: 9, fontWeight: 600, color: '#94a3b8', width: '20%' }}>Debit</th>
+                                                            <th style={{ textAlign: 'right', padding: '3px 6px', fontSize: 9, fontWeight: 600, color: '#94a3b8', width: '20%' }}>Credit</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {(entry.lines || []).map((line, li) => (
+                                                            <tr key={li} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                                <td style={{ padding: '3px 6px', fontFamily: 'monospace', color: '#6366f1', fontWeight: 600 }}>{line.account_code}</td>
+                                                                <td style={{ padding: '3px 6px', color: '#1e293b' }}>{line.account_name}</td>
+                                                                <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#1d4ed8' }}>
+                                                                    {(line.debit || 0) > 0 ? fmt(line.debit) : ''}
+                                                                </td>
+                                                                <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#dc2626' }}>
+                                                                    {(line.credit || 0) > 0 ? fmt(line.credit) : ''}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr style={{ borderTop: '2px solid #0f172a' }}>
+                                                            <td colSpan={2} style={{ padding: '3px 6px', fontWeight: 700, fontSize: 10 }}>Entry Total</td>
+                                                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>{fmt(entry.totalDebit || 0)}</td>
+                                                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>{fmt(entry.totalCredit || 0)}</td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })}
+
+                            {/* Grand totals */}
+                            <div style={{
+                                borderTop: '3px double #0f172a', paddingTop: 8, marginTop: 8,
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Grand Total — All Entries</span>
+                                <div style={{ display: 'flex', gap: 24 }}>
+                                    <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8' }}>
+                                        DR {fmt(entries.reduce((s, e) => s + (e.totalDebit || 0), 0))}
+                                    </span>
+                                    <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: '#dc2626' }}>
+                                        CR {fmt(entries.reduce((s, e) => s + (e.totalCredit || 0), 0))}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style={{ textAlign: 'center', marginTop: 16 }}>
+                                <button onClick={() => window.print()}
+                                    style={{
+                                        padding: '8px 20px', background: '#0f172a', color: 'white',
+                                        border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    }}>
+                                    <i className="ph ph-printer"></i> Print Report
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Entry Form */}
                     {showForm && (

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import ReportFilters from './components/ReportFilters.jsx';
+import { AccountDrillDown } from './components/AccountDrillDown.jsx';
 
 /**
  * BalanceSheetReport - Assets = Liabilities + Equity
@@ -28,6 +29,8 @@ export function BalanceSheetReport() {
         }
     };
 
+    const [expandedAccount, setExpandedAccount] = useState(null);
+
     const fmt = (amount) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
 
     const renderSection = (title, items, total, color) => (
@@ -37,11 +40,30 @@ export function BalanceSheetReport() {
                 <table className="w-full text-sm mb-2">
                     <tbody className="divide-y divide-gray-100">
                         {items.map(item => (
-                            <tr key={item.code} className="hover:bg-gray-50">
-                                <td className="py-2 font-mono text-gray-500 text-xs w-16">{item.code}</td>
+                            <React.Fragment key={item.code}>
+                            <tr
+                                className={`cursor-pointer transition-colors ${expandedAccount === item.code ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
+                                onClick={() => setExpandedAccount(expandedAccount === item.code ? null : item.code)}
+                                title={`Click to view transactions for ${item.code}`}
+                            >
+                                <td className="py-2 font-mono text-gray-500 text-xs w-16">
+                                    <i className={`ph ${expandedAccount === item.code ? 'ph-caret-down' : 'ph-caret-right'} text-[10px] mr-1 text-gray-400`}></i>
+                                    {item.code}
+                                </td>
                                 <td className="py-2 text-gray-900">{item.name}</td>
                                 <td className="py-2 text-right tabular-nums font-mono text-gray-900">{fmt(item.amount)}</td>
                             </tr>
+                            {expandedAccount === item.code && dateRange && (
+                                <AccountDrillDown
+                                    coaCode={item.code}
+                                    accountName={item.name}
+                                    startDate={dateRange.start || '2000-01-01'}
+                                    endDate={dateRange.end}
+                                    onClose={() => setExpandedAccount(null)}
+                                    accentColor="blue"
+                                />
+                            )}
+                            </React.Fragment>
                         ))}
                     </tbody>
                 </table>

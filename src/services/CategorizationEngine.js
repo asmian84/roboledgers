@@ -563,7 +563,7 @@ const ROUTING_TABLE = {
   CONSULTING:         { cogs: '5305', overhead: '6450', bs: null,              defaultCOGS: true,  gifi: '8860', logic: 'Client-project consultant → 5305 COGS; business advisor → 6450' },
   OFFICE_SUPPLY:      { cogs: null,   overhead: '8600', bs: null,              defaultCOGS: false, gifi: '8810', logic: 'Always overhead — office supplies and postage' },
   COURIER:            { cogs: '5700', overhead: '6550', bs: null,              defaultCOGS: false, gifi: '8550', logic: 'Product freight → 5700 COGS; document courier → 6550' },
-  OFFICE_SVC:         { cogs: null,   overhead: '8500', bs: null,              defaultCOGS: false, gifi: '9270', logic: 'Office services (shredding, records mgmt) → miscellaneous' },
+  OFFICE_SVC:         { cogs: null,   overhead: '8600', bs: null,              defaultCOGS: false, gifi: '9270', logic: 'Office services (shredding, records mgmt) → office supplies' },
   RENT:               { cogs: null,   overhead: '8720', bs: null,              defaultCOGS: false, gifi: '8810', logic: 'Rent/lease → 8720 (equipment lease → 7000)' },
   ATM_WITHDRAWAL:     { cogs: null,   overhead: null,   bs: null,              defaultCOGS: false, gifi: null,   logic: 'ATM/cash withdrawal — owner draw. Route to 9970 and FLAG_FOR_REVIEW. Accountant splits: shareholder draw (2650/8400) vs petty-cash reimbursement.' },
   BANK_FEE:           { cogs: null,   overhead: '7700', bs: null,              defaultCOGS: false, gifi: '8710', logic: 'Always overhead — interest and bank charges' },
@@ -590,7 +590,7 @@ const ROUTING_TABLE = {
   LICENSING:          { cogs: null,   overhead: '6800', bs: null,              defaultCOGS: false, gifi: '9270', logic: 'Professional licensing, registry fees → 6800 Dues & memberships' },
   EMP_BENEFITS:       { cogs: null,   overhead: '6900', bs: null,              defaultCOGS: false, gifi: '8930', logic: 'Employee benefits (Blue Cross, group plan) → 6900' },
   FURNISHINGS:        { cogs: null,   overhead: '5336', bs: null,              defaultCOGS: false, gifi: '1770', logic: 'Furniture/furnishings for rental property → 5336 or capital if >$1,500/unit' },
-  GENERAL_RETAIL:     { cogs: null,   overhead: '8500', bs: null,              defaultCOGS: false, gifi: null,   logic: 'AMBIGUOUS — always flag for human review' },
+  GENERAL_RETAIL:     { cogs: null,   overhead: '9970', bs: null,              defaultCOGS: false, gifi: null,   logic: 'AMBIGUOUS — always flag for human review → uncategorized' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -621,12 +621,12 @@ const ACCOUNT_GUARDS = {
     redirect: null,
   },
 
-  // ── HIGH: Miscellaneous (always flag) ─────────────────────────────────────
+  // ── 8500 Miscellaneous REMOVED from COA — redirect to 9970 for review ────
   '8500': {
     risk: 'HIGH',
-    rule: 'FLAG_FOR_REVIEW',
-    description: '8500 Miscellaneous — nothing auto-categorizes here without human confirmation.',
-    redirect: null,
+    rule: 'REDIRECT',
+    description: '8500 Miscellaneous removed — redirect all to 9970 Uncategorized for proper review.',
+    redirect: '9970',
   },
 
   // ── HIGH: Visa Payable (only CC payments) ────────────────────────────────
@@ -966,6 +966,14 @@ class CategorizationEngine {
           redirect: null,
           reason:   `🚫 GUARD: ${proposedCOA} is MANUAL ONLY — ${guard.description}`,
           flag:     'GUARD_MANUAL_ONLY',
+        };
+
+      case 'REDIRECT':
+        return {
+          blocked:  true,
+          redirect: guard.redirect || '9970',
+          reason:   `🔀 GUARD: ${proposedCOA} redirected to ${guard.redirect} — ${guard.description}`,
+          flag:     'GUARD_REDIRECT',
         };
 
       case 'FLAG_FOR_REVIEW':
