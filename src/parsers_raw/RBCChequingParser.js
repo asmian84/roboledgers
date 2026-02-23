@@ -143,6 +143,7 @@ SMART PARSING RULES:
       accountNumber: acctFromText,
       brand: null,         // brand = card network (VISA/MC/AMEX) — null for chequing
       bankName: 'RBC',     // bank name for display
+      bankIcon: 'RBC',
       bank: 'RBC',
       tag: 'Chequing',
       accountType: 'Chequing',

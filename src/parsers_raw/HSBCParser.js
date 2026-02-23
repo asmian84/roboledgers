@@ -85,6 +85,7 @@ HSBC BANK FORMAT:
             transactions,
             metadata: {
                 _brand: 'HSBC',
+                bankIcon: 'HSBC',
                 _tag: 'Chequing',
                 institutionCode: '016'
             }

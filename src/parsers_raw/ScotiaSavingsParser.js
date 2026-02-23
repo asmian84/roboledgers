@@ -74,6 +74,7 @@ SMART PARSING RULES:
       accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : (inputMetadata?.accountNumber || '-----'),
       _brand: inputMetadata?.brand || 'Scotiabank',
       _bank: inputMetadata?.fullBrandName || 'Scotiabank',
+      bankIcon: 'SCOTIA',
       _tag: inputMetadata?.tag || 'Chequing'
     };
 

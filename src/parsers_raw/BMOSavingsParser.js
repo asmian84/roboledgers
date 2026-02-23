@@ -65,6 +65,7 @@ BMO CHEQUING FORMAT:
             accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
             _brand: 'BMO',
             _bank: 'BMO',
+            bankIcon: 'BMO',
             _tag: 'Savings',
             openingBalance: openingBalance
         };
