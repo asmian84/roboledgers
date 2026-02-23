@@ -14,11 +14,9 @@ CIBC VISA FORMAT:
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-CIBC-VISA] Starting metadata extraction for CIBC Visa...');
-        console.error('📄 [DEBUG-CIBC-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
                 // Extract balances using base helper
@@ -43,7 +41,6 @@ CIBC VISA FORMAT:
             bankCode: 'VISA',
             institution: 'VISA'
         };
-        console.warn('🏁 [CIBC-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -103,7 +100,6 @@ CIBC VISA FORMAT:
             }
         }
 
-        console.log(`[CIBC-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata , openingBalance, closingBalance, statementPeriod };
     }
 
@@ -121,18 +117,34 @@ CIBC VISA FORMAT:
 
         const amount = parseFloat(amounts[0].replace(/,/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-        const isPayment = /payment|credit|refund/i.test(description);
 
-        const auditData = this.buildAuditData(originalLine, 'CIBCVisaParser');
+        // CIBC Visa PDF convention:
+        //   Purchases = positive (e.g. "301.25")
+        //   Refunds/credits = negative prefix (e.g. "-19.41")
+        //   Payments = positive but in separate "Your payments" section with PAYMENT/MERCI keyword
+        //   Some amounts may also use CR suffix on other CIBC products
+        //
+        // Detect negative prefix: "-" immediately before the first numeric amount
+        const negativeMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegativeAmt = negativeMatch && parseFloat(negativeMatch[1].replace(/,/g, '')) === amount;
+        // CR suffix detection (defensive — some CIBC variants may use it)
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword detection for payments in the dedicated "Your payments" section
+        const isPaymentKeyword = /payment|paiement|merci/i.test(description);
+        // Any of: negative amount, CR suffix, or payment keyword → reduces liability → debit
+        const reducesLiability = isNegativeAmt || hasCR || isPaymentKeyword;
+
+        const auditData = this.buildAuditData(originalLine, 'CIBCVisaParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
             description,
             amount,
-            debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
-            credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
+            debit: reducesLiability ? amount : 0,     // Payment / refund / CR → DEBIT (reduces liability)
+            credit: reducesLiability ? 0 : amount,    // Positive purchase → CREDIT (increases liability)
             balance,
             rawText: this.cleanRawText(originalLine),
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };
@@ -158,6 +170,21 @@ CIBC VISA FORMAT:
 
         return desc.replace(/,\s*,/g, ',').trim();
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'CIBCVISA-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.CIBCVisaParser = CIBCVisaParser;

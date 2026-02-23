@@ -34,9 +34,11 @@ const TAX_RATES = {
 };
 
 // Helper: Calculate GST/tax for a transaction amount
+// amount: dollars (e.g. 100.00)
+// Returns: INTEGER CENTS (e.g. 500 for $5.00 at 5% GST) — matches ledger.core.js convention
 function calculateTax(amount, province) {
     if (!amount || !province || !TAX_RATES[province]) return 0;
-    return (amount * TAX_RATES[province].total) / 100;
+    return Math.round(amount * TAX_RATES[province].total);  // dollars × rate% = cents
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -494,7 +496,7 @@ function DescriptionCell({ row }) {
 
 // Number formatting helper
 function formatCurrency(value) {
-    if (!value && value !== 0) return '-';
+    if (!value && value !== 0) return '';
     // Fix negative zero: -0.00 should display as 0.00
     const displayValue = Object.is(value, -0) || value === 0 ? 0 : value;
     return `$${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -772,20 +774,27 @@ const columns = [
         enableColumnFilter: true,
         filterFn: (row, columnId, filterValue) => {
             const categoryValue = row.getValue(columnId);
+            const tx = row.original;
 
-            // Special case: "UNCATEGORIZED" should match what COADropdown displays as "Uncategorized"
-            // COADropdown shows "Uncategorized" when: !currentAccount (code not found in COA list OR empty/null)
+            // Special case: "UNCATEGORIZED" matches empty/null category or codes not in COA
             if (filterValue === 'UNCATEGORIZED') {
                 if (!categoryValue || categoryValue === '' || categoryValue === 'Uncategorized') {
-                    return true; // Empty/null category
+                    return true;
                 }
-                // Also check if the code exists in COA - if not, it shows as "Uncategorized"
                 const coaAccounts = window.RoboLedger?.COA?.getAll() || [];
                 const accountExists = coaAccounts.some(acc => acc.code === categoryValue);
-                return !accountExists; // If code doesn't exist in COA, it displays as "Uncategorized"
+                return !accountExists;
             }
 
-            // Otherwise exact match by code
+            // GST sub-account codes (2148–2174) — match by gst_account field, not category
+            // These codes never appear as a transaction's category, but appear in the trial
+            // balance as GST sub-ledger entries seeded from tax_cents.
+            const GST_CODES = new Set(['2148','2149','2150','2151','2160','2170','2171','2172','2173','2174']);
+            if (GST_CODES.has(String(filterValue))) {
+                return tx.gst_enabled && String(tx.gst_account) === String(filterValue);
+            }
+
+            // Standard exact match by category code
             return categoryValue === filterValue;
         },
         cell: ({ row }) => {
@@ -874,12 +883,22 @@ const columns = [
             const val = info.getValue();
             const row = info.row.original;
 
-            // Initialize gst_enabled if not set (default to true)
+            const catStr = String(row.category || '');
+
+            // ── Default gst_enabled for first render ──────────────────────────
+            // Structural transfers (CC payments, bank transfers, inter-account) default
+            // to OFF — all other transactions (including uncategorized) default to ON.
+            // The toggle is always shown — user can override for any row.
             if (row.gst_enabled === undefined) {
-                row.gst_enabled = true;
+                const isStructuralTransfer =
+                    catStr === '9971' ||  // CC Payment
+                    row._isCCPayment ||
+                    row._isBankRebate ||
+                    row.transaction_type === 'transfer';
+                row.gst_enabled = !isStructuralTransfer;
             }
 
-            // Only calculate if enabled
+            // Auto-calculate tax_cents if enabled but not yet stored
             let displayValue = val;
             if (row.gst_enabled && (!val || val === 0)) {
                 const province = window.UI_STATE?.province;
@@ -887,73 +906,95 @@ const columns = [
                 if (province && amount) {
                     const calculatedTax = calculateTax(amount, province);
                     displayValue = calculatedTax;
+                    // Write back so LiveReportPanel can use it
+                    row.tax_cents = calculatedTax;
+                    // GST account routing:
+                    // Revenue (4xxx) on a NON-credit-card account = GST Collected (2160)
+                    // Everything on a credit card = always GST ITC/Paid (2150) — CC charges are NEVER revenue
+                    const acctForGST = window.RoboLedger?.Accounts?.get(row.account_id);
+                    const isCCAcct   = !!(acctForGST?.brand || acctForGST?.cardNetwork ||
+                                         (acctForGST?.accountType || '').toLowerCase() === 'creditcard');
+                    const isRevenue  = !isCCAcct && catStr.startsWith('4');
+                    row.gst_account = isRevenue ? '2160' : '2150';
+                    row.gst_type    = isRevenue ? 'collected' : 'itc';
                 }
             }
 
             const handleToggle = (e) => {
                 e.stopPropagation();
 
-                // Toggle the gst_enabled flag
                 row.gst_enabled = !row.gst_enabled;
 
                 if (row.gst_enabled) {
-                    // GST ENABLED: Set up proper accounting
+                    // GST ENABLED: compute and store
                     const province = window.UI_STATE?.province;
                     const amount = row.debit || row.credit || 0;
-
                     if (province && amount) {
                         const calculatedTax = calculateTax(amount, province);
                         row.tax_cents = calculatedTax;
-
-                        // Determine GST account based on transaction category
-                        // Revenue (4xxx) → 2160 GST Collected on Sales
-                        // Expenses (5xxx, 6xxx, etc.) → 2150 GST Paid on Purchases
-                        const category = row.category;
-                        const isRevenue = category && String(category).startsWith('4');
-
+                        const acctForGST = window.RoboLedger?.Accounts?.get(row.account_id);
+                        const isCCAcct   = !!(acctForGST?.brand || acctForGST?.cardNetwork ||
+                                             (acctForGST?.accountType || '').toLowerCase() === 'creditcard');
+                        const isRevenue  = !isCCAcct && catStr.startsWith('4');
                         row.gst_account = isRevenue ? '2160' : '2150';
-                        row.gst_type = isRevenue ? 'collected' : 'itc';
+                        row.gst_type    = isRevenue ? 'collected' : 'itc';
                     }
                 } else {
-                    // GST DISABLED: Clear all GST data
-                    row.tax_cents = 0;
+                    // GST DISABLED: clear
+                    row.tax_cents   = 0;
                     row.gst_account = null;
-                    row.gst_type = null;
+                    row.gst_type    = null;
                 }
 
-                // Force re-render by updating table data
+                // Persist to ledger store
+                try {
+                    window.RoboLedger?.Ledger?.updateMetadata(row.tx_id, {
+                        gst_enabled: row.gst_enabled,
+                        tax_cents:   row.tax_cents   || 0,
+                        gst_account: row.gst_account || null,
+                        gst_type:    row.gst_type    || null,
+                    });
+                } catch(e) { /* non-critical */ }
+
+                // Force re-render
                 const tableData = info.table.options.data;
                 const newData = [...tableData];
                 newData[info.row.index] = { ...row };
-
-                // Trigger state update
                 if (info.table.options.meta?.setData) {
                     info.table.options.meta.setData(newData);
                 }
+
+                // Refresh UB so GST totals update
+                setTimeout(() => window.updateUtilityBar?.(), 50);
             };
 
             return (
-                <div className="flex items-center justify-end gap-1">
+                <div className="flex items-center justify-end gap-1.5">
                     {/* Toggle button */}
                     <button
                         onClick={handleToggle}
-                        className="p-0.5 hover:bg-gray-100 rounded transition-colors"
-                        title={row.gst_enabled ? 'GST enabled (click to disable)' : 'GST disabled (click to enable)'}
+                        className="p-0.5 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+                        title={row.gst_enabled
+                            ? `GST enabled → ${row.gst_type === 'collected' ? 'Collected (2160)' : 'ITC/Paid (2150)'} — click to disable`
+                            : `GST disabled — click to enable (routes to ${catStr.startsWith('4') ? 'Collected 2160' : 'ITC/Paid 2150'})`
+                        }
                     >
-                        <i className={`ph ${row.gst_enabled ? 'ph-check-circle text-green-600' : 'ph-circle text-gray-300'} text-sm`}></i>
+                        <i className={`ph ${row.gst_enabled ? 'ph-check-circle' : 'ph-circle'} text-sm`}
+                           style={{ color: row.gst_enabled ? '#16a34a' : '#d1d5db' }}></i>
                     </button>
 
-                    {/* Amount with currency formatting */}
+                    {/* Amount */}
                     <span
                         className="text-right block font-mono"
                         style={{
                             fontSize: GRID_TOKENS.numberFontSize,
                             fontWeight: GRID_TOKENS.numberFontWeight,
-                            color: GRID_TOKENS.numberColor,
-                            fontVariantNumeric: 'tabular-nums'
+                            color: row.gst_enabled ? GRID_TOKENS.numberColor : '#cbd5e1',
+                            fontVariantNumeric: 'tabular-nums',
+                            minWidth: '52px',
                         }}
                     >
-                        {row.gst_enabled && displayValue ? formatCurrency(displayValue / 100) : ''}
+                        {row.gst_enabled && displayValue ? formatCurrency(displayValue / 100) : <span style={{ color: '#cbd5e1' }}>—</span>}
                     </span>
                 </div>
             );
@@ -980,22 +1021,32 @@ export function TransactionsTable({
         window.UI_STATE.gridDensity = gridDensity;
     }
 
-    // Force GRID_TOKENS recalculation (module-level variable gets updated)
-    if (window.recalculateGridTokens) {
-        window.recalculateGridTokens();
-    }
+    // ── Derive a stable token snapshot from props — React tracks this properly ──
+    // Using useMemo means whenever gridTheme / gridFontSize / gridDensity props
+    // change, React re-derives TK and re-renders all consumers of it.
+    const rowHeights = { compact: 36, comfortable: 42, spacious: 56 };
+    const TK = useMemo(() => {
+        // Sync UI_STATE so getActiveTheme() reads the right value
+        if (window.UI_STATE) window.UI_STATE.gridTheme = gridTheme;
+        if (window.recalculateGridTokens) window.recalculateGridTokens();
+        const base = { ...GRID_TOKENS };
+        // Apply density override
+        base.rowHeight = rowHeights[gridDensity] ?? base.rowHeight;
+        // Apply font size
+        if (gridFontSize) {
+            base.cellFontSize       = `${gridFontSize}px`;
+            base.descLine1FontSize  = `${gridFontSize}px`;
+            base.descLine2FontSize  = `${Math.max(9, gridFontSize - 1.5)}px`;
+            base.numberFontSize     = `${gridFontSize}px`;
+        }
+        return base;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [gridTheme, gridFontSize, gridDensity]);
 
-    // Apply density-based rowHeight override
-    const rowHeights = {
-        compact: 36,      // 20% reduction
-        comfortable: 42,  // Sweet spot (Caseware-standard)
-        spacious: 56      // Balanced spacing
-    };
-    if (rowHeights[gridDensity]) {
-        GRID_TOKENS.rowHeight = rowHeights[gridDensity];
-    }
+    // Keep module-level GRID_TOKENS in sync for legacy callers
+    Object.assign(GRID_TOKENS, TK);
 
-    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize, 'density:', gridDensity, 'rowHeight:', GRID_TOKENS.rowHeight);
+    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize, 'density:', gridDensity, 'rowHeight:', TK.rowHeight);
 
 
     const [data, setData] = useState(initialData || []);
@@ -1005,6 +1056,11 @@ export function TransactionsTable({
     const [rowSelection, setRowSelection] = useState({});
     const [density] = useState('comfortable'); // Fixed at comfortable for now
 
+    // BULK ACTION BAR STATE
+    const [bulkCOAOpen, setBulkCOAOpen]       = useState(false);  // COA picker open
+    const [bulkRenameOpen, setBulkRenameOpen] = useState(false);  // Rename input open
+    const [bulkRenameValue, setBulkRenameValue] = useState('');
+
     // INLINE FILTERS: State for column-specific filters
     const [columnFilters, setColumnFilters] = useState([]);
     const [showFilters, setShowFilters] = useState(false);
@@ -1013,18 +1069,299 @@ export function TransactionsTable({
     const [auditSidebarOpen, setAuditSidebarOpen] = useState(false);
     const [selectedAuditTransaction, setSelectedAuditTransaction] = useState(null);
 
+    // EXCEL-LIKE: Cell focus & inline editing state
+    const [focusedCell, setFocusedCell] = useState(null); // { rowIndex, columnId }
+    const [editingCell, setEditingCell] = useState(null);  // { rowIndex, columnId, value }
+    const editInputRef = useRef(null);
+
     // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
     const [activePanel, setActivePanel] = useState(null);
+
+    // DRILL STACK: Multi-level breadcrumb trail for drill-down navigation.
+    // Each entry = { label: string, data: rows[], source: rows[] (the full set at that level) }
+    // - drillStack[0] = root (All Transactions)
+    // - drillStack[n] = nth drill level (e.g. Revenue → Rental Revenue)
+    // Empty array = no drill active (root view)
+    const [drillStack, setDrillStack] = useState([]);
+
+    // Legacy compat getter — the "current active filter label" for things that read it
+    const activeFilterLabel = drillStack.length > 0 ? drillStack[drillStack.length - 1].label : null;
 
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
         setData(initialData || []);
     }, [initialData]);
 
+    // SYNC: Update columnVisibility when prop changes (for settings drawer saves)
+    // This ensures mountTransactionsTable() with new savedPrefs updates the grid
+    useEffect(() => {
+        setColumnVisibility(prev => ({ ...prev, ...initialColumnVisibility }));
+    }, [initialColumnVisibility]);
+
     // SYNC: Update globalFilter when search query changes (for live search)
     useEffect(() => {
         setGlobalFilter(initialGlobalFilter || '');
     }, [initialGlobalFilter]);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EXCEL-LIKE KEYBOARD NAVIGATION & INLINE EDITING
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Columns that support keyboard navigation (order matters for Tab/arrow keys)
+    const NAV_COLUMNS = useMemo(() => ['date', 'description', 'debit', 'credit', 'category'], []);
+    // Columns that are inline-editable (double-click or Enter)
+    const EDITABLE_COLUMNS = useMemo(() => new Set(['date', 'description', 'debit', 'credit']), []);
+
+    // Focus the edit input when editing starts
+    useEffect(() => {
+        if (editingCell && editInputRef.current) {
+            editInputRef.current.focus();
+            editInputRef.current.select();
+        }
+    }, [editingCell]);
+
+    // Commit edit value to ledger with full audit trail
+    const commitCellEdit = (rowIndex, columnId, value) => {
+        const rows = table.getRowModel().rows;
+        const row = rows[rowIndex];
+        if (!row) return;
+        const txId = row.original.tx_id;
+        if (!txId) return;
+
+        const tx = window.RoboLedger?.Ledger?.get?.(txId);
+        if (!tx) return;
+
+        // Build audit history entry
+        const historyEntry = {
+            field: columnId,
+            old_value: null,
+            new_value: value,
+            timestamp: new Date().toISOString(),
+            edited_by: 'user'
+        };
+
+        if (columnId === 'debit' || columnId === 'credit') {
+            const numVal = parseFloat(String(value).replace(/[$,]/g, '')) || 0;
+            const cents = Math.round(numVal * 100);
+            const oldAmount = tx.amount_cents || 0;
+            const oldPolarity = tx.polarity;
+
+            historyEntry.old_value = `${oldPolarity} $${(oldAmount / 100).toFixed(2)}`;
+
+            if (columnId === 'debit' && numVal > 0) {
+                historyEntry.new_value = `DEBIT $${numVal.toFixed(2)}`;
+                window.RoboLedger.Ledger.updateTransaction(txId, {
+                    amount_cents: cents,
+                    polarity: 'DEBIT',
+                    edit_history: [...(tx.edit_history || []), historyEntry]
+                });
+            } else if (columnId === 'credit' && numVal > 0) {
+                historyEntry.new_value = `CREDIT $${numVal.toFixed(2)}`;
+                window.RoboLedger.Ledger.updateTransaction(txId, {
+                    amount_cents: cents,
+                    polarity: 'CREDIT',
+                    edit_history: [...(tx.edit_history || []), historyEntry]
+                });
+            } else if (numVal === 0) {
+                // Clear the field — keep opposite polarity or zero out
+                historyEntry.new_value = `${columnId.toUpperCase()} $0.00`;
+                window.RoboLedger.Ledger.updateTransaction(txId, {
+                    amount_cents: 0,
+                    polarity: columnId === 'debit' ? 'DEBIT' : 'CREDIT',
+                    edit_history: [...(tx.edit_history || []), historyEntry]
+                });
+            }
+        } else if (columnId === 'date') {
+            historyEntry.old_value = tx.date || tx.date_iso || '';
+            historyEntry.new_value = value;
+            // Validate date format
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (dateRegex.test(value)) {
+                window.RoboLedger.Ledger.updateTransaction(txId, {
+                    date: value,
+                    date_iso: value,
+                    edit_history: [...(tx.edit_history || []), historyEntry]
+                });
+            } else {
+                if (window.showToast) window.showToast('Invalid date format. Use YYYY-MM-DD', 'error');
+                return;
+            }
+        } else if (columnId === 'description') {
+            // Description already has its own edit handler via DescriptionCell
+            window.RoboLedger.Ledger.updateDescription(txId, value);
+            setEditingCell(null);
+            if (window.updateWorkspace) window.updateWorkspace();
+            return;
+        }
+
+        setEditingCell(null);
+        // Refresh data
+        if (window.updateWorkspace) window.updateWorkspace();
+        else setData([...data]);
+    };
+
+    // Start editing current focused cell
+    const startEditing = (rowIndex, columnId) => {
+        if (!EDITABLE_COLUMNS.has(columnId)) return;
+        const rows = table.getRowModel().rows;
+        const row = rows[rowIndex];
+        if (!row) return;
+
+        let currentValue = '';
+        if (columnId === 'debit') {
+            currentValue = row.original.debit ? String(row.original.debit) : '';
+        } else if (columnId === 'credit') {
+            currentValue = row.original.credit ? String(row.original.credit) : '';
+        } else if (columnId === 'date') {
+            currentValue = row.original.date_iso || row.original.date || '';
+        } else if (columnId === 'description') {
+            currentValue = row.original.payee || row.original.description || '';
+        }
+
+        setEditingCell({ rowIndex, columnId, value: currentValue });
+    };
+
+    // Keyboard handler for grid navigation
+    const handleGridKeyDown = (e) => {
+        // Global shortcuts that work regardless of focus state
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'N') {
+            e.preventDefault();
+            handleAddTransaction();
+            return;
+        }
+
+        // Don't intercept if user is typing in an input/textarea/select that's NOT our edit cell
+        const tag = e.target.tagName?.toLowerCase();
+        if ((tag === 'input' || tag === 'textarea' || tag === 'select') && !e.target.dataset?.gridEdit) return;
+
+        if (!focusedCell) return;
+
+        const rows = table.getRowModel().rows;
+        const { rowIndex, columnId } = focusedCell;
+        const colIdx = NAV_COLUMNS.indexOf(columnId);
+
+        switch (e.key) {
+            case 'ArrowDown': {
+                e.preventDefault();
+                const nextRow = Math.min(rowIndex + 1, rows.length - 1);
+                setFocusedCell({ rowIndex: nextRow, columnId });
+                // Scroll into view
+                rowVirtualizer.scrollToIndex(nextRow, { align: 'auto' });
+                break;
+            }
+            case 'ArrowUp': {
+                e.preventDefault();
+                const prevRow = Math.max(rowIndex - 1, 0);
+                setFocusedCell({ rowIndex: prevRow, columnId });
+                rowVirtualizer.scrollToIndex(prevRow, { align: 'auto' });
+                break;
+            }
+            case 'ArrowRight': {
+                e.preventDefault();
+                if (colIdx < NAV_COLUMNS.length - 1) {
+                    setFocusedCell({ rowIndex, columnId: NAV_COLUMNS[colIdx + 1] });
+                }
+                break;
+            }
+            case 'ArrowLeft': {
+                e.preventDefault();
+                if (colIdx > 0) {
+                    setFocusedCell({ rowIndex, columnId: NAV_COLUMNS[colIdx - 1] });
+                }
+                break;
+            }
+            case 'Tab': {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    // Move left or to previous row
+                    if (colIdx > 0) {
+                        setFocusedCell({ rowIndex, columnId: NAV_COLUMNS[colIdx - 1] });
+                    } else if (rowIndex > 0) {
+                        setFocusedCell({ rowIndex: rowIndex - 1, columnId: NAV_COLUMNS[NAV_COLUMNS.length - 1] });
+                    }
+                } else {
+                    // Move right or to next row
+                    if (colIdx < NAV_COLUMNS.length - 1) {
+                        setFocusedCell({ rowIndex, columnId: NAV_COLUMNS[colIdx + 1] });
+                    } else if (rowIndex < rows.length - 1) {
+                        setFocusedCell({ rowIndex: rowIndex + 1, columnId: NAV_COLUMNS[0] });
+                    }
+                }
+                break;
+            }
+            case 'Enter': {
+                e.preventDefault();
+                if (editingCell) {
+                    // Commit and move down
+                    commitCellEdit(editingCell.rowIndex, editingCell.columnId, editingCell.value);
+                    const nextRow = Math.min(rowIndex + 1, rows.length - 1);
+                    setFocusedCell({ rowIndex: nextRow, columnId });
+                } else {
+                    startEditing(rowIndex, columnId);
+                }
+                break;
+            }
+            case 'Escape': {
+                e.preventDefault();
+                if (editingCell) {
+                    setEditingCell(null);
+                } else {
+                    setFocusedCell(null);
+                }
+                break;
+            }
+            case 'F2': {
+                e.preventDefault();
+                startEditing(rowIndex, columnId);
+                break;
+            }
+            case 'Delete':
+            case 'Backspace': {
+                if (!editingCell && EDITABLE_COLUMNS.has(columnId)) {
+                    e.preventDefault();
+                    // Clear cell and start editing
+                    setEditingCell({ rowIndex, columnId, value: '' });
+                }
+                break;
+            }
+            default: {
+                // If user starts typing alphanumeric, enter edit mode
+                if (!editingCell && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    if (EDITABLE_COLUMNS.has(columnId)) {
+                        e.preventDefault();
+                        setEditingCell({ rowIndex, columnId, value: e.key });
+                    }
+                }
+                break;
+            }
+        }
+    };
+
+    // ADD TRANSACTION: Insert a new manual transaction row
+    const handleAddTransaction = () => {
+        const accountId = window.UI_STATE?.selectedAccount;
+        const tx = window.RoboLedger?.Ledger?.createManual?.(accountId !== 'ALL' ? accountId : undefined);
+        if (tx) {
+            if (window.showToast) window.showToast('New transaction added', 'success');
+            if (window.updateWorkspace) window.updateWorkspace();
+            else setData([...data]);
+        }
+    };
+
+    // DIRECT BRIDGE: Expose setData so utility-bar and setTxGridFilter can drive
+    // the grid without going through the stale React root reference.
+    useEffect(() => {
+        window.__txGridSetData = (rows) => setData(rows || []);
+        // Clear filter bridge — called by setTxGridFilter(null) and vanilla JS
+        window.__txGridClearFilter = () => {
+            setDrillStack([]);
+            window._txGridActiveFilter = null;
+        };
+        return () => {
+            delete window.__txGridSetData;
+            delete window.__txGridClearFilter;
+        };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // DETAIL MODE: Sidebar collapse detection
     const [isDetailMode, setIsDetailMode] = useState(() => {
@@ -1034,7 +1371,7 @@ export function TransactionsTable({
 
     useEffect(() => {
         const handleSidebarCollapse = (e) => {
-            const isCollapsed = e.detail?.collapsed ?? false;  // FIX: Property is 'collapsed'
+            const isCollapsed = e.detail?.isCollapsed ?? false;
             console.log('[DETAIL_MODE] Sidebar collapsed event received:', isCollapsed);
             setIsDetailMode(isCollapsed);
             console.log('[DETAIL_MODE] Current activePanel:', activePanel);
@@ -1081,57 +1418,71 @@ export function TransactionsTable({
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Auto-categorize selected transactions using RuleEngine
+     * BULK CATEGORIZE: Apply a COA code to all selected transactions
+     * Called when user picks an account from the inline COA picker in the bulk bar
      */
-    const handleBulkCategorize = () => {
+    const handleBulkSetCOA = (code) => {
+        if (!code) return;
         const selectedTxIds = Object.keys(rowSelection);
         if (selectedTxIds.length === 0) return;
 
-        // Get selected transactions
-        const selectedTxs = selectedTxIds
-            .map(id => window.RoboLedger?.Ledger?.transactions[id])
-            .filter(Boolean);
-
-        if (selectedTxs.length === 0) {
-            alert('No valid transactions selected');
-            return;
-        }
-
-        // Use RuleEngine to bulk categorize
-        const results = window.RoboLedger?.RuleEngine?.bulkCategorize(selectedTxs);
-
-        if (results) {
-            // Show results
-            const message = `✅ Categorized ${results.categorized}/${selectedTxs.length} transactions`;
-            console.log('[BULK_CATEGORIZE]', message, results);
-
-            // Show toast if available
-            if (window.showToast) {
-                window.showToast(message, 'success');
-            } else {
-                alert(message);
+        let updated = 0;
+        selectedTxIds.forEach(txId => {
+            try {
+                window.RoboLedger?.Ledger?.updateCategory?.(txId, code);
+                updated++;
+            } catch (e) {
+                console.warn('[BULK_COA] Failed for', txId, e);
             }
+        });
 
-            // Clear selection
-            setRowSelection({});
+        console.log(`[BULK_COA] Set ${code} on ${updated}/${selectedTxIds.length} transactions`);
+        if (window.showToast) window.showToast(`Categorized ${updated} transaction${updated !== 1 ? 's' : ''} → ${code}`, 'success');
 
-            // Force re-render
-            setData([...data]);
-        } else {
-            alert('Bulk categorization failed - RuleEngine not available');
-        }
+        // Close picker, clear selection, refresh
+        setBulkCOAOpen(false);
+        setRowSelection({});
+        if (window.updateWorkspace) window.updateWorkspace();
+        else setData([...data]);
     };
 
     /**
-     * Delete selected transactions
+     * BULK RENAME: Rename all selected transactions — each change is audit-trailed
+     */
+    const handleBulkRename = () => {
+        const newName = bulkRenameValue.trim();
+        if (!newName) return;
+        const selectedTxIds = Object.keys(rowSelection);
+        if (selectedTxIds.length === 0) return;
+
+        let renamed = 0;
+        selectedTxIds.forEach(txId => {
+            try {
+                // updateDescription writes to edit_history[] for audit trail
+                const ok = window.RoboLedger?.Ledger?.updateDescription?.(txId, newName);
+                if (ok !== false) renamed++;
+            } catch (e) {
+                console.warn('[BULK_RENAME] Failed for', txId, e);
+            }
+        });
+
+        console.log(`[BULK_RENAME] Renamed ${renamed}/${selectedTxIds.length} to "${newName}"`);
+        if (window.showToast) window.showToast(`Renamed ${renamed} transaction${renamed !== 1 ? 's' : ''}`, 'success');
+
+        // Close rename, clear, refresh
+        setBulkRenameOpen(false);
+        setBulkRenameValue('');
+        setRowSelection({});
+        if (window.updateWorkspace) window.updateWorkspace();
+        else setData([...data]);
+    };
+
+    /**
+     * BULK DELETE: Remove selected transactions from ledger
      */
     const handleBulkDelete = () => {
         const selectedTxIds = Object.keys(rowSelection);
         if (selectedTxIds.length === 0) return;
-
-        if (!confirm(`Delete ${selectedTxIds.length} selected transactions? This cannot be undone.`)) {
-            return;
-        }
 
         // Delete each transaction
         let deleted = 0;
@@ -1142,13 +1493,14 @@ export function TransactionsTable({
         });
 
         console.log(`[BULK_DELETE] Deleted ${deleted}/${selectedTxIds.length} transactions`);
+        if (window.showToast) window.showToast(`Deleted ${deleted} transaction${deleted !== 1 ? 's' : ''}`, 'success');
 
         // Clear selection
         setRowSelection({});
 
         // Force re-render by updating data
         if (window.RoboLedger?.Ledger) {
-            setData(window.RoboLedger.Ledger.getAllTransactions());
+            setData(window.RoboLedger.Ledger.getAllTransactions?.() || []);
         }
     };
 
@@ -1241,7 +1593,7 @@ export function TransactionsTable({
     const rowVirtualizer = useVirtualizer({
         count: table.getRowModel().rows.length,
         getScrollElement: () => parentRef.current,
-        estimateSize: () => GRID_TOKENS.rowHeight,
+        estimateSize: () => TK.rowHeight,
         overscan: 15,
     });
 
@@ -1256,11 +1608,14 @@ export function TransactionsTable({
     return (
         <div
             className="bg-white relative"
+            tabIndex={0}
+            onKeyDown={handleGridKeyDown}
             style={{
                 height: 'calc(100vh - 60px)', // Fixed height minus nav
                 overflow: 'hidden',
                 display: 'flex',
-                flexDirection: activePanel ? 'row' : 'column'
+                flexDirection: activePanel ? 'row' : 'column',
+                outline: 'none',
             }}
         >
             {/* Scrolling container with fixed height */}
@@ -1275,44 +1630,180 @@ export function TransactionsTable({
                     maxWidth: activePanel ? 'calc(100vw - 370px)' : '100%'  // Prevent bleeding into panel
                 }}
             >
-                {/* Batch Action Bar */}
+                {/* ── Bulk Action Bar ─────────────────────────────────────────── */}
                 {Object.keys(rowSelection).length > 0 && (
-                    <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
-                        <span className="text-sm font-bold text-blue-900">{Object.keys(rowSelection).length} selected</span>
-                        <div className="ml-auto flex items-center gap-2">
+                    <div className="sticky top-0 z-40 bg-white border-b border-[#e5e7eb] shadow-sm">
+
+                        {/* Main toolbar row — same height / padding as FilterToolbar */}
+                        <div className="flex items-center gap-2 px-4 h-[44px]">
+
+                            {/* Selection count pill */}
+                            <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-1 shrink-0">
+                                <i className="ph ph-check-square text-indigo-500 text-[13px]"></i>
+                                <span className="text-[11px] font-bold text-indigo-700 tabular-nums">
+                                    {Object.keys(rowSelection).length} selected
+                                </span>
+                            </div>
+
+                            {/* Thin separator */}
+                            <div className="w-px h-5 bg-[#e5e7eb] mx-1 shrink-0" />
+
+                            {/* ── Categorize ── */}
                             <button
-                                onClick={handleBulkCategorize}
-                                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                                onClick={() => { setBulkCOAOpen(o => !o); setBulkRenameOpen(false); }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold border transition-all ${
+                                    bulkCOAOpen
+                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                        : 'bg-white text-[#374151] border-[#e5e7eb] hover:bg-[#f9fafb] hover:border-indigo-300'
+                                }`}
                             >
+                                <i className="ph ph-tag text-[13px]"></i>
                                 Categorize
+                                <i className={`ph ph-caret-${bulkCOAOpen ? 'up' : 'down'} text-[10px] opacity-60`}></i>
                             </button>
-                            <button className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">Match</button>
+
+                            {/* ── Rename ── */}
+                            <button
+                                onClick={() => { setBulkRenameOpen(o => !o); setBulkCOAOpen(false); }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold border transition-all ${
+                                    bulkRenameOpen
+                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                        : 'bg-white text-[#374151] border-[#e5e7eb] hover:bg-[#f9fafb] hover:border-indigo-300'
+                                }`}
+                            >
+                                <i className="ph ph-pencil-simple text-[13px]"></i>
+                                Rename
+                                <i className={`ph ph-caret-${bulkRenameOpen ? 'up' : 'down'} text-[10px] opacity-60`}></i>
+                            </button>
+
+                            {/* ── Delete ── */}
                             <button
                                 onClick={handleBulkDelete}
-                                className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-white border border-red-300 rounded hover:bg-red-50"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold border border-[#e5e7eb] text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all"
                             >
+                                <i className="ph ph-trash text-[13px]"></i>
                                 Delete
                             </button>
-                            <button onClick={() => setRowSelection({})} className="ml-2 p-1.5 text-gray-500 hover:text-gray-700">
-                                <i className="ph ph-x text-sm"></i>
+
+                            {/* Spacer */}
+                            <div className="flex-1" />
+
+                            {/* Deselect all */}
+                            <button
+                                onClick={() => { setRowSelection({}); setBulkCOAOpen(false); setBulkRenameOpen(false); setBulkRenameValue(''); }}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] text-[#9ca3af] hover:text-[#374151] hover:bg-[#f9fafb] border border-transparent hover:border-[#e5e7eb] transition-all"
+                                title="Clear selection"
+                            >
+                                <i className="ph ph-x text-[12px]"></i>
+                                Deselect
                             </button>
                         </div>
+
+                        {/* ── COA Picker sub-panel ─────────────────────────────── */}
+                        {bulkCOAOpen && (
+                            <div className="px-4 pt-2 pb-3 bg-[#fafbfc] border-t border-[#e5e7eb]">
+                                <p className="text-[11px] text-[#6b7280] font-medium mb-2">
+                                    Apply category to <span className="font-bold text-indigo-600">{Object.keys(rowSelection).length}</span> transaction{Object.keys(rowSelection).length !== 1 ? 's' : ''}
+                                </p>
+                                <div className="max-w-md">
+                                    <COADropdown
+                                        value=""
+                                        onChange={(code) => handleBulkSetCOA(code)}
+                                        txId="bulk"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── Rename sub-panel ─────────────────────────────────── */}
+                        {bulkRenameOpen && (
+                            <div className="px-4 pt-2 pb-3 bg-[#fafbfc] border-t border-[#e5e7eb]">
+                                <p className="text-[11px] text-[#6b7280] font-medium mb-2">
+                                    New description for <span className="font-bold text-indigo-600">{Object.keys(rowSelection).length}</span> transaction{Object.keys(rowSelection).length !== 1 ? 's' : ''}
+                                    <span className="ml-1.5 text-[10px] text-amber-600 font-normal">· audit trailed</span>
+                                </p>
+                                <div className="flex gap-2 max-w-lg">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={bulkRenameValue}
+                                        onChange={e => setBulkRenameValue(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleBulkRename();
+                                            if (e.key === 'Escape') { setBulkRenameOpen(false); setBulkRenameValue(''); }
+                                        }}
+                                        placeholder="New description / payee name…"
+                                        className="flex-1 px-3 py-1.5 text-[12px] border border-[#e5e7eb] rounded-md focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 bg-white text-[#1e293b] placeholder-[#c0c4cc] transition-all"
+                                    />
+                                    <button
+                                        onClick={handleBulkRename}
+                                        disabled={!bulkRenameValue.trim()}
+                                        className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-[12px] font-semibold transition-all ${
+                                            bulkRenameValue.trim()
+                                                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                                : 'bg-[#e5e7eb] text-[#9ca3af] cursor-not-allowed'
+                                        }`}
+                                    >
+                                        <i className="ph ph-check text-[13px]"></i>
+                                        Apply
+                                    </button>
+                                    <button
+                                        onClick={() => { setBulkRenameOpen(false); setBulkRenameValue(''); }}
+                                        className="px-3 py-1.5 rounded-md text-[12px] font-medium text-[#6b7280] border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-all"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* Filter Toolbar - STICKY: Freezes at top when scrolling */}
-                <div style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#fff' }}>
+                <div style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#fff', display: 'flex', alignItems: 'stretch' }}>
+                    <div style={{ flex: 1 }}>
                     <FilterToolbar
                         refPrefix={window.UI_STATE?.refPrefix || 'CHQ1'}
                         searchQuery={window.UI_STATE?.searchQuery || ''}
                         selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
-                        accounts={window.RoboLedger?.Accounts?.getAll() || []}
+                        accounts={window.RoboLedger?.Accounts?.getActive?.() || window.RoboLedger?.Accounts?.getAll() || []}
                         onRefPrefixChange={(value) => window.updateRefPrefix?.(value)}
                         onSearchChange={(value) => window.handleSearch?.(value)}
                         onAccountChange={(value) => window.switchAccount?.(value)}
                         onToggleFilters={() => window.toggleGridFilters?.()}
                         onToggleSettings={() => window.toggleSettings?.(true)}
                         isDetailMode={isDetailMode}  // Pass mode to show/hide panel toggles
+                        activePanel={activePanel}     // Pass active panel for button highlighting
+                        activeFilter={drillStack.length === 0 ? null : activeFilterLabel}
+                        drillPath={drillStack.length > 0 ? drillStack : null}
+                        onDrillBack={(idx) => {
+                            // idx=0 means navigate to root (all transactions)
+                            if (idx === 0 || idx >= drillStack.length) {
+                                // Navigate to root
+                                const rootData = drillStack[0]?.source || window._txGridAllData || data;
+                                window.__txGridSetData?.(rootData);
+                                window._txGridAllData = rootData;
+                                window._txGridActiveFilter = null;
+                                setDrillStack([]);
+                            } else {
+                                // Navigate to ancestor level idx (1-indexed in drillStack)
+                                const target = drillStack[idx - 1];
+                                if (target) {
+                                    window.__txGridSetData?.(target.data);
+                                    window._txGridAllData = target.source;
+                                    window._txGridActiveFilter = target.label;
+                                    setDrillStack(drillStack.slice(0, idx));
+                                }
+                            }
+                        }}
+                        onClearFilter={() => {
+                            // Clear all drill levels, restore root data
+                            const rootData = drillStack[0]?.source || window._txGridAllData || data;
+                            window.__txGridSetData?.(rootData);
+                            window._txGridAllData = rootData;
+                            window._txGridActiveFilter = null;
+                            setDrillStack([]);
+                        }}
                         onToggleReportPanel={() => {
                             const newPanel = activePanel === 'report' ? null : 'report';
                             setActivePanel(newPanel);
@@ -1346,6 +1837,32 @@ export function TransactionsTable({
                         }}
                         onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
                     />
+                    </div>
+                    {/* Add Transaction button — next to FilterToolbar */}
+                    <button
+                        onClick={handleAddTransaction}
+                        title="Add a new manual transaction (Ctrl+Shift+N)"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            padding: '0 14px',
+                            background: 'none',
+                            border: 'none',
+                            borderLeft: '1px solid #e2e8f0',
+                            color: '#64748b',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.background = '#eff6ff'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = 'none'; }}
+                    >
+                        <i className="ph ph-plus-circle" style={{ fontSize: '15px' }}></i>
+                        Add
+                    </button>
                 </div>
 
                 {/* Grid Header */}
@@ -1359,17 +1876,17 @@ export function TransactionsTable({
                                 flex: header.id === 'description' ? '1 1 0' : undefined,
                                 minWidth: header.id === 'description' ? '250px' : undefined,
                                 flexShrink: 0,
-                                height: GRID_TOKENS.headerHeight,
+                                height: TK.headerHeight,
                                 // Custom padding per column (match cell padding)
-                                padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
+                                padding: header.id === 'select' ? '0 4px 0 12px' :  // Checkbox: 12px left padding
                                     header.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                        `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
-                                fontSize: GRID_TOKENS.headerFontSize,
-                                fontWeight: GRID_TOKENS.headerFontWeight,
-                                letterSpacing: GRID_TOKENS.headerLetterSpacing,
-                                color: GRID_TOKENS.headerColor,
+                                        `0 ${TK.rowPaddingX}`,           // Others: default
+                                fontSize: TK.headerFontSize,
+                                fontWeight: TK.headerFontWeight,
+                                letterSpacing: TK.headerLetterSpacing,
+                                color: TK.headerColor,
                                 textTransform: 'uppercase',
-                                borderRight: `1px solid ${GRID_TOKENS.borderColor}`  // Vertical dividers
+                                borderRight: `1px solid ${TK.borderColor}`  // Vertical dividers
                             }}
                             onClick={header.column.getToggleSortingHandler()}
                         >
@@ -1404,10 +1921,10 @@ export function TransactionsTable({
                                     minWidth: header.id === 'description' ? '250px' : undefined,
                                     flexShrink: 0,
                                     height: '40px',
-                                    padding: header.id === 'select' ? '0 4px 0 6px' :
+                                    padding: header.id === 'select' ? '0 4px 0 12px' :
                                         header.id === 'balance' ? '0 6px 0 2px' :
-                                            `0 ${GRID_TOKENS.rowPaddingX}`,
-                                    borderRight: `1px solid ${GRID_TOKENS.borderColor}`
+                                            `0 ${TK.rowPaddingX}`,
+                                    borderRight: `1px solid ${TK.borderColor}`
                                 }}
                             >
                                 {/* Render appropriate filter input based on column */}
@@ -1445,51 +1962,119 @@ export function TransactionsTable({
                                 const rowIndex = virtualRow.index;
                                 let rowBg;
                                 if (isSelected) {
-                                    rowBg = GRID_TOKENS.selectedRowBg || '#eff6ff';
-                                } else if (GRID_TOKENS.rowColors && Array.isArray(GRID_TOKENS.rowColors)) {
+                                    rowBg = TK.selectedRowBg || '#eff6ff';
+                                } else if (TK.rowColors && Array.isArray(TK.rowColors)) {
                                     // Rainbow mode: cycle through color palette
-                                    rowBg = GRID_TOKENS.rowColors[rowIndex % GRID_TOKENS.rowColors.length];
+                                    rowBg = TK.rowColors[rowIndex % TK.rowColors.length];
                                 } else {
                                     // Standard alternating (2 colors)
-                                    rowBg = rowIndex % 2 === 0 ? GRID_TOKENS.rowBg : GRID_TOKENS.rowBgAlt;
+                                    rowBg = rowIndex % 2 === 0 ? TK.rowBg : TK.rowBgAlt;
                                 }
-                                const hoverBg = GRID_TOKENS.hoverBg || '#f8fafc';
+                                const hoverBg = TK.hoverBg || '#f8fafc';
 
                                 return (
                                     <div
                                         key={row.id}
                                         className="flex absolute top-0 left-0 w-full transition-colors group"
                                         style={{
-                                            height: `${GRID_TOKENS.rowHeight}px`,
+                                            height: `${TK.rowHeight}px`,
                                             transform: `translateY(${virtualRow.start}px)`,
-                                            borderBottom: `1px solid ${GRID_TOKENS.borderColor}`,
+                                            borderBottom: `1px solid ${TK.borderColor}`,
                                             backgroundColor: rowBg
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = rowBg}
                                     >
-                                        {row.getVisibleCells().map(cell => (
+                                        {row.getVisibleCells().map(cell => {
+                                            const colId = cell.column.id;
+                                            const isFocused = focusedCell && focusedCell.rowIndex === virtualRow.index && focusedCell.columnId === colId;
+                                            const isEditing = editingCell && editingCell.rowIndex === virtualRow.index && editingCell.columnId === colId;
+                                            const isNavigable = NAV_COLUMNS.includes(colId);
+                                            const isEditable = EDITABLE_COLUMNS.has(colId);
+
+                                            return (
                                             <div
                                                 key={cell.id}
-                                                className={`flex items-center ${cell.column.id === 'category' ? 'overflow-visible' : 'overflow-hidden'} ${getStickyClass(cell.column.id)}`}
+                                                className={`flex items-center ${colId === 'category' ? 'overflow-visible' : 'overflow-hidden'} ${getStickyClass(colId)}`}
+                                                onClick={() => {
+                                                    if (isNavigable) setFocusedCell({ rowIndex: virtualRow.index, columnId: colId });
+                                                }}
+                                                onDoubleClick={() => {
+                                                    if (isEditable) {
+                                                        setFocusedCell({ rowIndex: virtualRow.index, columnId: colId });
+                                                        startEditing(virtualRow.index, colId);
+                                                    }
+                                                }}
                                                 style={{
-                                                    width: cell.column.id === 'description' ? undefined : cell.column.getSize(),
-                                                    flex: cell.column.id === 'description' ? '1 1 0' : undefined,
-                                                    minWidth: cell.column.id === 'description' ? '250px' : undefined,
+                                                    width: colId === 'description' ? undefined : cell.column.getSize(),
+                                                    flex: colId === 'description' ? '1 1 0' : undefined,
+                                                    minWidth: colId === 'description' ? '250px' : undefined,
                                                     flexShrink: 0,
-                                                    // Custom padding per column - flush left
-                                                    padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
-                                                        cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
+                                                    // Custom padding per column
+                                                    padding: colId === 'select' ? '0 4px 0 12px' :  // Checkbox: 12px left padding
+                                                        colId === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
                                                             '0 8px 0 2px',                               // Others: minimal left, standard right
-                                                    borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
-                                                    position: cell.column.id === 'category' ? 'relative' : undefined
+                                                    borderRight: `1px solid ${TK.borderColor}`,
+                                                    position: colId === 'category' ? 'relative' : undefined,
+                                                    // Focus indicator
+                                                    ...(isFocused ? {
+                                                        boxShadow: 'inset 0 0 0 2px #3b82f6',
+                                                        borderRadius: '2px',
+                                                    } : {}),
                                                 }}
                                             >
+                                                {isEditing ? (
+                                                    <input
+                                                        ref={editInputRef}
+                                                        data-grid-edit="true"
+                                                        type={colId === 'date' ? 'date' : colId === 'debit' || colId === 'credit' ? 'number' : 'text'}
+                                                        step={colId === 'debit' || colId === 'credit' ? '0.01' : undefined}
+                                                        value={editingCell.value}
+                                                        onChange={(e) => setEditingCell(prev => ({ ...prev, value: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                commitCellEdit(editingCell.rowIndex, editingCell.columnId, editingCell.value);
+                                                                const nextRow = Math.min(virtualRow.index + 1, table.getRowModel().rows.length - 1);
+                                                                setFocusedCell({ rowIndex: nextRow, columnId: colId });
+                                                            } else if (e.key === 'Escape') {
+                                                                e.preventDefault();
+                                                                setEditingCell(null);
+                                                            } else if (e.key === 'Tab') {
+                                                                e.preventDefault();
+                                                                commitCellEdit(editingCell.rowIndex, editingCell.columnId, editingCell.value);
+                                                                const ci = NAV_COLUMNS.indexOf(colId);
+                                                                if (e.shiftKey) {
+                                                                    if (ci > 0) setFocusedCell({ rowIndex: virtualRow.index, columnId: NAV_COLUMNS[ci - 1] });
+                                                                } else {
+                                                                    if (ci < NAV_COLUMNS.length - 1) setFocusedCell({ rowIndex: virtualRow.index, columnId: NAV_COLUMNS[ci + 1] });
+                                                                }
+                                                            }
+                                                        }}
+                                                        onBlur={() => {
+                                                            commitCellEdit(editingCell.rowIndex, editingCell.columnId, editingCell.value);
+                                                        }}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            border: 'none',
+                                                            outline: 'none',
+                                                            background: '#eff6ff',
+                                                            padding: '4px 6px',
+                                                            fontSize: TK.cellFontSize,
+                                                            fontFamily: colId === 'debit' || colId === 'credit' ? 'JetBrains Mono, monospace' : TK.fontFamily,
+                                                            textAlign: colId === 'debit' || colId === 'credit' ? 'right' : 'left',
+                                                            boxSizing: 'border-box',
+                                                        }}
+                                                    />
+                                                ) : (
                                                 <div className="w-full text-left">
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </div>
+                                                )}
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 );
                             })}
@@ -1498,7 +2083,26 @@ export function TransactionsTable({
                         <div className="flex flex-col items-center justify-center h-full py-20">
                             <i className="ph ph-database text-[#cbd5e1] text-[64px] mb-4"></i>
                             <h3 className="text-[16px] font-semibold text-[#64748b] mb-2">No transactions found</h3>
-                            <p className="text-[13px] text-[#94a3b8]">Import a bank statement to get started</p>
+                            <p className="text-[13px] text-[#94a3b8] mb-4">Import a bank statement to get started</p>
+                            <button
+                                onClick={handleAddTransaction}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 20px',
+                                    background: '#3b82f6',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    color: 'white',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <i className="ph ph-plus-circle" style={{ fontSize: '15px' }}></i>
+                                Add Manual Transaction
+                            </button>
                         </div>
                     )}
                 </div>
@@ -1520,26 +2124,96 @@ export function TransactionsTable({
                 onClose={() => setActivePanel(null)}
                 title={
                     activePanel === 'utility' ? 'Dashboard & Stats' :
-                        activePanel === 'report' ? 'Live Trial Balance' :
+                        activePanel === 'report' ? 'Trial Balance' :
                             'Panel'
                 }
                 defaultWidth={360}
                 minWidth={350}
                 maxWidth={450}
             >
-                {activePanel === 'utility' && <UtilityBar transactions={data} />}
+                {activePanel === 'utility' && (
+                    <UtilityBar
+                        transactions={data}
+                        activeFilter={activeFilterLabel}
+                        accounts={window.RoboLedger?.Accounts?.getActive?.() || window.RoboLedger?.Accounts?.getAll() || []}
+                        selectedAccount={window.UI_STATE?.selectedAccount || 'ALL'}
+                        onAccountChange={(value) => window.switchAccount?.(value)}
+                        onClearFilter={() => {
+                            const source = window._txGridAllData || data;
+                            window.__txGridSetData?.(source);
+                            setActiveFilterLabel(null);
+                            window._txGridActiveFilter = null;
+                        }}
+                        onFilterTransactions={(spec) => {
+                            // source = the current full unfiltered dataset at this level
+                            const source = window._txGridAllData || data;
+                            if (!window._txGridAllData) window._txGridAllData = source;
+
+                            if (!spec) {
+                                // Clear all
+                                window.__txGridSetData?.(source);
+                                window._txGridActiveFilter = null;
+                                setDrillStack([]);
+                            } else if (typeof spec.filter === 'function') {
+                                const filtered = source.filter(spec.filter);
+                                const label    = spec.label || 'Filtered';
+
+                                // Push a new level onto the drill stack
+                                // Each entry records: the label shown, the filtered rows, and the source
+                                setDrillStack(prev => [
+                                    ...prev,
+                                    { label, data: filtered, source }
+                                ]);
+
+                                window.__txGridSetData?.(filtered);
+                                window._txGridActiveFilter = label;
+
+                                // Update source pointer so next drill uses filtered as base
+                                window._txGridAllData = source;
+                            }
+                        }}
+                    />
+                )}
                 {activePanel === 'report' && (
                     <LiveReportPanel
                         reportType="trial-balance"
                         transactions={data}
                         selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
-                        onAccountClick={(accountCode) => {
-                            // Set category column filter
+                        onAccountClick={(accountCode, accountName) => {
+                            // Report mode drill: filter grid to this account's transactions
+                            // AND push to breadcrumb trail
+                            const source = window._txGridAllData || data;
+                            if (!window._txGridAllData) window._txGridAllData = source;
+
+                            const filtered = source.filter(tx =>
+                                tx.category === accountCode ||
+                                tx.gst_account === accountCode
+                            );
+                            const label = accountName
+                                ? `${accountCode} · ${accountName}`
+                                : accountCode;
+
+                            setDrillStack(prev => [...prev, {
+                                label,
+                                data: filtered,
+                                source,
+                            }]);
+
+                            window.__txGridSetData?.(filtered);
+                            window._txGridAllData = source;
+                            window._txGridActiveFilter = label;
+
+                            // Also set column filter so trial balance highlights the row
                             setColumnFilters([{ id: 'category', value: accountCode }]);
                         }}
                         onClearFilter={() => {
-                            // Clear category column filter
+                            // Clear both column filter and drill stack
                             setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
+                            const rootData = drillStack[0]?.source || window._txGridAllData || data;
+                            window.__txGridSetData?.(rootData);
+                            window._txGridAllData = rootData;
+                            window._txGridActiveFilter = null;
+                            setDrillStack([]);
                         }}
                     />
                 )}

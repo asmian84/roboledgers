@@ -24,14 +24,13 @@ BMO CHEQUING FORMAT:
      * Extracts from the ACTUAL debit/credit columns in the PDF
      */
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
+        this._getStmtId(statementText); // Pre-warm cache so parseLineWithAmounts can call without text arg
         this.lastLineMetadata = lineMetadata;
         const lines = statementText.split('\n');
         const transactions = [];
 
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-BMO] Starting metadata extraction for BMO...');
-        console.error('📄 [DEBUG-BMO] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         // Extract year from statement
         const yearMatch = statementText.match(/20\d{2}/);
@@ -55,7 +54,6 @@ BMO CHEQUING FORMAT:
         const openingMatch = statementText.match(/Opening balance.*?([\d,]+\.\d{2})/i);
         if (openingMatch) {
             openingBalance = parseFloat(openingMatch[1].replace(/,/g, ''));
-            console.log(`[BMO] Extracted opening balance: ${openingBalance}`);
         }
 
         const parsedMetadata = {
@@ -71,7 +69,6 @@ BMO CHEQUING FORMAT:
             openingBalance: openingBalance
         };
 
-        console.warn('🏁 [BMO] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         // Date pattern: "Apr 01", "May 16", etc. (Flexible, no start anchor)
         const dateRegex = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})/i;
@@ -83,7 +80,6 @@ BMO CHEQUING FORMAT:
             'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
         };
 
-        console.log('[BMO] Starting parse with', lines.length, 'lines');
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
@@ -164,7 +160,6 @@ BMO CHEQUING FORMAT:
             }
         }
 
-        console.log('[BMO] Parsing complete. Found', transactions.length, 'transactions.');
         return { transactions, metadata: parsedMetadata };
     }
 
@@ -232,7 +227,7 @@ BMO CHEQUING FORMAT:
         if (debit === 0 && credit === 0) return null;
 
         // Build audit data for source document viewing
-        const auditData = this.buildAuditData(fullLine, 'BMOSavingsParser');
+        const auditData = this.buildAuditData(fullLine, 'BMOSavingsParser', { statementId: this._getStmtId(), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
@@ -241,6 +236,7 @@ BMO CHEQUING FORMAT:
             debit: debit,
             credit: credit,
             balance: balance,
+            parser_ref: this._getStmtId() + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit,
             rawText: this.cleanRawText(fullLine)
@@ -251,6 +247,21 @@ BMO CHEQUING FORMAT:
         const creditKeywords = /deposit|credit\s+memo|refund|transfer\s+in|payroll|salary|interest\s+earned|e-?transfer\s+received|direct\s+deposit/i;
         return creditKeywords.test(description);
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'BMOSAV-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 // Expose to window for file:// compatibility

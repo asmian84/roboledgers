@@ -17,16 +17,13 @@ TD VISA FORMAT:
      * Parse TD Visa statement using regex
      */
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-TD-VISA] Starting metadata extraction for TD Visa...');
-        console.error('📄 [DEBUG-TD-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
-        console.log(`[TD-VISA] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
 
@@ -38,7 +35,6 @@ TD VISA FORMAT:
         const maskedMatch = statementText.match(/(?:Account\s+Number[:\s]+)?([4-6]\d{3}\s+[X\d]{2,4}\s+[X\d]{4}\s+\d{4})/i);
         if (maskedMatch) {
             accountNumber = maskedMatch[1]; // Full masked format: "4520 70XX XXXX 7298"
-            console.log(`[TD-VISA] Extracted full masked card: ${accountNumber}`);
         } else {
             // Fallback: Try unformatted (no spaces)
             const unformattedMatch = statementText.match(/(?:Account\s+Number[:\s]+)?([4-6]\d{3}[X\d]{8}\d{4})/i);
@@ -46,7 +42,6 @@ TD VISA FORMAT:
                 const raw = unformattedMatch[1];
                 // Format as XXXX XXXX XXXX XXXX
                 accountNumber = raw.match(/.{1,4}/g).join(' ');
-                console.log(`[TD-VISA] Extracted and formatted: ${accountNumber}`);
             }
         }
 
@@ -66,7 +61,6 @@ TD VISA FORMAT:
             institution: 'VISA',
             openingBalance: openingBalance
         };
-        console.warn('🏁 [TD-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -108,7 +102,6 @@ TD VISA FORMAT:
             }
         }
 
-        console.log(`[TD-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 
@@ -136,10 +129,15 @@ TD VISA FORMAT:
         // Parse amount (remove $ and - signs, keep just the number)
         const amountStr = amounts[0].replace(/[\$-]/g, '');
         const amount = parseFloat(amountStr.replace(/,/g, ''));
+        // TD Visa PDF: negative prefix (e.g. "-$1.00") = payment/refund
         const isNegative = amounts[0].includes('-');
-        const isPayment = /payment|credit|refund/i.test(description) || isNegative;
+        // CR suffix (defensive — some TD products may use it)
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback — avoid bare "credit" which appears in "CREDIT PURCHASE"
+        const isPaymentKeyword = /payment|paiement|merci|refund|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+        const isPayment = isNegative || hasCR || isPaymentKeyword;
 
-        const auditData = this.buildAuditData(originalLine, 'TDVisaParser');
+        const auditData = this.buildAuditData(originalLine, 'TDVisaParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
@@ -152,6 +150,7 @@ TD VISA FORMAT:
             _tag: 'Visa',
             _accountType: 'CreditCard',
             rawText: this.cleanRawText(originalLine),
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };
@@ -179,6 +178,21 @@ TD VISA FORMAT:
 
         return desc.replace(/,\s*,/g, ',').trim();
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'TDVISA-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.TDVisaParser = TDVisaParser;

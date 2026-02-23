@@ -18,31 +18,16 @@ AMEX FORMAT:
      * [PHASE 4] Now accepts lineMetadata for spatial tracking
      */
     async parse(statementText, inputMetadata = null, lineMetadata = []) {
-        // HEARTBEAT: Log progress every 100ms to detect where parsing hangs
-        let heartbeatId = null;
+        // Progress tracking for parse steps (heartbeat removed - was 100ms interval spam)
         let lastStep = 'START';
-        const startHeartbeat = () => {
-            heartbeatId = setInterval(() => {
-                console.log(`[AMEX-HEARTBEAT] Still alive at step: ${lastStep}`);
-            }, 100); // Log every 100ms
-        };
         const updateStep = (step) => {
             lastStep = step;
-            console.log(`[AMEX-PROGRESS] → ${step}`);
-        };
-        const stopHeartbeat = () => {
-            if (heartbeatId) clearInterval(heartbeatId);
         };
 
         try {
-            startHeartbeat();
             updateStep('Metadata extraction started');
 
             this.lastLineMetadata = lineMetadata;
-            // LOUD DIAGNOSTIC
-            console.warn('⚡ [EXTREME-AMEX] Starting metadata extraction for Amex...');
-            console.error('📄 [DEBUG-AMEX] First 1000 characters (RED for visibility):');
-            console.log(statementText.substring(0, 1000));
 
             // EXTRACT METADATA - Full masked card (IIN: 15 digits for Amex)
             // Amex format often: "XXXX XXXXX6 91001" or "3XXX XXXXXX X1001"
@@ -55,7 +40,6 @@ AMEX FORMAT:
 
             if (maskedMatch) {
                 accountNumber = maskedMatch[1].replace(/-/g, ' ').replace(/\s+/g, ' '); // Normalize
-                console.log(`[AMEX] Extracted full masked card: ${accountNumber}`);
             }
 
             // EXTRACTION FOR CARD TYPE (Platinum, Gold, etc)
@@ -77,8 +61,6 @@ AMEX FORMAT:
                 brand: 'AMEX',
                 id: 'CC-AMEX'
             };
-            console.warn('🏁 [AMEX] Extraction Phase Complete. Card:', metadata.accountNumber);
-
             updateStep('Extracting year');
             // YEAR DETECTION: Look for Statement Period or Closing Date year
             const yearRegex = /(?:Statement\s+Period|Closing\s+Date|Ending\s+in|20[23]\d)/gi;
@@ -89,8 +71,6 @@ AMEX FORMAT:
                 const fullYearMatch = statementText.match(/20\d{2}/);
                 if (fullYearMatch) currentYear = parseInt(fullYearMatch[0]);
             }
-            console.warn(`[AMEX] Detected Year: ${currentYear}`);
-
             const lines = statementText.split('\n');
             const transactions = [];
 
@@ -101,7 +81,6 @@ AMEX FORMAT:
             const previousBalanceMatch = statementText.match(/Previous\s+Balance\s+.*?([\d,]+\.\d{2})/i);
             if (previousBalanceMatch) {
                 openingBalance = parseFloat(previousBalanceMatch[1].replace(/,/g, ''));
-                console.log(`[AMEX] Extracted opening balance: ${openingBalance}`);
 
                 // Find exact coordinates from lineMetadata
                 if (lineMetadata && lineMetadata.length > 0) {
@@ -115,7 +94,6 @@ AMEX FORMAT:
                             height: balanceLine.height || 12,
                             width: 500  // Approx width to show full balance line
                         };
-                        console.log(`[AMEX] Found opening balance coords:`, openingBalanceCoords);
                     }
                 }
             }
@@ -128,7 +106,6 @@ AMEX FORMAT:
                 statementText.match(/Closing balance on [A-Za-z]+\s+\d{1,2},\s+\d{4}\s+.*?\$([\d,]+\.\d{2})/i);
             if (closingBalanceMatch) {
                 closingBalance = parseFloat(closingBalanceMatch[1].replace(/,/g, ''));
-                console.log(`[AMEX] Extracted closing balance: ${closingBalance}`);
 
                 // Find exact coordinates from lineMetadata
                 if (lineMetadata && lineMetadata.length > 0) {
@@ -145,7 +122,6 @@ AMEX FORMAT:
                             height: balanceLine.height || 12,
                             width: 500
                         };
-                        console.log(`[AMEX] Found closing balance coords: ${JSON.stringify(closingBalanceCoords)}`);
                     }
                 }
             }
@@ -164,9 +140,7 @@ AMEX FORMAT:
                     const month = endDateMatch[1].toUpperCase().substring(0, 3);
                     const year = endDateMatch[2];
                     statementId = `AMEX-${year}${month}`;
-                    console.log(`[AMEX] Generated statement ID: ${statementId}`);
                 }
-                console.log(`[AMEX] Extracted statement period: ${statementPeriod}`);
             }
 
             // NEW APPROACH: Amex PDFs have fragmented structure
@@ -186,9 +160,7 @@ AMEX FORMAT:
             const dateRegex = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(.+)/i;
             const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
-            console.log('%c[AMEX-DEBUG] Starting dual-phase scan...', 'color: orange; font-weight: bold');
             updateStep('Starting dual-phase scan');
-            console.log(`[AMEX-DEBUG] Starting dual-phase scan...`);
 
             // DUAL-PHASE: First scan for section boundaries and collect FX lines separately
             let currentSection = null;
@@ -201,7 +173,6 @@ AMEX FORMAT:
 
                 // Detect start of transaction section (positive lookahead)
                 if (line.match(/^New (Transactions|Purchases|Payments)/i)) {
-                    console.log(`%c✅ START SECTION ${sections.length + 1}: Line ${i} ${line}`, 'background: green; color: white; padding: 2px;');
                     if (currentSection) {
                         sections.push(currentSection);
                     }
@@ -216,7 +187,6 @@ AMEX FORMAT:
 
                 // Detect end of transaction section
                 if (line.match(/^Total of/i) && currentSection) {
-                    console.log(`%c🛑 STOP SECTION ${sections.length + 1}: Line ${i} ${line}`, 'background: red; color: white; padding: 2px;');
                     currentSection.endLine = i;
                     currentSection.endText = line;
                     sections.push(currentSection);
@@ -255,7 +225,6 @@ AMEX FORMAT:
                         pdfCoords: fxCoords,
                         lineIndex: i
                     });
-                    console.log(`[FX-COLLECT] Line ${i}: USD ${usdAmount} @ ${rate} = CAD ${cadAmount.toFixed(2)}`);
                 }
 
                 // If in active section, look for transaction lines AND amounts
@@ -278,7 +247,6 @@ AMEX FORMAT:
                         };
 
                         currentSection.amounts.push(amountData);
-                        console.log(`[TX-AMT] Line ${i} (Y=${amountData.coords?.y}): ${amt}`);
                     }
 
                     // SECOND: Capture transaction descriptions (lines with dates)
@@ -294,9 +262,6 @@ AMEX FORMAT:
                             const amt = parseFloat(amountMatch[1].replace(/,/g, ''));
                             const signedAmount = line.includes('-') ? -amt : amt;
                             currentSection.amounts.push(signedAmount);
-                            console.log(`[TX-EXTRACT] Line ${i}: "${description.substring(0, 30)}" → $${amt}`);
-                        } else {
-                            console.log(`[TX-NO-AMT] Line ${i}: "${description.substring(0, 30)}" (no amount on line)`);
                         }
 
                         // Capture PDF coordinates for this line
@@ -311,7 +276,6 @@ AMEX FORMAT:
                                 height: metaLine.height || 12,
                                 lineText: metaLine.text
                             };
-                            console.log(`[AMEX] Line ${i}: Matched "${description.substring(0, 40)}" to PDF coords page ${pdfCoords.page} Y=${pdfCoords.top}`);
                         }
 
                         currentSection.descriptions.push({
@@ -326,33 +290,27 @@ AMEX FORMAT:
 
             }
 
-            // Log all detected sections
-            console.log(`%c📋 Found ${sections.length} transaction sections`, 'background: orange; color: white; padding: 4px; font-weight: bold;');
-            sections.forEach((s, idx) => {
-                console.log(`%cSection ${idx + 1}: ${s.descriptions.length} descriptions, ${s.amounts.length} amounts`, 'color: blue');
-                console.log(`  Start: "${s.startText?.substring(0, 60)}"`);
-                console.log(`  End: "${s.endText?.substring(0, 60)}"`);
-                if (s.descriptions.length > 0) {
-                    console.log(`  First desc: "${s.descriptions[0].rawLine.substring(0, 60)}"`);
-                }
-            });
-
-            // Use the LAST section (typically the actual statement period transactions)
-            // Earlier sections are often summary/bulk categorizations
-            const targetSection = sections[sections.length - 1];
-            if (!targetSection) {
-                console.warn('[AMEX] No transaction sections found!');
+            // Merge ALL sections that have transactions (not just the last one)
+            // This prevents data loss when statements have multiple transaction sections
+            // (e.g., pending + posted, or multi-period statements)
+            if (sections.length === 0) {
                 descriptionLines = [];
                 amountLines = [];
+            } else if (sections.length === 1) {
+                descriptionLines = sections[0].descriptions;
+                amountLines = sections[0].amounts;
             } else {
-                console.log(`🎯 Using Section ${targetSection.sectionIndex} (last section)`);
-                updateStep(`Processing section ${targetSection.sectionIndex} with ${targetSection.descriptions.length} descriptions`);
+                // Multiple sections: use the one with the MOST transactions
+                // (the actual statement section, not summary/header sections)
+                const targetSection = sections.reduce((best, s) =>
+                    s.descriptions.length > best.descriptions.length ? s : best
+                , sections[0]);
+                updateStep(`Processing section ${targetSection.sectionIndex} with ${targetSection.descriptions.length} descriptions (largest of ${sections.length} sections)`);
                 descriptionLines = targetSection.descriptions;
                 amountLines = targetSection.amounts;
             }
 
             // Match descriptions with amounts by SPATIAL PROXIMITY (not position!)
-            console.log(`[AMEX] Found ${descriptionLines.length} descriptions, ${amountLines.length} amounts`);
             updateStep('Matching descriptions with amounts by spatial proximity');
 
             // Create a copy of amounts for matching (to track which have been used)
@@ -388,22 +346,17 @@ AMEX FORMAT:
                     if (matchedIndex >= 0) {
                         // Remove matched amount from available pool
                         availableAmounts[matchedIndex] = null;
-                        console.log(`[SPATIAL-MATCH] "${desc.description.substring(0, 30)}" (Y=${descY}) ← $${Math.abs(matchedAmount).toFixed(2)} (distance: ${minDistance}px)`);
-                    } else {
-                        console.log(`[NO-MATCH] "${desc.description.substring(0, 30)}" (Y=${descY}) - no nearby amount found`);
                     }
                 } else {
                     // Fallback: use position-based matching if no coordinates
                     if (i < availableAmounts.length && availableAmounts[i]) {
                         matchedAmount = availableAmounts[i].amount || availableAmounts[i];  // Handle both formats
                         availableAmounts[i] = null;
-                        console.log(`[POSITION-MATCH] "${desc.description.substring(0, 30)}" ← $${Math.abs(matchedAmount).toFixed(2)} (no coords, fallback to position)`);
                     }
                 }
 
                 if (matchedAmount === null) {
-                    console.warn(`[AMEX] No amount matched for: ${desc.description}`);
-                    continue;  // Skip this transaction
+                    continue;  // Skip this transaction - no amount matched
                 }
 
                 const amount = Math.abs(matchedAmount);
@@ -437,17 +390,10 @@ AMEX FORMAT:
             }
 
             // POST-PROCESSING: Match FX lines to transactions by amount
-            console.log(`[FX-MATCH] Attempting to match ${fxLines.length} FX lines to ${transactions.length} transactions`);
-
             for (const fxLine of fxLines) {
                 // Find transaction with matching CAD amount (within $0.50 tolerance for rounding)
                 const matchedTx = transactions.find(tx => {
-                    const matches = tx.debit > 0 && Math.abs(tx.debit - fxLine.cadAmount) <= 0.50;
-                    if (tx.debit > 0) {
-                        const diff = Math.abs(tx.debit - fxLine.cadAmount);
-                        console.log(`  [FX-COMPARE] "${tx.description.substring(0, 25)}" debit=$${tx.debit.toFixed(2)} vs FX CAD=$${fxLine.cadAmount.toFixed(2)} (diff: $${diff.toFixed(2)}) ${matches ? '✅' : '❌'}`);
-                    }
-                    return matches;
+                    return tx.debit > 0 && Math.abs(tx.debit - fxLine.cadAmount) <= 0.50;
                 });
 
                 if (matchedTx) {
@@ -460,15 +406,10 @@ AMEX FORMAT:
                         coords: fxLine.pdfCoords,
                         type: 'continuation'
                     });
-
-                    console.log(`[FX-MATCH] ✅ Matched FX line (USD ${fxLine.usdAmount} @ ${fxLine.rate} = CAD ${fxLine.cadAmount.toFixed(2)}) to transaction: ${matchedTx.description} (CAD ${matchedTx.debit.toFixed(2)})`);
-                } else {
-                    console.log(`[FX-MATCH] ❌ No match for FX line: CAD ${fxLine.cadAmount.toFixed(2)} (USD ${fxLine.usdAmount} @ ${fxLine.rate})`);
                 }
             }
 
             updateStep('Finalizing parse - building return object');
-            console.log(`[AMEX] Parsed ${transactions.length} transactions`);
             return {
                 transactions,
                 metadata,
@@ -480,7 +421,6 @@ AMEX FORMAT:
             };
         } finally {
             updateStep('COMPLETE');
-            stopHeartbeat();
         }
     }
 
@@ -498,7 +438,9 @@ AMEX FORMAT:
             "INTEREST CHARGE", "MEMBERSHIP FEE", "LATE FEE", "FOREIGN TRANSACTION FEE"
         ]);
 
-        const isPayment = amount < 0 || /payment|credit|thank you/i.test(description);
+        // Amex PDF: negative amount = payment/refund; avoid bare "credit" which appears in "CREDIT PURCHASE"
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        const isPayment = amount < 0 || hasCR || /payment|refund|thank you|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
         const absAmount = Math.abs(amount);
 
         // Build audit data for source document viewing

@@ -2,34 +2,34 @@ import React from 'react';
 
 /**
  * ReportHeader - Professional Caseware-style report header
- * Matches Jazzit template formatting with proper typography and borders
+ * Inherits font-family and font-size from parent zoom/font controls
  */
 export function ReportHeader({
-    companyName = 'RoboLedger Company',
+    companyName = window.UI_STATE?.activeClientName || 'Your Company',
     reportTitle,
     period,
     subtitle
 }) {
     return (
         <div className="report-header">
-            {/* Company Name - 11pt Bold */}
+            {/* Company Name */}
             <div className="text-center mb-1">
-                <h1 className="text-[11pt] font-bold text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+                <h1 className="font-bold text-gray-900" style={{ fontSize: '1.15em' }}>
                     {companyName}
                 </h1>
             </div>
 
-            {/* Report Title - 11pt Bold */}
+            {/* Report Title */}
             <div className="text-center mb-1">
-                <h2 className="text-[11pt] font-bold text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+                <h2 className="font-bold text-gray-900" style={{ fontSize: '1.15em' }}>
                     {reportTitle}
                 </h2>
             </div>
 
-            {/* Period/Subtitle - 11pt Bold */}
+            {/* Period/Subtitle */}
             {(period || subtitle) && (
                 <div className="text-center mb-3">
-                    <p className="text-[11pt] font-bold text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+                    <p className="font-bold text-gray-900" style={{ fontSize: '1.15em' }}>
                         {period || subtitle}
                     </p>
                 </div>

@@ -1,28 +1,576 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import ReportFilters from './components/ReportFilters.jsx';
+import { ReportControlsBar, FONTS } from './components/ReportControlsBar.jsx';
+import { AJEFormPanel } from './components/AJEFormPanel.jsx';
+import { AnnotationPopover } from './components/AnnotationPopover.jsx';
+import { AccountDrillDown } from './components/AccountDrillDown.jsx';
 
 /**
- * TrialBalanceReport - Verify debits = credits
+ * TrialBalanceReport - Multiple view modes inspired by Caseware Working Papers
+ *
+ * Views:
+ *   1. Leadsheet   — Grouped by Caseware leadsheet (L/S) codes with subtotals
+ *   2. Account      — Flat list sorted by account number (classic TB)
+ *   3. Type         — Grouped by account type (Asset, Liability, Equity, Revenue, Expense)
+ *
+ * Features:
+ *   - Opening balances import (QB / Caseware TB CSV) → comparative "Prior Year" column
+ *   - Equity / Retained Earnings synthesised from opening balances + net income
  */
+
+// ─── Opening Balances store (session-level, keyed by COA code string) ────────
+// window.RoboLedger._tbOpeningBalances = { '3999': 125000, '3000': 50000, ... }
+function getOpeningBalances() {
+    return window.RoboLedger?._tbOpeningBalances || {};
+}
+function setOpeningBalances(map) {
+    if (!window.RoboLedger) window.RoboLedger = {};
+    window.RoboLedger._tbOpeningBalances = map;
+}
+
+// ─── QB / Caseware CSV parser ─────────────────────────────────────────────────
+/**
+ * Parses a Trial Balance CSV exported from QuickBooks or Caseware.
+ *
+ * QuickBooks format (comma-separated):
+ *   Account, Debit, Credit, Balance
+ *   1040 Savings account #2, 398094.65, 0.00, 398094.65
+ *
+ * Caseware format (tab or comma-separated):
+ *   Ref No, Account Description, Debit, Credit, Balance
+ *   1040, Savings account #2, 398094.65, , 398094.65
+ *
+ * Returns: { [coaCode]: { name, debit, credit, balance } }
+ */
+function parseTBCsv(csvText) {
+    const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return null;
+
+    // Detect delimiter
+    const firstLine = lines[0];
+    const delimiter = firstLine.includes('\t') ? '\t' : ',';
+
+    // Parse header to find column indices
+    const headers = firstLine.split(delimiter).map(h => h.replace(/"/g, '').trim().toLowerCase());
+
+    const codeIdx    = headers.findIndex(h => /^(code|account\s*code|ref|ref\s*no|number|acct)$/i.test(h));
+    const nameIdx    = headers.findIndex(h => /^(account|account\s*name|description|name|account\s*description)$/i.test(h));
+    const debitIdx   = headers.findIndex(h => /^(debit|dr)$/i.test(h));
+    const creditIdx  = headers.findIndex(h => /^(credit|cr)$/i.test(h));
+    const balanceIdx = headers.findIndex(h => /^(balance|net|closing)$/i.test(h));
+
+    // Fall back: QB sometimes merges code into account name like "1040 Savings account #2"
+    const hasExplicitCode = codeIdx >= 0;
+
+    const result = {};
+    const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const parts = splitCsvLine(lines[i], delimiter);
+        if (parts.length < 2) continue;
+
+        const rawName = nameIdx >= 0 ? parts[nameIdx]?.replace(/"/g, '').trim() : parts[0]?.replace(/"/g, '').trim();
+        if (!rawName) continue;
+
+        // Skip header-like rows
+        if (/^(total|grand\s*total|subtotal|net\s*income|retained|opening)/i.test(rawName)) continue;
+
+        let code = '';
+        let name = rawName;
+
+        if (hasExplicitCode && parts[codeIdx]) {
+            code = parts[codeIdx].replace(/"/g, '').trim();
+        } else {
+            // QB format: "1040 Savings account #2" — extract leading numeric code
+            const m = rawName.match(/^(\d{3,5})\s+(.+)$/);
+            if (m) { code = m[1]; name = m[2]; }
+        }
+
+        // Try to match to COA by code first, then by name fuzzy
+        let matchedCode = code;
+        if (!matchedCode || !allCOA.find(a => String(a.code) === matchedCode)) {
+            const nameLower = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const byName = allCOA.find(a => {
+                const aName = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return aName === nameLower || aName.startsWith(nameLower) || nameLower.startsWith(aName);
+            });
+            if (byName) matchedCode = String(byName.code);
+        }
+
+        if (!matchedCode) continue;
+
+        const parseAmt = (v) => {
+            if (!v) return 0;
+            const s = String(v).replace(/"/g, '').replace(/[$, ]/g, '').trim();
+            if (!s || s === '-' || s === '—') return 0;
+            return parseFloat(s) || 0;
+        };
+
+        const debit   = debitIdx   >= 0 ? parseAmt(parts[debitIdx])   : 0;
+        const credit  = creditIdx  >= 0 ? parseAmt(parts[creditIdx])  : 0;
+        const balance = balanceIdx >= 0 ? parseAmt(parts[balanceIdx]) : (debit - credit);
+
+        result[matchedCode] = { name, debit, credit, balance };
+    }
+
+    return Object.keys(result).length > 0 ? result : null;
+}
+
+function splitCsvLine(line, delimiter) {
+    if (delimiter !== ',') return line.split(delimiter);
+    // Handle quoted commas in CSV
+    const result = [];
+    let inQuote = false, cur = '';
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { inQuote = !inQuote; }
+        else if (c === ',' && !inQuote) { result.push(cur); cur = ''; }
+        else { cur += c; }
+    }
+    result.push(cur);
+    return result;
+}
+
+// ─── PDF Trial Balance parser ─────────────────────────────────────────────────
+/**
+ * Extracts text from a Caseware Working Papers or QuickBooks TB PDF printout.
+ *
+ * CASEWARE WORKING PAPERS TB FORMAT (from real printouts):
+ * ──────────────────────────────────────────────────────────
+ * Page header: company name, "Trial Balance", period, "Prepared by / Date"
+ *
+ * Column header row (right-aligned labels over numeric columns):
+ *   [blank]                         Debit        Credit       Balance
+ *
+ * Data rows — two common layouts:
+ *   A) Code LEFT + Name RIGHT of code + numbers right-aligned in columns
+ *      "  1040   Bank - chequing                  398,094.65               398,094.65"
+ *
+ *   B) Name only (no code) + single net balance column (simpler CW exports)
+ *      "  Bank - chequing                                                  398,094.65"
+ *
+ * Section headers (group rows, no numbers):
+ *   "  ASSETS"  or  "  Current Assets"  (bold, no numbers on that line)
+ *
+ * Subtotal rows:
+ *   "  Total Current Assets                    xxx,xxx.xx               xxx,xxx.xx"
+ *   "  Total Assets                            xxx,xxx.xx               xxx,xxx.xx"
+ *
+ * Sign convention:
+ *   - Caseware uses PARENTHESES for negative amounts: (125,000.00)
+ *   - Some versions use a trailing minus:  125,000.00-
+ *   - Credits on liability/equity/revenue accounts are shown as positive Balance
+ *
+ * QUICKBOOKS ONLINE TB PDF:
+ *   Company name, "Trial Balance", "As of DATE"
+ *   Column headers: DEBIT  CREDIT  (no Balance column — balance is implied)
+ *   OR: single TOTAL column
+ *
+ * Strategy:
+ *   1. Extract all text items with (x, y) coordinates from every page
+ *   2. Group by y-position into "lines" (3pt bucket tolerance for sub-pixels)
+ *   3. Find the column header line → record exact x-positions of Debit/Credit/Balance
+ *   4. For each data row: bucket items into left-side (code+name) vs numeric columns
+ *   5. Parse amounts — handle parentheses, trailing minus, commas, dollar signs
+ *   6. Match to COA by code (exact) then by name (fuzzy)
+ *   7. Fallback: reconstruct as plain text → feed to parseTBCsv
+ */
+async function parseTBPdf(arrayBuffer) {
+    const pdfjsLib = window.pdfjsLib;
+    if (!pdfjsLib) throw new Error('PDF.js not available');
+
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    // ── Step 1: Extract all text items with coordinates, all pages ────────────
+    const allLines = []; // Each entry: Array<{ x, y, text, width }>
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+        const page    = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const vp      = page.getViewport({ scale: 1.0 });
+
+        // Bucket items into lines by y-position (3pt tolerance handles sub-pixel variations)
+        const lineMap = {};
+        content.items.forEach(item => {
+            if (!item.str?.trim()) return;
+            const rawY = item.transform[5];
+            const x    = item.transform[4];
+            // Round to nearest 3pt bucket
+            const yKey = Math.round(rawY / 3) * 3;
+            if (!lineMap[yKey]) lineMap[yKey] = [];
+            lineMap[yKey].push({
+                x,
+                y:    rawY,
+                text: item.str,
+                w:    item.width || 0,
+            });
+        });
+
+        // Sort lines top-to-bottom (PDF y=0 is bottom, so descending = top-first)
+        const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
+        sortedYs.forEach(yKey => {
+            const items = lineMap[yKey].sort((a, b) => a.x - b.x);
+            allLines.push(items);
+        });
+    }
+
+    // ── Step 2: Find the column header line ───────────────────────────────────
+    // Caseware:   [blank]            Debit        Credit       Balance
+    // QB Online:  [blank]            Debit        Credit
+    // QB Desktop: [blank]            Debit        Credit       Balance
+    // Some CW:    Ref No  Account Description    Debit  Credit  Balance
+
+    let debitX = null, creditX = null, balanceX = null;
+    let headerLineIdx = -1;
+
+    for (let i = 0; i < allLines.length; i++) {
+        const line  = allLines[i];
+        const texts = line.map(item => item.text.trim().toUpperCase());
+        const joined = texts.join(' ');
+
+        // Look for a line that contains at least DEBIT and CREDIT (case-insensitive)
+        if (/\bDEBIT\b/.test(joined) && /\bCREDIT\b/.test(joined)) {
+            const debitItem  = line.find(item => /^DEBIT$/i.test(item.text.trim()));
+            const creditItem = line.find(item => /^CREDIT$/i.test(item.text.trim()));
+            const balItem    = line.find(item => /^BALANCE$/i.test(item.text.trim()));
+
+            if (debitItem && creditItem) {
+                // For right-aligned column headers the x is the left edge of the text —
+                // the actual column right edge = x + width. Use the right edge as anchor.
+                debitX  = debitItem.x  + (debitItem.w  || 0);
+                creditX = creditItem.x + (creditItem.w || 0);
+                balanceX = balItem ? (balItem.x + (balItem.w || 0)) : creditX + 90;
+                headerLineIdx = i;
+                break;
+            }
+        }
+    }
+
+    // ── Step 3: If no explicit header found, try plain-text reconstruction ────
+    if (debitX === null) {
+        const textLines = allLines
+            .map(line => line.map(i => i.text).filter(t => t.trim()).join('  '))
+            .filter(l => l.trim());
+        return parseTBCsv(textLines.join('\n'));
+    }
+
+    // ── Step 4: Define column x-boundaries ───────────────────────────────────
+    // Each numeric column spans roughly 80–100 pts wide, right-aligned.
+    // We define a "slot" as [rightEdge - slotWidth, rightEdge].
+    const SLOT_W  = 100; // pts — wide enough to catch all digits
+    const NAME_MAX = debitX - SLOT_W - 10; // everything left of here = code/name region
+
+    const inDebitSlot   = (x) => x > (debitX  - SLOT_W) && x <= (debitX  + 20);
+    const inCreditSlot  = (x) => x > (creditX - SLOT_W) && x <= (creditX + 20);
+    const inBalanceSlot = (x) => x > (balanceX - SLOT_W) && x <= (balanceX + 20);
+    const inNameRegion  = (x) => x < NAME_MAX;
+
+    // ── Step 5: Amount parser — handles parentheses, trailing minus, commas ──
+    const parseAmt = (v) => {
+        if (!v) return null;
+        let s = String(v).replace(/[$\s,]/g, '').trim();
+        if (!s || s === '-' || s === '—' || s === '') return null;
+        // Parentheses = negative: (125000.00) → -125000.00
+        const isNeg = s.startsWith('(') && s.endsWith(')');
+        const hasTrailingMinus = s.endsWith('-');
+        s = s.replace(/[()]/g, '').replace(/-$/, '');
+        const n = parseFloat(s);
+        if (isNaN(n)) return null;
+        return isNeg || hasTrailingMinus ? -n : n;
+    };
+
+    // ── Step 6: Lines to skip (headers, totals, section labels, page noise) ──
+    const isSkipLine = (joined) => {
+        if (!joined.trim()) return true;
+        // Pure section headers (ASSETS, LIABILITIES, etc.) — no numbers on the line
+        if (/^(assets?|liabilit|equity|revenue|income|expense|cost\s+of|total\s+|subtotal|grand\s*total|net\s*income|net\s*loss|retained earn|opening|closing|prepared\s*by|partner|working\s*paper|trial\s*balance|balance\s*sheet|income\s*statement|period\s*end|as\s*of\s*|page\s*\d)/i.test(joined.trim())) return true;
+        // Column header row
+        if (/\bDEBIT\b.*\bCREDIT\b/i.test(joined)) return true;
+        return false;
+    };
+
+    // ── Step 7: Parse data rows ───────────────────────────────────────────────
+    const result = {};
+    const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+
+    for (let i = 0; i < allLines.length; i++) {
+        if (i <= headerLineIdx) continue; // skip everything above/including header
+
+        const line  = allLines[i];
+        const joined = line.map(item => item.text).join(' ').trim();
+        if (isSkipLine(joined)) continue;
+
+        // Collect items by column region
+        const nameItems   = line.filter(item => inNameRegion(item.x));
+        const debitItems  = line.filter(item => inDebitSlot(item.x));
+        const creditItems = line.filter(item => inCreditSlot(item.x));
+        const balItems    = line.filter(item => inBalanceSlot(item.x));
+
+        const leftText = nameItems.map(i => i.text).join(' ').trim();
+        if (!leftText) continue;
+
+        // Skip pure section/group headers (lines with no numeric content at all)
+        const hasAnyNumber = debitItems.length > 0 || creditItems.length > 0 || balItems.length > 0;
+        if (!hasAnyNumber) continue;
+
+        // Extract code + name from left region
+        // Caseware: code is a separate left-most item, name is next items
+        // Sometimes code is embedded: "1040  Bank - chequing"
+        let code = '', name = leftText;
+
+        // If leftText starts with a 4-digit code
+        const codePrefixMatch = leftText.match(/^(\d{3,5})\s{2,}(.+)$/);
+        if (codePrefixMatch) {
+            code = codePrefixMatch[1];
+            name = codePrefixMatch[2].trim();
+        } else if (nameItems.length >= 2) {
+            // First item might be the code (pure numeric)
+            const firstItem = nameItems[0].text.trim();
+            if (/^\d{3,5}$/.test(firstItem)) {
+                code = firstItem;
+                name = nameItems.slice(1).map(i => i.text).join(' ').trim();
+            }
+        }
+
+        // Parse amounts — join multi-item cells (e.g. "$" and "398,094.65" as separate PDF items)
+        const debitStr  = debitItems.map(i => i.text).join('').trim();
+        const creditStr = creditItems.map(i => i.text).join('').trim();
+        const balStr    = balItems.map(i => i.text).join('').trim();
+
+        const debit   = parseAmt(debitStr)  ?? 0;
+        const credit  = parseAmt(creditStr) ?? 0;
+        const balance = parseAmt(balStr);
+
+        // Derived balance if not present
+        const finalBalance = balance !== null ? balance : (debit - credit);
+
+        // Skip rows that appear to be zero-everything (likely blank or noise)
+        if (debit === 0 && credit === 0 && finalBalance === 0 && !code) continue;
+
+        // COA matching: code exact → code fuzzy → name fuzzy
+        let matchedCode = '';
+
+        if (code) {
+            // Exact code match
+            if (allCOA.find(a => String(a.code) === code)) {
+                matchedCode = code;
+            }
+        }
+
+        if (!matchedCode) {
+            // Name fuzzy match
+            const nameLower = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const byName = allCOA.find(a => {
+                const aName = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return aName === nameLower
+                    || (nameLower.length > 5 && aName.startsWith(nameLower.slice(0, 8)))
+                    || (nameLower.length > 5 && nameLower.startsWith(aName.slice(0, 8)));
+            });
+            if (byName) matchedCode = String(byName.code);
+        }
+
+        if (!matchedCode && code) {
+            // Keep unmatched codes anyway — user may have custom COA
+            matchedCode = code;
+        }
+
+        if (!matchedCode) continue;
+
+        // Deduplicate: if we already have this code, accumulate (handles multi-page runs)
+        if (result[matchedCode]) {
+            result[matchedCode].debit  += debit;
+            result[matchedCode].credit += credit;
+            result[matchedCode].balance = result[matchedCode].debit - result[matchedCode].credit;
+        } else {
+            result[matchedCode] = { name, debit, credit, balance: finalBalance };
+        }
+    }
+
+    if (Object.keys(result).length > 0) return result;
+
+    // ── Fallback: plain-text reconstruction → CSV parser ─────────────────────
+    const textLines = allLines
+        .map(line => line.map(i => i.text).filter(t => t.trim()).join('  '))
+        .filter(l => l.trim());
+    return parseTBCsv(textLines.join('\n'));
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export function TrialBalanceReport() {
-    const [reportData, setReportData] = useState(null);
-    const [dateRange, setDateRange] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [reportData, setReportData]           = useState(null);
+    const [dateRange, setDateRange]             = useState(null);
+    const [loading, setLoading]                 = useState(false);
+    const [viewMode, setViewMode]               = useState('leadsheet'); // 'leadsheet' | 'account' | 'type'
+    const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+    const [zoom, setZoom] = useState(100);
+    const [textSize, setTextSize] = useState(13); // px base
+    const [fontFamily, setFontFamily] = useState('system'); // system, serif, mono, caseware
+    // Opening balances (comparative prior-year column)
+    const [openingBalances, setOpeningBalancesState] = useState(getOpeningBalances());
+    const [showImport, setShowImport]           = useState(false);
+    const [importError, setImportError]         = useState('');
+    const [importPreview, setImportPreview]     = useState(null); // parsed result before committing
+    const [importParsing, setImportParsing]     = useState(false); // PDF extraction in progress
+    const fileRef = useRef(null);
+
+    // ─── Phase 1: Split-screen AJE Panel ───────────────────────────────────────
+    const [showAJEPanel, setShowAJEPanel] = useState(false);
+    const [showAdjustments, setShowAdjustments] = useState(false);
+    const [ajeVersion, setAjeVersion] = useState(0); // bump to force TB refresh after posting
+
+    // ─── Phase 2: Annotations + Editable Names + Comparative Toggle ────────────
+    const [annotations, setAnnotations] = useState(() => {
+        try {
+            const stored = window.RoboLedger?._tbAnnotations;
+            return stored || {};
+        } catch { return {}; }
+    });
+    const [editingAccountCode, setEditingAccountCode] = useState(null);
+    const [editValue, setEditValue] = useState('');
+    const [showComparative, setShowComparative] = useState(true); // toggle for comparative columns
+
+    // ─── Phase 3: GIFI + Profile Export ────────────────────────────────────────
+    const [showGIFI, setShowGIFI] = useState(false);
+    const [expandedAccount, setExpandedAccount] = useState(null); // COA code for drill-down
+
+    // ─── Keyboard shortcut: Shift+A toggles AJE panel ──────────────────────────
+    useEffect(() => {
+        const handler = (e) => {
+            if (e.shiftKey && e.key === 'A' && !e.ctrlKey && !e.metaKey) {
+                // Don't trigger when typing in an input
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                e.preventDefault();
+                setShowAJEPanel(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, []);
+
+    // ─── Persist annotations ───────────────────────────────────────────────────
+    const updateAnnotation = useCallback((code, ann) => {
+        setAnnotations(prev => {
+            const next = { ...prev };
+            if (!ann) { delete next[code]; } else { next[code] = ann; }
+            // Persist
+            if (!window.RoboLedger) window.RoboLedger = {};
+            window.RoboLedger._tbAnnotations = next;
+            try {
+                const _SS = window.StorageService;
+                if (_SS) _SS.set('roboledger_tb_annotations', next);
+                else localStorage.setItem('roboledger_tb_annotations', JSON.stringify(next));
+            } catch (e) { /* ignore */ }
+            return next;
+        });
+    }, []);
+
+    // ─── Load annotations from storage on mount ────────────────────────────────
+    useEffect(() => {
+        try {
+            const _SS = window.StorageService;
+            const stored = _SS ? _SS.get('roboledger_tb_annotations') : JSON.parse(localStorage.getItem('roboledger_tb_annotations') || '{}');
+            if (stored && Object.keys(stored).length > 0) {
+                setAnnotations(stored);
+                if (!window.RoboLedger) window.RoboLedger = {};
+                window.RoboLedger._tbAnnotations = stored;
+            }
+        } catch { /* ignore */ }
+    }, []);
+
+    // ─── Editable account name handler ─────────────────────────────────────────
+    const startEditName = (code, currentName) => {
+        setEditingAccountCode(code);
+        setEditValue(currentName);
+    };
+    const saveEditName = (code) => {
+        if (!editValue.trim()) { setEditingAccountCode(null); return; }
+        const coa = window.RoboLedger?.COA;
+        if (coa?.setName) {
+            coa.setName(code, editValue.trim());
+        } else if (coa?.get) {
+            const entry = coa.get(code);
+            if (entry) { entry.name = editValue.trim(); coa.save?.(); }
+        }
+        setEditingAccountCode(null);
+        // Force re-render
+        if (dateRange) generateReport(dateRange);
+    };
+
+    // ─── AJE Impact computation ────────────────────────────────────────────────
+    const getAJEImpact = useCallback(() => {
+        const impact = {}; // { [coaCode]: { debit: number, credit: number } }
+        const entries = window.RoboLedger?.Ledger?.getJournalEntries?.() || [];
+        for (const entry of entries) {
+            if (!entry.lines) continue;
+            // Filter by period if we have a date range
+            if (dateRange && (entry.date < dateRange.start || entry.date > dateRange.end)) continue;
+            for (const line of entry.lines) {
+                const code = line.account_code;
+                if (!code) continue;
+                if (!impact[code]) impact[code] = { debit: 0, credit: 0 };
+                impact[code].debit += (line.debit || 0);
+                impact[code].credit += (line.credit || 0);
+            }
+        }
+        return impact;
+    }, [dateRange, ajeVersion]);
+
+    // ─── Profile (Intuit Tax Software) Export ──────────────────────────────────
+    const exportForProfile = () => {
+        if (!reportData) return;
+        const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+        const groups = getGroupedAccounts();
+        const allAccounts = groups.flatMap(g => g.accounts);
+        const ajeImpact = showAdjustments ? getAJEImpact() : {};
+
+        const rows = [['GIFI Code', 'Account Code', 'Account Name', 'Debit', 'Credit', 'Adjusted Balance']];
+        allAccounts
+            .filter(acc => {
+                const net = acc.debit - acc.credit;
+                const adj = ajeImpact[String(acc.code)] || { debit: 0, credit: 0 };
+                const adjustedBal = net + adj.debit - adj.credit;
+                return Math.abs(adjustedBal) > 0.005;
+            })
+            .sort((a, b) => {
+                const aGifi = String(allCOA.find(c => String(c.code) === String(a.code))?.mapNo || '');
+                const bGifi = String(allCOA.find(c => String(c.code) === String(b.code))?.mapNo || '');
+                return aGifi.localeCompare(bGifi);
+            })
+            .forEach(acc => {
+                const coaEntry = allCOA.find(c => String(c.code) === String(acc.code));
+                const gifi = coaEntry?.mapNo || '';
+                const net = acc.debit - acc.credit;
+                const adj = ajeImpact[String(acc.code)] || { debit: 0, credit: 0 };
+                const adjustedBal = net + adj.debit - adj.credit;
+                rows.push([
+                    gifi, acc.code, acc.name,
+                    adjustedBal > 0 ? adjustedBal.toFixed(2) : '',
+                    adjustedBal < 0 ? Math.abs(adjustedBal).toFixed(2) : '',
+                    adjustedBal.toFixed(2)
+                ]);
+            });
+
+        const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `trial-balance-profile-export-${dateRange?.end || 'current'}.csv`;
+        a.click();
+    };
 
     const generateReport = (range) => {
         if (!range?.start || !range?.end) return;
-
         setLoading(true);
         try {
             const generator = new ReportGenerator(
                 window.RoboLedger.Ledger,
                 window.RoboLedger.COA
             );
-
             const data = generator.generateTrialBalance(range.start, range.end);
             setReportData(data);
             setDateRange(range);
+            setCollapsedGroups(new Set());
         } catch (error) {
             console.error('[TRIAL_BALANCE] Generation failed:', error);
         } finally {
@@ -30,179 +578,1006 @@ export function TrialBalanceReport() {
         }
     };
 
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-CA', {
-            style: 'currency',
-            currency: 'CAD'
-        }).format(amount);
+    const fmt = (amount) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
+    const fmtAbs = (amount) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Math.abs(amount));
+
+    // ─── Synthesise equity rows from opening balances ────────────────────────
+    // Equity accounts (3xxx) don't appear in the transaction stream — they are
+    // seeded by the opening balances import.  We inject them as synthetic rows
+    // so they show up in the TB alongside operating accounts.
+    const getAccountsWithEquity = (baseAccounts) => {
+        const ob = openingBalances;
+        const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+        const existingCodes = new Set(baseAccounts.map(a => String(a.code)));
+        const extra = [];
+
+        // 1. Inject any opening-balance COA account not already present
+        allCOA.forEach(coaAcct => {
+            const key = String(coaAcct.code);
+            if (existingCodes.has(key)) return; // already has transactions
+            if (ob[key] === undefined) return;   // no opening balance set
+            const bal = ob[key]; // dollar amount
+            extra.push({
+                code: coaAcct.code,
+                name: coaAcct.name,
+                root: coaAcct.root || inferRoot(coaAcct.code),
+                leadsheet: coaAcct.leadsheet || '',
+                debit:  bal > 0 ? bal : 0,
+                credit: bal < 0 ? Math.abs(bal) : 0,
+                balance: bal,
+                _fromOpening: true,
+            });
+        });
+
+        // 2. Retained Earnings (3999) = opening RE + current-year net income
+        //    Net income = sum of revenue credits - sum of expense debits
+        const revTotal  = baseAccounts.filter(a => a.root === 'REVENUE')
+                            .reduce((s, a) => s + (a.credit - a.debit), 0);
+        const expTotal  = baseAccounts.filter(a => a.root === 'EXPENSE' || a.root === 'COGS')
+                            .reduce((s, a) => s + (a.debit - a.credit), 0);
+        const netIncome = revTotal - expTotal;
+
+        const openingRE    = ob['3999'] || 0;
+        const closingRE    = openingRE + netIncome;
+        const reCode       = '3999';
+        const reCoaAcct    = allCOA.find(a => String(a.code) === reCode);
+        const reName       = reCoaAcct?.name || 'Retained earnings';
+
+        if (!existingCodes.has(reCode)) {
+            // Not in transactions — add synthetic RE row
+            if (closingRE !== 0 || openingRE !== 0) {
+                extra.push({
+                    code: reCode,
+                    name: reName,
+                    root: 'EQUITY',
+                    leadsheet: reCoaAcct?.leadsheet || 'TT',
+                    debit:  closingRE < 0 ? Math.abs(closingRE) : 0,
+                    credit: closingRE > 0 ? closingRE : 0,
+                    balance: -closingRE, // Equity is credit-normal → negative balance = equity
+                    _fromOpening: true,
+                    _isRetainedEarnings: true,
+                    _netIncome: netIncome,
+                    _openingRE: openingRE,
+                });
+            }
+        } else {
+            // Already has transactions — annotate for tooltip display
+            const reRow = baseAccounts.find(a => String(a.code) === reCode);
+            if (reRow) {
+                reRow._isRetainedEarnings = true;
+                reRow._netIncome = netIncome;
+                reRow._openingRE = openingRE;
+            }
+        }
+
+        return [...baseAccounts, ...extra];
     };
 
+    // ─── Grouping Logic ───────────────────────────────────────────────────────
+    const getGroupedAccounts = () => {
+        if (!reportData?.accounts) return [];
+        const COA = window.RoboLedger?.COA;
+
+        const allAccounts = getAccountsWithEquity(reportData.accounts);
+
+        if (viewMode === 'account') {
+            const sorted = [...allAccounts].sort((a, b) => String(a.code).localeCompare(String(b.code)));
+            const td = sorted.reduce((s, a) => s + a.debit, 0);
+            const tc = sorted.reduce((s, a) => s + a.credit, 0);
+            return [{ code: 'ALL', name: 'All Accounts', accounts: sorted, totalDebit: td, totalCredit: tc }];
+        }
+
+        if (viewMode === 'type') {
+            const typeOrder = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'];
+            const typeNames = { ASSET: 'Assets', LIABILITY: 'Liabilities', EQUITY: 'Equity', REVENUE: 'Revenue', EXPENSE: 'Expenses' };
+            const groups = {};
+            allAccounts.forEach(acc => {
+                const root = acc.root || COA?.inferRoot?.(acc.code) || 'EXPENSE';
+                if (!groups[root]) groups[root] = { code: root, name: typeNames[root] || root, accounts: [], totalDebit: 0, totalCredit: 0 };
+                groups[root].accounts.push(acc);
+                groups[root].totalDebit  += acc.debit;
+                groups[root].totalCredit += acc.credit;
+            });
+            return typeOrder.filter(t => groups[t]).map(t => {
+                groups[t].accounts.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+                return groups[t];
+            });
+        }
+
+        // Default: leadsheet
+        const lsOrder = COA?.getLeadsheetOrder?.() || [];
+        const groups = {};
+        allAccounts.forEach(acc => {
+            const ls = acc.leadsheet || COA?.getLeadsheet?.(acc.code) || '40';
+            if (!groups[ls]) groups[ls] = { code: ls, name: COA?.getLeadsheetName?.(ls) || ls, accounts: [], totalDebit: 0, totalCredit: 0 };
+            groups[ls].accounts.push(acc);
+            groups[ls].totalDebit  += acc.debit;
+            groups[ls].totalCredit += acc.credit;
+        });
+        const ordered = [];
+        lsOrder.forEach(ls => { if (groups[ls]) { groups[ls].accounts.sort((a, b) => String(a.code).localeCompare(String(b.code))); ordered.push(groups[ls]); } });
+        Object.keys(groups).forEach(ls => { if (!lsOrder.includes(ls)) { groups[ls].accounts.sort((a, b) => String(a.code).localeCompare(String(b.code))); ordered.push(groups[ls]); } });
+        return ordered;
+    };
+
+    const isBalanceSheet = (lsCode) => !['20', '30', '40', '70', '80'].includes(lsCode);
+
+    const toggleGroup = (code) => {
+        setCollapsedGroups(prev => {
+            const next = new Set(prev);
+            next.has(code) ? next.delete(code) : next.add(code);
+            return next;
+        });
+    };
+
+    const collapseAll = () => {
+        const groups = getGroupedAccounts();
+        setCollapsedGroups(new Set(groups.map(g => g.code)));
+    };
+
+    const expandAll = () => setCollapsedGroups(new Set());
+
+    // ─── Group Color Logic ────────────────────────────────────────────────────
+    const getGroupColors = (code) => {
+        if (viewMode === 'type') {
+            const map = {
+                ASSET: { bg: 'bg-blue-50', border: 'border-blue-200', badge: 'bg-blue-600', sub: 'bg-blue-50/50 border-blue-100' },
+                LIABILITY: { bg: 'bg-red-50', border: 'border-red-200', badge: 'bg-red-600', sub: 'bg-red-50/50 border-red-100' },
+                EQUITY: { bg: 'bg-purple-50', border: 'border-purple-200', badge: 'bg-purple-600', sub: 'bg-purple-50/50 border-purple-100' },
+                REVENUE: { bg: 'bg-emerald-50', border: 'border-emerald-200', badge: 'bg-emerald-600', sub: 'bg-emerald-50/50 border-emerald-100' },
+                EXPENSE: { bg: 'bg-amber-50', border: 'border-amber-200', badge: 'bg-amber-600', sub: 'bg-amber-50/50 border-amber-100' },
+            };
+            return map[code] || map.EXPENSE;
+        }
+        if (viewMode === 'account') {
+            return { bg: 'bg-gray-50', border: 'border-gray-200', badge: 'bg-gray-600', sub: 'bg-gray-50/50 border-gray-100' };
+        }
+        return isBalanceSheet(code)
+            ? { bg: 'bg-blue-50', border: 'border-blue-200', badge: 'bg-blue-600', sub: 'bg-blue-50/50 border-blue-100' }
+            : { bg: 'bg-emerald-50', border: 'border-emerald-200', badge: 'bg-emerald-600', sub: 'bg-emerald-50/50 border-emerald-100' };
+    };
+
+    // ─── CSV Export ───────────────────────────────────────────────────────────
     const exportCSV = () => {
         if (!reportData) return;
-
-        const csv = [
-            ['Account Code', 'Account Name', 'Debit', 'Credit', 'Balance'],
-            ...reportData.accounts.map(acc => [
-                acc.code,
-                acc.name,
-                acc.debit.toFixed(2),
-                acc.credit.toFixed(2),
-                acc.balance.toFixed(2)
-            ]),
-            ['', 'TOTALS', reportData.totals.debit.toFixed(2), reportData.totals.credit.toFixed(2), reportData.totals.balance.toFixed(2)]
-        ].map(row => row.join(',')).join('\n');
-
+        const groups = getGroupedAccounts();
+        const hasOB = Object.keys(openingBalances).length > 0;
+        const rows = [['Group', 'Account Code', 'Account Name', ...(hasOB ? ['Prior Year'] : []), 'Debit', 'Credit']];
+        groups.forEach(group => {
+            if (viewMode !== 'account') rows.push([`[${group.code}] ${group.name}`, '', '', ...(hasOB ? [''] : []), '', '']);
+            group.accounts.forEach(acc => {
+                const ob = hasOB ? (openingBalances[String(acc.code)] ?? '') : undefined;
+                const net = acc.debit - acc.credit;
+                rows.push([
+                    viewMode === 'account' ? '' : '',
+                    acc.code, acc.name,
+                    ...(hasOB ? [ob !== '' ? ob.toFixed(2) : ''] : []),
+                    net > 0 ? Math.abs(net).toFixed(2) : '',
+                    net < 0 ? Math.abs(net).toFixed(2) : ''
+                ]);
+            });
+            if (viewMode !== 'account') {
+                rows.push(['', '', `Subtotal: ${group.name}`, ...(hasOB ? [''] : []),
+                    group.totalDebit > 0 ? group.totalDebit.toFixed(2) : '',
+                    group.totalCredit > 0 ? group.totalCredit.toFixed(2) : ''
+                ]);
+            }
+        });
+        rows.push(['', '', 'GRAND TOTAL', ...(hasOB ? [''] : []),
+            reportData.totals.debit.toFixed(2),
+            reportData.totals.credit.toFixed(2)
+        ]);
+        const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `trial-balance-${dateRange.start}-to-${dateRange.end}.csv`;
+        a.download = `trial-balance-${viewMode}-${dateRange.start}-to-${dateRange.end}.csv`;
         a.click();
     };
 
+    // ─── Opening Balances Import handlers ────────────────────────────────────
+    const handleImportFile = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImportError('');
+        setImportPreview(null);
+
+        const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+
+        if (isPDF) {
+            // PDF path — async extraction via PDF.js
+            setImportParsing(true);
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const parsed = await parseTBPdf(arrayBuffer);
+                if (!parsed) {
+                    setImportError('Could not extract account data from the PDF. Please ensure it is a QuickBooks or Caseware Trial Balance printout with clearly visible columns.');
+                } else {
+                    setImportPreview(parsed);
+                }
+            } catch (err) {
+                setImportError(`PDF extraction failed: ${err.message}`);
+            } finally {
+                setImportParsing(false);
+            }
+        } else {
+            // CSV / text path — synchronous
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const text = ev.target.result;
+                const parsed = parseTBCsv(text);
+                if (!parsed) {
+                    setImportError('Could not parse the file. Please check the format — expected CSV with Account/Code, Debit, Credit, Balance columns.');
+                    setImportPreview(null);
+                } else {
+                    setImportPreview(parsed);
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+
+    const handleImportConfirm = () => {
+        if (!importPreview) return;
+        // Convert to code→balance map
+        const balanceMap = {};
+        Object.entries(importPreview).forEach(([code, row]) => {
+            balanceMap[code] = row.balance;
+        });
+        setOpeningBalances(balanceMap);
+        setOpeningBalancesState(balanceMap);
+        setImportPreview(null);
+        setShowImport(false);
+        // Re-generate report if we have a range
+        if (dateRange) generateReport(dateRange);
+    };
+
+    const handleClearOpeningBalances = () => {
+        setOpeningBalances({});
+        setOpeningBalancesState({});
+        if (dateRange) generateReport(dateRange);
+    };
+
+    const groups = reportData ? getGroupedAccounts() : [];
+    const hasOB  = Object.keys(openingBalances).length > 0;
+
+    const fontStack = FONTS[fontFamily]?.stack || FONTS.system.stack;
+
+    // Column count depends on view mode + enabled feature toggles
+    const baseColCount = viewMode === 'leadsheet' ? 3 : viewMode === 'type' ? 3 : 2;
+    const hasComparative = hasOB && showComparative;
+    const numericCols  = (hasComparative ? 1 : 0) + 2 + (showAdjustments ? 3 : 0); // Prior + DR/CR + AdjDR/AdjCR/AdjBal
+    const annotationCols = 1; // annotation column always present
+    const gifiCols = showGIFI ? 1 : 0;
+    const colCount     = baseColCount + gifiCols + numericCols + annotationCols;
+    const ajeImpact = showAdjustments ? getAJEImpact() : {};
+
+    // ─── View Mode Labels ─────────────────────────────────────────────────────
+    const viewModes = [
+        { id: 'leadsheet', label: 'L/S',  title: 'Grouped by Leadsheet',    icon: 'ph-folders' },
+        { id: 'account',   label: 'Acct', title: 'Flat by Account #',       icon: 'ph-list-numbers' },
+        { id: 'type',      label: 'Type', title: 'Grouped by Account Type', icon: 'ph-stack' },
+    ];
+
     return (
         <div className="min-h-screen bg-gray-50 p-8">
+            {/* Print stylesheet */}
+            <style>{`
+                @media print {
+                    body { background: white !important; }
+                    .min-h-screen { padding: 0 !important; background: white !important; }
+                    .shadow, .shadow-sm { box-shadow: none !important; }
+                    .border-gray-200, .border-gray-100 { border-color: #d1d5db !important; }
+                    .rounded-lg { border-radius: 0 !important; }
+                    button, .no-print { display: none !important; }
+                    table { font-size: 9pt !important; }
+                    th, td { padding: 3px 8px !important; }
+                    @page { margin: 0.5in; size: landscape; }
+                }
+            `}</style>
             {/* Header */}
-            <div className="max-w-7xl mx-auto mb-6">
+            <div style={{ maxWidth: showAJEPanel ? '100%' : '72rem', margin: '0 auto', marginBottom: '1.5rem' }}>
                 <div className="flex items-center gap-3 mb-2">
-                    <button
-                        onClick={() => window.location.hash = '#/reports'}
-                        className="text-gray-600 hover:text-gray-900 mr-2"
-                    >
+                    <button onClick={() => window.__reportsGoBack?.()} className="text-gray-600 hover:text-gray-900 mr-2">
                         <i className="ph ph-arrow-left text-2xl"></i>
                     </button>
                     <i className="ph ph-scales text-3xl text-blue-600"></i>
                     <h1 className="text-3xl font-bold text-gray-900">Trial Balance</h1>
+                    <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8, fontStyle: 'italic' }}>Shift+A to toggle entries panel</span>
                 </div>
-                <p className="text-gray-600">
-                    Verify that total debits equal total credits across all accounts
-                </p>
+                <p className="text-gray-600">Verify debits equal credits — multiple view modes</p>
             </div>
 
             {/* Filters */}
-            <div className="max-w-7xl mx-auto">
+            <div style={{ maxWidth: showAJEPanel ? '100%' : '72rem', margin: '0 auto' }}>
                 <ReportFilters onFilterChange={generateReport} />
             </div>
 
-            {/* Report Content */}
+            {/* Loading */}
             {loading && (
-                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow p-12 text-center">
+                <div style={{ maxWidth: showAJEPanel ? '100%' : '72rem', margin: '0 auto' }} className="bg-white rounded-lg shadow p-12 text-center">
                     <i className="ph ph-spinner-gap animate-spin text-4xl text-blue-600 mb-4"></i>
                     <p className="text-gray-600">Generating report...</p>
                 </div>
             )}
 
+            {/* Empty state */}
+            {!loading && !reportData && (
+                <div style={{ maxWidth: showAJEPanel ? '100%' : '72rem', margin: '0 auto' }} className="bg-white rounded-lg shadow p-16 text-center">
+                    <i className="ph ph-upload-simple text-6xl text-gray-200 mb-5 block"></i>
+                    <p className="text-lg font-semibold text-gray-500 mb-1">Upload statements to get started</p>
+                    <p className="text-sm text-gray-400 mb-6">Import your bank statements to generate this report</p>
+                    <button
+                        onClick={() => window.__reportsGoBack?.()}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                    >
+                        <i className="ph ph-arrow-left text-base"></i>
+                        Back to Reports
+                    </button>
+                </div>
+            )}
+
+            {/* Report — 70/30 Split Screen */}
             {!loading && reportData && (
-                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow">
-                    {/* Report Header */}
-                    <div className="border-b border-gray-200 p-6">
-                        <div className="flex items-center justify-between">
+                <div style={{
+                    maxWidth: showAJEPanel ? '100%' : '72rem',
+                    margin: '0 auto',
+                    display: 'flex',
+                    gap: showAJEPanel ? 12 : 0,
+                    alignItems: 'flex-start',
+                }}>
+                {/* ═══ LEFT PANEL: Trial Balance (70% or 100%) ═══ */}
+                <div style={{
+                    flex: showAJEPanel ? '0 0 70%' : '1 1 100%',
+                    transition: 'flex 0.3s ease',
+                    minWidth: 0,
+                }} className="bg-white rounded-lg shadow">
+                    {/* Report Header + View Tabs */}
+                    <div className="border-b border-gray-200 p-5">
+                        <div className="flex items-center justify-between mb-4">
                             <div>
-                                <h2 className="text-xl font-bold text-gray-900">Trial Balance Report</h2>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    Period: {dateRange.start} to {dateRange.end}
+                                <h2 className="text-lg font-bold text-gray-900">Trial Balance Report</h2>
+                                <p className="text-[12px] text-gray-500 mt-0.5">
+                                    Period: {dateRange.start} to {dateRange.end} — {reportData.accounts.length} accounts
+                                    {viewMode !== 'account' && ` across ${groups.length} groups`}
                                 </p>
                             </div>
+                            <div className="flex items-center gap-2">
+                                {/* Opening Balances indicator */}
+                                {hasOB && (
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-[11px]">
+                                        <i className="ph ph-arrow-square-in text-purple-600 text-[13px]"></i>
+                                        <span className="text-purple-700 font-semibold">
+                                            Prior Year: {Object.keys(openingBalances).length} accounts
+                                        </span>
+                                        <button
+                                            onClick={handleClearOpeningBalances}
+                                            className="ml-1 text-purple-400 hover:text-purple-700"
+                                            title="Clear opening balances"
+                                        >
+                                            <i className="ph ph-x text-[10px]"></i>
+                                        </button>
+                                    </div>
+                                )}
+                                {/* Balance badge */}
+                                <div className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-[13px] ${reportData.isBalanced ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                                    <i className={`ph ${reportData.isBalanced ? 'ph-check-circle text-green-600' : 'ph-warning-circle text-red-600'} text-lg`}></i>
+                                    <span className={`font-bold ${reportData.isBalanced ? 'text-green-800' : 'text-red-800'}`}>
+                                        {reportData.isBalanced ? 'Balanced' : `Out of Balance: ${fmt(reportData.difference)}`}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
 
-                            {/* Balance Status */}
-                            <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ${reportData.isBalanced
-                                ? 'bg-green-50 border border-green-200'
-                                : 'bg-red-50 border border-red-200'
-                                }`}>
-                                <i className={`ph ${reportData.isBalanced ? 'ph-check-circle' : 'ph-warning-circle'} text-xl ${reportData.isBalanced ? 'text-green-600' : 'text-red-600'
-                                    }`}></i>
-                                <span className={`font-bold ${reportData.isBalanced ? 'text-green-900' : 'text-red-900'}`}>
-                                    {reportData.isBalanced ? 'Balanced ✓' : `Out of Balance: ${formatCurrency(reportData.difference)}`}
-                                </span>
+                        {/* View mode tabs + feature toggles + controls */}
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+                                {viewModes.map(v => (
+                                    <button
+                                        key={v.id}
+                                        onClick={() => { setViewMode(v.id); setCollapsedGroups(new Set()); }}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-all ${viewMode === v.id
+                                            ? 'bg-white text-gray-900 shadow-sm'
+                                            : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                        title={v.title}
+                                    >
+                                        <i className={`ph ${v.icon} text-[13px]`}></i>
+                                        <span>{v.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {/* Feature toggles */}
+                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer select-none"
+                                    title="Show GIFI/Map codes from CRA mapping">
+                                    <input type="checkbox" checked={showGIFI} onChange={e => setShowGIFI(e.target.checked)}
+                                        style={{ accentColor: '#6366f1', width: 14, height: 14 }} />
+                                    GIFI
+                                </label>
+                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer select-none"
+                                    title="Show adjusting journal entry columns">
+                                    <input type="checkbox" checked={showAdjustments} onChange={e => setShowAdjustments(e.target.checked)}
+                                        style={{ accentColor: '#7c3aed', width: 14, height: 14 }} />
+                                    Adjustments
+                                </label>
+                                {hasOB && (
+                                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer select-none"
+                                        title="Show comparative prior-year column">
+                                        <input type="checkbox" checked={showComparative} onChange={e => setShowComparative(e.target.checked)}
+                                            style={{ accentColor: '#9333ea', width: 14, height: 14 }} />
+                                        Comparative
+                                    </label>
+                                )}
+                                <span className="text-gray-200">|</span>
+                                {/* AJE Panel toggle */}
+                                <button
+                                    onClick={() => setShowAJEPanel(prev => !prev)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${
+                                        showAJEPanel
+                                            ? 'text-purple-700 bg-purple-100 border border-purple-300'
+                                            : 'text-gray-500 bg-gray-50 border border-gray-200 hover:bg-purple-50 hover:text-purple-600'
+                                    }`}
+                                    title="Toggle journal entries panel (Shift+A)"
+                                >
+                                    <i className="ph ph-notebook text-[13px]"></i>
+                                    {showAJEPanel ? 'Hide' : 'Show'} AJE Panel
+                                </button>
+                                <span className="text-gray-200">|</span>
+                                {/* Import Prior Year */}
+                                <button
+                                    onClick={() => setShowImport(true)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+                                    title="Import opening balances from QuickBooks or Caseware CSV"
+                                >
+                                    <i className="ph ph-arrow-square-in text-[12px]"></i>
+                                    Import Prior Year
+                                </button>
+                                {viewMode !== 'account' && (
+                                    <>
+                                        <button onClick={expandAll} className="text-[11px] text-gray-500 hover:text-blue-600 font-medium">Expand</button>
+                                        <span className="text-gray-300">|</span>
+                                        <button onClick={collapseAll} className="text-[11px] text-gray-500 hover:text-blue-600 font-medium">Collapse</button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Report Table */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                        Code
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                        Account Name
-                                    </th>
-                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                        Debit
-                                    </th>
-                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                        Credit
-                                    </th>
-                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
-                                        Balance
+                    {/* Shared Report Controls Bar */}
+                    <ReportControlsBar
+                        zoom={zoom} setZoom={setZoom}
+                        textSize={textSize} setTextSize={setTextSize}
+                        fontFamily={fontFamily} setFontFamily={setFontFamily}
+                        accentColor="blue"
+                    />
+
+                    {/* Table */}
+                    <div className="overflow-x-auto" style={{ fontSize: `${(textSize * zoom) / 100}px`, fontFamily: fontStack }}>
+                        <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                            <colgroup>
+                                {viewMode === 'leadsheet' && <col style={{ width: '48px' }} />}
+                                <col style={{ width: '68px' }} />
+                                <col style={{ width: 'auto' }} />
+                                {viewMode === 'type' && <col style={{ width: '64px' }} />}
+                                {showGIFI && <col style={{ width: '64px' }} />}
+                                {hasComparative && <col style={{ width: '120px' }} />}
+                                <col style={{ width: '130px' }} />
+                                <col style={{ width: '130px' }} />
+                                {showAdjustments && <col style={{ width: '105px' }} />}
+                                {showAdjustments && <col style={{ width: '105px' }} />}
+                                {showAdjustments && <col style={{ width: '120px' }} />}
+                                <col style={{ width: '54px' }} />
+                            </colgroup>
+                            <thead>
+                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #cbd5e1' }}>
+                                    {viewMode === 'leadsheet' && (
+                                        <th style={{ padding: '8px 8px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>L/S</th>
+                                    )}
+                                    <th style={{ padding: '8px 8px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Code</th>
+                                    <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Account Name</th>
+                                    {viewMode === 'type' && (
+                                        <th style={{ padding: '8px 8px', textAlign: 'left', fontSize: '0.7em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Type</th>
+                                    )}
+                                    {showGIFI && (
+                                        <th style={{ padding: '8px 6px', textAlign: 'center', fontSize: '0.65em', fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0' }}>GIFI</th>
+                                    )}
+                                    {hasComparative && (
+                                        <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#9333ea', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '2px solid #e2e8f0' }}>
+                                            Prior Year
+                                        </th>
+                                    )}
+                                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '2px solid #e2e8f0' }}>Debit</th>
+                                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '0.7em', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>Credit</th>
+                                    {showAdjustments && (
+                                        <th style={{ padding: '8px 8px', textAlign: 'right', fontSize: '0.65em', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '2px solid #e9d5ff' }}>Adj DR</th>
+                                    )}
+                                    {showAdjustments && (
+                                        <th style={{ padding: '8px 8px', textAlign: 'right', fontSize: '0.65em', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0' }}>Adj CR</th>
+                                    )}
+                                    {showAdjustments && (
+                                        <th style={{ padding: '8px 8px', textAlign: 'right', fontSize: '0.65em', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0' }}>Adjusted</th>
+                                    )}
+                                    <th style={{ padding: '8px 4px', textAlign: 'center', fontSize: '0.65em', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }} title="Annotations">
+                                        <i className="ph ph-note-pencil"></i>
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {reportData.accounts.map(account => (
-                                    <tr key={account.code} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                                            {account.code}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {account.name}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right tabular-nums font-mono text-gray-900">
-                                            {account.debit > 0 ? formatCurrency(account.debit) : '—'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right tabular-nums font-mono text-gray-900">
-                                            {account.credit > 0 ? formatCurrency(account.credit) : '—'}
-                                        </td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm text-right tabular-nums font-mono font-semibold ${account.balance > 0 ? 'text-green-600' : account.balance < 0 ? 'text-red-600' : 'text-gray-500'
-                                            }`}>
-                                            {formatCurrency(account.balance)}
-                                        </td>
-                                    </tr>
-                                ))}
+                            <tbody>
+                                {groups.map(group => {
+                                    const colors = getGroupColors(group.code);
+                                    const isCollapsed = collapsedGroups.has(group.code);
+
+                                    return (
+                                        <React.Fragment key={group.code}>
+                                            {/* Group Header */}
+                                            {viewMode !== 'account' && (
+                                                <tr
+                                                    className={`${colors.bg} cursor-pointer select-none`}
+                                                    onClick={() => toggleGroup(group.code)}
+                                                    style={{ borderTop: '2px solid', borderColor: 'inherit' }}
+                                                >
+                                                    <td style={{ padding: '7px 12px' }} colSpan={colCount}>
+                                                        <div className="flex items-center gap-2">
+                                                            <i className={`ph ${isCollapsed ? 'ph-caret-right' : 'ph-caret-down'}`} style={{ fontSize: '0.7em', color: '#64748b' }}></i>
+                                                            <span className={`inline-flex items-center justify-center min-w-[26px] px-1.5 py-0.5 rounded text-white ${colors.badge}`} style={{ fontSize: '0.65em', fontWeight: 700, letterSpacing: '0.03em' }}>
+                                                                {group.code}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.85em', fontWeight: 600, color: '#1e293b' }}>{group.name}</span>
+                                                            <span style={{ fontSize: '0.7em', color: '#94a3b8', marginLeft: '2px' }}>({group.accounts.length})</span>
+                                                            {isCollapsed && (
+                                                                <span className="ml-auto flex items-center" style={{ gap: '24px', fontFamily: 'monospace' }}>
+                                                                    <span style={{ fontSize: '0.8em', color: '#2563eb', fontWeight: 600 }}>{fmtAbs(group.totalDebit)}</span>
+                                                                    <span style={{ fontSize: '0.8em', color: '#dc2626', fontWeight: 600 }}>{fmtAbs(group.totalCredit)}</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+
+                                            {/* Account Rows */}
+                                            {!isCollapsed && group.accounts.map(acc => {
+                                                const accCode = String(acc.code);
+                                                const priorBal = hasComparative ? (openingBalances[accCode] ?? null) : null;
+                                                const movement = priorBal !== null ? (acc.balance - priorBal) : null;
+                                                const net = acc.debit - acc.credit;
+                                                const adj = showAdjustments ? (ajeImpact[accCode] || { debit: 0, credit: 0 }) : { debit: 0, credit: 0 };
+                                                const adjustedBalance = net + adj.debit - adj.credit;
+                                                const allCOA = window.RoboLedger?.COA?.getAll?.() || [];
+                                                const coaEntry = allCOA.find(c => String(c.code) === accCode);
+                                                const ann = annotations[accCode];
+                                                return (
+                                                    <React.Fragment key={`${group.code}-${acc.code}-wrap`}>
+                                                    <tr key={`${group.code}-${acc.code}`}
+                                                        className={`${acc._fromOpening ? 'opacity-70 italic' : ''} cursor-pointer`}
+                                                        style={{
+                                                            borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s',
+                                                            background: expandedAccount === accCode ? '#eef2ff' : ann?.checked ? '#f0fdf4' : '',
+                                                        }}
+                                                        onClick={() => setExpandedAccount(expandedAccount === accCode ? null : accCode)}
+                                                        onMouseEnter={e => e.currentTarget.style.background = expandedAccount === accCode ? '#eef2ff' : ann?.checked ? '#dcfce7' : '#f8fafc'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = expandedAccount === accCode ? '#eef2ff' : ann?.checked ? '#f0fdf4' : ''}
+                                                        title={acc._isRetainedEarnings
+                                                            ? `Retained Earnings: Opening ${fmt(acc._openingRE)} + Net Income ${fmt(acc._netIncome)} = ${fmt((acc._openingRE || 0) + (acc._netIncome || 0))}`
+                                                            : acc._fromOpening ? 'From opening balances (no current-year transactions)' : ''}
+                                                    >
+                                                        {viewMode === 'leadsheet' && (
+                                                            <td style={{ padding: '5px 8px', fontSize: '0.75em', color: '#cbd5e1', fontFamily: 'monospace', borderRight: '1px solid #f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}></td>
+                                                        )}
+                                                        <td style={{ padding: '5px 8px', fontSize: '0.8em', fontFamily: 'monospace', color: '#64748b', fontWeight: 500, borderRight: '1px solid #f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {acc.code}
+                                                            {acc._isRetainedEarnings && <span style={{ marginLeft: '4px', fontSize: '0.75em', color: '#a78bfa', fontFamily: 'sans-serif', fontStyle: 'normal' }}>RE</span>}
+                                                        </td>
+                                                        {/* Account Name — double-click to edit */}
+                                                        <td style={{ padding: '5px 10px', fontSize: '0.8em', color: '#1e293b', cursor: 'pointer', borderRight: '1px solid #f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                                            onDoubleClick={() => startEditName(accCode, acc.name)}
+                                                            title={`${acc.name} — Double-click to rename`}
+                                                        >
+                                                            {editingAccountCode === accCode ? (
+                                                                <input
+                                                                    type="text"
+                                                                    value={editValue}
+                                                                    onChange={e => setEditValue(e.target.value)}
+                                                                    onBlur={() => saveEditName(accCode)}
+                                                                    onKeyDown={e => { if (e.key === 'Enter') saveEditName(accCode); if (e.key === 'Escape') setEditingAccountCode(null); }}
+                                                                    autoFocus
+                                                                    style={{
+                                                                        width: '100%', padding: '2px 6px', border: '1.5px solid #6366f1',
+                                                                        borderRadius: 4, fontSize: 'inherit', fontFamily: 'inherit',
+                                                                        background: '#eef2ff', outline: 'none',
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <>
+                                                                    {acc.name}
+                                                                    {acc._isRetainedEarnings && (
+                                                                        <span style={{ marginLeft: '8px', fontSize: '0.8em', color: '#a78bfa', fontStyle: 'normal', fontWeight: 400 }}>
+                                                                            (Opening {fmt(acc._openingRE || 0)} + NI {fmt(acc._netIncome || 0)})
+                                                                        </span>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </td>
+                                                        {viewMode === 'type' && (
+                                                            <td style={{ padding: '5px 8px', fontSize: '0.7em', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 500, borderRight: '1px solid #f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(acc.root || '').slice(0, 5)}</td>
+                                                        )}
+                                                        {/* GIFI column */}
+                                                        {showGIFI && (
+                                                            <td style={{ padding: '5px 6px', fontSize: '0.7em', textAlign: 'center', fontFamily: 'monospace', color: '#6366f1', fontWeight: 600, borderRight: '1px solid #f1f5f9' }}>
+                                                                {coaEntry?.mapNo || ''}
+                                                            </td>
+                                                        )}
+                                                        {/* Prior Year column */}
+                                                        {hasComparative && (
+                                                            <td style={{ padding: '5px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', color: '#9333ea', borderLeft: '2px solid #e2e8f0', borderRight: '1px solid #f1f5f9' }}>
+                                                                {priorBal !== null
+                                                                    ? <span title={movement !== null ? `Movement: ${movement >= 0 ? '+' : ''}${fmt(movement)}` : ''}>
+                                                                        {fmt(priorBal)}
+                                                                      </span>
+                                                                    : <span style={{ color: '#cbd5e1' }}>—</span>
+                                                                }
+                                                            </td>
+                                                        )}
+                                                        {/* Debit column */}
+                                                        <td style={{ padding: '5px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', borderLeft: '2px solid #e2e8f0', borderRight: '1px solid #f1f5f9' }}>
+                                                            {net > 0 ? fmtAbs(net) : ''}
+                                                        </td>
+                                                        {/* Credit column */}
+                                                        <td style={{ padding: '5px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#dc2626', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #f1f5f9' }}>
+                                                            {net < 0 ? fmtAbs(net) : ''}
+                                                        </td>
+                                                        {/* AJE Adjustment columns */}
+                                                        {showAdjustments && (
+                                                            <td style={{ padding: '5px 8px', fontSize: '0.75em', textAlign: 'right', fontFamily: 'monospace', color: adj.debit > 0 ? '#7c3aed' : '#cbd5e1', borderLeft: '2px solid #e9d5ff', borderRight: '1px solid #f5f3ff' }}>
+                                                                {adj.debit > 0 ? fmtAbs(adj.debit) : ''}
+                                                            </td>
+                                                        )}
+                                                        {showAdjustments && (
+                                                            <td style={{ padding: '5px 8px', fontSize: '0.75em', textAlign: 'right', fontFamily: 'monospace', color: adj.credit > 0 ? '#7c3aed' : '#cbd5e1', borderRight: '1px solid #f5f3ff' }}>
+                                                                {adj.credit > 0 ? fmtAbs(adj.credit) : ''}
+                                                            </td>
+                                                        )}
+                                                        {showAdjustments && (
+                                                            <td style={{
+                                                                padding: '5px 8px', fontSize: '0.8em', textAlign: 'right',
+                                                                fontFamily: 'monospace', fontWeight: 700, borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #f1f5f9',
+                                                                color: adjustedBalance > 0 ? '#059669' : adjustedBalance < 0 ? '#dc2626' : '#94a3b8',
+                                                            }}>
+                                                                {adjustedBalance !== 0 ? fmt(adjustedBalance) : ''}
+                                                            </td>
+                                                        )}
+                                                        {/* Annotation column */}
+                                                        <td style={{ padding: '3px 4px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                                            <AnnotationPopover
+                                                                accountCode={accCode}
+                                                                annotation={ann}
+                                                                onUpdate={updateAnnotation}
+                                                                compact={showAJEPanel}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                    {expandedAccount === accCode && dateRange && (
+                                                        <AccountDrillDown
+                                                            coaCode={accCode}
+                                                            accountName={acc.name}
+                                                            startDate={dateRange.start}
+                                                            endDate={dateRange.end}
+                                                            onClose={() => setExpandedAccount(null)}
+                                                            accentColor="green"
+                                                        />
+                                                    )}
+                                                    </React.Fragment>
+                                                );
+                                            })}
+
+                                            {/* Subtotal Row */}
+                                            {viewMode !== 'account' && !isCollapsed && (() => {
+                                                const grpAdjDR = showAdjustments ? group.accounts.reduce((s, a) => s + ((ajeImpact[String(a.code)] || {}).debit || 0), 0) : 0;
+                                                const grpAdjCR = showAdjustments ? group.accounts.reduce((s, a) => s + ((ajeImpact[String(a.code)] || {}).credit || 0), 0) : 0;
+                                                const grpAdjBal = showAdjustments ? group.accounts.reduce((s, a) => {
+                                                    const net = a.debit - a.credit;
+                                                    const adj = ajeImpact[String(a.code)] || { debit: 0, credit: 0 };
+                                                    return s + net + adj.debit - adj.credit;
+                                                }, 0) : 0;
+                                                return (
+                                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                                    <td style={{ padding: '6px 12px', borderRight: '1px solid #e2e8f0' }} colSpan={baseColCount}>
+                                                        <span style={{ fontSize: '0.7em', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                            Subtotal — {group.code}
+                                                        </span>
+                                                    </td>
+                                                    {showGIFI && <td style={{ borderRight: '1px solid #e2e8f0' }}></td>}
+                                                    {hasComparative && <td style={{ borderLeft: '2px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}></td>}
+                                                    <td style={{ padding: '6px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8', borderLeft: hasComparative ? '1px solid #e2e8f0' : '2px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                                                        {group.totalDebit > 0 ? fmtAbs(group.totalDebit) : ''}
+                                                    </td>
+                                                    <td style={{ padding: '6px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#dc2626', borderRight: '1px solid #e2e8f0' }}>
+                                                        {group.totalCredit > 0 ? fmtAbs(group.totalCredit) : ''}
+                                                    </td>
+                                                    {showAdjustments && (
+                                                        <td style={{ padding: '6px 12px', fontSize: '0.75em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#7c3aed', borderLeft: '2px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                                                            {grpAdjDR > 0 ? fmtAbs(grpAdjDR) : ''}
+                                                        </td>
+                                                    )}
+                                                    {showAdjustments && (
+                                                        <td style={{ padding: '6px 12px', fontSize: '0.75em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#7c3aed', borderRight: '1px solid #e2e8f0' }}>
+                                                            {grpAdjCR > 0 ? fmtAbs(grpAdjCR) : ''}
+                                                        </td>
+                                                    )}
+                                                    {showAdjustments && (
+                                                        <td style={{ padding: '6px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: grpAdjBal > 0 ? '#059669' : grpAdjBal < 0 ? '#dc2626' : '#94a3b8', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                                                            {grpAdjBal !== 0 ? fmt(grpAdjBal) : ''}
+                                                        </td>
+                                                    )}
+                                                    <td style={{ borderRight: '1px solid #e2e8f0' }}></td>{/* annotation placeholder */}
+                                                </tr>
+                                                );
+                                            })()}
+                                        </React.Fragment>
+                                    );
+                                })}
                             </tbody>
-                            <tfoot className="bg-gray-100 border-t-2 border-gray-300">
-                                <tr>
-                                    <td colSpan="2" className="px-6 py-4 text-sm font-bold text-gray-900 uppercase">
-                                        Totals
+                            <tfoot>
+                                {(() => {
+                                    const grandAdjDR = showAdjustments ? Object.values(ajeImpact).reduce((s, v) => s + (v.debit || 0), 0) : 0;
+                                    const grandAdjCR = showAdjustments ? Object.values(ajeImpact).reduce((s, v) => s + (v.credit || 0), 0) : 0;
+                                    return (
+                                <tr style={{ background: '#1e293b', color: 'white' }}>
+                                    <td colSpan={baseColCount} style={{ padding: '10px 12px', fontSize: '0.8em', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #334155' }}>
+                                        Grand Total
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right tabular-nums font-mono font-bold text-gray-900">
-                                        {formatCurrency(reportData.totals.debit)}
+                                    {showGIFI && <td style={{ borderRight: '1px solid #334155' }}></td>}
+                                    {hasComparative && <td style={{ padding: '10px 12px', borderLeft: '2px solid #475569', borderRight: '1px solid #334155' }}></td>}
+                                    <td style={{ padding: '10px 12px', fontSize: '0.85em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderLeft: hasComparative ? '1px solid #334155' : '2px solid #475569', borderRight: '1px solid #334155' }}>
+                                        {fmtAbs(reportData.totals.debit)}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right tabular-nums font-mono font-bold text-gray-900">
-                                        {formatCurrency(reportData.totals.credit)}
+                                    <td style={{ padding: '10px 12px', fontSize: '0.85em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderRight: '1px solid #334155' }}>
+                                        {fmtAbs(reportData.totals.credit)}
+                                        {reportData.isBalanced
+                                            ? <span style={{ marginLeft: '10px', fontSize: '0.8em', fontWeight: 400, color: '#4ade80' }}>✓ Balanced</span>
+                                            : <span style={{ marginLeft: '10px', fontSize: '0.8em', fontWeight: 400, color: '#f87171' }}>⚠ Off by {fmtAbs(reportData.difference)}</span>}
                                     </td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm text-right tabular-nums font-mono font-bold ${reportData.isBalanced ? 'text-green-600' : 'text-red-600'
-                                        }`}>
-                                        {formatCurrency(reportData.totals.balance)}
-                                    </td>
+                                    {showAdjustments && (
+                                        <td style={{ padding: '10px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderLeft: '2px solid #475569', borderRight: '1px solid #334155' }}>
+                                            {grandAdjDR > 0 ? fmtAbs(grandAdjDR) : ''}
+                                        </td>
+                                    )}
+                                    {showAdjustments && (
+                                        <td style={{ padding: '10px 12px', fontSize: '0.8em', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, borderRight: '1px solid #334155' }}>
+                                            {grandAdjCR > 0 ? fmtAbs(grandAdjCR) : ''}
+                                        </td>
+                                    )}
+                                    {showAdjustments && (
+                                        <td style={{ padding: '10px 12px', borderLeft: '1px solid #334155', borderRight: '1px solid #334155' }}></td>
+                                    )}
+                                    <td style={{ borderRight: '1px solid #334155' }}></td>{/* annotation placeholder */}
                                 </tr>
+                                    );
+                                })()}
                             </tfoot>
                         </table>
                     </div>
 
                     {/* Export Actions */}
-                    <div className="border-t border-gray-200 p-6 flex justify-end gap-3">
-                        <button
-                            onClick={exportCSV}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center gap-2"
-                        >
-                            <i className="ph ph-download-simple"></i>
-                            <span>Export CSV</span>
-                        </button>
-                        <button
-                            onClick={() => window.print()}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-semibold flex items-center gap-2"
-                        >
-                            <i className="ph ph-printer"></i>
-                            <span>Print</span>
-                        </button>
+                    <div className="border-t border-gray-200 px-5 py-3 flex items-center justify-between">
+                        <div className="text-[11px] text-gray-400">
+                            View: {viewModes.find(v => v.id === viewMode)?.title} — {reportData.accounts.length} accounts
+                            {hasOB && ` · Prior Year: ${Object.keys(openingBalances).length} accounts`}
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={exportCSV} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center gap-1.5 text-[12px]">
+                                <i className="ph ph-download-simple text-[13px]"></i>Export CSV
+                            </button>
+                            <button onClick={exportForProfile} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex items-center gap-1.5 text-[12px]"
+                                title="Export for Profile / Intuit Tax — sorted by GIFI code">
+                                <i className="ph ph-file-arrow-up text-[13px]"></i>Profile Export
+                            </button>
+                            <button onClick={() => window.print()} className="px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-semibold flex items-center gap-1.5 text-[12px]">
+                                <i className="ph ph-printer text-[13px]"></i>Print
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ═══ RIGHT PANEL: AJE Journal Entries (30%) ═══ */}
+                {showAJEPanel && (
+                    <div style={{
+                        flex: '0 0 29%',
+                        minWidth: 0,
+                        height: 'calc(100vh - 200px)',
+                        position: 'sticky',
+                        top: 16,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        background: 'white',
+                        borderRadius: 8,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04)',
+                        border: '1px solid #e2e8f0',
+                        overflow: 'hidden',
+                    }}>
+                        <AJEFormPanel
+                            compact
+                            onPost={() => {
+                                setAjeVersion(v => v + 1);
+                                if (dateRange) generateReport(dateRange);
+                            }}
+                            periodStart={dateRange?.start}
+                            periodEnd={dateRange?.end}
+                        />
+                    </div>
+                )}
+                </div>
+            )}
+
+            {/* ─── Import Opening Balances Modal ─────────────────────────────── */}
+            {showImport && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-6"
+                    onClick={(e) => { if (e.target === e.currentTarget) { setShowImport(false); setImportPreview(null); setImportError(''); } }}
+                >
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                            <div>
+                                <h2 className="text-[15px] font-bold text-gray-900 flex items-center gap-2">
+                                    <i className="ph ph-arrow-square-in text-purple-600"></i>
+                                    Import Opening Balances / Prior Year
+                                </h2>
+                                <p className="text-[11px] text-gray-500 mt-0.5">
+                                    Import a Trial Balance <strong>CSV export</strong> or <strong>PDF printout</strong> from QuickBooks or Caseware to add a comparative prior-year column and seed equity accounts.
+                                </p>
+                            </div>
+                            <button onClick={() => { setShowImport(false); setImportPreview(null); setImportError(''); }} className="text-gray-400 hover:text-gray-700">
+                                <i className="ph ph-x text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                            {/* Format guidance */}
+                            <div className="bg-gray-50 rounded-lg p-4 text-[11px] text-gray-600 space-y-2">
+                                <p className="font-semibold text-gray-700">Supported formats:</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="font-semibold text-blue-700 mb-1">QuickBooks</p>
+                                        <code className="block bg-white border border-gray-200 rounded p-2 text-[10px] whitespace-pre">
+Account,Debit,Credit,Balance{'\n'}1040 Savings account #2,398094.65,0.00,398094.65{'\n'}3999 Retained Earnings,0.00,125000.00,-125000.00
+                                        </code>
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-indigo-700 mb-1">Caseware</p>
+                                        <code className="block bg-white border border-gray-200 rounded p-2 text-[10px] whitespace-pre">
+Code,Account Description,Debit,Credit,Balance{'\n'}1040,Savings account #2,398094.65,,398094.65{'\n'}3999,Retained earnings,,125000.00,-125000.00
+                                        </code>
+                                    </div>
+                                </div>
+                                <p className="text-gray-500 mt-1">
+                                    Accounts are matched by code number first, then by name. Equity accounts (3xxx) will automatically appear in the Trial Balance and seed Retained Earnings.
+                                    For PDFs: use <em>File → Print → Save as PDF</em> (or Export to PDF) from QuickBooks or Caseware — the columnar layout must be preserved.
+                                </p>
+                            </div>
+
+                            {/* File picker */}
+                            {!importPreview && (
+                                <div>
+                                    <label className="block text-[12px] font-semibold text-gray-700 mb-2">Select file</label>
+                                    <div
+                                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                                        onClick={() => !importParsing && fileRef.current?.click()}
+                                    >
+                                        {importParsing ? (
+                                            <>
+                                                <i className="ph ph-spinner-gap animate-spin text-4xl text-purple-400 mb-2 block"></i>
+                                                <p className="text-[13px] text-purple-600 font-medium">Extracting data from PDF…</p>
+                                                <p className="text-[11px] text-gray-400 mt-1">This may take a few seconds</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="flex items-center justify-center gap-3 mb-3">
+                                                    <i className="ph ph-file-csv text-3xl text-green-500"></i>
+                                                    <span className="text-gray-300 text-lg">or</span>
+                                                    <i className="ph ph-file-pdf text-3xl text-red-400"></i>
+                                                </div>
+                                                <p className="text-[13px] text-gray-600 font-medium">Click to select a CSV or PDF file</p>
+                                                <p className="text-[11px] text-gray-400 mt-1">QuickBooks or Caseware Trial Balance export or printout</p>
+                                            </>
+                                        )}
+                                        <input
+                                            ref={fileRef}
+                                            type="file"
+                                            accept=".csv,.txt,.tsv,.pdf"
+                                            className="hidden"
+                                            onChange={handleImportFile}
+                                        />
+                                    </div>
+                                    {importError && (
+                                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 flex items-start gap-2">
+                                            <i className="ph ph-warning-circle mt-0.5 shrink-0"></i>
+                                            <span>{importError}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Preview */}
+                            {importPreview && (
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-[12px] font-semibold text-gray-700">
+                                            Preview — {Object.keys(importPreview).length} accounts matched
+                                        </p>
+                                        <button
+                                            onClick={() => { setImportPreview(null); fileRef.current && (fileRef.current.value = ''); }}
+                                            className="text-[11px] text-gray-500 hover:text-red-600"
+                                        >
+                                            ← Choose different file
+                                        </button>
+                                    </div>
+                                    <div className="border border-gray-200 rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
+                                        <table className="w-full text-[11px]">
+                                            <thead className="bg-gray-50 sticky top-0">
+                                                <tr>
+                                                    <th className="text-left px-3 py-2 font-semibold text-gray-500">Code</th>
+                                                    <th className="text-left px-3 py-2 font-semibold text-gray-500">Account Name</th>
+                                                    <th className="text-right px-3 py-2 font-semibold text-gray-500">Debit</th>
+                                                    <th className="text-right px-3 py-2 font-semibold text-gray-500">Credit</th>
+                                                    <th className="text-right px-3 py-2 font-semibold text-gray-500">Balance</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {Object.entries(importPreview).map(([code, row]) => (
+                                                    <tr key={code} className="border-t border-gray-100 hover:bg-gray-50">
+                                                        <td className="px-3 py-1.5 font-mono text-gray-600">{code}</td>
+                                                        <td className="px-3 py-1.5 text-gray-800">{row.name}</td>
+                                                        <td className="px-3 py-1.5 text-right font-mono text-gray-700">{row.debit > 0 ? fmt(row.debit) : ''}</td>
+                                                        <td className="px-3 py-1.5 text-right font-mono text-gray-700">{row.credit > 0 ? fmt(row.credit) : ''}</td>
+                                                        <td className={`px-3 py-1.5 text-right font-mono font-semibold ${row.balance > 0 ? 'text-blue-700' : row.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                                            {fmt(row.balance)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                            <button
+                                onClick={() => { setShowImport(false); setImportPreview(null); setImportError(''); }}
+                                className="px-4 py-2 text-[12px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            {importPreview && (
+                                <button
+                                    onClick={handleImportConfirm}
+                                    className="px-4 py-2 text-[12px] font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors flex items-center gap-1.5"
+                                >
+                                    <i className="ph ph-check-circle"></i>
+                                    Apply {Object.keys(importPreview).length} Opening Balances
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
         </div>
     );
+}
+
+/** Infer account root type from code range when COA entry is missing */
+function inferRoot(code) {
+    const num = parseInt(code);
+    if (isNaN(num))                        return 'EXPENSE';
+    if (num >= 1000 && num < 2000)         return 'ASSET';
+    if (num >= 2000 && num < 3000)         return 'LIABILITY';
+    if (num >= 3000 && num < 4000)         return 'EQUITY';
+    if (num >= 4000 && num < 5000)         return 'REVENUE';
+    return 'EXPENSE'; // 5000-9999
 }
 
 export default TrialBalanceReport;

@@ -1,6 +1,6 @@
 /**
  * Column State Manager
- * Persists which columns are visible to localStorage
+ * Persists which columns are visible (IndexedDB via StorageService, localStorage fallback)
  */
 
 const STORAGE_KEY = "rl_active_columns";
@@ -15,15 +15,20 @@ const DEFAULT_COLUMNS = [
 ];
 
 export function getActiveColumns() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  return saved ? JSON.parse(saved) : DEFAULT_COLUMNS;
+  const _SS = window.StorageService;
+  const saved = _SS ? _SS.get(STORAGE_KEY) : localStorage.getItem(STORAGE_KEY);
+  if (!saved) return DEFAULT_COLUMNS;
+  return (typeof saved === 'string') ? JSON.parse(saved) : saved;
 }
 
 export function setActiveColumns(cols) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(cols));
+  const _SS = window.StorageService;
+  if (_SS) { _SS.set(STORAGE_KEY, cols); }
+  else { localStorage.setItem(STORAGE_KEY, JSON.stringify(cols)); }
 }
 
 export function resetColumns() {
-  localStorage.removeItem(STORAGE_KEY);
+  const _SS = window.StorageService;
+  if (_SS) _SS.remove(STORAGE_KEY); else localStorage.removeItem(STORAGE_KEY);
   return DEFAULT_COLUMNS;
 }

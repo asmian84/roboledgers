@@ -26,7 +26,32 @@ SMART PARSING RULES:
    * KEY INSIGHT: Multiple transactions can occur on the same date
    * A new transaction starts when we see an AMOUNT (not a new date)
    */
-  parseWithRegex(text, metadata = null, lineMetadata = []) {
+  async parse(text, metadata = null, lineMetadata = []) {
+        // ── AUDIT IDENTITY: statement ID + sequence counter ──────────────────
+        // Produces parser_ref like "RBCSAV-2024NOV-001" on every transaction.
+        // Mirrors AmexParser audit structure for consistent audit drawer display.
+        let _statementYear = new Date().getFullYear().toString();
+        let _statementMonth = 'UNK';
+        const _yearMatch = text.match(/20\d{2}/);
+        if (_yearMatch) _statementYear = _yearMatch[0];
+        const _monthMatch = text.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (_monthMatch) _statementMonth = _monthMatch[1].substring(0, 3).toUpperCase();
+        const _statementId = 'RBCSAV-' + _statementYear + _statementMonth;
+        let _seqNum = 0;
+
+        // ── Audit helper — call this when building each transaction ──────────
+        const _makeAuditRef = (rawLine, lineMetadata) => {
+            _seqNum++;
+            const auditResult = typeof this.buildAuditData === 'function'
+                ? this.buildAuditData(rawLine, this.constructor.name, { statementId: _statementId, lineNumber: _seqNum })
+                : { pdfLocation: null, audit: null };
+            return {
+                parser_ref: _statementId + '-' + String(_seqNum).padStart(3, '0'),
+                pdfLocation: auditResult.pdfLocation,
+                audit: auditResult.audit,
+            };
+        };
+
     const lines = text.split('\n');
     const transactions = [];
 
@@ -42,9 +67,7 @@ SMART PARSING RULES:
 
     if (openingMatch) {
       openingBalance = parseFloat(openingMatch[1].replace(/,/g, ''));
-      console.log(`✅ [RBC] Robustly extracted opening balance: ${openingBalance}`);
     } else {
-      console.warn('⚠️ [RBC] Opening balance not found in text header.');
     }
 
     // 1.1 EXTRACT ACCOUNT INFO
@@ -92,7 +115,6 @@ SMART PARSING RULES:
     if (acctInfoMatch) {
       transit = acctInfoMatch[1];
       acctFromText = acctInfoMatch[2].replace(/[-\s]/g, '');
-      console.log(`✅ [RBC] Found Transit/Account: ${transit} / ${acctFromText}`);
 
       // Store in metadata for processing engine
       if (metadata) {
@@ -102,7 +124,6 @@ SMART PARSING RULES:
     } else if (anyTransitAcctMatch) {
       transit = anyTransitAcctMatch[1];
       acctFromText = anyTransitAcctMatch[2].replace(/[-\s]/g, '');
-      console.log(`✅ [RBC] Found via Scorched Earth: ${transit} / ${acctFromText}`);
       if (metadata) {
         metadata.transit = transit;
         metadata.accountNumber = acctFromText;
@@ -115,9 +136,6 @@ SMART PARSING RULES:
     const isSavings = text.includes('Savings Account') || text.includes('SAVINGS');
     const accountType = isSavings ? 'SAVINGS' : 'Chequing';
 
-    console.log(`[RBC Parser Debug] Raw Header Sample (First 100 chars): ${headerLines.substring(0, 100).replace(/\n/g, ' ')}`);
-    console.log(`[RBC Parser Debug] Extracted -> Transit: ${transit}, Account: ${acctFromText}`);
-    console.log('[RBC Parser Debug] Account Type:', accountType);
 
     if (window.ProcessingEngine) {
       window.ProcessingEngine.log('info', '[RBC Parser] Extraction Result', { transit, acct: acctFromText });
@@ -126,12 +144,15 @@ SMART PARSING RULES:
     // Capture metadata
     this.metadata = {
       institutionCode: '003',
+      inst: '003',
       transit: transit,
       accountNumber: acctFromText,
-      brand: 'RBC',
+      // NOTE: Do NOT set `brand` here — brand is for card networks (MASTERCARD, VISA).
+      // Setting brand: 'RBC' caused updateMetadata() to treat this as a credit card.
+      bankName: 'RBC',          // ← correct field for the issuing bank
       bank: 'RBC',
       tag: 'Savings',
-      accountType: 'SAVINGS', // [NEW] Added for downstream categorization
+      accountType: 'SAVINGS',   // downstream name builder uses this for "RBC - Savings #XXXX"
       openingBalance: openingBalance,
       debug_raw_header: headerLines // Store for UI debugging
     };
@@ -148,7 +169,6 @@ SMART PARSING RULES:
     const yearMatch = text.match(/,\s+(20\d{2})/);
     if (yearMatch) currentYear = parseInt(yearMatch[1]);
 
-    console.log(`[RBC] Starting Grid Parse.Initial Balance: ${currentCalculatedBalance} `);
 
     let pendingDescription = '';
     let pendingDate = null;
@@ -189,7 +209,6 @@ SMART PARSING RULES:
         }
 
         if (startMarkers.some(m => line.match(m))) {
-          console.log(`[RBC] ✅ Started parsing transactions`);
           insideTransactionBlock = true;
           continue; // Skip the marker line itself
         }
@@ -198,7 +217,6 @@ SMART PARSING RULES:
       // Stop Trigger: Summary lines  
       if (insideTransactionBlock) {
         if (endMarkers.some(m => line.match(m))) {
-          console.log(`[RBC] ✅ Finished parsing at closing balance`);
           insideTransactionBlock = false;
           break;
         }
@@ -246,7 +264,6 @@ SMART PARSING RULES:
         // Validation: Ensure amounts are reasonable (not concatenated)
         // If balance jumped by more than 10x the amount, likely a parsing error
         if (rowAmount > 1000000 || rowBalance > 10000000) {
-          console.warn(`[RBC] Suspicious amount detected: ${rowAmount}, balance: ${rowBalance}. Skipping row.`);
           pendingLineDesc += ' ' + content;
           continue;
         }
@@ -276,7 +293,6 @@ SMART PARSING RULES:
 
         // Validation
         if (rowAmount > 1000000) {
-          console.warn(`[RBC] Suspicious gap amount: ${rowAmount}. Skipping.`);
           pendingLineDesc += ' ' + content;
           continue;
         }
@@ -307,7 +323,6 @@ SMART PARSING RULES:
       // Try all permutations of Debit/Credit for gaps
       // Optimization: Limit to 2^12 (4096) to prevent freezing. If > 12, use Keyword Fallback.
       if (gaps.length > 12) {
-        console.warn(`⚠️[RBC] Gap batch too large(${gaps.length}), falling back to Keywords.`);
         return gaps.map(g => ({ ...g, isCredit: this.isCredit(g.description) }));
       }
 
@@ -333,7 +348,6 @@ SMART PARSING RULES:
       }
 
       // No solution found? Fallback to keywords
-      console.warn('⚠️ [RBC] Math solver failed to reconcile batch. Using keywords.');
       return gaps.map(g => ({ ...g, isCredit: this.isCredit(g.description) }));
     };
 
@@ -347,7 +361,7 @@ SMART PARSING RULES:
         if (g.isCredit) runningBalance += g.amount;
         else runningBalance -= g.amount;
 
-        const auditData1 = this.buildAuditData(g.line, 'RBCSavingsParser');
+        const _auditRef1 = _makeAuditRef(g.line, lineMetadata);
         transactions.push({
           date: g.date,
           description: g.description,
@@ -356,8 +370,9 @@ SMART PARSING RULES:
           credit: g.isCredit ? g.amount : 0,
           balance: runningBalance,
           _brand: 'RBC', _tag: 'Savings',
-          pdfLocation: auditData1.pdfLocation,
-          audit: auditData1.audit
+          parser_ref: _auditRef1.parser_ref,
+          pdfLocation: _auditRef1.pdfLocation,
+          audit: _auditRef1.audit,
         });
       });
       gapBuffer = [];
@@ -375,7 +390,7 @@ SMART PARSING RULES:
             if (g.isCredit) runningBalance += g.amount;
             else runningBalance -= g.amount;
 
-            const auditData2 = this.buildAuditData(g.line, 'RBCSavingsParser');
+            const _auditRef2 = _makeAuditRef(g.line, lineMetadata);
             transactions.push({
               date: g.date,
               description: g.description,
@@ -384,8 +399,9 @@ SMART PARSING RULES:
               credit: g.isCredit ? g.amount : 0,
               balance: runningBalance,
               _brand: 'RBC', _tag: 'Savings', _accountType: 'SAVINGS',
-              pdfLocation: auditData2.pdfLocation,
-              audit: auditData2.audit
+              parser_ref: _auditRef2.parser_ref,
+              pdfLocation: _auditRef2.pdfLocation,
+              audit: _auditRef2.audit,
             });
           });
           gapBuffer = [];
@@ -398,11 +414,10 @@ SMART PARSING RULES:
 
         // Sync to anchor balance if there's drift
         if (Math.abs(runningBalance - row.balance) > 0.05) {
-          console.warn(`⚠️[RBC] Balance drift: calc=${runningBalance.toFixed(2)}, anchor=${row.balance.toFixed(2)}. Syncing to anchor.`);
           runningBalance = row.balance;
         }
 
-        const auditData3 = this.buildAuditData(row.line, 'RBCSavingsParser');
+        const _auditRef3 = _makeAuditRef(row.line, lineMetadata);
         transactions.push({
           date: row.date,
           description: row.description,
@@ -411,8 +426,9 @@ SMART PARSING RULES:
           credit: isCredit ? row.amount : 0,
           balance: runningBalance,
           _brand: 'RBC', _tag: 'Savings', _accountType: 'SAVINGS',
-          pdfLocation: auditData3.pdfLocation,
-          audit: auditData3.audit
+          parser_ref: _auditRef3.parser_ref,
+          pdfLocation: _auditRef3.pdfLocation,
+          audit: _auditRef3.audit,
         });
 
       } else {
@@ -423,13 +439,12 @@ SMART PARSING RULES:
 
     // Handle Trailing Gaps (no closing anchor)
     if (gapBuffer.length > 0) {
-      console.warn('⚠️ [RBC] Trailing gaps found without closing anchor. Using keywords.');
       gapBuffer.forEach(g => {
         const isCredit = this.isCredit(g.description);
         if (isCredit) runningBalance += g.amount;
         else runningBalance -= g.amount;
 
-        const auditData4 = this.buildAuditData(g.line, 'RBCSavingsParser');
+        const _auditRef4 = _makeAuditRef(g.line, lineMetadata);
         transactions.push({
           date: g.date,
           description: g.description,
@@ -438,13 +453,13 @@ SMART PARSING RULES:
           credit: isCredit ? g.amount : 0,
           balance: runningBalance,
           _brand: 'RBC', _tag: 'Savings',
-          pdfLocation: auditData4.pdfLocation,
-          audit: auditData4.audit
+          parser_ref: _auditRef4.parser_ref,
+          pdfLocation: _auditRef4.pdfLocation,
+          audit: _auditRef4.audit,
         });
       });
     }
 
-    console.log(`[RBC] Grid Parse Complete via GapSolver.${transactions.length} rows.`);
     return {
       transactions,
       metadata: this.metadata,
@@ -505,10 +520,6 @@ SMART PARSING RULES:
         // Check if the search line is contained in (or contains) the metadata line
         // This handles cases where lines might be split differently
         if (normalizedMeta.includes(normalizedSearch) || normalizedSearch.includes(normalizedMeta)) {
-          console.log(`🎯[RBC - AUDIT] Exact match found for "${description.substring(0, 30)}...": `);
-          console.log(`   Search: "${normalizedSearch.substring(0, 50)}"`);
-          console.log(`   Found: "${normalizedMeta.substring(0, 50)}"`);
-          console.log(`   Y: ${lineMeta.y}, Page: ${lineMeta.page} `);
           auditData = {
             page: lineMeta.page,
             y: lineMeta.y,
@@ -615,7 +626,6 @@ SMART PARSING RULES:
     };
 
     // DEBUG: Log audit data for inspection
-    console.log(`[RBC - AUDIT] Final Audit for "${description.substring(0, 15)}...": `, auditData);
 
     return finalTxn;
   }

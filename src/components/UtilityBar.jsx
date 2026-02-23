@@ -19,7 +19,7 @@ const CHART_COLORS = [
 /**
  * Simple SVG Pie Chart
  */
-function PieChart({ data, size = 200 }) {
+function PieChart({ data, size = 200, onSliceClick }) {
     if (!data || data.length === 0) {
         return (
             <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
@@ -65,13 +65,14 @@ function PieChart({ data, size = 200 }) {
             color: CHART_COLORS[index % CHART_COLORS.length],
             label: item.label,
             value: item.value,
+            filterFn: item.filterFn,
             percentage: percentage.toFixed(1)
         };
     });
 
     return (
         <div className="space-y-3">
-            {/* SVG Pie Chart */}
+            {/* SVG Pie Chart — each slice is clickable */}
             <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="mx-auto">
                 {slices.map((slice, index) => (
                     <path
@@ -81,14 +82,19 @@ function PieChart({ data, size = 200 }) {
                         stroke="white"
                         strokeWidth="2"
                         className="transition-opacity hover:opacity-80 cursor-pointer"
+                        onClick={() => onSliceClick?.(slice)}
                     />
                 ))}
             </svg>
 
-            {/* Legend */}
+            {/* Legend — each row is clickable */}
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {slices.map((slice, index) => (
-                    <div key={index} className="flex items-center justify-between text-xs">
+                    <div
+                        key={index}
+                        className="flex items-center justify-between text-xs cursor-pointer rounded px-1 py-0.5 hover:bg-gray-100 transition-colors"
+                        onClick={() => onSliceClick?.(slice)}
+                    >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                             <div
                                 className="w-3 h-3 rounded-sm flex-shrink-0"
@@ -107,59 +113,341 @@ function PieChart({ data, size = 200 }) {
     );
 }
 
+/** Shared row style for drillable stat rows */
+const DRILL_ROW = "flex justify-between items-center cursor-pointer rounded px-2 py-1.5 -mx-2 hover:bg-opacity-80 transition-colors group";
+
+// ── Account type badge colours ─────────────────────────────────────────────
+const ACCOUNT_TYPE_COLORS = {
+    CHEQUING:   { bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },
+    SAVINGS:    { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
+    VISA:       { bg: '#faf5ff', border: '#e9d5ff', text: '#7c3aed' },
+    MASTERCARD: { bg: '#fff1f2', border: '#fecdd3', text: '#be123c' },
+    AMEX:       { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af' },
+    DEFAULT:    { bg: '#f8fafc', border: '#e2e8f0', text: '#475569' },
+};
+
+function accountTypeColor(account) {
+    const t = (account?.accountType || account?.brand || account?.cardNetwork || '').toUpperCase();
+    return ACCOUNT_TYPE_COLORS[t] || ACCOUNT_TYPE_COLORS.DEFAULT;
+}
+
+function accountTypeLabel(account) {
+    if (account?.brand || account?.cardNetwork) {
+        return (account.brand || account.cardNetwork).toUpperCase();
+    }
+    if (account?.accountType) return account.accountType;
+    return 'ACCOUNT';
+}
+
+/** Masked last-4 of account number */
+function maskNumber(num) {
+    if (!num) return null;
+    const s = String(num).replace(/\D/g, '');
+    return s.length >= 4 ? '···· ' + s.slice(-4) : s;
+}
+
+/**
+ * Returns a bank icon element for a given account.
+ * Uses known bank abbreviations with brand colors, falls back to generic card icon.
+ */
+function BankIcon({ account, size = 32, className = '' }) {
+    const bankName  = (account?.bankName || account?.name || '').toUpperCase();
+    const brand     = (account?.brand || account?.cardNetwork || '').toUpperCase();
+    const acctType  = (account?.accountType || '').toLowerCase();
+    const isCC      = acctType === 'creditcard' || !!account?.brand || !!account?.cardNetwork;
+
+    // Known bank → icon colour map
+    const BANK_STYLES = {
+        RBC:   { bg: '#003168', text: '#fff', abbr: 'RBC' },
+        'ROYAL BANK': { bg: '#003168', text: '#fff', abbr: 'RBC' },
+        TD:    { bg: '#00a850', text: '#fff', abbr: 'TD' },
+        'TORONTO DOMINION': { bg: '#00a850', text: '#fff', abbr: 'TD' },
+        BMO:   { bg: '#0079c1', text: '#fff', abbr: 'BMO' },
+        'BANK OF MONTREAL': { bg: '#0079c1', text: '#fff', abbr: 'BMO' },
+        CIBC:  { bg: '#c41f3e', text: '#fff', abbr: 'CIBC' },
+        SCOTIABANK: { bg: '#ec111a', text: '#fff', abbr: 'NS' },
+        SCOTIA: { bg: '#ec111a', text: '#fff', abbr: 'NS' },
+        ATB:   { bg: '#003057', text: '#fff', abbr: 'ATB' },
+        'ATB FINANCIAL': { bg: '#003057', text: '#fff', abbr: 'ATB' },
+        HSBC:  { bg: '#db0011', text: '#fff', abbr: 'HSBC' },
+        AMEX:  { bg: '#016fce', text: '#fff', abbr: 'AX' },
+        'AMERICAN EXPRESS': { bg: '#016fce', text: '#fff', abbr: 'AX' },
+        VISA:  { bg: '#1a1f71', text: '#fff', abbr: 'VISA' },
+        MASTERCARD: { bg: '#eb001b', text: '#fff', abbr: 'MC' },
+        MC:    { bg: '#eb001b', text: '#fff', abbr: 'MC' },
+    };
+
+    // Try matching on bank name first, then brand
+    let style = null;
+    for (const key of Object.keys(BANK_STYLES)) {
+        if (bankName.includes(key) || brand.includes(key)) {
+            style = BANK_STYLES[key];
+            break;
+        }
+    }
+
+    if (!style) {
+        // Generic fallback — use account type colour
+        const col = accountTypeColor(account);
+        const initials = (account?.ref || account?.name || '?').slice(0, 3).toUpperCase();
+        return (
+            <div
+                className={`flex items-center justify-center rounded-lg flex-shrink-0 text-[10px] font-bold ${className}`}
+                style={{ width: size, height: size, background: col.bg, border: `1px solid ${col.border}`, color: col.text }}
+            >
+                {isCC
+                    ? <i className="ph ph-credit-card" style={{ fontSize: size * 0.45 }}></i>
+                    : initials
+                }
+            </div>
+        );
+    }
+
+    return (
+        <div
+            className={`flex items-center justify-center rounded-lg flex-shrink-0 font-bold ${className}`}
+            style={{
+                width: size, height: size,
+                background: style.bg,
+                color: style.text,
+                fontSize: size <= 28 ? 8 : size <= 36 ? 10 : 12,
+                letterSpacing: '-0.02em',
+            }}
+        >
+            {style.abbr}
+        </div>
+    );
+}
+
+/**
+ * AccountCard — compact card showing current account metadata.
+ * Click the chevron to expand and pick a different account.
+ */
+function AccountCard({ accounts = [], selectedAccount = 'ALL', onAccountChange }) {
+    const [expanded, setExpanded] = React.useState(false);
+
+    const current = selectedAccount === 'ALL'
+        ? null
+        : accounts.find(a => a.id === selectedAccount);
+
+    const col = current ? accountTypeColor(current) : ACCOUNT_TYPE_COLORS.DEFAULT;
+
+    return (
+        <div className="bg-white border-b border-gray-200">
+            {/* ── Current account summary row ── */}
+            <button
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                onClick={() => setExpanded(v => !v)}
+            >
+                {/* Bank icon */}
+                {current
+                    ? <BankIcon account={current} size={32} />
+                    : (
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 border border-gray-200 flex-shrink-0">
+                            <i className="ph ph-buildings text-gray-500 text-[14px]"></i>
+                        </div>
+                    )
+                }
+
+                {/* Name + sub-line */}
+                <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold text-gray-900 truncate leading-tight">
+                        {current ? (current.name || current.ref || current.id) : 'All Accounts'}
+                    </div>
+                    <div className="text-[10px] text-gray-400 leading-tight mt-0.5 truncate">
+                        {current
+                            ? [
+                                accountTypeLabel(current),
+                                current.bankName,
+                                maskNumber(current.accountNumber),
+                              ].filter(Boolean).join(' · ')
+                            : `${accounts.length} accounts`
+                        }
+                    </div>
+                </div>
+
+                {/* Type badge */}
+                {current && (
+                    <span
+                        className="flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: col.bg, border: `1px solid ${col.border}`, color: col.text }}
+                    >
+                        {accountTypeLabel(current)}
+                    </span>
+                )}
+
+                {/* Chevron */}
+                <i className={`ph ph-caret-${expanded ? 'up' : 'down'} text-gray-400 text-[12px] flex-shrink-0`}></i>
+            </button>
+
+            {/* ── Expanded account switcher list ── */}
+            {expanded && (
+                <div className="border-t border-gray-100 max-h-64 overflow-y-auto">
+                    {/* All Accounts option */}
+                    <button
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 transition-colors text-left ${selectedAccount === 'ALL' ? 'bg-indigo-50' : ''}`}
+                        onClick={() => { onAccountChange?.('ALL'); setExpanded(false); }}
+                    >
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center bg-gray-100 border border-gray-200 flex-shrink-0">
+                            <i className="ph ph-stack text-gray-500 text-[12px]"></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-semibold text-gray-800">All Accounts</div>
+                            <div className="text-[10px] text-gray-400">{accounts.length} accounts · combined view</div>
+                        </div>
+                        {selectedAccount === 'ALL' && (
+                            <i className="ph ph-check-circle text-indigo-500 text-[14px]"></i>
+                        )}
+                    </button>
+
+                    {/* Individual accounts */}
+                    {accounts.map(acct => {
+                        const c   = accountTypeColor(acct);
+                        const sel = selectedAccount === acct.id;
+                        return (
+                            <button
+                                key={acct.id}
+                                className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 transition-colors text-left ${sel ? 'bg-indigo-50' : ''}`}
+                                onClick={() => { onAccountChange?.(acct.id); setExpanded(false); }}
+                            >
+                                <BankIcon account={acct} size={28} />
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-[12px] font-semibold text-gray-800 truncate">
+                                        {acct.name || acct.ref || acct.id}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 truncate">
+                                        {[accountTypeLabel(acct), acct.bankName, maskNumber(acct.accountNumber)]
+                                            .filter(Boolean).join(' · ')}
+                                    </div>
+                                </div>
+                                {acct.period && (
+                                    <span className="text-[9px] text-gray-400 flex-shrink-0">{acct.period}</span>
+                                )}
+                                {sel && <i className="ph ph-check-circle text-indigo-500 text-[14px]"></i>}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* ── Metadata strip (visible when a single account is selected) ── */}
+            {current && !expanded && (
+                <div className="px-4 pb-3 flex items-center gap-3 flex-wrap">
+                    {current.period && (
+                        <span className="text-[10px] text-gray-400">
+                            <span className="font-medium text-gray-600">Period</span> {current.period}
+                        </span>
+                    )}
+                    {current.transit && (
+                        <span className="text-[10px] text-gray-400">
+                            <span className="font-medium text-gray-600">Transit</span> {current.transit}
+                        </span>
+                    )}
+                    {current.inst && (
+                        <span className="text-[10px] text-gray-400">
+                            <span className="font-medium text-gray-600">Inst</span> {current.inst}
+                        </span>
+                    )}
+                    {current.currency && (
+                        <span className="text-[10px] text-gray-400">
+                            <span className="font-medium text-gray-600">CCY</span> {current.currency}
+                        </span>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 /**
  * UtilityBar - Side panel showing reconciliation stats, metadata, and dashboard
- * Replaces the old overlay utility bar with integrated split-pane design
+ * Every stat row is drillable — clicking filters the main transaction grid.
  */
-export function UtilityBar({ transactions = [], onFilterTransactions }) {
+export function UtilityBar({
+    transactions = [],
+    onFilterTransactions,
+    activeFilter,
+    onClearFilter,
+    accounts = [],
+    selectedAccount = 'ALL',
+    onAccountChange,
+}) {
     // Calculate stats from transactions
     const stats = React.useMemo(() => {
-        const categorized = transactions.filter(t => t.category && t.category !== 'UNCAT');
-        const uncategorized = transactions.filter(t => !t.category || t.category === 'UNCAT');
+        // 9970 = "Unusual item" — the fallback uncategorized bucket; treat as uncategorized
+        const isUncategorized = t => !t.category || t.category === 'UNCAT' || String(t.category) === '9970';
+        const categorized   = transactions.filter(t => !isUncategorized(t));
+        const uncategorized = transactions.filter(isUncategorized);
+        const needsReview   = transactions.filter(t =>
+            t.status === 'needs_review' || (t.confidence != null && t.confidence < 0.7));
 
-        const totalDebit = transactions.reduce((sum, t) => {
-            return t.polarity === 'DEBIT' ? sum + (t.amount_cents || 0) : sum;
-        }, 0) / 100;
+        const totalDebit = transactions.reduce((sum, t) =>
+            t.polarity === 'DEBIT'  ? sum + (t.amount_cents || 0) : sum, 0) / 100;
+        const totalCredit = transactions.reduce((sum, t) =>
+            t.polarity === 'CREDIT' ? sum + (t.amount_cents || 0) : sum, 0) / 100;
 
-        const totalCredit = transactions.reduce((sum, t) => {
-            return t.polarity === 'CREDIT' ? sum + (t.amount_cents || 0) : sum;
-        }, 0) / 100;
-
-        // GST Calculations
+        // GST Calculations — only count gst_enabled transactions
         let gstCollected = 0;
-        let gstPaid = 0;
+        let gstPaid      = 0;
         let totalRevenue = 0;
+        let totalExpense = 0;
 
         transactions.forEach(t => {
-            // Only include if GST checkbox is checked
-            if (!t.gst_enabled) return;
+            const amtDollars = (t.amount_cents || 0) / 100;
+            const coaAcct    = window.RoboLedger?.COA?.get(t.category);
 
+            // Is this transaction from a credit card / liability account?
+            // CC charges are NEVER revenue — the card owner is spending, not earning.
+            const ledgerAcct = window.RoboLedger?.Accounts?.get(t.account_id);
+            const isCCAcct   = !!(ledgerAcct?.brand || ledgerAcct?.cardNetwork ||
+                                  (ledgerAcct?.accountType || '').toLowerCase() === 'creditcard');
+
+            // Revenue / Expense totals (all transactions, not just GST-enabled)
+            // Credit card transactions with a REVENUE category are misclassified — treat as expense
+            if (coaAcct?.root === 'REVENUE' && !isCCAcct) {
+                totalRevenue += amtDollars;
+            } else if (coaAcct?.root === 'EXPENSE' || coaAcct?.class === 'COGS') {
+                totalExpense += amtDollars;
+            } else if (isCCAcct && coaAcct?.root === 'REVENUE') {
+                // CC account with a revenue category = miscategorized charge → count as expense
+                totalExpense += amtDollars;
+            }
+
+            if (!t.gst_enabled) return;
             const taxAmount = (t.tax_cents || 0) / 100;
 
-            // USE POLARITY (90% accurate, user controls via checkbox)
-            if (t.polarity === 'CREDIT') {
-                // CREDIT = incoming money = GST Collected
+            if (coaAcct?.root === 'REVENUE' && !isCCAcct) {
+                // Revenue on a bank/chequing account = GST Collected
                 gstCollected += taxAmount;
-                totalRevenue += (t.amount_cents || 0) / 100;
-            } else if (t.polarity === 'DEBIT') {
-                // DEBIT = outgoing money = GST ITC/Paid
+            } else if (coaAcct?.root === 'EXPENSE' || coaAcct?.class === 'COGS' || isCCAcct) {
+                // Expenses, COGS, or ANY credit card transaction = GST ITC (paid to vendor)
+                gstPaid += taxAmount;
+            } else if (!coaAcct && !isCCAcct && t.polarity === 'CREDIT') {
+                // Uncategorized bank CREDIT (deposit) — assume revenue/collected
+                gstCollected += taxAmount;
+                totalRevenue += amtDollars;
+            } else if (!coaAcct) {
+                // Everything else uncategorized = assume expense/ITC
                 gstPaid += taxAmount;
             }
         });
 
-        const netGST = gstCollected - gstPaid;
+        const netGST      = gstCollected - gstPaid;
+        const netActivity = totalDebit - totalCredit;
 
         return {
-            total: transactions.length,
-            categorized: categorized.length,
+            total:        transactions.length,
+            categorized:  categorized.length,
             uncategorized: uncategorized.length,
+            needsReview:  needsReview.length,
             totalDebit,
             totalCredit,
-            netActivity: totalDebit - totalCredit,
+            netActivity,
             gstCollected,
             gstPaid,
             netGST,
-            totalRevenue
+            totalRevenue,
+            totalExpense,
         };
     }, [transactions]);
 
@@ -167,138 +455,305 @@ export function UtilityBar({ transactions = [], onFilterTransactions }) {
         ? Math.round((stats.categorized / stats.total) * 100)
         : 0;
 
+    const fmt = (n) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    /** Fire a filter event — every drillable row calls this */
+    const drill = (label, filterFn) => onFilterTransactions?.({ label, filter: filterFn });
+
+    // Shared helper: derive whether a transaction is GST Collected vs ITC using the same
+    // logic as the stats block — based on COA root + account type, not stored gst_type field
+    // (gst_type is only persisted when the toggle is explicitly clicked, so it may be absent)
+    const gstTypeOf = (tx) => {
+        const coaAcct    = window.RoboLedger?.COA?.get(tx.category);
+        const ledgerAcct = window.RoboLedger?.Accounts?.get(tx.account_id);
+        const isCCAcct   = !!(ledgerAcct?.brand || ledgerAcct?.cardNetwork ||
+                              (ledgerAcct?.accountType || '').toLowerCase() === 'creditcard');
+        // Revenue on a non-CC bank account = Collected; everything else = ITC
+        if (coaAcct?.root === 'REVENUE' && !isCCAcct) return 'collected';
+        if (!coaAcct && !isCCAcct && tx.polarity === 'CREDIT') return 'collected'; // uncat bank deposit
+        return 'itc';
+    };
+
     return (
         <div className="h-full overflow-y-auto bg-gray-50">
-            {/* Dashboard Section - 3 Column Stats */}
+
+            {/* ── ACCOUNT CARD + SWITCHER ──────────────────────────────────── */}
+            <AccountCard
+                accounts={accounts}
+                selectedAccount={selectedAccount}
+                onAccountChange={onAccountChange}
+            />
+
+            {/* ── OVERVIEW: 3-column count grid ───────────────────────────── */}
             <div className="p-3 bg-white border-b border-gray-200">
                 <div className="bg-pink-50 border border-pink-200 rounded-md overflow-hidden">
                     <div className="grid grid-cols-3 divide-x divide-pink-200">
 
-                        {/* Column 1: Total */}
-                        <div className="p-3 text-center">
+                        {/* Total — clears all filters */}
+                        <div
+                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            onClick={() => onClearFilter?.()}
+                        >
                             <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-                            <div className="text-xs text-gray-600 mt-1">Total</div>
+                            <div className="text-xs text-gray-500 mt-1">Total</div>
                         </div>
 
-                        {/* Column 2: Categorized */}
-                        <div className="p-3 text-center">
-                            <div className="text-2xl font-bold text-blue-600">
-                                {stats.categorized}
-                            </div>
-                            <div className="text-xs text-gray-600 mt-1">
-                                Categorized ({categorizationProgress}%)
-                            </div>
+                        {/* Categorized */}
+                        <div
+                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            onClick={() => drill('Categorized',
+                                t => !!(t.category && t.category !== 'UNCAT' && String(t.category) !== '9970'))}
+                        >
+                            <div className="text-2xl font-bold text-blue-600">{stats.categorized}</div>
+                            <div className="text-xs text-gray-500 mt-1">Categorized ({categorizationProgress}%)</div>
                         </div>
 
-                        {/* Column 3: Uncategorized */}
-                        <div className="p-3 text-center">
-                            <div className="text-2xl font-bold text-amber-600">
-                                {stats.uncategorized}
-                            </div>
-                            <div className="text-xs text-gray-600 mt-1">Uncategorized</div>
+                        {/* Uncategorized */}
+                        <div
+                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            onClick={() => drill('Uncategorized',
+                                t => !t.category || t.category === 'UNCAT' || String(t.category) === '9970')}
+                        >
+                            <div className="text-2xl font-bold text-amber-600">{stats.uncategorized}</div>
+                            <div className="text-xs text-gray-500 mt-1">Uncategorized</div>
                         </div>
 
                     </div>
+
+                    {/* Needs Review — below the grid */}
+                    {stats.needsReview > 0 && (
+                        <div
+                            className="border-t border-pink-200 px-3 py-2 flex justify-between items-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            onClick={() => drill('Needs Review',
+                                t => t.status === 'needs_review' || (t.confidence != null && t.confidence < 0.7))}
+                        >
+                            <span className="text-xs text-orange-700 font-medium">⚠ Needs Review</span>
+                            <span className="text-xs font-bold text-orange-700">{stats.needsReview}</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* GST Summary */}
+            {/* ── BANK ACCOUNTS ICONS ─────────────────────────────────────── */}
+            {accounts.length > 0 && (
+                <div className="p-3 bg-white border-b border-gray-200">
+                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Bank Accounts</h3>
+                    <div className="flex flex-wrap gap-2">
+                        {accounts.map(acc => {
+                            const isSelected = selectedAccount === acc.id;
+                            // Calculate account balance from transactions
+                            const accTxs = transactions.filter(t => t.account_id === acc.id);
+                            const bal = accTxs.reduce((sum, t) => {
+                                const amt = (t.amount_cents || 0) / 100;
+                                return t.polarity === 'DEBIT' ? sum - amt : sum + amt;
+                            }, 0);
+                            return (
+                                <div
+                                    key={acc.id}
+                                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-all ${
+                                        isSelected
+                                            ? 'bg-indigo-50 border border-indigo-300 ring-1 ring-indigo-200'
+                                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                    onClick={() => onAccountChange?.(isSelected ? 'ALL' : acc.id)}
+                                    title={`${acc.name || acc.ref} — ${accTxs.length} transactions`}
+                                >
+                                    <BankIcon account={acc} size={22} />
+                                    <div className="leading-tight">
+                                        <div className="text-[10px] font-semibold text-gray-700 truncate max-w-[70px]">
+                                            {(acc.ref || acc.name || '').slice(0, 10)}
+                                        </div>
+                                        <div className="text-[9px] font-mono text-gray-400">
+                                            {accTxs.length}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* ── GST SUMMARY ─────────────────────────────────────────────── */}
             <div className="p-4 bg-white border-b border-gray-200">
-                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">GST Summary</h3>
-                <div className="bg-green-50 border border-green-200 rounded-md p-3 space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">GST / HST Summary</h3>
+                <div className="bg-green-50 border border-green-200 rounded-md p-3 space-y-1">
+
+                    {/* GST Collected */}
                     <div
-                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
-                        onClick={() => onFilterTransactions?.({
-                            type: 'gst_collected',
-                            label: 'GST Collected',
-                            filter: tx => tx.gst_enabled && tx.polarity === 'CREDIT' && tx.tax_cents > 0
-                        })}
-                        title="Click to filter GST Collected transactions"
+                        className={`${DRILL_ROW} hover:bg-green-100`}
+                        onClick={() => drill('GST Collected (2160)',
+                            tx => tx.gst_enabled && (tx.tax_cents > 0) && gstTypeOf(tx) === 'collected')}
                     >
-                        <span className="text-xs text-gray-600">GST Collected</span>
-                        <span className="text-sm font-bold font-mono text-green-700">
-                            ${stats.gstCollected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        <span className="text-xs text-gray-600 group-hover:text-green-800">GST Collected</span>
+                        <span className="text-sm font-bold font-mono text-green-700">{fmt(stats.gstCollected)}</span>
                     </div>
+
+                    {/* GST ITC Paid */}
                     <div
-                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
-                        onClick={() => onFilterTransactions?.({
-                            type: 'gst_paid',
-                            label: 'GST ITC (Paid)',
-                            filter: tx => tx.gst_enabled && tx.polarity === 'DEBIT' && tx.tax_cents > 0
-                        })}
-                        title="Click to filter GST ITC/Paid transactions"
+                        className={`${DRILL_ROW} hover:bg-blue-50`}
+                        onClick={() => drill('GST ITC / Paid (2150)',
+                            tx => tx.gst_enabled && (tx.tax_cents > 0) && gstTypeOf(tx) === 'itc')}
                     >
-                        <span className="text-xs text-gray-600">GST ITC (Paid)</span>
-                        <span className="text-sm font-bold font-mono text-blue-700">
-                            ${stats.gstPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        <span className="text-xs text-gray-600 group-hover:text-blue-800">GST ITC (Paid)</span>
+                        <span className="text-sm font-bold font-mono text-blue-700">{fmt(stats.gstPaid)}</span>
                     </div>
+
+                    {/* Total Revenue */}
                     <div
-                        className="flex justify-between items-center cursor-pointer hover:bg-green-100 p-2 -m-2 rounded transition-colors"
-                        onClick={() => onFilterTransactions?.({
-                            type: 'revenue',
-                            label: 'Total Revenue',
-                            filter: tx => tx.polarity === 'CREDIT' && tx.gst_enabled
-                        })}
-                        title="Click to filter Revenue transactions"
+                        className={`${DRILL_ROW} hover:bg-green-100`}
+                        onClick={() => drill('Revenue',
+                            tx => {
+                                const acct = window.RoboLedger?.COA?.get(tx.category);
+                                return acct?.root === 'REVENUE';
+                            })}
                     >
-                        <span className="text-xs text-gray-600">Total Revenue</span>
-                        <span className="text-sm font-bold font-mono text-gray-700">
-                            ${stats.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        <span className="text-xs text-gray-600 group-hover:text-green-800">Total Revenue</span>
+                        <span className="text-sm font-bold font-mono text-gray-700">{fmt(stats.totalRevenue)}</span>
                     </div>
-                    <div className="pt-2 border-t border-green-300 flex justify-between items-center">
+
+                    {/* Total Expenses */}
+                    <div
+                        className={`${DRILL_ROW} hover:bg-amber-50`}
+                        onClick={() => drill('Expenses',
+                            tx => {
+                                const acct = window.RoboLedger?.COA?.get(tx.category);
+                                return acct?.root === 'EXPENSE' || acct?.class === 'COGS';
+                            })}
+                    >
+                        <span className="text-xs text-gray-600 group-hover:text-amber-800">Total Expenses</span>
+                        <span className="text-sm font-bold font-mono text-amber-700">{fmt(stats.totalExpense)}</span>
+                    </div>
+
+                    {/* Net GST Payable / Refund */}
+                    <div
+                        className={`pt-2 border-t border-green-300 ${DRILL_ROW} hover:bg-green-100`}
+                        onClick={() => drill('All GST Transactions',
+                            tx => tx.gst_enabled && tx.tax_cents > 0)}
+                    >
                         <span className="text-xs font-semibold text-gray-700">
-                            {stats.netGST < 0 ? 'GST Refund' : 'GST Payable'}
+                            {stats.netGST < 0 ? 'GST Refund' : 'Net GST Payable'}
                         </span>
                         <span className={`text-sm font-bold font-mono ${stats.netGST < 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ${Math.abs(stats.netGST).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {fmt(Math.abs(stats.netGST))}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* Account Reconciliation */}
+            {/* ── RECONCILIATION ──────────────────────────────────────────── */}
             <div className="p-4 bg-white border-b border-gray-200">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Reconciliation</h3>
+                <div className="space-y-1">
 
-                {/* Account Balances */}
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-600">Total Debit</span>
-                        <span className="text-sm font-bold font-mono text-red-600">
-                            ${stats.totalDebit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                    {/* Total Debit (Money Out) */}
+                    <div
+                        className={`${DRILL_ROW} hover:bg-red-50`}
+                        onClick={() => drill('Money Out (Debits)', t => t.polarity === 'DEBIT')}
+                    >
+                        <span className="text-xs text-gray-600 group-hover:text-red-800">Total Debit</span>
+                        <span className="text-sm font-bold font-mono text-red-600">{fmt(stats.totalDebit)}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-600">Total Credit</span>
-                        <span className="text-sm font-bold font-mono text-green-600">
-                            ${stats.totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+
+                    {/* Total Credit (Money In) */}
+                    <div
+                        className={`${DRILL_ROW} hover:bg-green-50`}
+                        onClick={() => drill('Money In (Credits)', t => t.polarity === 'CREDIT')}
+                    >
+                        <span className="text-xs text-gray-600 group-hover:text-green-800">Total Credit</span>
+                        <span className="text-sm font-bold font-mono text-green-600">{fmt(stats.totalCredit)}</span>
                     </div>
-                    <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
+
+                    {/* Net Activity */}
+                    <div
+                        className={`pt-2 border-t border-gray-200 ${DRILL_ROW} hover:bg-gray-100`}
+                        onClick={() => {
+                            // Net = debits - credits; if positive show debits, if negative show credits
+                            if (stats.netActivity >= 0) {
+                                drill('Net Activity (Debit-heavy)', t => t.polarity === 'DEBIT');
+                            } else {
+                                drill('Net Activity (Credit-heavy)', t => t.polarity === 'CREDIT');
+                            }
+                        }}
+                    >
                         <span className="text-xs font-semibold text-gray-700">Net Activity</span>
                         <span className={`text-sm font-bold font-mono ${stats.netActivity >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ${Math.abs(stats.netActivity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {fmt(Math.abs(stats.netActivity))}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* Category Distribution Pie Chart */}
+            {/* ── CATEGORY DISTRIBUTION PIE CHART ────────────────────────── */}
             <div className="p-4 bg-white border-b border-gray-200">
-                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Category Distribution</h3>
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">Category Distribution</h3>
+
+                {/* Active Filter Breadcrumb — sits right above the pie */}
+                {activeFilter ? (
+                    <div className="flex items-center justify-between mb-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-md">
+                        <div className="flex items-center gap-1.5 text-xs text-amber-800 min-w-0">
+                            <button
+                                className="text-amber-600 hover:text-amber-900 font-medium shrink-0 underline underline-offset-2"
+                                onClick={() => onClearFilter?.()}
+                            >
+                                All
+                            </button>
+                            <span className="text-amber-400">›</span>
+                            <span className="font-semibold truncate">{activeFilter}</span>
+                        </div>
+                        <button
+                            className="ml-2 shrink-0 w-4 h-4 flex items-center justify-center rounded-full bg-amber-200 hover:bg-amber-300 text-amber-700 transition-colors"
+                            onClick={() => onClearFilter?.()}
+                        >
+                            <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                                <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                ) : (
+                    <p className="text-[10px] text-gray-400 mb-2">Click any slice or row to filter the grid</p>
+                )}
                 <PieChart
                     data={getCategoryDistribution(transactions)}
                     size={180}
+                    onSliceClick={(slice) => {
+                        if (typeof slice.filterFn === 'function') {
+                            onFilterTransactions?.({ label: slice.label, filter: slice.filterFn });
+                        }
+                    }}
                 />
             </div>
 
-            {/* Metadata */}
+            {/* ── TOP CATEGORIES ─────────────────────────────────────────── */}
+            <div className="p-4 bg-white border-b border-gray-200">
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Top Categories</h3>
+                <div className="space-y-1">
+                    {getTopCategories(transactions).map((cat, idx) => (
+                        <div
+                            key={idx}
+                            className={`${DRILL_ROW} hover:bg-indigo-50`}
+                            onClick={() => drill(cat.name,
+                                t => (t.category || 'Uncategorized') === cat.code)}
+                        >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span
+                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
+                                />
+                                <span className="text-xs text-gray-700 truncate group-hover:text-indigo-900">{cat.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                <span className="text-xs font-mono font-semibold text-gray-900">{fmt(cat.total)}</span>
+                                <span className="text-[10px] text-gray-400">({cat.count})</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── METADATA ────────────────────────────────────────────────── */}
             <div className="p-4 bg-white">
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Metadata</h3>
-
                 <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
                         <span className="text-gray-600">Date Range</span>
@@ -306,7 +761,7 @@ export function UtilityBar({ transactions = [], onFilterTransactions }) {
                             {transactions.length > 0 ? (
                                 <>
                                     {new Date(Math.min(...transactions.map(t => new Date(t.date)))).toLocaleDateString('en-CA')}
-                                    {' - '}
+                                    {' — '}
                                     {new Date(Math.max(...transactions.map(t => new Date(t.date)))).toLocaleDateString('en-CA')}
                                 </>
                             ) : '—'}
@@ -319,63 +774,57 @@ export function UtilityBar({ transactions = [], onFilterTransactions }) {
                 </div>
             </div>
 
-            {/* Top Categories */}
-            <div className="p-4 bg-white border-t border-gray-200">
-                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Top Categories</h3>
-
-                <div className="space-y-2">
-                    {getTopCategories(transactions).map((cat, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-xs">
-                            <span className="text-gray-700 truncate">{cat.name}</span>
-                            <span className="font-mono font-semibold text-gray-900">{cat.count}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
         </div>
     );
 }
 
-// Helper to get category distribution for pie chart
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Category distribution for pie chart — by spend amount, not count */
 function getCategoryDistribution(transactions) {
-    const categoryCounts = {};
+    const categoryTotals = {};
 
     transactions.forEach(tx => {
         const cat = tx.category || 'Uncategorized';
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+        if (!categoryTotals[cat]) categoryTotals[cat] = 0;
+        categoryTotals[cat] += (tx.amount_cents || 0) / 100;
     });
 
-    return Object.entries(categoryCounts)
+    return Object.entries(categoryTotals)
         .sort((a, b) => b[1] - a[1])
-        .map(([code, count]) => {
-            // Try to get friendly name from COA
+        .slice(0, 12)
+        .map(([code, total]) => {
             const account = window.RoboLedger?.COA?.get(String(code));
+            const label   = account?.name || (code === 'Uncategorized' ? 'Uncategorized' : code);
             return {
-                label: account?.name || code,
-                value: count
+                label,
+                value: Math.round(total),
+                filterFn: (tx) => (tx.category || 'Uncategorized') === code,
             };
         });
 }
 
-// Helper to get top 5 categories by transaction count
+/** Top 8 categories by spend total — each row is drillable */
 function getTopCategories(transactions) {
-    const categoryCounts = {};
+    const catMap = {};
 
     transactions.forEach(tx => {
         const cat = tx.category || 'Uncategorized';
-        if (cat === 'UNCAT') return; // Skip uncategorized
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+        if (!catMap[cat]) catMap[cat] = { count: 0, total: 0 };
+        catMap[cat].count++;
+        catMap[cat].total += (tx.amount_cents || 0) / 100;
     });
 
-    return Object.entries(categoryCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([code, count]) => {
-            // Try to get friendly name from COA (code is the account code like "2710")
+    return Object.entries(catMap)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 8)
+        .map(([code, data]) => {
             const account = window.RoboLedger?.COA?.get(String(code));
             return {
-                name: code === 'Uncategorized' ? 'Uncategorized' : (account?.name || code),
-                count
+                code,
+                name:  account?.name || (code === 'Uncategorized' ? 'Uncategorized' : code),
+                count: data.count,
+                total: data.total,
             };
         });
 }

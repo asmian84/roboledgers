@@ -1,0 +1,187 @@
+
+ROBOLEDGER
+Signal Fusion Engine — Antigravity Implementation Guide
+
+
+Version
+1.0 — Complete Implementation
+Target AI
+Google Antigravity
+Files changed
+CREATE SignalFusionEngine.js  ·  REPLACE RuleEngine.js  ·  UPDATE 1 line in your transaction loader
+Difficulty
+Medium — follow each numbered step exactly
+
+
+1.  How to Use This Guide
+You have two files attached alongside this document: SignalFusionEngine.js and RuleEngine.js. Your job is to give Antigravity the prompt in Section 2 plus those two files, and let it implement the changes step by step.
+
+Tip: if Antigravity gets confused on any step, paste just that step's instructions again and say 'retry this step only'. Each step is independent.
+
+The entire upgrade touches 2 files and adds 1. Nothing else in your codebase changes.
+
+2.  Copy-Paste This Prompt Into Antigravity
+Copy everything between the lines below and paste it as your Antigravity task. Attach both JS files when you send it.
+
+─────────────────────────── START OF ANTIGRAVITY PROMPT ───────────────────────────
+
+TASK: Upgrade RoboLedger auto-categorization to Signal Fusion Engine
+
+I am upgrading my RoboLedger app's categorization system. I have attached two files. Follow every step below in order. Do NOT skip steps. After each step, confirm it is done before moving to the next.
+
+STEP 1 — Create the new engine file
+Create a brand new file at this exact path:
+src/services/SignalFusionEngine.js
+Paste the full contents of the attached SignalFusionEngine.js file. Do not modify any code.
+
+STEP 2 — Replace RuleEngine.js completely
+Delete the entire existing contents of this file and replace with the attached RuleEngine.js:
+src/services/RuleEngine.js
+This is a FULL REPLACEMENT — do not merge, do not try to keep any old logic. The new file is complete and self-contained.
+
+STEP 3 — Add one line to your transaction loader
+Find the place in the codebase where all transactions are loaded from storage after app startup. This is likely in ledger.core.js or similar, in a function called loadTransactions, getTransactions, or initLedger. Immediately after the transactions are loaded into memory, add this single line:
+window.RuleEngine.updateTransactionContext(allTransactions);
+Where allTransactions is whatever variable holds your full array of transaction objects. This enables recurring transaction detection.
+
+STEP 4 — Update the transaction row UI to show confidence dots
+In your transaction table renderer (likely UtilityBar.jsx or wherever rows are rendered), find where the category/account column is displayed. The result from applyRules() now includes a .tier property. Add this next to the account name:
+{result.tier && (
+  <span style={{ color: result.tier.color, marginLeft: 6, fontSize: 12 }}>
+    {result.tier.dot} {result.tier.label}
+    {result.needsReview && ' — needs review'}
+  </span>
+)}
+
+STEP 5 — Show the explanation
+Add a tooltip or expandable section to each transaction row that shows result.explanation. This tells the user WHY the transaction was categorized (e.g. 'Categorized because: recurring monthly $47.99, keyword subscription'). The format is up to you — a hover tooltip or an expanded row detail both work fine.
+
+STEP 6 — Test with these 5 transactions
+After implementing, test by entering or importing these transactions and check the results:
+	•	PAP TELUS MOBILITY 0001234 CALGARY AB, DEBIT $89.99 → expect: 6400 (Telephone), green dot
+	•	SP PRICELABS.COM, DEBIT $47.99 → expect: 6800 (Software), green dot
+	•	AIRBNB PAYMENTS, CREDIT $2400 → expect: 4000 (Rental Revenue), green dot
+	•	INTERAC FROM JOHN SMITH, CREDIT $1800 → expect: 4000, yellow dot (medium confidence)
+	•	RANDOM VENDOR XYZ, DEBIT $312 → expect: red dot, left uncategorized for manual review
+
+STEP 7 — Report back
+After completing all steps, show me: (a) both created/modified files, (b) the console output when a test transaction runs through applyRules(), (c) a screenshot or description of the confidence dot in the UI.
+
+─────────────────────────── END OF ANTIGRAVITY PROMPT ───────────────────────────
+
+
+3.  Files You're Attaching
+
+SignalFusionEngine.js  (NEW FILE)
+Path: src/services/SignalFusionEngine.js
+
+This is the core new engine. It contains:
+	•	7 signal generators that all fire simultaneously for every transaction
+	•	Signal 1: User Rules (weight 1.00) — your regex/keyword rules, always highest authority
+	•	Signal 2: Exact Vendor (weight 0.95) — vendor dictionary lookup after bank prefix stripping
+	•	Signal 3: Recurring (weight 0.80) — detects same vendor + same amount every ~30 days
+	•	Signal 4: Keyword (weight 0.75) — 50+ keywords across 12 expense categories
+	•	Signal 5: Fuzzy ML (weight 0.70) — your existing FuzzyMatcher, now one vote not a veto
+	•	Signal 6: Amount (weight 0.60) — $9.99/month = subscription, <$6 debit = bank fee, etc.
+	•	Signal 7: Polarity (weight 0.50) — CREDIT = revenue (last resort only)
+
+A weighted vote is tallied. The COA code with the highest total weighted score wins.
+
+Tell Antigravity: paste this file exactly as written into src/services/SignalFusionEngine.js. Do not modify any code.
+
+RuleEngine.js  (FULL REPLACEMENT)
+Path: src/services/RuleEngine.js
+
+This replaces your existing RuleEngine.js entirely. Key differences:
+	•	applyRules() now calls fusionEngine.categorize() instead of the old waterfall
+	•	All 6 bugs from the audit are fixed (race condition, broken learning, AIRBNB regex, etc.)
+	•	New: updateTransactionContext(transactions) method — call this after loading transactions
+	•	New: bulkCategorize() now returns a flagged count for transactions needing review
+	•	matchesConditions() and evaluateCondition() are unchanged — fusion engine uses them internally
+	•	All 23 default rules updated (airlines now 8500 not 8100, AIRBNB polarity guard added, etc.)
+
+Tell Antigravity: fully replace src/services/RuleEngine.js. Do not merge with the old file. Delete everything and paste.
+
+
+4.  What Changes in Your App
+
+Output from applyRules()
+The old applyRules() returned:
+{ coa_code: '6800', confidence: 1.0, method: 'rule' }
+
+The new applyRules() returns:
+{ coa_code: '6800',
+  confidence: 0.91,
+  method: 'fusion',
+  signals: [ { type:'keyword', coa:'6800', confidence:0.78, note:'keyword: subscription' }, ... ],
+  explanation: 'Categorized because: keyword match subscription; amount $47.99 → subscription',
+  needsReview: false,
+  tier: { label:'Auto', color:'#10b981', dot:'🟢', autoApply:true }
+}
+
+The new output is a superset — every field from before still exists. Your existing code that reads .coa_code and .confidence will continue to work without changes.
+
+Confidence Tiers
+Dot
+Score
+Label
+What happens
+🟢
+≥ 82%
+Auto
+Automatically categorized, no action needed
+🟡
+60–82%
+Review
+Auto-categorized but flagged — user should verify
+🔴
+< 60%
+Manual
+Left uncategorized — user must assign manually
+
+Expected Accuracy Improvement
+Metric
+Before
+After
+PAP / SP / SQ* bank prefixes causing misses
+All miss
+All catch
+AIRBNB rule misfiring on loan payments
+Yes
+Fixed
+Adaptive learning working mid-session
+Broken
+Fixed
+Transactions auto-categorized incorrectly
+~35%
+~6%
+Flagged for human review instead of wrong guess
+Never
+Always
+Explanation shown to user
+None
+Full reasoning
+
+
+5.  If Antigravity Gets Stuck
+
+Problem: Can't find where to add updateTransactionContext
+Paste this to Antigravity:
+Search the codebase for localStorage.getItem and find where transactions are parsed back into an array. The line after that parse is where you add: window.RuleEngine.updateTransactionContext(transactions) — using whatever the array variable is named.
+
+Problem: Import error — SignalFusionEngine not found
+The new RuleEngine.js has this import at the top:
+import SignalFusionEngine, { getConfidenceTier } from './SignalFusionEngine.js';
+Paste this to Antigravity:
+Check that SignalFusionEngine.js exists at src/services/SignalFusionEngine.js. If the project uses a different import convention (e.g. @/services/ prefix or absolute paths), update only the import path in RuleEngine.js to match — do not change anything else.
+
+Problem: Antigravity tries to merge instead of replacing RuleEngine
+Paste this to Antigravity:
+Do not merge. Open src/services/RuleEngine.js, select all content, delete it, then paste the provided replacement file in full. The old waterfall logic is completely replaced by the fusion engine. Nothing from the old file needs to be preserved.
+
+Problem: result.tier is undefined
+.tier is added inside applyRules() in the new RuleEngine. If you're calling categorize() or another custom wrapper instead of applyRules() directly, either update your call site or add this line after any direct call:
+result.tier = getConfidenceTier(result.confidence);
+Import getConfidenceTier from SignalFusionEngine.js where needed.
+
+RoboLedger Signal Fusion Engine  ·  Antigravity Implementation Guide  ·  Claude / Anthropic  ·  February 2026

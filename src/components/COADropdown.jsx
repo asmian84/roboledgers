@@ -6,24 +6,26 @@ import { createPortal } from 'react-dom';
  * Groups accounts by: Assets, Liabilities, Equity, Revenue, Expenses
  */
 export function COADropdown({ value, onChange, txId }) {
+    // Get all COA accounts from ledger — must be first, used in useState initialisers below
+    const allAccounts = window.RoboLedger?.COA?.getAll() || [];
+
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [buttonRect, setButtonRect] = useState(null);
+    // Find which category the current value belongs to, expand it by default
+    const currentRoot = allAccounts.find(a => a.code === value)?.root || 'EXPENSE';
     const [collapsedCategories, setCollapsedCategories] = useState({
-        ASSET: true,
-        LIABILITY: true,
-        EQUITY: true,
-        REVENUE: true,
-        EXPENSE: true
+        ASSET:     currentRoot !== 'ASSET',
+        LIABILITY: currentRoot !== 'LIABILITY',
+        EQUITY:    currentRoot !== 'EQUITY',
+        REVENUE:   currentRoot !== 'REVENUE',
+        EXPENSE:   currentRoot !== 'EXPENSE',  // EXPENSE open by default (most common)
     });
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const dropdownRef = useRef(null);
     const buttonRef = useRef(null);
     const portalRef = useRef(null);
     const searchInputRef = useRef(null);
-
-    // Get all COA accounts from ledger
-    const allAccounts = window.RoboLedger?.COA?.getAll() || [];
 
     // Find current selection
     const currentAccount = allAccounts.find(acc => acc.code === value);
@@ -108,10 +110,17 @@ export function COADropdown({ value, onChange, txId }) {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen]);
 
-    // Auto-focus search when opened
+    // Auto-focus search when opened + scroll selected item into view
     useEffect(() => {
         if (isOpen && searchInputRef.current) {
             searchInputRef.current.focus();
+        }
+        if (isOpen && value) {
+            // Small delay to let portal render
+            setTimeout(() => {
+                const selectedEl = portalRef.current?.querySelector('[data-selected="true"]');
+                if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }, 50);
         }
     }, [isOpen]);
 
@@ -153,20 +162,40 @@ export function COADropdown({ value, onChange, txId }) {
         setIsOpen(!isOpen);
     };
 
+    const isUncategorized = !currentAccount;
+
     return (
         <div ref={dropdownRef} className="relative w-full" onKeyDown={handleKeyDown}>
             {/* Trigger Button */}
             <button
                 ref={buttonRef}
                 onClick={handleToggle}
-                className="w-full text-left px-2 py-1 text-sm hover:bg-gray-50 rounded transition-colors truncate"
+                className="w-full text-left rounded transition-colors group"
                 style={{
-                    fontSize: '13.5px',
-                    fontWeight: 400,
-                    color: '#111827'
+                    padding: '3px 6px',
+                    fontSize: '12px',
+                    fontWeight: isUncategorized ? 400 : 500,
+                    color: isUncategorized ? '#94a3b8' : '#1e293b',
+                    background: isOpen ? '#eff6ff' : 'transparent',
+                    border: `1px solid ${isOpen ? '#93c5fd' : 'transparent'}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    width: '100%',
+                    cursor: 'pointer',
                 }}
+                onMouseEnter={e => { if (!isOpen) { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}}
+                onMouseLeave={e => { if (!isOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}}
             >
-                {displayValue}
+                {currentAccount && (
+                    <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#94a3b8', flexShrink: 0 }}>
+                        {currentAccount.code}
+                    </span>
+                )}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {displayValue}
+                </span>
+                <i className="ph ph-caret-down" style={{ fontSize: '10px', color: '#94a3b8', flexShrink: 0, opacity: 0.6 }}></i>
             </button>
 
             {/* Dropdown Menu - Portal to body */}
@@ -178,9 +207,9 @@ export function COADropdown({ value, onChange, txId }) {
                         position: 'fixed',
                         left: `${buttonRect.left}px`,
                         top: `${buttonRect.bottom + 4}px`,
-                        minWidth: `${buttonRect.width}px`,
+                        minWidth: '320px',
                         width: 'auto',
-                        maxWidth: '450px',
+                        maxWidth: '520px',
                         maxHeight: '420px',
                         zIndex: 9999
                     }}
@@ -232,13 +261,15 @@ export function COADropdown({ value, onChange, txId }) {
                                                 return (
                                                     <button
                                                         key={account.code}
+                                                        data-selected={isSelected ? 'true' : undefined}
                                                         onClick={() => selectAccount(account.code)}
-                                                        className={`w-full flex items-center justify-between px-6 py-2 text-left transition-colors ${isHighlighted ? 'bg-blue-50' : isSelected ? 'bg-blue-50/50' : 'hover:bg-gray-50'
+                                                        className={`w-full flex items-center justify-between px-6 py-2 text-left transition-colors ${isHighlighted ? 'bg-blue-50' : isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                                                             }`}
                                                         style={{
-                                                            fontSize: '13px',
-                                                            fontWeight: isSelected ? 500 : 400,
-                                                            color: isSelected ? '#1e40af' : '#374151'
+                                                            fontSize: '12.5px',
+                                                            fontWeight: isSelected ? 600 : 400,
+                                                            color: isSelected ? '#1e40af' : '#374151',
+                                                            borderLeft: isSelected ? '3px solid #3b82f6' : '3px solid transparent',
                                                         }}
                                                     >
                                                         <span className="truncate">

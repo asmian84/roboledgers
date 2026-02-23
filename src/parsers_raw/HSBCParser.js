@@ -13,6 +13,7 @@ HSBC BANK FORMAT:
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
         const lines = statementText.split('\n');
         const transactions = [];
@@ -101,16 +102,26 @@ HSBC BANK FORMAT:
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
 
         let debit = 0, credit = 0;
-        // HSBC usually has Withdrawal then Deposit columns
+        // HSBC format: Date | Description | Withdrawal | Deposit | Balance
+        // When 3+ amounts: withdrawal=amounts[0], deposit=amounts[1], balance=amounts[last]
+        // When 2 amounts:  only one column is populated; balance=amounts[last], amount=amounts[0]
+        //   → use keyword heuristics to determine which column is non-zero
         if (amounts.length >= 3) {
-            debit = amount;
+            // Both withdrawal and deposit present on same row (rare: interest + balance)
+            // amounts[0]=withdrawal, amounts[1]=deposit, amounts[last]=balance
+            debit  = parseFloat(amounts[0].replace(/,/g, ''));
             credit = parseFloat(amounts[1].replace(/,/g, ''));
         } else {
-            // Heuristic or user adjustment
-            debit = amount;
+            // Only one non-zero column — use description keywords to classify
+            const isDeposit = /deposit|credit|interest earned|payroll|transfer from|e-transfer.*rec|refund|direct deposit|autodeposit/i.test(description);
+            if (isDeposit) {
+                credit = amount;
+            } else {
+                debit = amount;
+            }
         }
 
-        const auditData = this.buildAuditData(originalLine, 'HSBCParser');
+        const auditData = this.buildAuditData(originalLine, 'HSBCParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
@@ -120,12 +131,28 @@ HSBC BANK FORMAT:
             credit,
             balance,
             rawText: this.cleanRawText(originalLine),
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
-            audit: auditData.audit
+            audit: auditData.audit,
             _brand: 'HSBC',
             _tag: 'Chequing'
         };
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'HSBC-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.HSBCParser = HSBCParser;

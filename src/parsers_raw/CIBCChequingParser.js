@@ -18,16 +18,13 @@ CIBC CHEQUING FORMAT:
      * Parse CIBC Chequing statement using regex
      */
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
-        console.log('⚡ CIBC Chequing: Starting regex-based parsing...');
 
         const lines = statementText.split('\n');
         const transactions = [];
 
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-CIBC] Starting metadata extraction for CIBC...');
-        console.error('📄 [DEBUG-CIBC] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         // EXTRACT METADATA (Institution, Transit, Account)
         // CIBC format: Account number 10-57618, Branch transit number 04729
@@ -45,12 +42,10 @@ CIBC CHEQUING FORMAT:
             _bank: 'CIBC',
             _tag: 'Chequing'
         };
-        console.warn('🏁 [CIBC] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         // Extract year from statement
         const yearMatch = statementText.match(/20\d{2}/);
         this.currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
-        console.log(`[CIBC] Extracted year: ${this.currentYear}`);
 
         let currentDate = null;
         let pendingDescription = '';
@@ -61,7 +56,6 @@ CIBC CHEQUING FORMAT:
         // Date regex: "Apr 1", "May 15", etc.
         const dateRegex = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})/i;
 
-        console.log(`[CIBC] Starting parse with ${lines.length} lines, year: ${this.currentYear}`);
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -77,7 +71,6 @@ CIBC CHEQUING FORMAT:
                 const monthIndex = this.getMonthIndex(monthName);
                 if (lastMonth !== null && monthIndex < lastMonth && monthIndex <= 1) {
                     this.currentYear++;
-                    console.log(`[CIBC] Year rollover detected: ${this.currentYear}`);
                 }
                 lastMonth = monthIndex;
 
@@ -130,7 +123,6 @@ CIBC CHEQUING FORMAT:
             }
         }
 
-        console.log(`[CIBC] Parsing complete. Found ${transactions.length} transactions.`);
         return { transactions, metadata: parsedMetadata };
     }
 
@@ -183,7 +175,7 @@ CIBC CHEQUING FORMAT:
         }
 
         // Build audit data for source document viewing
-        const auditData = this.buildAuditData(originalLine || text, 'CIBCChequingParser');
+        const auditData = this.buildAuditData(originalLine || text, 'CIBCChequingParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: dateStr,
@@ -196,6 +188,7 @@ CIBC CHEQUING FORMAT:
             _brand: 'CIBC',
             _bank: 'CIBC',
             _tag: 'Chequing',
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit,
             rawText: this.cleanRawText(originalLine || text)
@@ -282,6 +275,21 @@ CIBC CHEQUING FORMAT:
         const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
         return months.indexOf(monthName.toLowerCase().substring(0, 3));
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'CIBCCHQ-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 // Expose to window for file:// compatibility

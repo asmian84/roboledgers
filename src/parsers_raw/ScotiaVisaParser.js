@@ -15,15 +15,12 @@ SCOTIABANK VISA FORMAT:
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
-        console.warn('⚡ [EXTREME-SCOTIA-VISA] Starting metadata extraction for Scotiabank Visa...');
-        console.error('📄 [DEBUG-SCOTIA-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
-        console.log(`[SCOTIA-VISA] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
 
@@ -48,7 +45,6 @@ SCOTIABANK VISA FORMAT:
             bankCode: 'VISA',
             institution: 'VISA'
         };
-        console.warn('🏁 [SCOTIA-VISA] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -115,12 +111,12 @@ SCOTIABANK VISA FORMAT:
             }
         }
 
-        console.log(`[SCOTIA-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     };
 
     extractTransaction(text, isoDate, originalLine) {
-        const amounts = text.match(/([\d,]+\.\d{2})/g);
+        // Capture trailing minus if present (Scotia format: "123.45-")
+        const amounts = text.match(/([\d,]+\.\d{2}-?)/g);
         if (!amounts || amounts.length < 1) return null;
 
         const firstAmtIdx = text.search(/[\d,]+\.\d{2}/);
@@ -131,23 +127,35 @@ SCOTIABANK VISA FORMAT:
             "INTEREST", "INTEREST CHARGE", "ANNUAL FEE", "FEE", "FOREIGN TRANSACTION FEE"
         ]);
 
-        const amount = parseFloat(amounts[0].replace(/,/g, ''));
-        const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-        const isPayment = /payment|credit|refund|THANK YOU|REWARD/i.test(description);
+        let rawAmt = amounts[0];
+        // Scotia CC PDF convention: trailing minus = payment/refund/credit (reduces liability)
+        const isTrailingMinus = rawAmt.endsWith('-');
+        const amount = parseFloat(rawAmt.replace(/[,-]/g, ''));
+        const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/[,-]/g, '')) : 0;
+        // Negative prefix (e.g. "-19.41")
+        const negativeMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegativePrefix = negativeMatch && parseFloat(negativeMatch[1].replace(/,/g, '')) === amount;
+        // CR suffix (e.g. "1,419.47CR")
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback for payment language
+        const isPaymentKeyword = /payment|paiement|merci|refund|THANK YOU|REWARD/i.test(description);
+        // Any sign indicator or payment keyword → reduces liability → debit
+        const reducesLiability = isTrailingMinus || isNegativePrefix || hasCR || isPaymentKeyword;
 
-        const auditData = this.buildAuditData(originalLine, 'ScotiaVisaParser');
+        const auditData = this.buildAuditData(originalLine, 'ScotiaVisaParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
             description,
             amount,
-            debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
-            credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
+            debit: reducesLiability ? amount : 0,     // Payment / refund → DEBIT (reduces liability)
+            credit: reducesLiability ? 0 : amount,    // Purchase → CREDIT (increases liability)
             balance,
             _brand: 'Scotiabank',
             _tag: 'Visa',
             _accountType: 'CreditCard',
             rawText: this.cleanRawText(originalLine),
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };
@@ -177,6 +185,21 @@ SCOTIABANK VISA FORMAT:
 
         return desc.replace(/,\s*,/g, ',').trim();
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'SCOTIAVISA-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.ScotiaVisaParser = ScotiaVisaParser;

@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { TransactionsTable } from './TransactionsTable2.jsx';  // TESTING EXPERIMENTAL VERSION
 import { ReportsPage } from './reports/ReportsPage';
 import HomePage from './ui/pages/HomePage.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { BankReconciliationReport } from './reports/BankReconciliationReport.jsx';
+// Import TransactionExporter so it bundles with xlsx and registers window.TransactionExporter
+import './services/TransactionExporter.js';
 
 
 /**
@@ -17,10 +21,6 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     const theme = window.UI_STATE?.gridTheme || 'default';
     const fontSize = window.UI_STATE?.gridFontSize || 13.5;
     const uniqueKey = `table-${theme}-${fontSize}`;
-
-    console.log('[MAIN.JSX] Mounting grid with key:', uniqueKey);
-    console.log('[MAIN.JSX] Theme from UI_STATE:', theme);
-    console.log('[MAIN.JSX] FontSize from UI_STATE:', fontSize);
 
     // If the old root's container was detached from the DOM (e.g. by render() replacing innerHTML),
     // we must create a fresh root on the new container node.
@@ -60,21 +60,26 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
     // Filter out opening balance rows (reference points, not transactions)
     const pureTransactions = canonicalData.filter(tx => tx.ref && !tx.ref.includes('opening-balance'));
 
-    console.log(`[MAIN.JSX] Canonical data count:`, pureTransactions.length);
-
     // Get density setting
     const density = window.UI_STATE?.density || 'comfortable';
-    console.log(`[MAIN.JSX] Grid density:`, density);
 
-    // Load saved column preferences from localStorage
-    const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+    // Load saved column preferences (with corruption recovery)
+    let savedPrefs = {};
+    try {
+        const _SS = window.StorageService;
+        const stored = _SS ? _SS.get('roboledger_column_prefs') : localStorage.getItem('roboledger_column_prefs');
+        if (stored) savedPrefs = (typeof stored === 'string') ? JSON.parse(stored) : stored;
+    } catch (e) {
+        const _SS = window.StorageService;
+        if (_SS) _SS.remove('roboledger_column_prefs'); else localStorage.removeItem('roboledger_column_prefs');
+    }
     const columnVisibility = {
-        // TanStack Grid uses INVERTED logic in state: false = visible, true = hidden
-        // If user enabled tax (savedPrefs.tax_cents === true), pass false to TanStack (visible)
-        // If user disabled tax (savedPrefs.tax_cents === false/undefined), pass true to TanStack (hidden)
-        tax_cents: savedPrefs.tax_cents !== true
+        // TanStack columnVisibility: false = hidden, true = visible (normal logic)
+        // tax_cents defaults to hidden (false) unless user explicitly checked it (true)
+        tax_cents: savedPrefs.tax_cents === true
     };
-    console.log('[MAIN.JSX] Initial column visibility from localStorage:', columnVisibility);
+    // Restore any active drill-down filter from UI_STATE so it survives re-renders
+    const activeDrillFilter = window.UI_STATE?.activeCategoryFilter || null;
 
     // Create props object and save for updateGridDensity
     const gridProps = {
@@ -83,14 +88,19 @@ window.mountTransactionsTable = (data, filterQuery = '') => {
         gridTheme: theme,
         gridFontSize: fontSize,
         gridDensity: density,
-        columnVisibility: columnVisibility
+        columnVisibility: columnVisibility,
+        initialCategoryFilter: activeDrillFilter,   // Persists drill-down across re-renders
     };
     window._txGridProps = gridProps;
+    // Always update the "source of truth" for predicate filters so they operate on fresh data
+    window._txGridAllData = pureTransactions;
 
-    // Render
+    // Render with error boundary to prevent white screen crashes
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable {...gridProps} />
+            <ErrorBoundary fallbackMessage="Failed to render transactions grid">
+                <TransactionsTable {...gridProps} />
+            </ErrorBoundary>
         </React.StrictMode>
     );
 };
@@ -107,14 +117,15 @@ window.updateGridDensity = (newDensity) => {
         return;
     }
 
-    console.log(`[MAIN.JSX] Updating grid density to: ${newDensity}`);
     window._txGridProps.gridDensity = newDensity;
 
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable
-                {...window._txGridProps}
-            />
+            <ErrorBoundary fallbackMessage="Failed to render transactions grid">
+                <TransactionsTable
+                    {...window._txGridProps}
+                />
+            </ErrorBoundary>
         </React.StrictMode>
     );
 };
@@ -144,8 +155,6 @@ window.mountPDFSnippet = (containerId, pdfUrl, page, linePosition) => {
         </React.StrictMode>
     );
 
-    console.log(`[PDF SNIPPET] Mounted in #${containerId}`);
-
     // Store root for cleanup
     container._pdfSnippetRoot = root;
 };
@@ -158,8 +167,7 @@ window.unmountPDFSnippet = (containerId) => {
     if (container && container._pdfSnippetRoot) {
         container._pdfSnippetRoot.unmount();
         delete container._pdfSnippetRoot;
-        console.log(`[PDF SNIPPET] Unmounted from #${containerId}`);
-    }
+        }
 };
 
 /**
@@ -186,7 +194,6 @@ window.mountDocumentViewer = (containerId, document) => {
         </React.StrictMode>
     );
 
-    console.log(`[DOC VIEWER] Mounted in #${containerId}`);
 
     // Store root for cleanup
     container._documentViewerRoot = root;
@@ -200,30 +207,71 @@ window.unmountDocumentViewer = (containerId) => {
     if (container && container._documentViewerRoot) {
         container._documentViewerRoot.unmount();
         delete container._documentViewerRoot;
-        console.log(`[DOC VIEWER] Unmounted from #${containerId}`);
     }
 };
 
 /**
- * Global Bridge: Set grid filter (called from utility bar category chart)
+ * Global Bridge: Set grid filter (called from utility bar category chart and drill-down)
+ *
+ * Accepts:
+ *   - string/number: passed as globalFilter (TanStack column filter — searches all columns)
+ *   - function (tx) => bool: applied as a pre-filter on the data array before rendering
+ *   - null/undefined: clears all filters and restores full dataset
  */
 window.setTxGridFilter = (filterValue) => {
-    if (!window._txGridRoot || !window._txGridProps) {
-        console.warn('[MAIN.JSX] Grid not mounted, cannot set filter.');
+    // Always resolve full dataset first
+    const allData = window._txGridAllData
+        || window._txGridProps?.data
+        || window.RoboLedger?.Ledger?.getAll()
+        || [];
+    if (!window._txGridAllData && allData.length) window._txGridAllData = allData;
+
+    let filteredData, newGlobalFilter = '';
+
+    if (typeof filterValue === 'function') {
+        window._txGridFilterPredicate = filterValue;
+        filteredData = allData.filter(filterValue);
+        console.log(`[setTxGridFilter] predicate → ${filteredData.length} / ${allData.length} rows`);
+    } else if (filterValue === null || filterValue === undefined) {
+        window._txGridFilterPredicate = null;
+        filteredData = allData;
+        window._txGridActiveFilter = null;
+        window.__txGridClearFilter?.(); // Notify React to clear the breadcrumb
+        console.log(`[setTxGridFilter] cleared → ${allData.length} rows`);
+    } else {
+        window._txGridFilterPredicate = null;
+        filteredData = allData;
+        newGlobalFilter = String(filterValue);
+        console.log(`[setTxGridFilter] globalFilter → "${newGlobalFilter}"`);
+    }
+
+    // Preferred: direct React state bridge (never goes stale)
+    if (window.__txGridSetData) {
+        if (window._txGridProps) {
+            window._txGridProps.data = filteredData;
+            window._txGridProps.globalFilter = newGlobalFilter;
+        }
+        window.__txGridSetData(filteredData);
         return;
     }
 
-    console.log(`[MAIN.JSX] Setting grid filter to: ${filterValue}`);
-    window._txGridProps.globalFilter = filterValue;
-
+    // Fallback: re-render via root (may be stale if DOM was replaced)
+    if (!window._txGridRoot || !window._txGridProps) {
+        console.warn('[setTxGridFilter] ❌ No bridge and no root available');
+        return;
+    }
+    console.log('[setTxGridFilter] → fallback root.render()');
+    window._txGridProps.data = filteredData;
+    window._txGridProps.globalFilter = newGlobalFilter;
     window._txGridRoot.render(
         <React.StrictMode>
-            <TransactionsTable {...window._txGridProps} />
+            <ErrorBoundary fallbackMessage="Failed to render transactions grid">
+                <TransactionsTable {...window._txGridProps} />
+            </ErrorBoundary>
         </React.StrictMode>
     );
 };
 
-console.log('[VITE] React bridge established.');
 
 /**
  * Mount ReportsPage React component
@@ -234,8 +282,6 @@ window.mountReportsPage = () => {
         console.error('[MAIN.JSX] Reports container not found');
         return;
     }
-
-    console.log('[MAIN.JSX] Mounting ReportsPage');
 
     if (window._reportsRoot && window._reportsRootContainer && !document.body.contains(window._reportsRootContainer)) {
         try { window._reportsRoot.unmount(); } catch (e) { /* ignore */ }
@@ -250,7 +296,9 @@ window.mountReportsPage = () => {
 
     window._reportsRoot.render(
         <React.StrictMode>
-            <ReportsPage />
+            <ErrorBoundary fallbackMessage="Failed to render reports">
+                <ReportsPage />
+            </ErrorBoundary>
         </React.StrictMode>
     );
 };
@@ -259,12 +307,51 @@ window.unmountReportsPage = () => {
     if (window._reportsRoot) {
         try {
             window._reportsRoot.unmount();
-            console.log('[MAIN.JSX] ✓ Reports unmounted');
         } catch (e) {
             console.warn('[MAIN.JSX] ⚠ Reports unmount error:', e);
         }
         window._reportsRoot = null;
         window._reportsRootContainer = null;
+    }
+};
+
+/**
+ * Mount BankReconciliationReport React component as a standalone page
+ */
+window.mountBankRecPage = () => {
+    const container = document.getElementById('bankrec-container');
+    if (!container) {
+        console.error('[MAIN.JSX] Bank rec container not found');
+        return;
+    }
+
+    if (window._bankRecRoot && window._bankRecRootContainer && !document.body.contains(window._bankRecRootContainer)) {
+        try { window._bankRecRoot.unmount(); } catch (e) { /* ignore */ }
+        window._bankRecRoot = null;
+        window._bankRecRootContainer = null;
+    }
+
+    if (!window._bankRecRoot) {
+        window._bankRecRoot = ReactDOM.createRoot(container);
+        window._bankRecRootContainer = container;
+    }
+
+    window._bankRecRoot.render(
+        <React.StrictMode>
+            <BankReconciliationReport />
+        </React.StrictMode>
+    );
+};
+
+window.unmountBankRecPage = () => {
+    if (window._bankRecRoot) {
+        try {
+            window._bankRecRoot.unmount();
+        } catch (e) {
+            console.warn('[MAIN.JSX] ⚠ Bank rec unmount error:', e);
+        }
+        window._bankRecRoot = null;
+        window._bankRecRootContainer = null;
     }
 };
 
@@ -278,7 +365,6 @@ window.mountHomePage = () => {
         return;
     }
 
-    console.log('[MAIN.JSX] Mounting HomePage');
 
     if (window._homeRoot && window._homeRootContainer && !document.body.contains(window._homeRootContainer)) {
         try { window._homeRoot.unmount(); } catch (e) { /* ignore */ }
@@ -302,7 +388,6 @@ window.unmountHomePage = () => {
     if (window._homeRoot) {
         try {
             window._homeRoot.unmount();
-            console.log('[MAIN.JSX] ✓ Home unmounted');
         } catch (e) {
             console.warn('[MAIN.JSX] ⚠ Home unmount error:', e);
         }

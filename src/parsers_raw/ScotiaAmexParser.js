@@ -14,15 +14,12 @@ SCOTIABANK AMEX FORMAT:
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
-        console.warn('⚡ [EXTREME-SCOTIA-AMEX] Starting metadata extraction for Scotiabank Amex...');
-        console.error('📄 [DEBUG-SCOTIA-AMEX] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
         const { openingBalance, closingBalance, statementPeriod } = this.extractBalances(statementText);
-        console.log(`[SCOTIA-AMEX] Extracted opening balance: ${openingBalance}`);
 
         const transactions = [];
 
@@ -36,7 +33,6 @@ SCOTIABANK AMEX FORMAT:
             accountType: 'CreditCard',
             bankName: 'Scotiabank'
         };
-        console.warn('🏁 [SCOTIA-AMEX] Extraction Phase Complete. Transit:', parsedMetadata.transit, 'Acct:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -103,7 +99,6 @@ SCOTIABANK AMEX FORMAT:
             }
         }
 
-        console.log(`[SCOTIA-AMEX] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     };
 
@@ -121,18 +116,25 @@ SCOTIABANK AMEX FORMAT:
 
         const amount = parseFloat(amounts[0].replace(/,/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-        const isPayment = /payment|credit|refund/i.test(description);
+        // Detect negative prefix, trailing minus, CR suffix — bulletproof sign detection
+        const negMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegPrefix = negMatch && parseFloat(negMatch[1].replace(/,/g, '')) === amount;
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback — avoid bare "credit" which appears in "CREDIT PURCHASE"
+        const isPaymentKeyword = /payment|paiement|merci|refund|thank you|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+        const isPayment = isNegPrefix || hasCR || isPaymentKeyword;
 
-        const auditData = this.buildAuditData(originalLine, 'ScotiaAmexParser');
+        const auditData = this.buildAuditData(originalLine, 'ScotiaAmexParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
             description,
             amount,
-            debit: isPayment ? 0 : amount,
-            credit: isPayment ? amount : 0,
+            debit: isPayment ? amount : 0,    // Payments REDUCE liability (debit)
+            credit: isPayment ? 0 : amount,  // Purchases INCREASE liability (credit)
             balance,
             rawText: this.cleanRawText(originalLine),
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };
@@ -153,6 +155,21 @@ SCOTIABANK AMEX FORMAT:
 
         return desc.replace(/,\s*,/g, ',').trim();
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'SCOTIAAX-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.ScotiaAmexParser = ScotiaAmexParser;

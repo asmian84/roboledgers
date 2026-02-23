@@ -14,11 +14,9 @@ RBC VISA FORMAT:
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
         // LOUD DIAGNOSTIC
-        console.warn('⚡ [EXTREME-RBC-VISA] Starting metadata extraction for RBC Visa...');
-        console.error('📄 [DEBUG-RBC-VISA] First 1000 characters (RED for visibility):');
-        console.log(statementText.substring(0, 1000));
 
         const lines = statementText.split('\n');
         const transactions = [];
@@ -31,14 +29,12 @@ RBC VISA FORMAT:
         const maskedMatch = statementText.match(/([4-6]\d{3}[\s-]+[X\d]{4}[\s-]+[X\d]{4}[\s-]+\d{4})/i);
         if (maskedMatch) {
             accountNumber = maskedMatch[1].replace(/-/g, ' '); // Normalize to spaces
-            console.log(`[RBC-VISA] Extracted full masked card: ${accountNumber}`);
         } else {
             // Fallback: Try unformatted
             const unformattedMatch = statementText.match(/([4-6]\d{3}[X\d]{8}\d{4})/i);
             if (unformattedMatch) {
                 const raw = unformattedMatch[1];
                 accountNumber = raw.match(/.{1,4}/g).join(' ');
-                console.log(`[RBC-VISA] Extracted and formatted: ${accountNumber}`);
             }
         }
 
@@ -61,7 +57,6 @@ RBC VISA FORMAT:
             institution: 'VISA'
             // NO transit, NO institutionCode - these are for bank accounts only
         };
-        console.warn('🏁 [RBC-VISA] Extraction Phase Complete. Card:', parsedMetadata.accountNumber);
 
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
@@ -104,7 +99,7 @@ RBC VISA FORMAT:
                     pendingAuditLines = [];
                 } else {
                     // Start of multi-line
-                    pendingDescription = remainder;
+                    pendingDescription = trimmed;
                     pendingRawLines = [line];
                     pendingAuditLines = [this.getSpatialMetadata(line)];
                 }
@@ -112,7 +107,7 @@ RBC VISA FORMAT:
                 // Check if this line has an amount (sometimes lines wrap and amount is on next line)
                 const extracted = this.extractTransaction(trimmed, '', line);
                 if (extracted && extracted.amount) {
-                    extracted.date = transactions[transactions.length - 1]?.date || '1900-01-01';
+                    extracted.date = transactions[transactions.length - 1]?.date || `${currentYear}-01-01`;
                     extracted.description = pendingDescription + ' ' + extracted.description;
                     extracted.rawText = [...pendingRawLines, line].join('\n');
                     extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, this.getSpatialMetadata(line)]);
@@ -127,7 +122,6 @@ RBC VISA FORMAT:
                 }
             }
         }
-        console.log(`[RBC-VISA] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 
@@ -145,9 +139,16 @@ RBC VISA FORMAT:
 
         const amount = parseFloat(amounts[0].replace(/,/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
-        const isPayment = /payment|credit|refund|THANK YOU|REWARD/i.test(description);
+        // Detect negative prefix, trailing minus, CR suffix — bulletproof sign detection
+        const negMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegPrefix = negMatch && parseFloat(negMatch[1].replace(/,/g, '')) === amount;
+        const isTrailingMinus = text.match(new RegExp(amounts[0].replace(/[.]/g, '\\.') + '\\s*-'));
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback — avoid bare "credit" which appears in "CREDIT PURCHASE"/"ONLINE CREDIT"
+        const isPaymentKeyword = /payment|paiement|merci|refund|thank you|reward|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+        const isPayment = isNegPrefix || !!isTrailingMinus || hasCR || isPaymentKeyword;
 
-        const auditData = this.buildAuditData(originalLine, 'RBCVisaParser');
+        const auditData = this.buildAuditData(originalLine, 'RBCVisaParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
@@ -157,6 +158,7 @@ RBC VISA FORMAT:
             credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
             balance,
             rawText: this.cleanRawText(originalLine),
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };
@@ -187,6 +189,21 @@ RBC VISA FORMAT:
 
         return desc.replace(/,\s*,/g, ',').trim();
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'RBCVISA-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.RBCVisaParser = RBCVisaParser;

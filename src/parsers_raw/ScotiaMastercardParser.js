@@ -14,8 +14,8 @@ SCOTIA MASTERCARD FORMAT:
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
-        console.log('⚡ Scotia Mastercard: Starting regex-based parsing...');
 
         const lines = statementText.split('\n');
                 // Extract balances using base helper
@@ -90,7 +90,6 @@ SCOTIA MASTERCARD FORMAT:
             }
         }
 
-        console.log(`[SCOTIA-MC] Parsed ${transactions.length} transactions`);
         return {
             transactions,
             metadata: {
@@ -124,12 +123,19 @@ SCOTIA MASTERCARD FORMAT:
         ]);
 
         let rawAmt = amounts[0];
-        const isNegative = rawAmt.endsWith('-');
+        // Scotia CC PDF convention: trailing minus = payment/refund/credit (e.g. "79.00-")
+        const isTrailingMinus = rawAmt.endsWith('-');
         const amount = parseFloat(rawAmt.replace(/[,-]/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/[,-]/g, '')) : 0;
-        const isPayment = isNegative || /payment|credit|refund/i.test(description);
+        // Negative prefix (defensive), CR suffix (defensive)
+        const negMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+        const isNegPrefix = negMatch && parseFloat(negMatch[1].replace(/,/g, '')) === amount;
+        const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+        // Keyword fallback — NOTE: avoid bare "credit" which appears in "CREDIT PURCHASE"
+        const isPaymentKeyword = /payment|paiement|merci|refund|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+        const isPayment = isTrailingMinus || isNegPrefix || hasCR || isPaymentKeyword;
 
-        const auditData = this.buildAuditData(originalLine, 'ScotiaMastercardParser');
+        const auditData = this.buildAuditData(originalLine, 'ScotiaMastercardParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
@@ -139,6 +145,7 @@ SCOTIA MASTERCARD FORMAT:
             credit: isPayment ? 0 : amount,   // Purchases INCREASE liability (credit)
             balance,
             rawText: this.cleanRawText(originalLine),
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };
@@ -164,6 +171,21 @@ SCOTIA MASTERCARD FORMAT:
 
         return desc.replace(/,\s*,/g, ',').trim();
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'SCOTIAMC-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.ScotiaMastercardParser = ScotiaMastercardParser;

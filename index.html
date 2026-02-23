@@ -30,6 +30,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <!-- fflate: in-browser ZIP library for Caseware per-account export -->
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+    <script>if(typeof fflate !== 'undefined') window.fflate = fflate;</script>
     <!-- React & TanStack Bridge (Restoration Layer) -->
     <!-- React & TanStack Bridge (Vite Modernization) -->
     <script type="module" src="/src/main.jsx"></script>
@@ -68,6 +71,21 @@
         });
     </script>
 
+    <!-- Top Context Bar — Breadcrumb + Context Drawer trigger -->
+    <div id="top-context-bar">
+        <button id="top-sidebar-toggle" onclick="window.toggleSidebar()" title="Toggle Sidebar">
+            <i class="ph ph-list"></i>
+        </button>
+        <div id="top-breadcrumb" class="top-breadcrumb-trail">
+            <!-- populated by navigateTo() -->
+        </div>
+        <button id="top-drawer-trigger" onclick="window.openContextDrawer()" title="Switch client / firm">
+            <i class="ph ph-buildings" style="font-size:14px;"></i>
+            <span id="top-client-label">Select client</span>
+            <i class="ph ph-caret-down" style="font-size:11px;opacity:0.5;"></i>
+        </button>
+    </div>
+
     <div class="app-layout">
         <!-- Shared Grid Instance (Hidden Storage) -->
         <div id="shared-grid-storage" style="display: none; width: 100%;">
@@ -78,19 +96,15 @@
             <div class="sidebar-brand">
                 <div class="brand-logo-text">roboledgers <span
                         style="font-size: 10px; opacity: 0.5; margin-left: 4px;">v5.1</span></div>
-                <button id="sidebar-toggle" class="sidebar-toggle" onclick="window.toggleSidebar()"
-                    aria-label="Toggle Sidebar" title="Collapse">
-                    <i class="ph ph-caret-left"></i>
-                </button>
             </div>
 
             <nav class="sidebar-nav-content">
                 <div class="nav-group">
-                    <div class="nav-item active" data-route="home">
+                    <div class="nav-item active" data-route="home" data-tooltip="Home">
                         <i class="ph ph-house nav-icon"></i>
                         <span class="nav-label">Home</span>
                     </div>
-                    <div class="nav-item" data-route="import">
+                    <div class="nav-item" data-route="import" data-tooltip="Transactions">
                         <i class="ph ph-rows nav-icon"></i>
                         <span class="nav-label">Transactions</span>
                     </div>
@@ -98,15 +112,15 @@
 
                 <div class="nav-group">
                     <div class="nav-group-header">ANALYSIS</div>
-                    <div class="nav-item" data-route="dashboard">
+                    <div class="nav-item" data-route="dashboard" data-tooltip="Dashboard">
                         <i class="ph ph-chart-pie nav-icon"></i>
                         <span class="nav-label">Dashboard</span>
                     </div>
-                    <div class="nav-item" data-route="reports">
+                    <div class="nav-item" data-route="reports" data-tooltip="Reports">
                         <i class="ph ph-files nav-icon"></i>
                         <span class="nav-label">Reports</span>
                     </div>
-                    <div class="nav-item" data-route="coa">
+                    <div class="nav-item" data-route="coa" data-tooltip="Chart of Accounts">
                         <i class="ph ph-book-open nav-icon"></i>
                         <span class="nav-label">Chart of Accounts</span>
                     </div>
@@ -115,13 +129,11 @@
 
                 <div class="nav-group">
                     <div class="nav-group-header">SYSTEM</div>
-                    <div class="nav-item" data-route="settings">
+                    <div class="nav-item" data-route="settings" data-tooltip="Settings">
                         <i class="ph ph-gear nav-icon"></i>
                         <span class="nav-label">Settings</span>
                     </div>
-
-
-                    <div class="nav-item" data-route="roadmap">
+                    <div class="nav-item" data-route="roadmap" data-tooltip="Roadmap">
                         <i class="ph ph-map-trifold nav-icon"></i>
                         <span class="nav-label">Roadmap</span>
                     </div>
@@ -205,6 +217,46 @@
                 </div>
             </div>
 
+            <!-- GST / HST Summary (drillable) -->
+            <div class="utility-card" id="util-gst-card" style="display:none;">
+                <div class="utility-card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                    <span id="util-gst-label">GST/HST</span>
+                    <span id="util-gst-province-badge" style="font-size:9px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 5px;color:#64748b;font-weight:600;"></span>
+                </div>
+
+                <!-- GST Collected (on sales) -->
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;cursor:pointer;border-radius:4px;padding:2px 4px;transition:background 0.12s;"
+                     onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='transparent'"
+                     title="GST/HST collected on sales — click to filter"
+                     onclick="window.ubDrillType?.('gst-collected')">
+                    <span style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:4px;">
+                        <span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;flex-shrink:0;"></span>
+                        Collected (2160)
+                    </span>
+                    <span id="util-gst-collected" style="font-size:12px;font-weight:600;color:#10b981;font-family:'JetBrains Mono',monospace;">$0</span>
+                </div>
+
+                <!-- ITC / GST Paid -->
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;cursor:pointer;border-radius:4px;padding:2px 4px;transition:background 0.12s;"
+                     onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='transparent'"
+                     title="Input Tax Credits (GST paid on expenses) — click to filter"
+                     onclick="window.ubDrillType?.('gst-itc')">
+                    <span style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:4px;">
+                        <span style="width:6px;height:6px;border-radius:50%;background:#3b82f6;display:inline-block;flex-shrink:0;"></span>
+                        ITC Paid (2150)
+                    </span>
+                    <span id="util-gst-itc" style="font-size:12px;font-weight:600;color:#3b82f6;font-family:'JetBrains Mono',monospace;">$0</span>
+                </div>
+
+                <!-- Net GST Payable -->
+                <div style="border-top:1px solid #e2e8f0;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;cursor:pointer;border-radius:4px;padding:4px;"
+                     title="Net GST payable to CRA (Collected − ITC). Green = refund."
+                     onclick="window.ubDrillType?.('gst-all')">
+                    <span style="font-size:11px;font-weight:700;color:#1e293b;">Net Payable / Refund</span>
+                    <span id="util-gst-net" style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;">$0</span>
+                </div>
+            </div>
+
             <!-- Category Allocation -->
             <div class="utility-card">
                 <div class="utility-card-title">Top Categories</div>
@@ -238,16 +290,6 @@
 
         <!-- Restored Main Container -->
         <div class="main-wrapper">
-            <!-- Breadcrumb Bar -->
-            <div id="breadcrumb" class="breadcrumb-bar">
-                <div class="breadcrumb-item">
-                    <i class="ph ph-house breadcrumb-icon"></i>
-                    <span class="breadcrumb-link">Home</span>
-                </div>
-                <div class="breadcrumb-separator"><i class="ph ph-caret-right"></i></div>
-                <div class="breadcrumb-item breadcrumb-current">Transactions</div>
-            </div>
-
             <!-- Stage Area -->
             <main id="app-stage" class="stage">
                 <!-- V4/V5 Restoration Logic Injected Here -->
@@ -401,16 +443,20 @@
     <script src="src/parsers_raw/HSBCParser.js"></script>
 
     <!-- Category / Rule Engine -->
+    <!-- IMPORTANT: These are ES modules (type="module") which are deferred by default.
+         ledger.core.js and app.js MUST also be deferred so they execute AFTER
+         window.VendorMatcher and window.RuleEngine are set by the modules above.
+         Without defer, ledger.core.js and app.js run synchronously before modules execute. -->
     <script type="module" src="src/constants/defaultCategories.js"></script>
     <script type="module" src="src/services/CategoryService.js"></script>
     <script type="module" src="src/services/VendorMatcher.js"></script>
     <script type="module" src="src/services/RuleEngine.js"></script>
-    <script src="src/services/TransactionExporter.js"></script>
+    <!-- TransactionExporter is now bundled via main.jsx (ES module with xlsx dependency) -->
+    <script type="module" src="src/services/StorageService.js"></script>
 
-
-    <script src="src/ui/enterprise/ledger.core.js"></script>
-    <script src="src/ui/enterprise/utility-bar.js"></script>
-    <script src="src/ui/enterprise/app.js"></script>
+    <script defer src="src/ui/enterprise/ledger.core.js"></script>
+    <script defer src="src/ui/enterprise/utility-bar.js"></script>
+    <script defer src="src/ui/enterprise/app.js"></script>
     <!-- Dev: DBG2 debug helper auto-inject -->
     <script>
         (function () {

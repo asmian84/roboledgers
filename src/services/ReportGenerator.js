@@ -1,3 +1,5 @@
+import { UNCATEGORIZED_CODE, UNCATEGORIZED_NAME } from '../constants/accounts.js';
+
 /**
  * ReportGenerator - Core service for generating financial reports
  * Handles data aggregation, calculations, and report formatting
@@ -6,6 +8,46 @@ class ReportGenerator {
     constructor(ledger, coa) {
         this.ledger = ledger;
         this.coa = coa;
+    }
+
+    /**
+     * DOUBLE-ENTRY POLARITY FLIP for credit-normal (liability) source accounts.
+     *
+     * ACCOUNTING FUNDAMENTALS — Normal balance direction from COA:
+     *   ASSET     → Debit-normal   (1000-1999)
+     *   LIABILITY → Credit-normal  (2000-2999)  ← includes all credit cards
+     *   EQUITY    → Credit-normal  (3000-3999)
+     *   REVENUE   → Credit-normal  (4000-4999)
+     *   EXPENSE   → Debit-normal   (5000-9999)
+     *
+     * Transaction polarity is from the SOURCE ACCOUNT's perspective:
+     *   CC  CREDIT = purchase (increases liability)
+     *   CC  DEBIT  = payment  (decreases liability)
+     *   CHQ DEBIT  = withdrawal (decreases asset)
+     *   CHQ CREDIT = deposit    (increases asset)
+     *
+     * For the CATEGORIZED (target) account in reports, credit-normal source
+     * accounts need polarity flipped:
+     *   CC purchase  (CREDIT on CC) → DEBIT  the expense account
+     *   CC payment   (DEBIT  on CC) → CREDIT the clearing account
+     *   CHQ withdrawal (DEBIT)      → DEBIT  the expense account (no flip)
+     *   CHQ deposit    (CREDIT)     → CREDIT the revenue account (no flip)
+     */
+    _isSourceCreditNormal(tx) {
+        const sourceAcct = this.ledger.getAccount?.(tx.account_id);
+        if (!sourceAcct) return false;
+        // Primary: accountType — set by every CC parser (CreditCard)
+        if ((sourceAcct.accountType || '').toLowerCase() === 'creditcard') return true;
+        // Secondary: cardNetwork / brand — set by CC parsers
+        if (sourceAcct.cardNetwork || sourceAcct.brand) return true;
+        return false;
+    }
+
+    _effectivePolarity(tx) {
+        if (this._isSourceCreditNormal(tx)) {
+            return tx.polarity === 'CREDIT' ? 'DEBIT' : 'CREDIT';
+        }
+        return tx.polarity;
     }
 
     /**
@@ -19,50 +61,80 @@ class ReportGenerator {
         // Aggregate by account
         const accountBalances = {};
 
-        transactions.forEach(tx => {
-            // Use category if set, otherwise use "9970" for uncategorized
-            const category = tx.category || '9970';
-
-            if (!accountBalances[category]) {
-                // Ensure category is string for COA lookup
-                const account = this.coa.get(String(category));
-                accountBalances[category] = {
-                    code: category,
-                    name: category === '9970' ? 'Uncategorized' : (account?.name || 'Unknown'),
+        // Helper: ensure a COA bucket exists in accountBalances
+        const ensureBucket = (code) => {
+            if (!accountBalances[code]) {
+                const account = this.coa.get(String(code)) || this.coa.get(parseInt(code));
+                const leadsheet = this.coa.getLeadsheet ? this.coa.getLeadsheet(code) : null;
+                accountBalances[code] = {
+                    code,
+                    name: code === UNCATEGORIZED_CODE ? UNCATEGORIZED_NAME : (account?.name && account.name.trim() !== '' ? account.name : `Account ${code}`),
+                    leadsheet: leadsheet || '',
+                    root: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(code) : ''),
                     debit: 0,
                     credit: 0,
                     balance: 0
                 };
             }
+        };
+
+        // Pre-build account_id → coaCode lookup for contra entries.
+        // Each imported bank/CC account is linked to a COA code via coaCode.
+        // We use the Accounts service (exposed on window.RoboLedger) to get all accounts.
+        const acctCoaMap = {};
+        const allAccounts = window.RoboLedger?.Accounts?.getAll?.() || [];
+        for (const acct of allAccounts) {
+            if (acct.id && acct.coaCode) {
+                acctCoaMap[acct.id] = acct.coaCode;
+            }
+        }
+
+        transactions.forEach(tx => {
+            // Use category if set, otherwise use uncategorized code
+            const category = tx.category || UNCATEGORIZED_CODE;
+            ensureBucket(category);
 
             // Use amount_cents + polarity (the actual transaction schema)
             const amount = (tx.amount_cents || 0) / 100;
+            const effPolarity = this._effectivePolarity(tx);
 
-            if (tx.polarity === 'DEBIT') {
+            // ─── Side 1: Category account (expense/revenue/etc.) ───
+            if (effPolarity === 'DEBIT') {
                 accountBalances[category].debit += amount;
-            } else if (tx.polarity === 'CREDIT') {
+            } else if (effPolarity === 'CREDIT') {
                 accountBalances[category].credit += amount;
+            }
+
+            // ─── Side 2: Source bank/CC account (contra entry) ───
+            // Double-entry: every transaction hits two accounts.
+            // The source account (CHQ, SAV, CC) gets the opposite side.
+            const sourceCoaCode = acctCoaMap[tx.account_id];
+            if (sourceCoaCode && sourceCoaCode !== category) {
+                ensureBucket(sourceCoaCode);
+                // Contra = opposite of the category side
+                if (effPolarity === 'DEBIT') {
+                    accountBalances[sourceCoaCode].credit += amount;
+                } else if (effPolarity === 'CREDIT') {
+                    accountBalances[sourceCoaCode].debit += amount;
+                }
             }
 
             // GST ACCOUNTING: Add GST entry if enabled
             if (tx.gst_enabled && tx.gst_account && tx.tax_cents) {
                 const gstAccount = tx.gst_account;
                 const gstAmount = (tx.tax_cents || 0) / 100;
+                ensureBucket(gstAccount);
 
-                if (!accountBalances[gstAccount]) {
-                    const account = this.coa?.get(String(gstAccount)) || this.coa?.get(parseInt(gstAccount));
-
-                    accountBalances[gstAccount] = {
-                        code: gstAccount,
-                        name: account?.name || `GST Account ${gstAccount}`,
-                        debit: 0,
-                        credit: 0,
-                        balance: 0
-                    };
-                }
-
-                // GST is always a credit to liability accounts (2150, 2160)
+                // GST ITC (2150) = debit (asset-like), GST collected (2160) = credit (liability)
+                // For expense transactions: DR 2150 (ITC paid on purchase)
+                // For revenue transactions: CR 2160 (GST collected on sale)
                 accountBalances[gstAccount].credit += gstAmount;
+
+                // GST also reduces the source bank account (contra for GST portion)
+                if (sourceCoaCode) {
+                    ensureBucket(sourceCoaCode);
+                    accountBalances[sourceCoaCode].credit += gstAmount;
+                }
             }
         });
 
@@ -73,11 +145,10 @@ class ReportGenerator {
         // FORCE BALANCE: Add any imbalance to Uncategorized
         const imbalance = totalDebit - totalCredit;
         if (Math.abs(imbalance) > 0.01) {
-            // Ensure 9970 (Uncategorized) exists
-            if (!accountBalances['9970']) {
-                accountBalances['9970'] = {
-                    code: '9970',
-                    name: 'Uncategorized',
+            if (!accountBalances[UNCATEGORIZED_CODE]) {
+                accountBalances[UNCATEGORIZED_CODE] = {
+                    code: UNCATEGORIZED_CODE,
+                    name: UNCATEGORIZED_NAME,
                     debit: 0,
                     credit: 0,
                     balance: 0
@@ -86,11 +157,9 @@ class ReportGenerator {
 
             // Add offsetting entry to balance
             if (imbalance > 0) {
-                // More debits than credits, add credit to 9970
-                accountBalances['9970'].credit += imbalance;
+                accountBalances[UNCATEGORIZED_CODE].credit += imbalance;
             } else {
-                // More credits than debits, add debit to 9970
-                accountBalances['9970'].debit += Math.abs(imbalance);
+                accountBalances[UNCATEGORIZED_CODE].debit += Math.abs(imbalance);
             }
         }
 
@@ -99,9 +168,9 @@ class ReportGenerator {
             acc.balance = acc.debit - acc.credit;
             return acc;
         }).sort((a, b) => {
-            // Sort: Uncategorized (9970) last, others by code
-            if (a.code === '9970') return 1;
-            if (b.code === '9970') return -1;
+            // Sort: Uncategorized last, others by code
+            if (a.code === UNCATEGORIZED_CODE) return 1;
+            if (b.code === UNCATEGORIZED_CODE) return -1;
             return parseInt(a.code) - parseInt(b.code);
         });
 
@@ -138,9 +207,10 @@ class ReportGenerator {
         // Sort by date
         transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Enrich with account names
+        // Enrich with account names + effective polarity for display
         const enriched = transactions.map(tx => ({
             ...tx,
+            effPolarity: this._effectivePolarity(tx),
             account_name: this.coa.get(tx.category)?.name || 'Uncategorized',
             account_code: tx.category || '',
             source_account: this.ledger.getAccount?.(tx.account_id)?.name || tx.account_id
@@ -161,35 +231,76 @@ class ReportGenerator {
         const transactions = this.ledger.getTransactionsByDateRange?.(startDate, endDate) ||
             this.ledger.getAllTransactions();
 
-        // Filter by COA code
+        // For bank/CC COA codes (1000-2199), also match by source account_id via sourceAccountId linkage
+        const coaEntry = this.coa.get(coaCode);
+        const sourceAccountId = coaEntry?.sourceAccountId || null;
+
+        // Filter by COA code OR by source bank account
         const filtered = transactions
-            .filter(tx => tx.category === coaCode)
+            .filter(tx => {
+                // Direct category match (expense/revenue accounts)
+                if (tx.category === coaCode || tx.category_code === coaCode || tx.gl_account_code === coaCode) return true;
+                // Source account match (bank/CC accounts linked via COA.sourceAccountId)
+                if (sourceAccountId && tx.account_id === sourceAccountId) return true;
+                return false;
+            })
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const account = this.coa.get(coaCode);
 
-        // Calculate running balance
+        // Calculate running balance using effective polarity (flipped for CC accounts)
         let runningBalance = 0;
         const enriched = filtered.map(tx => {
-            runningBalance += (tx.debit || 0) - (tx.credit || 0);
+            const amount = (tx.amount_cents || 0) / 100;
+            const eff = this._effectivePolarity(tx);
+            if (eff === 'DEBIT') {
+                runningBalance += amount;
+            } else if (eff === 'CREDIT') {
+                runningBalance -= amount;
+            }
             return {
                 ...tx,
+                effPolarity: eff,
                 balance: runningBalance
             };
         });
 
-        const totalDebit = filtered.reduce((sum, tx) => sum + (tx.debit || 0), 0);
-        const totalCredit = filtered.reduce((sum, tx) => sum + (tx.credit || 0), 0);
+        const totalDebit = filtered.reduce((sum, tx) => {
+            return this._effectivePolarity(tx) === 'DEBIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
+        }, 0);
+        const totalCredit = filtered.reduce((sum, tx) => {
+            return this._effectivePolarity(tx) === 'CREDIT' ? sum + (tx.amount_cents || 0) / 100 : sum;
+        }, 0);
+
+        // Calculate opening balance: sum all transactions for this COA code BEFORE startDate
+        let openingBalance = 0;
+        if (startDate) {
+            const allTxsForCode = this.ledger.getAllTransactions
+                ? this.ledger.getAllTransactions().filter(tx => {
+                    if (tx.category === coaCode || tx.category_code === coaCode || tx.gl_account_code === coaCode) return true;
+                    if (sourceAccountId && tx.account_id === sourceAccountId) return true;
+                    return false;
+                })
+                : [];
+            allTxsForCode.forEach(tx => {
+                if (new Date(tx.date) < new Date(startDate)) {
+                    const amt = (tx.amount_cents || 0) / 100;
+                    const eff = this._effectivePolarity(tx);
+                    if (eff === 'DEBIT') openingBalance += amt;
+                    else if (eff === 'CREDIT') openingBalance -= amt;
+                }
+            });
+        }
 
         return {
             account: {
                 code: coaCode,
-                name: account?.name || 'Unknown',
-                type: account?.root || 'Unknown'
+                name: (account?.name && account.name.trim()) || `Account ${coaCode}`,
+                type: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(coaCode) : 'EXPENSE')
             },
             transactions: enriched,
-            openingBalance: 0, // TODO: Calculate from transactions before startDate
-            closingBalance: runningBalance,
+            openingBalance,
+            closingBalance: openingBalance + runningBalance,
             totals: {
                 debit: totalDebit,
                 credit: totalCredit,
@@ -217,19 +328,30 @@ class ReportGenerator {
             const account = this.coa.get(tx.category);
             if (!account) return;
 
-            const amount = (tx.credit || 0) - (tx.debit || 0); // For income statement
+            // Use canonical schema: amount_cents + effective polarity
+            const absAmount = (tx.amount_cents || 0) / 100;
+            const eff = this._effectivePolarity(tx);
 
-            // REVENUE accounts (4000-4999)
+            // REVENUE accounts (4000-4999) — Credit-normal
+            //   effPolarity CREDIT → adds to revenue (normal)
+            //   effPolarity DEBIT  → reduces revenue (refund/reversal)
             if (account.root === 'REVENUE') {
-                this.addToCategory(revenue, tx.category, account.name, amount);
+                const signed = eff === 'CREDIT' ? absAmount : -absAmount;
+                this.addToCategory(revenue, tx.category, account.name, signed);
             }
-            // COGS accounts (5000-5999) - Cost of Goods Sold
+            // COGS accounts (5000-5999) - Cost of Goods Sold — Debit-normal
+            //   effPolarity DEBIT  → adds to COGS (normal)
+            //   effPolarity CREDIT → reduces COGS (refund/reversal)
             else if (account.class === 'COGS') {
-                this.addToCategory(cogs, tx.category, account.name, amount);
+                const signed = eff === 'DEBIT' ? absAmount : -absAmount;
+                this.addToCategory(cogs, tx.category, account.name, signed);
             }
-            // EXPENSE accounts (6000-9999)
+            // EXPENSE accounts (6000-9999) — Debit-normal
+            //   effPolarity DEBIT  → adds to expense (normal)
+            //   effPolarity CREDIT → reduces expense (refund/reversal)
             else if (account.root === 'EXPENSE') {
-                this.addToCategory(expenses, tx.category, account.name, amount);
+                const signed = eff === 'DEBIT' ? absAmount : -absAmount;
+                this.addToCategory(expenses, tx.category, account.name, signed);
             }
         });
 
@@ -267,21 +389,28 @@ class ReportGenerator {
         const liabilities = [];
         const equity = [];
 
-        // Aggregate by account type
+        // Aggregate by account type using canonical schema
         transactions.forEach(tx => {
             if (!tx.category) return;
 
             const account = this.coa.get(tx.category);
             if (!account) return;
 
-            const amount = (tx.debit || 0) - (tx.credit || 0);
+            const absAmount = (tx.amount_cents || 0) / 100;
+            const eff = this._effectivePolarity(tx);
 
             if (account.root === 'ASSET') {
-                this.addToCategory(assets, tx.category, account.name, amount);
+                // Assets: DEBIT increases (+), CREDIT decreases (-)
+                const signed = eff === 'DEBIT' ? absAmount : -absAmount;
+                this.addToCategory(assets, tx.category, account.name, signed);
             } else if (account.root === 'LIABILITY') {
-                this.addToCategory(liabilities, tx.category, account.name, -amount); // Negative for liabilities
+                // Liabilities: CREDIT increases (+), DEBIT decreases (-)
+                const signed = eff === 'CREDIT' ? absAmount : -absAmount;
+                this.addToCategory(liabilities, tx.category, account.name, signed);
             } else if (account.root === 'EQUITY') {
-                this.addToCategory(equity, tx.category, account.name, -amount);
+                // Equity: CREDIT increases (+), DEBIT decreases (-)
+                const signed = eff === 'CREDIT' ? absAmount : -absAmount;
+                this.addToCategory(equity, tx.category, account.name, signed);
             }
         });
 
@@ -316,11 +445,11 @@ class ReportGenerator {
             if (!tx.category) return;
 
             if (!summary[tx.category]) {
-                const account = this.coa.get(tx.category);
+                const account = this.coa.get(String(tx.category)) || this.coa.get(parseInt(tx.category));
                 summary[tx.category] = {
                     code: tx.category,
-                    name: account?.name || 'Unknown',
-                    type: account?.root || 'Unknown',
+                    name: (account?.name && account.name.trim()) || `Account ${tx.category}`,
+                    type: account?.root || (this.coa.inferRoot ? this.coa.inferRoot(tx.category) : 'EXPENSE'),
                     count: 0,
                     debit: 0,
                     credit: 0,
@@ -329,8 +458,13 @@ class ReportGenerator {
             }
 
             summary[tx.category].count++;
-            summary[tx.category].debit += tx.debit || 0;
-            summary[tx.category].credit += tx.credit || 0;
+            const amount = (tx.amount_cents || 0) / 100;
+            const eff = this._effectivePolarity(tx);
+            if (eff === 'DEBIT') {
+                summary[tx.category].debit += amount;
+            } else if (eff === 'CREDIT') {
+                summary[tx.category].credit += amount;
+            }
         });
 
         // Calculate net and sort
@@ -391,7 +525,7 @@ class ReportGenerator {
 
         // Check if account is in exempt range (e.g., equity accounts)
         const accountCode = account.code;
-        if (accountCode >= '3000' && accountCode < '4000') {  // Equity
+        if (parseInt(accountCode) >= 3000 && parseInt(accountCode) < 4000) {  // Equity
             return true;
         }
 
@@ -426,10 +560,12 @@ class ReportGenerator {
             // Check if transaction has tax amount
             const taxAmount = tx.tax_cents ? tx.tax_cents / 100 : 0;
 
-            // REVENUE accounts (4000-4999)  
+            // Use canonical schema: amount_cents
+            const amount = (tx.amount_cents || 0) / 100;
+
+            // REVENUE accounts (4000-4999)
             if (account.root === 'REVENUE') {
                 // GST collected on revenue
-                const amount = tx.credit || 0;
                 const gst = taxAmount || (amount * taxRate);
                 gstCollected += gst;
                 revenueTransactions.push({
@@ -443,7 +579,6 @@ class ReportGenerator {
             // EXPENSE accounts (5000-9999) or COGS class
             else if (account.root === 'EXPENSE' || account.class === 'COGS') {
                 // GST paid on expenses (ITC)
-                const amount = tx.debit || 0;
                 const gst = taxAmount || (amount * taxRate);
                 gstPaid += gst;
                 expenseTransactions.push({
@@ -499,9 +634,22 @@ class ReportGenerator {
         const liabilities = balanceSheet.totals.liabilities;
         const equity = balanceSheet.totals.equity;
 
-        // Calculate current assets/liabilities (simplified - would need account classification)
-        const currentAssets = assets; // TODO: Filter by current asset accounts
-        const currentLiabilities = liabilities; // TODO: Filter by current liability accounts
+        // Current assets: cash, receivables, inventory (codes 1000-1399)
+        // Current liabilities: AP, accrued liabilities, GST payable (codes 2000-2499)
+        const currentAssets = (() => {
+            const bs = this.generateBalanceSheet(balanceDate);
+            return (bs.assets || []).reduce((sum, a) => {
+                const n = parseInt(a.code || 0);
+                return (n >= 1000 && n <= 1399) ? sum + Math.abs(a.balance || 0) : sum;
+            }, 0);
+        })();
+        const currentLiabilities = (() => {
+            const bs = this.generateBalanceSheet(balanceDate);
+            return (bs.liabilities || []).reduce((sum, a) => {
+                const n = parseInt(a.code || 0);
+                return (n >= 2000 && n <= 2499) ? sum + Math.abs(a.balance || 0) : sum;
+            }, 0);
+        })();
 
         return {
             // Profitability Ratios
@@ -544,6 +692,248 @@ class ReportGenerator {
             },
 
             period: { startDate, endDate, asOfDate: balanceDate }
+        };
+    }
+
+    /**
+     * Generate Cash Flow Statement (Indirect Method)
+     * Categorizes cash movements into Operating, Investing, and Financing
+     */
+    generateCashFlow(startDate, endDate) {
+        const transactions = this.ledger.getTransactionsByDateRange?.(startDate, endDate) ||
+            this.ledger.getAllTransactions();
+
+        const operating = [];
+        const investing = [];
+        const financing = [];
+
+        // Get net income for the period
+        const incomeStatement = this.generateIncomeStatement(startDate, endDate);
+        const netIncome = incomeStatement.totals.netIncome;
+
+        transactions.forEach(tx => {
+            if (!tx.category) return;
+            const code = parseInt(tx.category) || 0;
+            const account = this.coa.get(tx.category);
+            if (!account) return;
+
+            const absAmount = (tx.amount_cents || 0) / 100;
+            // Net cash effect: credits are inflows, debits are outflows
+            // For CC accounts, flip polarity (CC CREDIT = purchase = outflow)
+            const eff = this._effectivePolarity(tx);
+            const cashEffect = eff === 'CREDIT' ? absAmount : -absAmount;
+
+            // OPERATING: Revenue (4000-4999), COGS (5000-5999), Operating Expenses (6000-8999)
+            // Also includes changes in working capital: AR (1210-1299), AP (2000-2499), Inventory (1300-1399)
+            if (code >= 4000 && code < 9000) {
+                // Already captured in net income — skip to avoid double-counting
+                return;
+            }
+            // Changes in receivables
+            else if (code >= 1210 && code < 1300) {
+                this.addToCategory(operating, tx.category, account.name + ' (Change)', cashEffect);
+            }
+            // Changes in inventory
+            else if (code >= 1300 && code < 1400) {
+                this.addToCategory(operating, tx.category, account.name + ' (Change)', cashEffect);
+            }
+            // Changes in prepaids
+            else if (code >= 1350 && code < 1400) {
+                this.addToCategory(operating, tx.category, account.name + ' (Change)', cashEffect);
+            }
+            // Changes in payables and accrued liabilities
+            else if (code >= 2000 && code < 2500) {
+                this.addToCategory(operating, tx.category, account.name + ' (Change)', cashEffect);
+            }
+            // INVESTING: Capital assets (1500-1999), investments (1100, 1400)
+            else if (code >= 1500 && code < 2000) {
+                this.addToCategory(investing, tx.category, account.name, cashEffect);
+            }
+            else if (code === 1100 || code === 1400) {
+                this.addToCategory(investing, tx.category, account.name, cashEffect);
+            }
+            // FINANCING: Long-term debt (2500-2999), Equity (3000-3999)
+            else if (code >= 2500 && code < 3000) {
+                this.addToCategory(financing, tx.category, account.name, cashEffect);
+            }
+            else if (code >= 3000 && code < 4000) {
+                this.addToCategory(financing, tx.category, account.name, cashEffect);
+            }
+            // Cash accounts (1000-1099) are the resulting balance — exclude
+            else if (code >= 1000 && code < 1100) {
+                return; // Don't include cash-to-cash
+            }
+        });
+
+        // Operating starts with net income, then adjustments
+        const totalOperatingAdjustments = this.sumCategory(operating);
+        const totalOperating = netIncome + totalOperatingAdjustments;
+        const totalInvesting = this.sumCategory(investing);
+        const totalFinancing = this.sumCategory(financing);
+        const netChange = totalOperating + totalInvesting + totalFinancing;
+
+        // Get opening and closing cash balances
+        const allTxs = this.ledger.getAllTransactions ? this.ledger.getAllTransactions() : [];
+        let openingCash = 0, closingCash = 0;
+        allTxs.forEach(tx => {
+            const code = parseInt(tx.category) || 0;
+            if (code >= 1000 && code < 1100) {
+                const amt = (tx.amount_cents || 0) / 100;
+                const signed = tx.polarity === 'CREDIT' ? amt : -amt;
+                if (new Date(tx.date) < new Date(startDate)) {
+                    openingCash += signed;
+                }
+                if (new Date(tx.date) <= new Date(endDate)) {
+                    closingCash += signed;
+                }
+            }
+        });
+
+        return {
+            operating: {
+                netIncome,
+                adjustments: operating.sort((a, b) => parseInt(a.code) - parseInt(b.code)),
+                totalAdjustments: totalOperatingAdjustments,
+                total: totalOperating
+            },
+            investing: {
+                items: investing.sort((a, b) => parseInt(a.code) - parseInt(b.code)),
+                total: totalInvesting
+            },
+            financing: {
+                items: financing.sort((a, b) => parseInt(a.code) - parseInt(b.code)),
+                total: totalFinancing
+            },
+            netChange,
+            openingCash,
+            closingCash,
+            period: { startDate, endDate }
+        };
+    }
+
+    /**
+     * Generate Comparative Trial Balance (Current Year vs Prior Year)
+     */
+    generateComparativeTrialBalance(currentStart, currentEnd, priorStart, priorEnd) {
+        const currentTB = this.generateTrialBalance(currentStart, currentEnd);
+        const priorTB = this.generateTrialBalance(priorStart, priorEnd);
+
+        // Build comparison map
+        const compMap = {};
+        currentTB.accounts.forEach(acc => {
+            compMap[acc.code] = {
+                code: acc.code,
+                name: acc.name,
+                leadsheet: acc.leadsheet || '',
+                root: acc.root || '',
+                currentDebit: acc.debit,
+                currentCredit: acc.credit,
+                currentBalance: acc.balance,
+                priorDebit: 0,
+                priorCredit: 0,
+                priorBalance: 0,
+            };
+        });
+        priorTB.accounts.forEach(acc => {
+            if (!compMap[acc.code]) {
+                compMap[acc.code] = {
+                    code: acc.code,
+                    name: acc.name,
+                    leadsheet: acc.leadsheet || '',
+                    root: acc.root || '',
+                    currentDebit: 0,
+                    currentCredit: 0,
+                    currentBalance: 0,
+                    priorDebit: 0,
+                    priorCredit: 0,
+                    priorBalance: 0,
+                };
+            }
+            compMap[acc.code].priorDebit = acc.debit;
+            compMap[acc.code].priorCredit = acc.credit;
+            compMap[acc.code].priorBalance = acc.balance;
+        });
+
+        const accounts = Object.values(compMap).map(acc => ({
+            ...acc,
+            varianceAmount: acc.currentBalance - acc.priorBalance,
+            variancePct: acc.priorBalance !== 0 ? ((acc.currentBalance - acc.priorBalance) / Math.abs(acc.priorBalance)) * 100 : (acc.currentBalance !== 0 ? 100 : 0),
+        })).sort((a, b) => {
+            if (a.code === UNCATEGORIZED_CODE) return 1;
+            if (b.code === UNCATEGORIZED_CODE) return -1;
+            return parseInt(a.code) - parseInt(b.code);
+        });
+
+        return {
+            accounts,
+            currentPeriod: { start: currentStart, end: currentEnd },
+            priorPeriod: { start: priorStart, end: priorEnd },
+            currentTotals: currentTB.totals,
+            priorTotals: priorTB.totals,
+        };
+    }
+
+    /**
+     * Generate Bank Reconciliation for a specific account
+     */
+    generateBankReconciliation(accountId, asOfDate, bankBalance) {
+        const allTxs = this.ledger.getAllTransactions ? this.ledger.getAllTransactions() : [];
+        const accountTxs = allTxs.filter(tx =>
+            tx.account_id === accountId && new Date(tx.date) <= new Date(asOfDate)
+        );
+
+        // Calculate book balance
+        let bookBalance = 0;
+        const account = this.ledger.getAccount?.(accountId);
+        const openingBalance = (account?.openingBalance || 0) * 100; // to cents
+        bookBalance = openingBalance;
+
+        accountTxs.forEach(tx => {
+            const amt = tx.amount_cents || 0;
+            bookBalance += tx.polarity === 'CREDIT' ? amt : -amt;
+        });
+        bookBalance = bookBalance / 100;
+
+        // Find unreconciled items
+        const unreconciledItems = accountTxs.filter(tx => tx.status !== 'RECONCILED');
+        const outstandingDeposits = unreconciledItems
+            .filter(tx => tx.polarity === 'CREDIT')
+            .map(tx => ({
+                date: tx.date,
+                description: tx.description || tx.payee || '',
+                amount: (tx.amount_cents || 0) / 100,
+                tx_id: tx.tx_id,
+            }));
+        const outstandingCheques = unreconciledItems
+            .filter(tx => tx.polarity === 'DEBIT')
+            .map(tx => ({
+                date: tx.date,
+                description: tx.description || tx.payee || '',
+                amount: (tx.amount_cents || 0) / 100,
+                tx_id: tx.tx_id,
+            }));
+
+        const totalOutDeposits = outstandingDeposits.reduce((s, i) => s + i.amount, 0);
+        const totalOutCheques = outstandingCheques.reduce((s, i) => s + i.amount, 0);
+
+        // Adjusted bank balance = bank statement + outstanding deposits - outstanding cheques
+        const adjustedBankBalance = (bankBalance || 0) + totalOutDeposits - totalOutCheques;
+        const variance = bookBalance - adjustedBankBalance;
+
+        return {
+            accountId,
+            accountName: (account?.name && account.name.trim()) || accountId,
+            asOfDate,
+            bankBalance: bankBalance || 0,
+            bookBalance,
+            outstandingDeposits,
+            outstandingCheques,
+            totalOutstandingDeposits: totalOutDeposits,
+            totalOutstandingCheques: totalOutCheques,
+            adjustedBankBalance,
+            variance,
+            isReconciled: Math.abs(variance) < 0.01,
+            totalTransactions: accountTxs.length,
         };
     }
 

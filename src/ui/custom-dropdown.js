@@ -166,35 +166,13 @@
     var triggerRect = trigger.getBoundingClientRect();
     var viewportHeight = window.innerHeight;
     var viewportWidth = window.innerWidth;
-    var menuHeight = Math.min(menu.scrollHeight || 300, 320);
     var menuWidth = Math.max(triggerRect.width, 200);
 
-    // Calculate available space above and below
+    // Always open downward — constrain height to available space below
     var spaceBelow = viewportHeight - triggerRect.bottom - 12;
-    var spaceAbove = triggerRect.top - 12;
-
-    // Smart positioning: prefer below, flip above if needed
-    if (menuHeight <= spaceBelow) {
-      // Open below (preferred)
-      menu.style.top = (triggerRect.bottom + 4) + 'px';
-      menu.style.bottom = 'auto';
-      menu.style.maxHeight = Math.min(spaceBelow, 320) + 'px';
-    } else if (menuHeight <= spaceAbove) {
-      // Open above (fallback)
-      menu.style.top = (triggerRect.top - menuHeight - 4) + 'px';
-      menu.style.bottom = 'auto';
-      menu.style.maxHeight = Math.min(spaceAbove, 320) + 'px';
-    } else {
-      // Constrain to available space (whichever is larger)
-      if (spaceBelow >= spaceAbove) {
-        menu.style.top = (triggerRect.bottom + 4) + 'px';
-        menu.style.maxHeight = spaceBelow + 'px';
-      } else {
-        menu.style.top = '12px';
-        menu.style.maxHeight = spaceAbove + 'px';
-      }
-      menu.style.bottom = 'auto';
-    }
+    menu.style.top = (triggerRect.bottom + 4) + 'px';
+    menu.style.bottom = 'auto';
+    menu.style.maxHeight = Math.min(Math.max(spaceBelow, 120), 320) + 'px';
     menu.style.overflowY = 'auto';
 
     // Horizontal positioning - keep within viewport

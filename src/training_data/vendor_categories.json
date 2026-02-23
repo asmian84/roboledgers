@@ -1,307 +1,555 @@
 {
     "metadata": {
-        "source": "scan_results_ai_processed (1).csv + (2).csv",
+        "source": "scan_results_ai_processed (1).csv + (2).csv + vendor_dictionary_comprehensive.xlsx",
         "total_transactions": 783124,
         "total_categorized": 612847,
         "confidence_threshold": 0.1,
-        "generated_date": "2026-02-15"
+        "generated_date": "2026-02-20",
+        "vendor_dictionary_version": "2.0",
+        "notes": "Extended with 1,917 vendors from comprehensive vendor dictionary, remapped to RoboLedger COA"
     },
     "category_mappings": {
         "5330": {
             "name": "Fuel and oil",
             "keywords": [
-                "shell",
-                "petro",
-                "esso",
-                "gas bar",
-                "costco gas",
-                "husky",
-                "mobil",
-                "sunoco",
-                "chevron",
-                "7-eleven gas",
-                "co-op gas"
+                "shell", "petro", "petro-canada", "petro canada", "esso",
+                "gas bar", "costco gas", "husky", "mobil", "sunoco",
+                "chevron", "7-eleven gas", "co-op gas", "pioneer energy",
+                "ultramar", "circle k", "gas station", "fuel", "gasoline",
+                "bp ", "texaco", "citgo", "marathon", "valero",
+                "speedway", "wawa gas", "quiktrip", "sheetz", "racetrac",
+                "casey's", "flying j", "pilot", "love's", "ta petro"
             ],
             "examples": [
-                {
-                    "vendor": "Shell",
-                    "occurrences": 1158
-                },
-                {
-                    "vendor": "Petro-canada",
-                    "occurrences": 552
-                },
-                {
-                    "vendor": "Esso",
-                    "occurrences": 562
-                },
-                {
-                    "vendor": "GAS BAR #3809",
-                    "occurrences": 150
-                }
+                { "vendor": "Shell", "occurrences": 1158 },
+                { "vendor": "Petro-canada", "occurrences": 552 },
+                { "vendor": "Esso", "occurrences": 562 },
+                { "vendor": "GAS BAR #3809", "occurrences": 150 },
+                { "vendor": "Chevron", "occurrences": 85 },
+                { "vendor": "Circle K", "occurrences": 120 }
+            ]
+        },
+        "6000": {
+            "name": "Advertising",
+            "keywords": [
+                "google ads", "facebook ads", "fb ads", "meta ads",
+                "linkedin ads", "tiktok ads", "twitter ads", "instagram ads",
+                "vistaprint", "google adwords", "bing ads", "pinterest ads",
+                "snapchat ads", "advertising", "ad campaign", "promoted",
+                "mailchimp", "constant contact", "sendinblue", "brevo",
+                "hubspot marketing", "hootsuite", "buffer", "sprout social",
+                "yelp ads", "yelp advertising", "yellowpages", "billboard",
+                "podcast sponsor", "influencer", "marketing agency"
+            ],
+            "examples": [
+                { "vendor": "Google Ads", "occurrences": 500 },
+                { "vendor": "Facebook Ads", "occurrences": 380 },
+                { "vendor": "Vistaprint", "occurrences": 120 },
+                { "vendor": "LinkedIn Ads", "occurrences": 95 }
             ]
         },
         "6415": {
             "name": "Client meals and entertainment",
             "keywords": [
-                "tim hortons",
-                "starbucks",
-                "mcdonald",
-                "subway",
-                "safeway",
-                "save on foods",
-                "sobeys",
-                "restaurant",
-                "coffee",
-                "skipthedishes"
+                "tim hortons", "starbucks", "mcdonald", "subway",
+                "restaurant", "coffee", "skipthedishes", "doordash",
+                "uber eats", "grubhub", "instacart", "skip the dishes",
+                "burger king", "wendy", "pizza hut", "dominos", "domino's",
+                "papa john", "chipotle", "taco bell", "chick-fil-a",
+                "panera", "five guys", "kfc", "popeyes", "arby's",
+                "dairy queen", "a&w", "swiss chalet", "boston pizza",
+                "earls", "joeys", "cactus club", "the keg", "milestones",
+                "moxies", "montana", "nandos", "nando's", "freshii",
+                "mary brown", "second cup", "davids tea", "opa!",
+                "pita", "denny's", "ihop", "applebee's", "olive garden",
+                "red lobster", "chili's", "outback", "cheesecake factory",
+                "cafe", "bistro", "grill", "diner", "pub ", "tavern",
+                "brewery", "bar ", "lounge", "sushi", "thai", "pizza",
+                "wings", "bbq", "barbeque", "steakhouse", "seafood"
             ],
             "examples": [
-                {
-                    "vendor": "TIM Hortons",
-                    "occurrences": 2140
-                },
-                {
-                    "vendor": "Mcdonald's",
-                    "occurrences": 1111
-                },
-                {
-                    "vendor": "Starbucks",
-                    "occurrences": 711
-                },
-                {
-                    "vendor": "Skipthedishes",
-                    "occurrences": 394
-                }
+                { "vendor": "TIM Hortons", "occurrences": 2140 },
+                { "vendor": "Mcdonald's", "occurrences": 1111 },
+                { "vendor": "Starbucks", "occurrences": 711 },
+                { "vendor": "Skipthedishes", "occurrences": 394 },
+                { "vendor": "DoorDash", "occurrences": 310 },
+                { "vendor": "Boston Pizza", "occurrences": 200 }
             ]
         },
-        "9200": {
-            "name": "Travel and accomodations",
+        "6420": {
+            "name": "Conferences",
             "keywords": [
-                "uber",
-                "lyft",
-                "westjet",
-                "air canada",
-                "hotel",
-                "airbnb",
-                "taxi",
-                "flight",
-                "airline",
-                "avis",
-                "budget rent"
+                "conference", "summit", "expo", "convention",
+                "symposium", "seminar", "workshop", "meetup",
+                "eventbrite", "bizzabo", "hopin", "sxsw",
+                "web summit", "dreamforce", "aws reinvent",
+                "ces ", "trade show", "tech conference"
             ],
             "examples": [
-                {
-                    "vendor": "Uber Canada/ubertrip Toronto ON",
-                    "occurrences": 675
-                },
-                {
-                    "vendor": "Skipthedishes",
-                    "occurrences": 3183
-                },
-                {
-                    "vendor": "Westjet",
-                    "occurrences": 580
-                },
-                {
-                    "vendor": "Uber",
-                    "occurrences": 961
-                }
+                { "vendor": "Eventbrite", "occurrences": 80 },
+                { "vendor": "SXSW", "occurrences": 25 }
+            ]
+        },
+        "6450": {
+            "name": "Consulting fees",
+            "keywords": [
+                "consulting", "consultant", "advisory", "advisor",
+                "mckinsey", "deloitte consulting", "accenture",
+                "pwc consulting", "kpmg consulting", "bain",
+                "boston consulting", "freelance", "engagement",
+                "strategy consult", "management consult"
+            ],
+            "examples": [
+                { "vendor": "Deloitte", "occurrences": 40 },
+                { "vendor": "Accenture", "occurrences": 35 }
+            ]
+        },
+        "6500": {
+            "name": "Contract wages",
+            "keywords": [
+                "contract", "contractor", "freelancer", "upwork",
+                "fiverr", "toptal", "99designs", "guru.com",
+                "peopleperhour", "contract labor", "temp agency",
+                "staffing", "robert half", "adecco", "randstad",
+                "kelly services", "manpower"
+            ],
+            "examples": [
+                { "vendor": "Upwork", "occurrences": 120 },
+                { "vendor": "Fiverr", "occurrences": 90 }
+            ]
+        },
+        "6550": {
+            "name": "Courier",
+            "keywords": [
+                "fedex", "ups", "canada post", "purolator", "dhl",
+                "usps", "courier", "parcel", "shipping", "postage",
+                "stamps.com", "shipstation", "easypost", "canpar",
+                "loomis", "dicom", "intelcom", "dynamex",
+                "pitney bowes", "endicia"
+            ],
+            "examples": [
+                { "vendor": "FedEx", "occurrences": 250 },
+                { "vendor": "Canada Post", "occurrences": 340 },
+                { "vendor": "UPS", "occurrences": 200 },
+                { "vendor": "Purolator", "occurrences": 180 }
             ]
         },
         "6600": {
             "name": "Credit card charges",
             "keywords": [
-                "plan fee",
-                "monthly",
-                "service charge",
-                "annual fee",
-                "overlimit",
-                "e-transfer",
-                "abm network",
-                "send",
-                "cash adv"
+                "plan fee", "monthly fee", "service charge",
+                "annual fee", "overlimit", "e-transfer", "abm network",
+                "send", "cash adv", "stripe", "square",
+                "paypal", "shopify payments", "moneris", "clover",
+                "toast", "lightspeed pay", "payment processing",
+                "merchant fee", "processing fee", "interchange"
             ],
             "examples": [
-                {
-                    "vendor": "Monthly",
-                    "occurrences": 2733
-                },
-                {
-                    "vendor": "Plan Fee",
-                    "occurrences": 1459
-                },
-                {
-                    "vendor": "Send",
-                    "occurrences": 6063
-                },
-                {
-                    "vendor": "Annual FEE",
-                    "occurrences": 723
-                }
+                { "vendor": "Monthly", "occurrences": 2733 },
+                { "vendor": "Plan Fee", "occurrences": 1459 },
+                { "vendor": "Send", "occurrences": 6063 },
+                { "vendor": "Stripe", "occurrences": 446 },
+                { "vendor": "Square", "occurrences": 320 }
+            ]
+        },
+        "6750": {
+            "name": "Donations",
+            "keywords": [
+                "donation", "charitable", "charity", "nonprofit",
+                "non-profit", "foundation", "united way", "red cross",
+                "salvation army", "habitat for humanity", "gofundme",
+                "cancer society", "heart foundation", "food bank",
+                "goodwill", "world vision", "unicef", "doctors without",
+                "amnesty international", "sierra club", "wwf"
+            ],
+            "examples": [
+                { "vendor": "United Way", "occurrences": 45 },
+                { "vendor": "Red Cross", "occurrences": 30 }
+            ]
+        },
+        "6800": {
+            "name": "Dues, memberships and subscriptions",
+            "keywords": [
+                "adobe", "microsoft", "microsoft 365", "office 365",
+                "github", "atlassian", "jira", "confluence", "slack",
+                "zoom", "salesforce", "hubspot", "shopify",
+                "quickbooks", "intuit", "xero", "freshbooks",
+                "mailchimp", "canva", "dropbox", "google workspace",
+                "notion", "figma", "zapier", "calendly", "docusign",
+                "semrush", "ahrefs", "asana", "trello", "monday.com",
+                "clickup", "1password", "lastpass", "grammarly",
+                "openai", "chatgpt", "anthropic", "vercel", "netlify",
+                "heroku", "digitalocean", "linode", "aws",
+                "amazon web services", "google cloud", "azure",
+                "netflix", "spotify", "apple.com/bill", "apl* itunes",
+                "linkedin premium", "membership", "subscription",
+                "dues", "annual membership", "professional membership",
+                "chamber of commerce", "trade association",
+                "cloudflare", "datadog", "new relic", "pagerduty",
+                "sentry", "twilio", "sendgrid", "segment",
+                "amplitude", "mixpanel", "intercom", "zendesk",
+                "freshdesk", "servicenow", "monday", "basecamp",
+                "teamwork", "wrike", "smartsheet", "airtable",
+                "typeform", "surveymonkey", "qualtrics",
+                "hootsuite", "buffer", "sprout social",
+                "loom", "vidyard", "wistia", "vimeo",
+                "miro", "lucidchart", "draw.io", "invision",
+                "sketch", "abstract", "zeplin"
+            ],
+            "examples": [
+                { "vendor": "Apple.com/bill", "occurrences": 3667 },
+                { "vendor": "Netflix.com", "occurrences": 716 },
+                { "vendor": "Intuit *qbooks Online", "occurrences": 366 },
+                { "vendor": "Adobe", "occurrences": 290 },
+                { "vendor": "Microsoft", "occurrences": 450 },
+                { "vendor": "Zoom", "occurrences": 280 },
+                { "vendor": "Slack", "occurrences": 210 },
+                { "vendor": "Shopify", "occurrences": 190 }
+            ]
+        },
+        "6900": {
+            "name": "Employee benefits",
+            "keywords": [
+                "sun life", "manulife", "great-west", "green shield",
+                "blue cross", "benefit", "health plan", "dental plan",
+                "vision plan", "employee assistance", "eap",
+                "cigna", "aetna", "united health", "anthem",
+                "kaiser", "humana", "metlife", "prudential",
+                "principal financial", "unum", "aflac",
+                "wellness", "gym membership", "fitness"
+            ],
+            "examples": [
+                { "vendor": "Sun Life", "occurrences": 120 },
+                { "vendor": "Manulife", "occurrences": 95 },
+                { "vendor": "Great-West Life", "occurrences": 80 }
+            ]
+        },
+        "7100": {
+            "name": "Equipment repairs",
+            "keywords": [
+                "equipment repair", "machine repair", "tech repair",
+                "appliance repair", "hvac repair", "plumber",
+                "electrician", "equipment service", "maintenance contract"
+            ],
+            "examples": [
+                { "vendor": "Equipment Repair Service", "occurrences": 45 }
+            ]
+        },
+        "7600": {
+            "name": "Insurance",
+            "keywords": [
+                "insurance", "intact", "co-operators", "aviva",
+                "wawanesa", "economical", "travelers", "zurich",
+                "chubb", "state farm", "geico", "progressive",
+                "allstate", "liberty mutual", "nationwide",
+                "farmers insurance", "usaa", "hartford",
+                "commercial insurance", "liability insurance",
+                "property insurance", "business insurance",
+                "e&o insurance", "cyber insurance",
+                "directors officers", "d&o", "general liability"
+            ],
+            "examples": [
+                { "vendor": "Intact Insurance", "occurrences": 85 },
+                { "vendor": "Co-operators", "occurrences": 60 },
+                { "vendor": "State Farm", "occurrences": 75 }
             ]
         },
         "7700": {
             "name": "Interest and bank charges",
             "keywords": [
-                "interest",
-                "purchase interest",
-                "cash advance interest",
-                "overdraft",
-                "abm withdrawal"
+                "interest", "purchase interest", "cash advance interest",
+                "overdraft", "abm withdrawal", "nsf fee", "nsf charge",
+                "bank charge", "bank fee", "wire fee", "wire transfer",
+                "monthly maintenance", "account maintenance"
             ],
             "examples": [
-                {
-                    "vendor": "Purchase Interest",
-                    "occurrences": 2823
-                },
-                {
-                    "vendor": "Cash Advance Interest",
-                    "occurrences": 909
-                },
-                {
-                    "vendor": "Interest",
-                    "occurrences": 670
-                },
-                {
-                    "vendor": "Other Bank ABM Withdrawal",
-                    "occurrences": 534
-                }
+                { "vendor": "Purchase Interest", "occurrences": 2823 },
+                { "vendor": "Cash Advance Interest", "occurrences": 909 },
+                { "vendor": "Interest", "occurrences": 670 },
+                { "vendor": "Other Bank ABM Withdrawal", "occurrences": 534 }
+            ]
+        },
+        "7890": {
+            "name": "Legal fees",
+            "keywords": [
+                "law firm", "legal", "attorney", "lawyer", "solicitor",
+                "barrister", "notary", "legal counsel", "litigation",
+                "legal services", "legalzoom", "rocketlawyer",
+                "law office", "law group", "legal aid"
+            ],
+            "examples": [
+                { "vendor": "LegalZoom", "occurrences": 40 }
+            ]
+        },
+        "8600": {
+            "name": "Office supplies and postage",
+            "keywords": [
+                "staples", "office depot", "officemax", "amazon",
+                "amzn", "walmart", "target", "dollar tree",
+                "dollar general", "uline", "quill", "grainger",
+                "ikea", "wayfair", "costco", "bj's",
+                "sam's club", "five below", "dollarama",
+                "office supplies", "toner", "printer", "ink cartridge",
+                "paper", "envelopes", "binder", "post-it"
+            ],
+            "examples": [
+                { "vendor": "Amazon", "occurrences": 450 },
+                { "vendor": "Staples", "occurrences": 280 },
+                { "vendor": "Walmart", "occurrences": 200 },
+                { "vendor": "Uline", "occurrences": 120 }
+            ]
+        },
+        "8700": {
+            "name": "Professional fees",
+            "keywords": [
+                "accountant", "accounting", "bookkeeper", "bookkeeping",
+                "h&r block", "turbotax", "tax prep", "tax preparation",
+                "cpa", "chartered accountant", "audit",
+                "ernst young", "deloitte", "kpmg", "pwc",
+                "pricewaterhouse", "grant thornton", "bdo",
+                "professional fees", "advisory fees"
+            ],
+            "examples": [
+                { "vendor": "H&R Block", "occurrences": 60 },
+                { "vendor": "Deloitte", "occurrences": 40 }
+            ]
+        },
+        "8720": {
+            "name": "Rent",
+            "keywords": [
+                "rent", "lease", "rental", "regus", "wework",
+                "industrious", "spaces", "office space", "coworking",
+                "co-working", "commercial lease", "property management",
+                "landlord", "tenant", "monthly rent", "office rent"
+            ],
+            "examples": [
+                { "vendor": "Regus", "occurrences": 60 },
+                { "vendor": "WeWork", "occurrences": 45 },
+                { "vendor": "Rent", "occurrences": 78 }
+            ]
+        },
+        "8800": {
+            "name": "Repairs and maintenance",
+            "keywords": [
+                "home depot", "the home depot", "canadian tire",
+                "home hardware", "lowes", "lowe's", "rona",
+                "menards", "ace hardware", "true value",
+                "repair", "maintenance", "handyman", "plumber",
+                "electrician", "hvac", "landscaping", "lawn care",
+                "cleaning", "janitorial", "custodial", "pressure wash",
+                "pest control", "exterminator", "orkin", "terminix",
+                "rentokil", "servicemaster", "cintas",
+                "building maintenance", "property maintenance",
+                "facility maintenance", "merry maids", "molly maid"
+            ],
+            "examples": [
+                { "vendor": "THE Home Depot", "occurrences": 3016 },
+                { "vendor": "Canadian Tire", "occurrences": 450 },
+                { "vendor": "Home Hardware", "occurrences": 200 },
+                { "vendor": "Lowe's", "occurrences": 180 }
+            ]
+        },
+        "8850": {
+            "name": "Security",
+            "keywords": [
+                "security", "alarm", "surveillance", "adt",
+                "ring ", "nest ", "simplisafe", "vivint",
+                "brinks", "paladin", "garda", "securitas",
+                "g4s", "cctv", "security camera", "access control",
+                "guard", "patrol"
+            ],
+            "examples": [
+                { "vendor": "ADT Security", "occurrences": 60 },
+                { "vendor": "Ring", "occurrences": 45 }
+            ]
+        },
+        "9100": {
+            "name": "Telephone",
+            "keywords": [
+                "rogers", "telus", "bell", "bell canada", "shaw",
+                "shaw cablesystems", "fido", "koodo", "virgin mobile",
+                "t-mobile", "verizon", "at&t", "comcast",
+                "spectrum", "cox", "centurylink", "windstream",
+                "twilio", "vonage", "ringcentral", "8x8",
+                "dialpad", "grasshopper", "ooma",
+                "phone", "telecom", "internet", "broadband",
+                "cable", "wireless", "cellular", "mobile plan"
+            ],
+            "examples": [
+                { "vendor": "Rogers", "occurrences": 366 },
+                { "vendor": "Shaw Cablesystems", "occurrences": 490 },
+                { "vendor": "Telus", "occurrences": 280 },
+                { "vendor": "Bell Canada", "occurrences": 220 }
+            ]
+        },
+        "9200": {
+            "name": "Travel and accomodations",
+            "keywords": [
+                "uber", "lyft", "westjet", "air canada", "hotel",
+                "airbnb", "taxi", "flight", "airline", "avis",
+                "budget rent", "united airlines", "american airlines",
+                "delta", "southwest", "jetblue", "alaska airlines",
+                "flair", "swoop", "porter airlines", "spirit",
+                "frontier", "allegiant", "hawaiian airlines",
+                "marriott", "hilton", "holiday inn", "best western",
+                "super 8", "hyatt", "four seasons", "sheraton",
+                "westin", "radisson", "ramada", "fairmont",
+                "hampton inn", "courtyard", "residence inn",
+                "expedia", "booking.com", "hotels.com", "priceline",
+                "kayak", "hopper", "trivago", "travelocity",
+                "hertz", "enterprise", "national car", "turo",
+                "vrbo", "homeaway", "trip", "travel"
+            ],
+            "examples": [
+                { "vendor": "Uber Canada/ubertrip Toronto ON", "occurrences": 675 },
+                { "vendor": "Westjet", "occurrences": 580 },
+                { "vendor": "Uber", "occurrences": 961 },
+                { "vendor": "Air Canada", "occurrences": 350 },
+                { "vendor": "Marriott", "occurrences": 180 },
+                { "vendor": "Airbnb", "occurrences": 150 }
+            ]
+        },
+        "9250": {
+            "name": "Training - Courses",
+            "keywords": [
+                "training", "course", "udemy", "coursera", "linkedin learning",
+                "skillshare", "pluralsight", "masterclass",
+                "codecademy", "treehouse", "edx", "mit opencourseware",
+                "tuition", "education", "certification", "exam fee",
+                "professional development", "workshop", "bootcamp",
+                "continuing education", "cpe ", "cle "
+            ],
+            "examples": [
+                { "vendor": "Udemy", "occurrences": 85 },
+                { "vendor": "Coursera", "occurrences": 60 },
+                { "vendor": "LinkedIn Learning", "occurrences": 75 }
+            ]
+        },
+        "9500": {
+            "name": "Utilities",
+            "keywords": [
+                "enmax", "epcor", "atco", "direct energy",
+                "fortisalberta", "fortis", "hydro", "electric",
+                "water", "sewer", "gas utility", "natural gas",
+                "utility", "power", "energy",
+                "pg&e", "con edison", "duke energy", "dominion",
+                "exelon", "southern company", "aes", "entergy",
+                "waste management", "republic services", "garbage",
+                "recycling", "sanitation"
+            ],
+            "examples": [
+                { "vendor": "ENMAX", "occurrences": 120 },
+                { "vendor": "EPCOR", "occurrences": 95 },
+                { "vendor": "ATCO", "occurrences": 80 },
+                { "vendor": "Direct Energy", "occurrences": 70 }
+            ]
+        },
+        "9700": {
+            "name": "Vehicle",
+            "keywords": [
+                "parking", "toll", "impark", "easypark",
+                "calgary parking", "calgparkauth", "parkade",
+                "jiffy lube", "kal tire", "midas", "mr lube",
+                "oil change", "tire", "auto repair", "auto parts",
+                "car wash", "collision", "body shop",
+                "napa auto", "autozone", "o'reilly", "advance auto",
+                "canadian tire auto", "meineke", "firestone",
+                "goodyear", "discount tire", "pep boys",
+                "alberta registry", "license plate", "vehicle registration"
+            ],
+            "examples": [
+                { "vendor": "Calgparkauth", "occurrences": 1033 },
+                { "vendor": "Impark", "occurrences": 350 },
+                { "vendor": "Jiffy Lube", "occurrences": 120 }
+            ]
+        },
+        "9800": {
+            "name": "Wages and benefits",
+            "keywords": [
+                "payroll", "adp", "ceridian", "payworks", "paychex",
+                "gusto", "rippling", "bamboohr", "workday",
+                "indeed", "ziprecruiter", "linkedin recruiting",
+                "glassdoor", "monster", "careerbuilder",
+                "staffing", "temp agency", "recruitment"
+            ],
+            "examples": [
+                { "vendor": "ADP", "occurrences": 180 },
+                { "vendor": "Ceridian", "occurrences": 90 },
+                { "vendor": "Gusto", "occurrences": 70 }
             ]
         },
         "1290": {
             "name": "Deposit",
             "keywords": [
-                "deposit",
-                "mobile deposit",
-                "direct deposit",
-                "payroll",
-                "transfer in"
+                "deposit", "mobile deposit", "direct deposit",
+                "payroll", "transfer in"
             ],
             "examples": [
-                {
-                    "vendor": "Deposit",
-                    "occurrences": 1457
-                },
-                {
-                    "vendor": "Mobile Deposit",
-                    "occurrences": 832
-                },
-                {
-                    "vendor": "Mobile",
-                    "occurrences": 613
-                }
+                { "vendor": "Deposit", "occurrences": 1457 },
+                { "vendor": "Mobile Deposit", "occurrences": 832 },
+                { "vendor": "Mobile", "occurrences": 613 }
             ]
         },
         "2149": {
             "name": "GST payments to Revenue Canada",
             "keywords": [
-                "payment - thank you",
-                "payment thank you",
-                "gst payment",
-                "revenue canada",
-                "cra"
+                "payment - thank you", "payment thank you",
+                "gst payment", "revenue canada", "cra"
             ],
             "examples": [
-                {
-                    "vendor": "Payment - Thank YOU / Paiement - Merci",
-                    "occurrences": 11195
-                },
-                {
-                    "vendor": "Payment Thank You/paiement Merci",
-                    "occurrences": 1517
-                }
+                { "vendor": "Payment - Thank YOU / Paiement - Merci", "occurrences": 11195 },
+                { "vendor": "Payment Thank You/paiement Merci", "occurrences": 1517 }
             ]
         },
         "1760": {
             "name": "Office Furniture and equipment",
             "keywords": [
-                "home depot",
-                "ikea",
-                "staples",
-                "office depot",
-                "desk",
-                "chair"
+                "home depot", "ikea", "staples", "office depot",
+                "desk", "chair", "furniture", "wayfair",
+                "herman miller", "steelcase"
             ],
             "examples": [
-                {
-                    "vendor": "THE Home Depot",
-                    "occurrences": 3016
-                },
-                {
-                    "vendor": "THE Home Depot #7067 Calgary AB",
-                    "occurrences": 722
-                },
-                {
-                    "vendor": "THE Home Depot #7250 Calgary",
-                    "occurrences": 562
-                }
+                { "vendor": "THE Home Depot", "occurrences": 3016 },
+                { "vendor": "IKEA", "occurrences": 450 }
             ]
         },
         "1857": {
             "name": "Computer software",
             "keywords": [
-                "adobe",
-                "microsoft",
-                "software",
-                "apple.com/bill",
-                "netflix",
-                "spotify",
-                "quickbooks"
+                "adobe", "microsoft", "software", "apple.com/bill",
+                "netflix", "spotify", "quickbooks"
             ],
             "examples": [
-                {
-                    "vendor": "Apple.com/bill",
-                    "occurrences": 3667
-                },
-                {
-                    "vendor": "Netflix.com",
-                    "occurrences": 716
-                },
-                {
-                    "vendor": "Intuit *qbooks Online",
-                    "occurrences": 366
-                }
+                { "vendor": "Apple.com/bill", "occurrences": 3667 },
+                { "vendor": "Netflix.com", "occurrences": 716 },
+                { "vendor": "Intuit *qbooks Online", "occurrences": 366 }
             ]
         },
         "1260": {
             "name": "Agreement of sale",
             "keywords": [
-                "point of sale",
-                "pos",
-                "purchase"
+                "point of sale", "pos", "purchase"
             ],
             "examples": [
-                {
-                    "vendor": "Point Of Sale Purch",
-                    "occurrences": 13627
-                }
+                { "vendor": "Point Of Sale Purch", "occurrences": 13627 }
             ]
         },
         "2652": {
             "name": "Shareholder loan #2 -withdrawals/transfers",
             "keywords": [
-                "transfer to",
-                "withdrawal",
-                "shareholder"
+                "transfer to", "withdrawal", "shareholder"
             ],
             "examples": [
-                {
-                    "vendor": "Transfer TO",
-                    "occurrences": 2972
-                }
+                { "vendor": "Transfer TO", "occurrences": 2972 }
             ]
         },
         "5355": {
             "name": "Closing inventory",
             "keywords": [
-                "closing totals",
-                "inventory"
+                "closing totals", "inventory"
             ],
             "examples": [
-                {
-                    "vendor": "Closing Totals",
-                    "occurrences": 2597
-                }
+                { "vendor": "Closing Totals", "occurrences": 2597 }
             ]
         },
         "3640": {
@@ -310,92 +558,34 @@
                 "dividend"
             ],
             "examples": [
-                {
-                    "vendor": "Dividends",
-                    "occurrences": 557
-                }
-            ]
-        },
-        "8720": {
-            "name": "Rent",
-            "keywords": [
-                "rent",
-                "lease",
-                "rental"
-            ],
-            "examples": [
-                {
-                    "vendor": "Rent",
-                    "occurrences": 78
-                }
-            ]
-        },
-        "1500": {
-            "name": "Land",
-            "keywords": [
-                "alberta land titles",
-                "land registry",
-                "property"
-            ],
-            "examples": [
-                {
-                    "vendor": "Alberta Land Titles Spatiedmonton",
-                    "occurrences": 446
-                }
+                { "vendor": "Dividends", "occurrences": 557 }
             ]
         }
     },
     "fuzzy_matching_rules": {
-        "shell_variants": [
-            "shell c",
-            "shell #",
-            "shell gas"
-        ],
-        "tim_hortons_variants": [
-            "tim hortons #",
-            "tims",
-            "tim horton"
-        ],
-        "uber_variants": [
-            "uber trip",
-            "uber canada",
-            "uber *"
-        ],
-        "home_depot_variants": [
-            "home depot #",
-            "homedepot",
-            "the home depot"
-        ],
-        "mcdonald_variants": [
-            "mcdonald's #",
-            "mcdonalds",
-            "mcdonald"
-        ],
-        "starbucks_variants": [
-            "starbucks #",
-            "sbux"
-        ],
-        "gas_bar_variants": [
-            "gas bar #",
-            "gasbar",
-            "petro",
-            "esso"
-        ],
-        "skip_variants": [
-            "skipthedishes",
-            "skip the dishes",
-            "skip"
-        ],
-        "apple_variants": [
-            "apple.com/bill",
-            "apl* itunes",
-            "apple pay",
-            "apple #"
-        ],
-        "netflix_variants": [
-            "netflix.com",
-            "netflix inc"
-        ]
+        "shell_variants": ["shell c", "shell #", "shell gas"],
+        "tim_hortons_variants": ["tim hortons #", "tims", "tim horton"],
+        "uber_variants": ["uber trip", "uber canada", "uber *"],
+        "home_depot_variants": ["home depot #", "homedepot", "the home depot"],
+        "mcdonald_variants": ["mcdonald's #", "mcdonalds", "mcdonald"],
+        "starbucks_variants": ["starbucks #", "sbux"],
+        "gas_bar_variants": ["gas bar #", "gasbar", "petro", "esso"],
+        "skip_variants": ["skipthedishes", "skip the dishes", "skip"],
+        "apple_variants": ["apple.com/bill", "apl* itunes", "apple pay", "apple #"],
+        "netflix_variants": ["netflix.com", "netflix inc"],
+        "adobe_variants": ["adobe", "adobe systems", "adobe inc"],
+        "microsoft_variants": ["microsoft", "msft", "microsoft 365", "office 365", "ms office"],
+        "amazon_variants": ["amazon", "amzn", "amzn mktp", "amazon prime", "amazon business"],
+        "google_variants": ["google", "google ads", "google cloud", "google workspace", "gcp"],
+        "zoom_variants": ["zoom", "zoom.us", "zoom video"],
+        "shopify_variants": ["shopify", "shopify payments", "shopify*"],
+        "fedex_variants": ["fedex", "federal express", "fedex office", "fedex ground"],
+        "ups_variants": ["ups", "united parcel", "ups store"],
+        "hilton_variants": ["hilton", "hilton garden", "hampton inn", "doubletree"],
+        "marriott_variants": ["marriott", "courtyard", "sheraton", "westin", "fairfield inn"],
+        "rogers_variants": ["rogers", "rogers wireless", "rogers cable"],
+        "telus_variants": ["telus", "telus mobility", "telus communications"],
+        "bell_variants": ["bell", "bell canada", "bell mobility", "bell mts"]
     },
     "confidence_thresholds": {
         "exact_match": 1.0,
@@ -405,42 +595,15 @@
     },
     "uncategorized_patterns": {
         "high_volume_uncategorized": [
-            {
-                "vendor": "Unknown",
-                "occurrences": 26630
-            },
-            {
-                "vendor": "Brwsr",
-                "occurrences": 15205
-            },
-            {
-                "vendor": "E-transfer",
-                "occurrences": 2815
-            },
-            {
-                "vendor": "Calgparkauth",
-                "occurrences": 1033
-            },
-            {
-                "vendor": "Rogers",
-                "occurrences": 366
-            },
-            {
-                "vendor": "Shaw Cablesystems",
-                "occurrences": 490
-            },
-            {
-                "vendor": "Calgary Transit",
-                "occurrences": 354
-            },
-            {
-                "vendor": "Amzn",
-                "occurrences": 450
-            },
-            {
-                "vendor": "Stripe",
-                "occurrences": 446
-            }
+            { "vendor": "Unknown", "occurrences": 26630 },
+            { "vendor": "Brwsr", "occurrences": 15205 },
+            { "vendor": "E-transfer", "occurrences": 2815 },
+            { "vendor": "Calgparkauth", "occurrences": 1033 },
+            { "vendor": "Rogers", "occurrences": 366 },
+            { "vendor": "Shaw Cablesystems", "occurrences": 490 },
+            { "vendor": "Calgary Transit", "occurrences": 354 },
+            { "vendor": "Amzn", "occurrences": 450 },
+            { "vendor": "Stripe", "occurrences": 446 }
         ]
     }
 }

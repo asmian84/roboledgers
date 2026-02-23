@@ -24,14 +24,38 @@ SMART PARSING RULES:
    * [PHASE 4] Now accepts lineMetadata for spatial tracking
    */
   parseWithRegex(text, inputMetadata = null, lineMetadata = []) {
+        // ── AUDIT IDENTITY: statement ID + sequence counter ──────────────────
+        // Produces parser_ref like "SCOTIACHQ-2024NOV-001" on every transaction.
+        // Mirrors AmexParser audit structure for consistent audit drawer display.
+        let _statementYear = new Date().getFullYear().toString();
+        let _statementMonth = 'UNK';
+        const _yearMatch = text.match(/20\d{2}/);
+        if (_yearMatch) _statementYear = _yearMatch[0];
+        const _monthMatch = text.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (_monthMatch) _statementMonth = _monthMatch[1].substring(0, 3).toUpperCase();
+        const _statementId = 'SCOTIACHQ-' + _statementYear + _statementMonth;
+        let _seqNum = 0;
+
+        // ── Store on this so processTransaction (a method) can access it ─────
+        this._auditStatementId = _statementId;
+        this._auditSeqNum = 0;
+
+        // ── Audit helper — call this when building each transaction ──────────
+        const _makeAuditRef = (rawLine, lineMetadata) => {
+            _seqNum++;
+            const auditResult = typeof this.buildAuditData === 'function'
+                ? this.buildAuditData(rawLine, this.constructor.name, { statementId: _statementId, lineNumber: _seqNum })
+                : { pdfLocation: null, audit: null };
+            return {
+                parser_ref: _statementId + '-' + String(_seqNum).padStart(3, '0'),
+                pdfLocation: auditResult.pdfLocation,
+                audit: auditResult.audit,
+            };
+        };
+
     this.lastLineMetadata = lineMetadata;
     const lines = text.split('\n');
     const transactions = [];
-
-    // LOUD DIAGNOSTIC
-    console.warn('⚡ [EXTREME-SCOTIA] Starting metadata extraction for Scotiabank...');
-    console.error('📄 [DEBUG-SCOTIA] First 1000 characters (RED for visibility):');
-    console.log(text.substring(0, 1000));
 
     // EXTRACT METADATA (Institution, Transit, Account)
     // Scotia format: Account Number: 02469 01458 15
@@ -50,8 +74,6 @@ SMART PARSING RULES:
       _bank: inputMetadata?.fullBrandName || 'Scotiabank',
       _tag: inputMetadata?.tag || 'Chequing'
     };
-    console.warn('🏁 [SCOTIA] Extraction Phase Complete. Transit:', metadata.transit, 'Acct:', metadata.accountNumber);
-
     // Date patterns
     const dateRegex1 = /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)[a-z]*\s+\d{1,2}/i;
     const dateRegex2 = /^(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/;
@@ -64,7 +86,6 @@ SMART PARSING RULES:
     // Single amount pattern (for fallback or BALANCE FORWARD detection)
     const singleAmountPattern = /([\d,]+\.\d{2}-?)(?:\s|$)/;
 
-    console.log(`[SCOTIA] Starting parse with ${lines.length} lines`);
 
     let openingBalance = 0;
     const openingBalanceMatch = text.match(/BALANCE\s+FORWARD\s+.*?([\d,]+\.\d{2}-?)/i);
@@ -72,7 +93,6 @@ SMART PARSING RULES:
       let rawBal = openingBalanceMatch[1].replace(/,/g, '');
       openingBalance = parseFloat(rawBal.replace(/-$/, ''));
       if (rawBal.endsWith('-')) openingBalance = -openingBalance;
-      console.log(`[SCOTIA] Extracted opening balance: ${openingBalance}`);
     }
 
     for (let i = 0; i < lines.length; i++) {
@@ -92,20 +112,17 @@ SMART PARSING RULES:
 
         // Skip BALANCE FORWARD lines (they only show balance, not a transaction)
         if (line.match(/BALANCE\s+FORWARD/i)) {
-          console.log(`[SCOTIA] Skipping BALANCE FORWARD: "${line}"`);
           continue;
         }
 
         // Check if this line already has TWO amounts (complete transaction on one line)
         // Check for summary lines to skip
         if (line.match(/No\. of (?:Debits|Credits)|Total Amount|Service Charge Summary/i)) {
-          console.log(`[SCOTIA] ℹ️ Skipping summary line: "${line.substring(0, 50)}..."`);
           continue;
         }
 
         const amountMatch = line.match(twoAmountPattern);
         if (amountMatch) {
-          console.log(`[SCOTIA] ✓ Single-line match: "${line}"`);
           this.processTransaction(dateStr, line, amountMatch, transactions, metadata, meta);
           continue;
         }
@@ -162,19 +179,13 @@ SMART PARSING RULES:
           // Fallback: Try single amount on the same line (if not a balance forward)
           const singleMatch = line.match(singleAmountPattern);
           if (singleMatch && !line.includes("BALANCE FORWARD")) {
-            console.log(`[SCOTIA] ✓ Single-amount fallback: "${line}"`);
             this.processTransaction(dateStr, line, [singleMatch[0], singleMatch[1], null], transactions, metadata, meta);
             foundAmount = true;
           }
         }
 
-        if (!foundAmount) {
-          console.log(`[SCOTIA] ✗ No amount found for date line: "${line}"`);
-        }
       }
     }
-
-    console.log(`[SCOTIA] Parsing complete. Found ${transactions.length} transactions.`);
 
     return {
       transactions: transactions,
@@ -253,6 +264,13 @@ SMART PARSING RULES:
       description = description.replace(/^(CHQ\s+\d+)(\s+)/i, '$1,$2');
     }
 
+    // ── Audit identity (uses state set by parseWithRegex) ─────────────────
+    const _stmtId  = this._auditStatementId || 'SCOTIACHQ-UNK';
+    const _seqN    = ++this._auditSeqNum;
+    const _auditResult = typeof this.buildAuditData === 'function'
+        ? this.buildAuditData(fullLine, this.constructor.name, { statementId: _stmtId, lineNumber: _seqN })
+        : { pdfLocation: null, audit: null };
+
     const tx = {
       date: isoDate,
       description: description,
@@ -266,20 +284,14 @@ SMART PARSING RULES:
       _brand: 'Scotiabank',
       _bank: 'Scotiabank',
       _tag: 'Chequing',
-      audit: meta ? { page: meta.page, y: meta.y, height: meta.height } : null,
+      parser_ref: _stmtId + '-' + String(_seqN).padStart(3, '0'),
+      pdfLocation: _auditResult.pdfLocation || (meta ? { page: meta.page || 1, top: meta.y || 0, left: 0, width: 500, height: meta.height || 12 } : null),
+      audit: _auditResult.audit || (meta ? { page: meta.page, y: meta.y, height: meta.height } : null),
       rawText: this.cleanRawText(fullLine), // Capture full uncleaned multi-line string
       refCode: refCode
     };
 
     transactions.push(tx);
-
-    console.log('✅ Parsed:', {
-      date: isoDate,
-      desc: description.substring(0, 40) + (description.length > 40 ? '...' : ''),
-      debit: tx.debit,
-      credit: tx.credit,
-      balance: balance
-    });
   }
 }
 

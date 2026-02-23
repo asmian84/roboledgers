@@ -14,6 +14,7 @@ ATB FINANCIAL FORMAT:
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
         this.lastLineMetadata = lineMetadata;
         const lines = statementText.split('\n');
         const transactions = [];
@@ -101,13 +102,38 @@ ATB FINANCIAL FORMAT:
             }
         }
 
+        const parsedMetadata = isMastercard
+            ? {
+                _acct: '-----',
+                accountNumber: '-----',
+                _tag: 'Mastercard',
+                cardNetwork: 'Mastercard',
+                accountType: 'CreditCard',
+                bankName: 'ATB',
+                bankIcon: 'ATB',
+                networkIcon: 'MC',
+                brand: 'MC',
+                bankCode: 'MC',
+                institution: 'MC'
+            }
+            : {
+                _brand: 'ATB',
+                _tag: 'Chequing',
+                accountType: 'Chequing',
+                bankName: 'ATB',
+                institutionCode: '---'
+            };
+
+        // Extract account number from statement text if present
+        const acctMatch = statementText.match(/Account\s*(?:Number)?[:#]?\s*([\d*xX]{4}[\s\d*xX]+[\d*xX]{4})/i);
+        if (acctMatch) {
+            parsedMetadata._acct = acctMatch[1].replace(/\s+/g, '');
+            parsedMetadata.accountNumber = parsedMetadata._acct;
+        }
+
         return {
             transactions,
-            metadata: {
-                _brand: 'ATB',
-                _tag: tag,
-                institutionCode: '---'
-            }
+            metadata: parsedMetadata
         };
     }
 
@@ -117,15 +143,24 @@ ATB FINANCIAL FORMAT:
 
         const firstAmtIdx = text.search(/[\d,]+\.\d{2}/);
         let description = text.substring(0, firstAmtIdx).trim();
+        // Clean trailing minus that was part of negative amount prefix (e.g. "THANK YOU -" → "THANK YOU")
+        // Only strip a standalone trailing dash, not dashes within description like "PAYMENT - THANK YOU"
+        description = description.replace(/\s+-$/, '').trim();
 
         const amount = parseFloat(amounts[0].replace(/,/g, ''));
         const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
 
         let debit = 0, credit = 0;
         if (isMastercard) {
-            const isPayment = /payment|credit|refund/i.test(description);
-            debit = isPayment ? 0 : amount;
-            credit = isPayment ? amount : 0;
+            // Detect negative prefix, trailing minus, CR suffix — bulletproof sign detection
+            const negMatch = text.match(/-\s*([\d,]+\.\d{2})/);
+            const isNegPrefix = negMatch && parseFloat(negMatch[1].replace(/,/g, '')) === amount;
+            const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(text);
+            const isPaymentKeyword = /payment|paiement|merci|refund|thank you|CREDIT VOUCHER|CREDIT MEMO/i.test(description);
+            const isPayment = isNegPrefix || hasCR || isPaymentKeyword;
+            // MAJORITY CONVENTION: payment → debit (reduces liability), purchase → credit (increases liability)
+            debit = isPayment ? amount : 0;
+            credit = isPayment ? 0 : amount;
         } else {
             // Chequing format: Date Description Withdrawal Deposit Balance
             // If text has two amounts before balance, first is withdrawal
@@ -140,7 +175,7 @@ ATB FINANCIAL FORMAT:
             }
         }
 
-        const auditData = this.buildAuditData(originalLine, 'ATBParser');
+        const auditData = this.buildAuditData(originalLine, 'ATBParser', { statementId: this._getStmtId(text), lineNumber: ++this._txSeq });
 
         return {
             date: isoDate,
@@ -150,12 +185,29 @@ ATB FINANCIAL FORMAT:
             credit,
             balance,
             rawText: this.cleanRawText(originalLine),
+            parser_ref: this._getStmtId(text) + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
-            audit: auditData.audit
+            audit: auditData.audit,
             _brand: 'ATB',
-            _tag: isMastercard ? 'Mastercard' : 'Chequing'
+            _tag: isMastercard ? 'Mastercard' : 'Chequing',
+            _accountType: isMastercard ? 'CreditCard' : 'Chequing'
         };
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'ATB-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.ATBParser = ATBParser;

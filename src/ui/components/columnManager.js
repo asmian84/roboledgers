@@ -113,12 +113,14 @@ function openColumnManager() {
       }
     });
 
-    // Persist to localStorage
+    // Persist column visibility
     try {
       const hiddenFields = Array.from(checkboxes)
         .filter(cb => !cb.checked)
         .map(cb => cb.dataset.field);
-      localStorage.setItem("rl_hidden_columns", JSON.stringify(hiddenFields));
+      const _SS = window.StorageService;
+      if (_SS) { _SS.set("rl_hidden_columns", hiddenFields); }
+      else { localStorage.setItem("rl_hidden_columns", JSON.stringify(hiddenFields)); }
     } catch (e) {
       console.error("[Column Manager] Failed to save preferences", e);
     }

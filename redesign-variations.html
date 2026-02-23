@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboLedger — Design Variations</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/regular/style.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{font-family:'Inter',system-ui,sans-serif;background:#0a0a0a;color:#fff;}
+
+/* ─── Variation Switcher ─── */
+.switcher{position:fixed;top:0;left:0;right:0;z-index:999;display:flex;justify-content:center;gap:0;background:rgba(10,10,10,0.9);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.06);padding:12px 0;}
+.switch-btn{padding:10px 28px;font-size:13px;font-weight:700;color:#64748b;background:none;border:none;cursor:pointer;transition:all 0.2s;letter-spacing:-0.2px;position:relative;}
+.switch-btn:hover{color:#e2e8f0;}
+.switch-btn.active{color:#fff;}
+.switch-btn.active::after{content:'';position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);width:40px;height:2px;border-radius:2px;}
+.switch-btn[data-v="1"].active::after{background:linear-gradient(90deg,#6366f1,#818cf8);}
+.switch-btn[data-v="2"].active::after{background:linear-gradient(90deg,#10b981,#34d399);}
+.switch-btn[data-v="3"].active::after{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
+.variation{display:none;padding-top:58px;min-height:100vh;}
+.variation.active{display:block;}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   VARIATION 1 — "GLASS NOIR"
+   Deep black with glass morphism, floating cards, neon accents
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.v1{background:#050508;font-family:'DM Sans',sans-serif;}
+.v1 .layout{display:flex;min-height:100vh;}
+
+/* Sidebar */
+.v1 .side{width:72px;min-height:100vh;background:rgba(255,255,255,0.02);border-right:1px solid rgba(255,255,255,0.04);display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:2px;position:fixed;z-index:50;}
+.v1 .side .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:24px;}
+.v1 .side .nav-i{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#3f3f46;cursor:pointer;transition:all 0.15s;font-size:19px;position:relative;}
+.v1 .side .nav-i:hover{color:#a1a1aa;background:rgba(255,255,255,0.03);}
+.v1 .side .nav-i.on{color:#a78bfa;background:rgba(139,92,246,0.08);}
+.v1 .side .nav-i.on::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:2px;height:20px;background:#a78bfa;border-radius:0 2px 2px 0;}
+.v1 .side .sep{width:28px;height:1px;background:rgba(255,255,255,0.04);margin:8px 0;}
+.v1 .side .bottom{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px;padding-bottom:8px;}
+.v1 .side .avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:pointer;}
+
+/* Content */
+.v1 .content{margin-left:72px;flex:1;padding:0;}
+
+/* Topbar */
+.v1 .top{display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid rgba(255,255,255,0.04);}
+.v1 .top h1{font-size:18px;font-weight:800;letter-spacing:-0.5px;color:#fafafa;}
+.v1 .top .meta{font-size:11px;color:#52525b;margin-top:2px;display:flex;align-items:center;gap:8px;}
+.v1 .top .live-dot{width:6px;height:6px;border-radius:50%;background:#10b981;animation:glow 2s infinite;}
+@keyframes glow{0%,100%{box-shadow:0 0 4px #10b981;}50%{box-shadow:0 0 12px #10b981,0 0 24px rgba(16,185,129,0.3);}}
+.v1 .top-right{display:flex;align-items:center;gap:8px;}
+.v1 .search-bar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;color:#52525b;font-size:12px;min-width:220px;cursor:pointer;transition:all 0.15s;}
+.v1 .search-bar:hover{border-color:rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);}
+.v1 .search-bar kbd{font-family:'JetBrains Mono';font-size:10px;padding:2px 6px;background:rgba(255,255,255,0.06);border-radius:4px;margin-left:auto;color:#71717a;}
+.v1 .btn-g{padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#a1a1aa;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.12s;}
+.v1 .btn-g:hover{background:rgba(255,255,255,0.04);color:#e4e4e7;}
+.v1 .btn-p{padding:8px 18px;border-radius:10px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.12s;box-shadow:0 4px 20px rgba(99,102,241,0.25);}
+.v1 .btn-p:hover{box-shadow:0 4px 30px rgba(99,102,241,0.4);transform:translateY(-1px);}
+
+/* Dashboard */
+.v1 .dash{padding:28px 32px;display:flex;flex-direction:column;gap:20px;}
+
+/* Glass Card */
+.v1 .glass{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:16px;padding:22px;backdrop-filter:blur(12px);position:relative;overflow:hidden;}
+.v1 .glass::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent);}
+.v1 .glass-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.v1 .glass-title{font-size:11px;font-weight:700;color:#52525b;text-transform:uppercase;letter-spacing:0.08em;display:flex;align-items:center;gap:6px;}
+.v1 .glass-title i{font-size:13px;color:#71717a;}
+.v1 .glass-action{font-size:11px;color:#818cf8;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;}
+
+/* KPI */
+.v1 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.v1 .kpi{padding:20px;position:relative;}
+.v1 .kpi .kpi-accent{position:absolute;top:0;left:20px;right:20px;height:1px;}
+.v1 .kpi .kpi-accent.green{background:linear-gradient(90deg,transparent,#10b981,transparent);}
+.v1 .kpi .kpi-accent.red{background:linear-gradient(90deg,transparent,#ef4444,transparent);}
+.v1 .kpi .kpi-accent.blue{background:linear-gradient(90deg,transparent,#3b82f6,transparent);}
+.v1 .kpi .kpi-accent.violet{background:linear-gradient(90deg,transparent,#8b5cf6,transparent);}
+.v1 .kpi .kpi-accent.amber{background:linear-gradient(90deg,transparent,#f59e0b,transparent);}
+.v1 .kpi-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.v1 .kpi-lbl{font-size:11px;font-weight:600;color:#52525b;text-transform:uppercase;letter-spacing:0.04em;}
+.v1 .kpi-ico{font-size:16px;}
+.v1 .kpi-ico.green{color:#34d399;}.v1 .kpi-ico.red{color:#f87171;}.v1 .kpi-ico.blue{color:#60a5fa;}.v1 .kpi-ico.violet{color:#a78bfa;}.v1 .kpi-ico.amber{color:#fbbf24;}
+.v1 .kpi-val{font-size:26px;font-weight:900;letter-spacing:-1px;color:#fafafa;font-family:'JetBrains Mono','DM Sans',monospace;}
+.v1 .kpi-sub{font-size:10px;color:#3f3f46;margin-top:6px;font-weight:500;}
+.v1 .kpi-spark{display:flex;align-items:flex-end;gap:2px;height:24px;margin-top:8px;}
+.v1 .kpi-spark .s{flex:1;border-radius:2px 2px 0 0;min-height:3px;opacity:0.4;}
+
+/* Quarters */
+.v1 .qtrs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.v1 .qtr{background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.04);border-radius:14px;padding:18px;cursor:pointer;transition:all 0.15s;position:relative;}
+.v1 .qtr:hover{border-color:rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);}
+.v1 .qtr.now{border-color:rgba(139,92,246,0.2);background:rgba(139,92,246,0.03);}
+.v1 .qtr.now::after{content:'NOW';position:absolute;top:-7px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:800;color:#a78bfa;background:#050508;padding:1px 8px;border:1px solid rgba(139,92,246,0.2);border-radius:20px;letter-spacing:0.08em;}
+.v1 .qtr-h{font-size:16px;font-weight:800;color:#e4e4e7;margin-bottom:4px;}
+.v1 .qtr-m{font-size:10px;color:#3f3f46;margin-bottom:12px;}
+.v1 .qtr-s{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;}
+.v1 .qtr-s .l{color:#52525b;}.v1 .qtr-s .v{font-family:'JetBrains Mono';font-weight:600;font-size:11px;}
+.v1 .qtr-s .v.g{color:#34d399;}.v1 .qtr-s .v.r{color:#f87171;}
+.v1 .qtr-bar{height:3px;background:rgba(255,255,255,0.04);border-radius:3px;margin-top:10px;overflow:hidden;}
+.v1 .qtr-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#6366f1,#a78bfa);}
+
+/* Cat Bar */
+.v1 .cat-wrap{display:flex;align-items:center;gap:16px;}
+.v1 .cat-info{flex-shrink:0;display:flex;align-items:center;gap:10px;}
+.v1 .cat-pct{font-size:20px;font-weight:900;color:#a78bfa;font-family:'JetBrains Mono';}
+.v1 .cat-txt{font-size:10px;color:#52525b;line-height:1.3;}
+.v1 .cat-track{flex:1;height:4px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden;}
+.v1 .cat-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#6366f1,#a78bfa,#c084fc);transition:width 0.6s;}
+
+/* Grid */
+.v1 .grid-2{display:grid;grid-template-columns:1fr 360px;gap:16px;}
+
+/* Transactions */
+.v1 .tx{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,0.03);}
+.v1 .tx:last-child{border:none;}
+.v1 .tx:hover{background:rgba(255,255,255,0.01);margin:0 -14px;padding:11px 14px;border-radius:10px;}
+.v1 .tx-d{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.v1 .tx-d.y{background:#10b981;}.v1 .tx-d.n{background:#f59e0b;}
+.v1 .tx-i{flex:1;min-width:0;}
+.v1 .tx-p{font-size:12px;font-weight:600;color:#d4d4d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.v1 .tx-dt{font-size:10px;color:#3f3f46;margin-top:1px;}
+.v1 .tx-a{font-family:'JetBrains Mono';font-size:12px;font-weight:600;}
+.v1 .tx-a.dr{color:#f87171;}.v1 .tx-a.cr{color:#34d399;}
+
+/* Bars */
+.v1 .cf-chart{display:flex;align-items:flex-end;gap:8px;height:130px;padding:4px 0;}
+.v1 .cf-mo{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.v1 .cf-bars{display:flex;align-items:flex-end;gap:3px;width:100%;justify-content:center;height:105px;}
+.v1 .cf-b{width:38%;border-radius:4px 4px 0 0;min-height:4px;}
+.v1 .cf-b.in{background:linear-gradient(to top,rgba(16,185,129,0.6),rgba(16,185,129,0.15));}
+.v1 .cf-b.out{background:linear-gradient(to top,rgba(239,68,68,0.5),rgba(239,68,68,0.12));}
+.v1 .cf-lb{font-size:9px;color:#3f3f46;font-weight:600;}
+
+/* Expense */
+.v1 .exp-r{margin-bottom:12px;}.v1 .exp-r:last-child{margin:0;}
+.v1 .exp-h{display:flex;justify-content:space-between;margin-bottom:4px;}
+.v1 .exp-n{font-size:11px;color:#71717a;font-weight:500;}.v1 .exp-v{font-size:11px;font-family:'JetBrains Mono';font-weight:600;color:#d4d4d8;}
+.v1 .exp-bar{height:4px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden;}
+.v1 .exp-fill{height:100%;border-radius:4px;}
+
+/* Account */
+.v1 .acc{display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.03);margin-bottom:8px;}
+.v1 .acc:last-child{margin:0;}
+.v1 .acc-ic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.v1 .acc-info{flex:1;min-width:0;}
+.v1 .acc-nm{font-size:12px;font-weight:600;color:#d4d4d8;}.v1 .acc-mt{font-size:10px;color:#3f3f46;margin-top:1px;}
+.v1 .acc-bal{font-family:'JetBrains Mono';font-size:12px;font-weight:700;}
+.v1 .acc-bal.p{color:#34d399;}.v1 .acc-bal.n{color:#f87171;}
+
+/* GST */
+.v1 .gst-row{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-radius:10px;margin-bottom:6px;}
+.v1 .gst-row:last-child{margin:0;}
+.v1 .gst-l{font-size:11px;font-weight:500;color:#71717a;}
+.v1 .gst-v{font-family:'JetBrains Mono';font-size:12px;font-weight:700;}
+
+/* QA */
+.v1 .qas{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.v1 .qa{display:flex;align-items:center;gap:10px;padding:13px 14px;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.04);border-radius:12px;cursor:pointer;transition:all 0.12s;}
+.v1 .qa:hover{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.08);transform:translateY(-1px);}
+.v1 .qa-ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.v1 .qa-lb{font-size:12px;font-weight:600;color:#d4d4d8;}
+.v1 .qa-ds{font-size:10px;color:#3f3f46;margin-top:1px;}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   VARIATION 2 — "AURORA LIGHT"
+   Premium light mode with soft gradients, warm whites, depth through shadows
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.v2{background:#f5f5f7;font-family:'Inter',sans-serif;}
+.v2 .layout{display:flex;min-height:100vh;}
+
+.v2 .side{width:240px;min-height:100vh;background:#fff;border-right:1px solid #e8e8ed;display:flex;flex-direction:column;padding:20px 12px;position:fixed;z-index:50;}
+.v2 .side .logo-wrap{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;}
+.v2 .side .logo-box{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;}
+.v2 .side .logo-txt{font-size:15px;font-weight:800;color:#1a1a1a;letter-spacing:-0.4px;}
+.v2 .side .logo-ver{font-size:9px;color:#a3a3a3;font-weight:500;margin-top:1px;}
+.v2 .side .sec-lbl{font-size:10px;font-weight:700;color:#a3a3a3;text-transform:uppercase;letter-spacing:0.08em;padding:16px 8px 6px;}
+.v2 .side .nav-i{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;font-size:13px;font-weight:500;color:#737373;cursor:pointer;transition:all 0.1s;margin:1px 0;}
+.v2 .side .nav-i:hover{background:#f5f5f5;color:#404040;}
+.v2 .side .nav-i.on{background:linear-gradient(135deg,#eef2ff,#ede9fe);color:#4f46e5;font-weight:600;}
+.v2 .side .nav-i i{font-size:18px;width:20px;text-align:center;}
+.v2 .side .bottom{margin-top:auto;padding:12px 8px;border-top:1px solid #f0f0f0;}
+.v2 .side .client-card{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;cursor:pointer;transition:background 0.1s;}
+.v2 .side .client-card:hover{background:#f5f5f5;}
+.v2 .side .client-av{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+.v2 .side .client-nm{font-size:12px;font-weight:600;color:#1a1a1a;}
+.v2 .side .client-fy{font-size:10px;color:#a3a3a3;}
+
+.v2 .content{margin-left:240px;flex:1;}
+
+.v2 .top{display:flex;align-items:center;justify-content:space-between;padding:14px 32px;background:#fff;border-bottom:1px solid #e8e8ed;position:sticky;top:58px;z-index:40;}
+.v2 .top h1{font-size:17px;font-weight:800;color:#1a1a1a;letter-spacing:-0.4px;}
+.v2 .top .crumb{font-size:11px;color:#a3a3a3;margin-top:1px;display:flex;align-items:center;gap:6px;}
+.v2 .top .live-pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:#10b981;background:#ecfdf5;padding:2px 8px;border-radius:20px;}
+.v2 .top .live-pill::before{content:'';width:5px;height:5px;border-radius:50%;background:#10b981;animation:pulse2 2s infinite;}
+@keyframes pulse2{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.v2 .top-right{display:flex;align-items:center;gap:8px;}
+.v2 .search{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f5f5f5;border:1px solid #e8e8ed;border-radius:10px;color:#a3a3a3;font-size:12px;min-width:200px;cursor:pointer;transition:all 0.12s;}
+.v2 .search:hover{border-color:#d4d4d4;background:#fff;}
+.v2 .search kbd{font-family:'JetBrains Mono';font-size:10px;padding:2px 5px;background:#e8e8ed;border-radius:3px;margin-left:auto;color:#737373;}
+.v2 .btn-out{padding:8px 14px;border-radius:10px;border:1px solid #e8e8ed;background:#fff;color:#525252;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.1s;}
+.v2 .btn-out:hover{border-color:#d4d4d4;background:#fafafa;}
+.v2 .btn-fill{padding:8px 18px;border-radius:10px;border:none;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 12px rgba(79,70,229,0.25);transition:all 0.12s;}
+.v2 .btn-fill:hover{box-shadow:0 4px 20px rgba(79,70,229,0.35);transform:translateY(-1px);}
+
+.v2 .dash{padding:24px 32px;display:flex;flex-direction:column;gap:18px;}
+
+/* Cards */
+.v2 .card{background:#fff;border:1px solid #e8e8ed;border-radius:16px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+.v2 .card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.v2 .card-t{font-size:11px;font-weight:700;color:#a3a3a3;text-transform:uppercase;letter-spacing:0.08em;display:flex;align-items:center;gap:6px;}
+.v2 .card-t i{font-size:13px;color:#d4d4d4;}
+.v2 .card-a{font-size:11px;color:#4f46e5;font-weight:600;cursor:pointer;}
+
+/* KPI */
+.v2 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.v2 .kpi{position:relative;overflow:hidden;}
+.v2 .kpi .accent-line{position:absolute;top:0;left:0;right:0;height:3px;border-radius:16px 16px 0 0;}
+.v2 .kpi .accent-line.green{background:linear-gradient(90deg,#10b981,#34d399);}
+.v2 .kpi .accent-line.red{background:linear-gradient(90deg,#ef4444,#f87171);}
+.v2 .kpi .accent-line.blue{background:linear-gradient(90deg,#3b82f6,#60a5fa);}
+.v2 .kpi .accent-line.violet{background:linear-gradient(90deg,#7c3aed,#a78bfa);}
+.v2 .kpi .accent-line.amber{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
+.v2 .kpi-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.v2 .kpi-lbl{font-size:11px;font-weight:600;color:#a3a3a3;text-transform:uppercase;letter-spacing:0.04em;}
+.v2 .kpi-ico{font-size:16px;}
+.v2 .kpi-ico.green{color:#10b981;}.v2 .kpi-ico.red{color:#ef4444;}.v2 .kpi-ico.blue{color:#3b82f6;}.v2 .kpi-ico.violet{color:#7c3aed;}.v2 .kpi-ico.amber{color:#f59e0b;}
+.v2 .kpi-val{font-size:24px;font-weight:900;letter-spacing:-0.8px;color:#1a1a1a;font-family:'JetBrains Mono','Inter',monospace;}
+.v2 .kpi-sub{font-size:10px;color:#a3a3a3;margin-top:4px;}
+
+/* Quarters */
+.v2 .qtrs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.v2 .qtr{background:#fafafa;border:1px solid #e8e8ed;border-radius:14px;padding:18px;cursor:pointer;transition:all 0.12s;position:relative;}
+.v2 .qtr:hover{border-color:#d4d4d4;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+.v2 .qtr.now{border-color:#c7d2fe;background:linear-gradient(135deg,#eef2ff,#faf5ff);}
+.v2 .qtr.now::after{content:'Current';position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:#fff;background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:2px 10px;border-radius:20px;}
+.v2 .qtr-h{font-size:16px;font-weight:800;color:#1a1a1a;margin-bottom:2px;}
+.v2 .qtr-m{font-size:10px;color:#a3a3a3;margin-bottom:12px;}
+.v2 .qtr-s{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;}
+.v2 .qtr-s .l{color:#a3a3a3;}.v2 .qtr-s .v{font-family:'JetBrains Mono';font-weight:600;font-size:11px;}
+.v2 .qtr-s .v.g{color:#10b981;}.v2 .qtr-s .v.r{color:#ef4444;}
+.v2 .qtr-bar{height:3px;background:#e8e8ed;border-radius:3px;margin-top:10px;overflow:hidden;}
+.v2 .qtr-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#4f46e5,#7c3aed);}
+
+/* Cat */
+.v2 .cat-wrap{display:flex;align-items:center;gap:16px;padding:16px 22px;}
+.v2 .cat-pct{font-size:22px;font-weight:900;color:#4f46e5;font-family:'JetBrains Mono';}
+.v2 .cat-txt{font-size:10px;color:#a3a3a3;line-height:1.3;}
+.v2 .cat-track{flex:1;height:6px;background:#f0f0f0;border-radius:6px;overflow:hidden;}
+.v2 .cat-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#4f46e5,#7c3aed,#a78bfa);transition:width 0.6s;}
+
+/* Layout */
+.v2 .grid-2{display:grid;grid-template-columns:1fr 360px;gap:16px;}
+
+/* Transactions */
+.v2 .tx{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f5f5f5;}
+.v2 .tx:last-child{border:none;}
+.v2 .tx-d{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.v2 .tx-d.y{background:#10b981;}.v2 .tx-d.n{background:#f59e0b;}
+.v2 .tx-i{flex:1;min-width:0;}
+.v2 .tx-p{font-size:12px;font-weight:600;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.v2 .tx-dt{font-size:10px;color:#a3a3a3;margin-top:1px;}
+.v2 .tx-a{font-family:'JetBrains Mono';font-size:12px;font-weight:600;}
+.v2 .tx-a.dr{color:#ef4444;}.v2 .tx-a.cr{color:#10b981;}
+
+/* Cash Flow */
+.v2 .cf-chart{display:flex;align-items:flex-end;gap:8px;height:130px;}
+.v2 .cf-mo{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.v2 .cf-bars{display:flex;align-items:flex-end;gap:3px;width:100%;justify-content:center;height:105px;}
+.v2 .cf-b{width:38%;border-radius:4px 4px 0 0;min-height:4px;}
+.v2 .cf-b.in{background:linear-gradient(to top,#10b981,rgba(16,185,129,0.2));}
+.v2 .cf-b.out{background:linear-gradient(to top,#ef4444,rgba(239,68,68,0.15));}
+.v2 .cf-lb{font-size:9px;color:#a3a3a3;font-weight:600;}
+
+/* Right col */
+.v2 .exp-r{margin-bottom:12px;}.v2 .exp-r:last-child{margin:0;}
+.v2 .exp-h{display:flex;justify-content:space-between;margin-bottom:5px;}
+.v2 .exp-n{font-size:11px;color:#737373;font-weight:500;}.v2 .exp-v{font-size:11px;font-family:'JetBrains Mono';font-weight:600;color:#1a1a1a;}
+.v2 .exp-bar{height:5px;background:#f0f0f0;border-radius:5px;overflow:hidden;}
+.v2 .exp-fill{height:100%;border-radius:5px;}
+
+.v2 .acc{display:flex;align-items:center;gap:12px;padding:12px;background:#fafafa;border-radius:12px;border:1px solid #f0f0f0;margin-bottom:8px;}
+.v2 .acc:last-child{margin:0;}
+.v2 .acc-ic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.v2 .acc-info{flex:1;min-width:0;}
+.v2 .acc-nm{font-size:12px;font-weight:600;color:#1a1a1a;}.v2 .acc-mt{font-size:10px;color:#a3a3a3;margin-top:1px;}
+.v2 .acc-bal{font-family:'JetBrains Mono';font-size:12px;font-weight:700;}
+.v2 .acc-bal.p{color:#10b981;}.v2 .acc-bal.n{color:#ef4444;}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   VARIATION 3 — "CARBON PRO"
+   Warm charcoal with amber/gold accents, editorial typography, professional
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.v3{background:#171717;font-family:'Space Grotesk','Inter',sans-serif;}
+.v3 .layout{display:flex;min-height:100vh;}
+
+.v3 .side{width:260px;min-height:100vh;background:#1c1c1c;border-right:1px solid #262626;display:flex;flex-direction:column;padding:24px 16px;position:fixed;z-index:50;}
+.v3 .side .logo-wrap{display:flex;align-items:center;gap:12px;padding:0 4px 24px;border-bottom:1px solid #262626;margin-bottom:8px;}
+.v3 .side .logo-box{width:38px;height:38px;border-radius:8px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;}
+.v3 .side .logo-txt{font-size:16px;font-weight:700;color:#fafafa;letter-spacing:-0.5px;}
+.v3 .side .logo-sub{font-size:9px;color:#525252;font-weight:500;margin-top:2px;text-transform:uppercase;letter-spacing:0.1em;}
+.v3 .side .sec-lbl{font-size:9px;font-weight:700;color:#404040;text-transform:uppercase;letter-spacing:0.12em;padding:20px 4px 8px;}
+.v3 .side .nav-i{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:500;color:#737373;cursor:pointer;transition:all 0.1s;margin:1px 0;}
+.v3 .side .nav-i:hover{background:#262626;color:#d4d4d4;}
+.v3 .side .nav-i.on{background:#262626;color:#fbbf24;font-weight:600;}
+.v3 .side .nav-i.on::before{content:'';display:inline-block;width:3px;height:3px;border-radius:50%;background:#fbbf24;margin-right:-4px;}
+.v3 .side .nav-i i{font-size:18px;width:20px;text-align:center;}
+.v3 .side .bottom{margin-top:auto;padding:16px 4px 0;border-top:1px solid #262626;}
+.v3 .side .client-card{display:flex;align-items:center;gap:10px;padding:10px 8px;border-radius:8px;cursor:pointer;}
+.v3 .side .client-card:hover{background:#262626;}
+.v3 .side .client-av{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+.v3 .side .client-nm{font-size:12px;font-weight:600;color:#e5e5e5;}
+.v3 .side .client-fy{font-size:10px;color:#525252;}
+
+.v3 .content{margin-left:260px;flex:1;}
+
+.v3 .top{display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid #262626;background:#171717;position:sticky;top:58px;z-index:40;}
+.v3 .top h1{font-size:20px;font-weight:700;color:#fafafa;letter-spacing:-0.5px;}
+.v3 .top .crumb{font-size:11px;color:#525252;margin-top:2px;}
+.v3 .top-right{display:flex;align-items:center;gap:8px;}
+.v3 .search{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#1c1c1c;border:1px solid #262626;border-radius:8px;color:#525252;font-size:12px;min-width:200px;cursor:pointer;}
+.v3 .search:hover{border-color:#404040;}
+.v3 .search kbd{font-family:'JetBrains Mono';font-size:10px;padding:2px 5px;background:#262626;border-radius:3px;margin-left:auto;color:#525252;}
+.v3 .btn-out{padding:8px 14px;border-radius:8px;border:1px solid #262626;background:transparent;color:#a3a3a3;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.v3 .btn-out:hover{border-color:#404040;color:#d4d4d4;}
+.v3 .btn-fill{padding:8px 18px;border-radius:8px;border:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1a1a;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 12px rgba(245,158,11,0.2);}
+.v3 .btn-fill:hover{box-shadow:0 4px 20px rgba(245,158,11,0.3);}
+
+.v3 .dash{padding:28px 32px;display:flex;flex-direction:column;gap:18px;}
+
+.v3 .card{background:#1c1c1c;border:1px solid #262626;border-radius:12px;padding:22px;}
+.v3 .card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.v3 .card-t{font-size:11px;font-weight:700;color:#525252;text-transform:uppercase;letter-spacing:0.08em;}
+.v3 .card-a{font-size:11px;color:#fbbf24;font-weight:600;cursor:pointer;}
+
+/* KPI */
+.v3 .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.v3 .kpi{position:relative;}
+.v3 .kpi-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.v3 .kpi-lbl{font-size:11px;font-weight:600;color:#525252;text-transform:uppercase;letter-spacing:0.04em;}
+.v3 .kpi-ico{font-size:16px;}
+.v3 .kpi-ico.green{color:#34d399;}.v3 .kpi-ico.red{color:#f87171;}.v3 .kpi-ico.amber{color:#fbbf24;}.v3 .kpi-ico.blue{color:#60a5fa;}.v3 .kpi-ico.violet{color:#a78bfa;}
+.v3 .kpi-val{font-size:24px;font-weight:800;letter-spacing:-0.8px;color:#fafafa;font-family:'JetBrains Mono','Space Grotesk',monospace;}
+.v3 .kpi-sub{font-size:10px;color:#404040;margin-top:4px;}
+.v3 .kpi-line{width:100%;height:2px;background:#262626;border-radius:2px;margin-top:12px;overflow:hidden;}
+.v3 .kpi-line-fill{height:100%;border-radius:2px;}
+
+/* Quarters */
+.v3 .qtrs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.v3 .qtr{background:#1c1c1c;border:1px solid #262626;border-radius:10px;padding:18px;cursor:pointer;transition:all 0.12s;position:relative;}
+.v3 .qtr:hover{border-color:#404040;}
+.v3 .qtr.now{border-color:#92400e;background:rgba(245,158,11,0.03);}
+.v3 .qtr.now::after{content:'●';position:absolute;top:12px;right:14px;color:#fbbf24;font-size:8px;}
+.v3 .qtr-h{font-size:16px;font-weight:800;color:#e5e5e5;margin-bottom:2px;letter-spacing:-0.3px;}
+.v3 .qtr-m{font-size:10px;color:#404040;margin-bottom:12px;font-weight:500;}
+.v3 .qtr-s{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;}
+.v3 .qtr-s .l{color:#525252;}.v3 .qtr-s .v{font-family:'JetBrains Mono';font-weight:600;font-size:11px;}
+.v3 .qtr-s .v.g{color:#34d399;}.v3 .qtr-s .v.r{color:#f87171;}
+.v3 .qtr-bar{height:2px;background:#262626;border-radius:2px;margin-top:12px;overflow:hidden;}
+.v3 .qtr-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#f59e0b,#fbbf24);}
+
+/* Cat */
+.v3 .cat-wrap{display:flex;align-items:center;gap:16px;padding:14px 22px;}
+.v3 .cat-pct{font-size:20px;font-weight:800;color:#fbbf24;font-family:'JetBrains Mono';}
+.v3 .cat-txt{font-size:10px;color:#525252;line-height:1.3;}
+.v3 .cat-track{flex:1;height:3px;background:#262626;border-radius:3px;overflow:hidden;}
+.v3 .cat-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#f59e0b,#fbbf24);}
+
+.v3 .grid-2{display:grid;grid-template-columns:1fr 360px;gap:16px;}
+
+.v3 .tx{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #262626;}
+.v3 .tx:last-child{border:none;}
+.v3 .tx-d{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.v3 .tx-d.y{background:#10b981;}.v3 .tx-d.n{background:#f59e0b;}
+.v3 .tx-i{flex:1;min-width:0;}
+.v3 .tx-p{font-size:12px;font-weight:600;color:#d4d4d4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.v3 .tx-dt{font-size:10px;color:#404040;margin-top:1px;}
+.v3 .tx-a{font-family:'JetBrains Mono';font-size:12px;font-weight:600;}
+.v3 .tx-a.dr{color:#f87171;}.v3 .tx-a.cr{color:#34d399;}
+
+.v3 .cf-chart{display:flex;align-items:flex-end;gap:8px;height:130px;}
+.v3 .cf-mo{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.v3 .cf-bars{display:flex;align-items:flex-end;gap:3px;width:100%;justify-content:center;height:105px;}
+.v3 .cf-b{width:38%;border-radius:3px 3px 0 0;min-height:4px;}
+.v3 .cf-b.in{background:linear-gradient(to top,#fbbf24,rgba(251,191,36,0.15));}
+.v3 .cf-b.out{background:linear-gradient(to top,#f87171,rgba(248,113,113,0.12));}
+.v3 .cf-lb{font-size:9px;color:#404040;font-weight:600;}
+
+.v3 .exp-r{margin-bottom:12px;}.v3 .exp-r:last-child{margin:0;}
+.v3 .exp-h{display:flex;justify-content:space-between;margin-bottom:5px;}
+.v3 .exp-n{font-size:11px;color:#737373;font-weight:500;}.v3 .exp-v{font-size:11px;font-family:'JetBrains Mono';font-weight:600;color:#d4d4d4;}
+.v3 .exp-bar{height:3px;background:#262626;border-radius:3px;overflow:hidden;}
+.v3 .exp-fill{height:100%;border-radius:3px;}
+
+.v3 .acc{display:flex;align-items:center;gap:12px;padding:12px;background:#1c1c1c;border-radius:10px;border:1px solid #262626;margin-bottom:8px;}
+.v3 .acc:last-child{margin:0;}
+.v3 .acc-ic{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.v3 .acc-info{flex:1;min-width:0;}
+.v3 .acc-nm{font-size:12px;font-weight:600;color:#d4d4d4;}.v3 .acc-mt{font-size:10px;color:#404040;margin-top:1px;}
+.v3 .acc-bal{font-family:'JetBrains Mono';font-size:12px;font-weight:700;}
+.v3 .acc-bal.p{color:#34d399;}.v3 .acc-bal.n{color:#f87171;}
+</style>
+</head>
+<body>
+
+<!-- ─── Switcher ─── -->
+<div class="switcher">
+  <button class="switch-btn active" data-v="1" onclick="show(1)">① Glass Noir</button>
+  <button class="switch-btn" data-v="2" onclick="show(2)">② Aurora Light</button>
+  <button class="switch-btn" data-v="3" onclick="show(3)">③ Carbon Pro</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     VARIATION 1 — GLASS NOIR
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="variation v1 active" id="v1">
+<div class="layout">
+<nav class="side">
+  <div class="logo"><i class="ph ph-hexagon"></i></div>
+  <div class="nav-i on"><i class="ph ph-house"></i></div>
+  <div class="nav-i"><i class="ph ph-rows"></i></div>
+  <div class="nav-i"><i class="ph ph-upload-simple"></i></div>
+  <div class="sep"></div>
+  <div class="nav-i"><i class="ph ph-chart-pie-slice"></i></div>
+  <div class="nav-i"><i class="ph ph-book-open"></i></div>
+  <div class="nav-i"><i class="ph ph-receipt"></i></div>
+  <div class="sep"></div>
+  <div class="nav-i"><i class="ph ph-gear"></i></div>
+  <div class="nav-i"><i class="ph ph-brain"></i></div>
+  <div class="bottom"><div class="avatar">AC</div></div>
+</nav>
+<div class="content">
+  <div class="top">
+    <div><h1>Dashboard</h1><div class="meta">ABC Corp · 3 accounts · 1,247 txns <div class="live-dot"></div></div></div>
+    <div class="top-right">
+      <div class="search-bar"><i class="ph ph-magnifying-glass" style="font-size:14px;"></i>Search...<kbd>⌘K</kbd></div>
+      <button class="btn-g"><i class="ph ph-bell" style="font-size:15px;"></i></button>
+      <button class="btn-p"><i class="ph ph-upload-simple"></i> Import</button>
+    </div>
+  </div>
+  <div class="dash">
+    <div class="kpis">
+      <div class="glass kpi"><div class="kpi-accent green"></div><div class="kpi-row"><span class="kpi-lbl">Revenue</span><i class="ph ph-trend-up kpi-ico green"></i></div><div class="kpi-val">$284K</div><div class="kpi-sub">↑ 12% vs prior</div><div class="kpi-spark"><div class="s" style="height:40%;background:#10b981;"></div><div class="s" style="height:55%;background:#10b981;"></div><div class="s" style="height:45%;background:#10b981;"></div><div class="s" style="height:65%;background:#10b981;"></div><div class="s" style="height:80%;background:#10b981;"></div><div class="s" style="height:100%;background:#10b981;"></div></div></div>
+      <div class="glass kpi"><div class="kpi-accent red"></div><div class="kpi-row"><span class="kpi-lbl">Expenses</span><i class="ph ph-trend-down kpi-ico red"></i></div><div class="kpi-val">$198K</div><div class="kpi-sub">5000-9000 series</div><div class="kpi-spark"><div class="s" style="height:70%;background:#ef4444;"></div><div class="s" style="height:60%;background:#ef4444;"></div><div class="s" style="height:85%;background:#ef4444;"></div><div class="s" style="height:75%;background:#ef4444;"></div><div class="s" style="height:90%;background:#ef4444;"></div><div class="s" style="height:80%;background:#ef4444;"></div></div></div>
+      <div class="glass kpi"><div class="kpi-accent blue"></div><div class="kpi-row"><span class="kpi-lbl">Net Income</span><i class="ph ph-scales kpi-ico blue"></i></div><div class="kpi-val">$85.9K</div><div class="kpi-sub">30.2% margin</div></div>
+      <div class="glass kpi"><div class="kpi-accent violet"></div><div class="kpi-row"><span class="kpi-lbl">Transactions</span><i class="ph ph-receipt kpi-ico violet"></i></div><div class="kpi-val">1,247</div><div class="kpi-sub">3 accounts</div></div>
+      <div class="glass kpi"><div class="kpi-accent amber"></div><div class="kpi-row"><span class="kpi-lbl">Categorized</span><i class="ph ph-check-circle kpi-ico amber"></i></div><div class="kpi-val">87%</div><div class="kpi-sub">162 remaining</div></div>
+    </div>
+    <div class="glass">
+      <div class="glass-header"><span class="glass-title"><i class="ph ph-calendar-blank"></i>Fiscal Year</span><span style="font-size:11px;color:#3f3f46;font-family:'JetBrains Mono';">Jan 1 — Dec 31, 2024</span></div>
+      <div class="qtrs">
+        <div class="qtr"><div class="qtr-h">Q1</div><div class="qtr-m">Jan — Mar</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$62.1K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$48.2K</span></div><div class="qtr-s"><span class="l">Net</span><span class="v g">$13.9K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:100%"></div></div></div>
+        <div class="qtr"><div class="qtr-h">Q2</div><div class="qtr-m">Apr — Jun</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$78.4K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$52.3K</span></div><div class="qtr-s"><span class="l">Net</span><span class="v g">$26.1K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:95%"></div></div></div>
+        <div class="qtr now"><div class="qtr-h">Q3</div><div class="qtr-m">Jul — Sep</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$89.2K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$61.4K</span></div><div class="qtr-s"><span class="l">Net</span><span class="v g">$27.8K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:72%"></div></div></div>
+        <div class="qtr"><div class="qtr-h">Q4</div><div class="qtr-m">Oct — Dec</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$54.6K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$36.6K</span></div><div class="qtr-s"><span class="l">Net</span><span class="v g">$18.1K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:40%"></div></div></div>
+      </div>
+    </div>
+    <div class="glass" style="padding:14px 22px;">
+      <div class="cat-wrap"><div class="cat-info"><span class="cat-pct">87%</span><div class="cat-txt">Categorized<br><span style="color:#71717a;">162 remaining</span></div></div><div class="cat-track"><div class="cat-fill" style="width:87%"></div></div></div>
+    </div>
+    <div class="grid-2">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="glass"><div class="glass-header"><span class="glass-title"><i class="ph ph-chart-bar"></i>Cash Flow</span><span class="glass-action">6 months <i class="ph ph-arrow-right" style="font-size:10px;"></i></span></div><div class="cf-chart"><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:50%"></div><div class="cf-b out" style="height:38%"></div></div><span class="cf-lb">Sep</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:62%"></div><div class="cf-b out" style="height:48%"></div></div><span class="cf-lb">Oct</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:55%"></div><div class="cf-b out" style="height:60%"></div></div><span class="cf-lb">Nov</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:78%"></div><div class="cf-b out" style="height:52%"></div></div><span class="cf-lb">Dec</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:90%"></div><div class="cf-b out" style="height:65%"></div></div><span class="cf-lb">Jan</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:100%"></div><div class="cf-b out" style="height:70%"></div></div><span class="cf-lb">Feb</span></div></div></div>
+        <div class="glass"><div class="glass-header"><span class="glass-title"><i class="ph ph-list-dashes"></i>Recent Transactions</span><span class="glass-action">View All <i class="ph ph-arrow-right" style="font-size:10px;"></i></span></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Shopify Monthly Plan</div><div class="tx-dt">Feb 18</div></div><div class="tx-a dr">-$79.00</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Client Payment — Inv #4821</div><div class="tx-dt">Feb 17</div></div><div class="tx-a cr">+$4,200</div></div><div class="tx"><div class="tx-d n"></div><div class="tx-i"><div class="tx-p">INTERAC E-TRANSFER J SMITH</div><div class="tx-dt">Feb 16</div></div><div class="tx-a cr">+$850</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">AWS Cloud Services</div><div class="tx-dt">Feb 15</div></div><div class="tx-a dr">-$342</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Bell Canada — Internet</div><div class="tx-dt">Feb 14</div></div><div class="tx-a dr">-$120</div></div></div>
+        <div class="glass"><div class="glass-header"><span class="glass-title"><i class="ph ph-lightning"></i>Quick Actions</span></div><div class="qas"><div class="qa"><div class="qa-ic" style="background:rgba(96,165,250,0.1);color:#60a5fa;"><i class="ph ph-upload-simple"></i></div><div><div class="qa-lb">Import</div><div class="qa-ds">CSV, PDF</div></div></div><div class="qa"><div class="qa-ic" style="background:rgba(129,140,248,0.1);color:#818cf8;"><i class="ph ph-rows"></i></div><div><div class="qa-lb">Transactions</div><div class="qa-ds">Categorize</div></div></div><div class="qa"><div class="qa-ic" style="background:rgba(52,211,153,0.1);color:#34d399;"><i class="ph ph-chart-pie-slice"></i></div><div><div class="qa-lb">Reports</div><div class="qa-ds">TB, P&L, GST</div></div></div><div class="qa"><div class="qa-ic" style="background:rgba(161,161,170,0.08);color:#a1a1aa;"><i class="ph ph-gear-six"></i></div><div><div class="qa-lb">Settings</div><div class="qa-ds">Tax, province</div></div></div></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="glass"><div class="glass-header"><span class="glass-title"><i class="ph ph-chart-bar-horizontal"></i>Top Expenses</span></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Advertising</span><span class="exp-v">$34.2K</span></div><div class="exp-bar"><div class="exp-fill" style="width:100%;background:linear-gradient(90deg,#6366f1,#818cf8);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Professional Services</span><span class="exp-v">$28.9K</span></div><div class="exp-bar"><div class="exp-fill" style="width:84%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Office Supplies</span><span class="exp-v">$18.5K</span></div><div class="exp-bar"><div class="exp-fill" style="width:54%;background:linear-gradient(90deg,#ec4899,#f472b6);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Software & SaaS</span><span class="exp-v">$12.3K</span></div><div class="exp-bar"><div class="exp-fill" style="width:36%;background:linear-gradient(90deg,#f59e0b,#fbbf24);"></div></div></div></div>
+        <div class="glass"><div class="glass-header"><span class="glass-title"><i class="ph ph-bank"></i>Accounts</span></div><div class="acc"><div class="acc-ic" style="background:rgba(129,140,248,0.1);color:#818cf8;"><i class="ph ph-bank"></i></div><div class="acc-info"><div class="acc-nm">RBC Business Chequing</div><div class="acc-mt">423 txns</div></div><div class="acc-bal p">$42,180</div></div><div class="acc"><div class="acc-ic" style="background:rgba(167,139,250,0.1);color:#a78bfa;"><i class="ph ph-credit-card"></i></div><div class="acc-info"><div class="acc-nm">BMO Mastercard</div><div class="acc-mt">318 txns</div></div><div class="acc-bal n">-$3,420</div></div><div class="acc"><div class="acc-ic" style="background:rgba(52,211,153,0.1);color:#34d399;"><i class="ph ph-piggy-bank"></i></div><div class="acc-info"><div class="acc-nm">TD Savings</div><div class="acc-mt">506 txns</div></div><div class="acc-bal p">$128,940</div></div></div>
+        <div class="glass"><div class="glass-header"><span class="glass-title"><i class="ph ph-receipt"></i>GST / HST</span><span class="glass-action">Full Report <i class="ph ph-arrow-right" style="font-size:10px;"></i></span></div><div class="gst-row" style="background:rgba(239,68,68,0.04);"><span class="gst-l">Collected</span><span class="gst-v" style="color:#f87171;">$36,962</span></div><div class="gst-row" style="background:rgba(16,185,129,0.04);"><span class="gst-l">ITC (Paid)</span><span class="gst-v" style="color:#34d399;">$25,799</span></div><div class="gst-row" style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.12);"><span class="gst-l" style="color:#a78bfa;font-weight:700;">Net Payable</span><span class="gst-v" style="color:#fafafa;font-size:13px;">$11,163</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     VARIATION 2 — AURORA LIGHT
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="variation v2" id="v2">
+<div class="layout">
+<nav class="side">
+  <div class="logo-wrap"><div class="logo-box"><i class="ph ph-hexagon"></i></div><div><div class="logo-txt">RoboLedger</div><div class="logo-ver">v5.2</div></div></div>
+  <div class="sec-lbl">Main</div>
+  <div class="nav-i on"><i class="ph ph-house"></i> Home</div>
+  <div class="nav-i"><i class="ph ph-rows"></i> Transactions</div>
+  <div class="nav-i"><i class="ph ph-upload-simple"></i> Import</div>
+  <div class="sec-lbl">Analysis</div>
+  <div class="nav-i"><i class="ph ph-chart-pie-slice"></i> Reports</div>
+  <div class="nav-i"><i class="ph ph-book-open"></i> Chart of Accounts</div>
+  <div class="nav-i"><i class="ph ph-receipt"></i> GST / HST</div>
+  <div class="sec-lbl">System</div>
+  <div class="nav-i"><i class="ph ph-gear"></i> Settings</div>
+  <div class="nav-i"><i class="ph ph-brain"></i> AI Audit</div>
+  <div class="bottom"><div class="client-card"><div class="client-av">AC</div><div><div class="client-nm">ABC Corp</div><div class="client-fy">FY 2024</div></div></div></div>
+</nav>
+<div class="content">
+  <div class="top"><div><h1>Dashboard</h1><div class="crumb">ABC Corp · 3 accounts · 1,247 transactions <span class="live-pill">Live</span></div></div><div class="top-right"><div class="search"><i class="ph ph-magnifying-glass" style="font-size:14px;"></i>Search...<kbd>⌘K</kbd></div><button class="btn-out"><i class="ph ph-bell" style="font-size:15px;"></i></button><button class="btn-fill"><i class="ph ph-upload-simple"></i> Import</button></div></div>
+  <div class="dash">
+    <div class="kpis">
+      <div class="card kpi"><div class="accent-line green"></div><div class="kpi-row"><span class="kpi-lbl">Revenue</span><i class="ph ph-trend-up kpi-ico green"></i></div><div class="kpi-val">$284K</div><div class="kpi-sub">↑ 12% vs prior</div></div>
+      <div class="card kpi"><div class="accent-line red"></div><div class="kpi-row"><span class="kpi-lbl">Expenses</span><i class="ph ph-trend-down kpi-ico red"></i></div><div class="kpi-val">$198K</div><div class="kpi-sub">5000-9000</div></div>
+      <div class="card kpi"><div class="accent-line blue"></div><div class="kpi-row"><span class="kpi-lbl">Net Income</span><i class="ph ph-scales kpi-ico blue"></i></div><div class="kpi-val">$85.9K</div><div class="kpi-sub">30.2% margin</div></div>
+      <div class="card kpi"><div class="accent-line violet"></div><div class="kpi-row"><span class="kpi-lbl">Transactions</span><i class="ph ph-receipt kpi-ico violet"></i></div><div class="kpi-val">1,247</div><div class="kpi-sub">3 accounts</div></div>
+      <div class="card kpi"><div class="accent-line amber"></div><div class="kpi-row"><span class="kpi-lbl">Categorized</span><i class="ph ph-check-circle kpi-ico amber"></i></div><div class="kpi-val">87%</div><div class="kpi-sub">162 left</div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span class="card-t"><i class="ph ph-calendar-blank"></i>Fiscal Year Timeline</span><span style="font-size:11px;color:#a3a3a3;font-family:'JetBrains Mono';">Jan 1 — Dec 31, 2024</span></div>
+      <div class="qtrs">
+        <div class="qtr"><div class="qtr-h">Q1</div><div class="qtr-m">Jan — Mar</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$62.1K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$48.2K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:100%"></div></div></div>
+        <div class="qtr"><div class="qtr-h">Q2</div><div class="qtr-m">Apr — Jun</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$78.4K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$52.3K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:95%"></div></div></div>
+        <div class="qtr now"><div class="qtr-h">Q3</div><div class="qtr-m">Jul — Sep</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$89.2K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$61.4K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:72%"></div></div></div>
+        <div class="qtr"><div class="qtr-h">Q4</div><div class="qtr-m">Oct — Dec</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$54.6K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$36.6K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:40%"></div></div></div>
+      </div>
+    </div>
+    <div class="card" style="padding:0;"><div class="cat-wrap"><span class="cat-pct">87%</span><div class="cat-txt">Categorized<br><span style="color:#d4d4d4;">162 remaining</span></div><div class="cat-track"><div class="cat-fill" style="width:87%"></div></div></div></div>
+    <div class="grid-2">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card"><div class="card-h"><span class="card-t"><i class="ph ph-chart-bar"></i>Monthly Cash Flow</span></div><div class="cf-chart"><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:50%"></div><div class="cf-b out" style="height:38%"></div></div><span class="cf-lb">Sep</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:62%"></div><div class="cf-b out" style="height:48%"></div></div><span class="cf-lb">Oct</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:55%"></div><div class="cf-b out" style="height:60%"></div></div><span class="cf-lb">Nov</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:78%"></div><div class="cf-b out" style="height:52%"></div></div><span class="cf-lb">Dec</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:90%"></div><div class="cf-b out" style="height:65%"></div></div><span class="cf-lb">Jan</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:100%"></div><div class="cf-b out" style="height:70%"></div></div><span class="cf-lb">Feb</span></div></div></div>
+        <div class="card"><div class="card-h"><span class="card-t"><i class="ph ph-list-dashes"></i>Recent Transactions</span><span class="card-a">View All →</span></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Shopify Monthly Plan</div><div class="tx-dt">Feb 18</div></div><div class="tx-a dr">-$79.00</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Client Payment — Inv #4821</div><div class="tx-dt">Feb 17</div></div><div class="tx-a cr">+$4,200</div></div><div class="tx"><div class="tx-d n"></div><div class="tx-i"><div class="tx-p">INTERAC E-TRANSFER J SMITH</div><div class="tx-dt">Feb 16</div></div><div class="tx-a cr">+$850</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">AWS Cloud Services</div><div class="tx-dt">Feb 15</div></div><div class="tx-a dr">-$342</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Bell Canada — Internet</div><div class="tx-dt">Feb 14</div></div><div class="tx-a dr">-$120</div></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card"><div class="card-h"><span class="card-t"><i class="ph ph-chart-bar-horizontal"></i>Top Expenses</span></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Advertising</span><span class="exp-v">$34.2K</span></div><div class="exp-bar"><div class="exp-fill" style="width:100%;background:linear-gradient(90deg,#4f46e5,#7c3aed);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Professional Services</span><span class="exp-v">$28.9K</span></div><div class="exp-bar"><div class="exp-fill" style="width:84%;background:linear-gradient(90deg,#7c3aed,#a78bfa);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Office Supplies</span><span class="exp-v">$18.5K</span></div><div class="exp-bar"><div class="exp-fill" style="width:54%;background:linear-gradient(90deg,#ec4899,#f472b6);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Software</span><span class="exp-v">$12.3K</span></div><div class="exp-bar"><div class="exp-fill" style="width:36%;background:linear-gradient(90deg,#f59e0b,#fbbf24);"></div></div></div></div>
+        <div class="card"><div class="card-h"><span class="card-t"><i class="ph ph-bank"></i>Account Balances</span></div><div class="acc"><div class="acc-ic" style="background:#eef2ff;color:#4f46e5;"><i class="ph ph-bank"></i></div><div class="acc-info"><div class="acc-nm">RBC Business Chequing</div><div class="acc-mt">423 txns</div></div><div class="acc-bal p">$42,180</div></div><div class="acc"><div class="acc-ic" style="background:#faf5ff;color:#7c3aed;"><i class="ph ph-credit-card"></i></div><div class="acc-info"><div class="acc-nm">BMO Mastercard</div><div class="acc-mt">318 txns</div></div><div class="acc-bal n">-$3,420</div></div><div class="acc"><div class="acc-ic" style="background:#ecfdf5;color:#10b981;"><i class="ph ph-piggy-bank"></i></div><div class="acc-info"><div class="acc-nm">TD Savings</div><div class="acc-mt">506 txns</div></div><div class="acc-bal p">$128,940</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     VARIATION 3 — CARBON PRO
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="variation v3" id="v3">
+<div class="layout">
+<nav class="side">
+  <div class="logo-wrap"><div class="logo-box"><i class="ph ph-hexagon"></i></div><div><div class="logo-txt">RoboLedger</div><div class="logo-sub">Financial OS</div></div></div>
+  <div class="sec-lbl">Workspace</div>
+  <div class="nav-i on"><i class="ph ph-house"></i> Dashboard</div>
+  <div class="nav-i"><i class="ph ph-rows"></i> Transactions</div>
+  <div class="nav-i"><i class="ph ph-upload-simple"></i> Import</div>
+  <div class="sec-lbl">Intelligence</div>
+  <div class="nav-i"><i class="ph ph-chart-pie-slice"></i> Reports</div>
+  <div class="nav-i"><i class="ph ph-book-open"></i> Chart of Accounts</div>
+  <div class="nav-i"><i class="ph ph-receipt"></i> GST / HST</div>
+  <div class="sec-lbl">Configuration</div>
+  <div class="nav-i"><i class="ph ph-gear"></i> Settings</div>
+  <div class="nav-i"><i class="ph ph-brain"></i> AI Audit</div>
+  <div class="bottom"><div class="client-card"><div class="client-av">AC</div><div><div class="client-nm">ABC Corp</div><div class="client-fy">FY 2024 · Ontario</div></div></div></div>
+</nav>
+<div class="content">
+  <div class="top"><div><h1>Dashboard</h1><div class="crumb">ABC Corp · 3 accounts · 1,247 transactions</div></div><div class="top-right"><div class="search"><i class="ph ph-magnifying-glass" style="font-size:14px;"></i>Search...<kbd>⌘K</kbd></div><button class="btn-out"><i class="ph ph-bell" style="font-size:15px;"></i></button><button class="btn-fill"><i class="ph ph-upload-simple"></i> Import</button></div></div>
+  <div class="dash">
+    <div class="kpis">
+      <div class="card kpi"><div class="kpi-row"><span class="kpi-lbl">Revenue</span><i class="ph ph-trend-up kpi-ico green"></i></div><div class="kpi-val">$284K</div><div class="kpi-sub">↑ 12% vs prior year</div><div class="kpi-line"><div class="kpi-line-fill" style="width:75%;background:linear-gradient(90deg,#10b981,#34d399);"></div></div></div>
+      <div class="card kpi"><div class="kpi-row"><span class="kpi-lbl">Expenses</span><i class="ph ph-trend-down kpi-ico red"></i></div><div class="kpi-val">$198K</div><div class="kpi-sub">5000–9000 series</div><div class="kpi-line"><div class="kpi-line-fill" style="width:65%;background:linear-gradient(90deg,#ef4444,#f87171);"></div></div></div>
+      <div class="card kpi"><div class="kpi-row"><span class="kpi-lbl">Net Income</span><i class="ph ph-scales kpi-ico blue"></i></div><div class="kpi-val">$85.9K</div><div class="kpi-sub">30.2% margin</div><div class="kpi-line"><div class="kpi-line-fill" style="width:30%;background:linear-gradient(90deg,#3b82f6,#60a5fa);"></div></div></div>
+      <div class="card kpi"><div class="kpi-row"><span class="kpi-lbl">Transactions</span><i class="ph ph-receipt kpi-ico amber"></i></div><div class="kpi-val">1,247</div><div class="kpi-sub">3 accounts</div><div class="kpi-line"><div class="kpi-line-fill" style="width:100%;background:linear-gradient(90deg,#f59e0b,#fbbf24);"></div></div></div>
+      <div class="card kpi"><div class="kpi-row"><span class="kpi-lbl">Categorized</span><i class="ph ph-check-circle kpi-ico amber"></i></div><div class="kpi-val">87%</div><div class="kpi-sub">162 remaining</div><div class="kpi-line"><div class="kpi-line-fill" style="width:87%;background:linear-gradient(90deg,#f59e0b,#fbbf24);"></div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span class="card-t">Fiscal Year</span><span style="font-size:11px;color:#404040;font-family:'JetBrains Mono';">2024</span></div>
+      <div class="qtrs">
+        <div class="qtr"><div class="qtr-h">Q1</div><div class="qtr-m">Jan — Mar</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$62.1K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$48.2K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:100%"></div></div></div>
+        <div class="qtr"><div class="qtr-h">Q2</div><div class="qtr-m">Apr — Jun</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$78.4K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$52.3K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:95%"></div></div></div>
+        <div class="qtr now"><div class="qtr-h">Q3</div><div class="qtr-m">Jul — Sep</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$89.2K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$61.4K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:72%"></div></div></div>
+        <div class="qtr"><div class="qtr-h">Q4</div><div class="qtr-m">Oct — Dec</div><div class="qtr-s"><span class="l">Revenue</span><span class="v g">$54.6K</span></div><div class="qtr-s"><span class="l">Expenses</span><span class="v r">$36.6K</span></div><div class="qtr-bar"><div class="qtr-fill" style="width:40%"></div></div></div>
+      </div>
+    </div>
+    <div class="card" style="padding:0;"><div class="cat-wrap"><span class="cat-pct">87%</span><div class="cat-txt">Categorized<br><span style="color:#737373;">162 remaining</span></div><div class="cat-track"><div class="cat-fill" style="width:87%"></div></div></div></div>
+    <div class="grid-2">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card"><div class="card-h"><span class="card-t">Cash Flow</span><span class="card-a">6 months →</span></div><div class="cf-chart"><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:50%"></div><div class="cf-b out" style="height:38%"></div></div><span class="cf-lb">Sep</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:62%"></div><div class="cf-b out" style="height:48%"></div></div><span class="cf-lb">Oct</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:55%"></div><div class="cf-b out" style="height:60%"></div></div><span class="cf-lb">Nov</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:78%"></div><div class="cf-b out" style="height:52%"></div></div><span class="cf-lb">Dec</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:90%"></div><div class="cf-b out" style="height:65%"></div></div><span class="cf-lb">Jan</span></div><div class="cf-mo"><div class="cf-bars"><div class="cf-b in" style="height:100%"></div><div class="cf-b out" style="height:70%"></div></div><span class="cf-lb">Feb</span></div></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Recent Transactions</span><span class="card-a">All →</span></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Shopify Monthly Plan</div><div class="tx-dt">Feb 18</div></div><div class="tx-a dr">-$79</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Client Payment — Inv #4821</div><div class="tx-dt">Feb 17</div></div><div class="tx-a cr">+$4,200</div></div><div class="tx"><div class="tx-d n"></div><div class="tx-i"><div class="tx-p">INTERAC E-TRANSFER J SMITH</div><div class="tx-dt">Feb 16</div></div><div class="tx-a cr">+$850</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">AWS Cloud Services</div><div class="tx-dt">Feb 15</div></div><div class="tx-a dr">-$342</div></div><div class="tx"><div class="tx-d y"></div><div class="tx-i"><div class="tx-p">Bell Canada — Internet</div><div class="tx-dt">Feb 14</div></div><div class="tx-a dr">-$120</div></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card"><div class="card-h"><span class="card-t">Top Expenses</span></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Advertising</span><span class="exp-v">$34.2K</span></div><div class="exp-bar"><div class="exp-fill" style="width:100%;background:linear-gradient(90deg,#f59e0b,#fbbf24);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Professional Services</span><span class="exp-v">$28.9K</span></div><div class="exp-bar"><div class="exp-fill" style="width:84%;background:linear-gradient(90deg,#d97706,#f59e0b);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Office Supplies</span><span class="exp-v">$18.5K</span></div><div class="exp-bar"><div class="exp-fill" style="width:54%;background:linear-gradient(90deg,#92400e,#d97706);"></div></div></div><div class="exp-r"><div class="exp-h"><span class="exp-n">Software</span><span class="exp-v">$12.3K</span></div><div class="exp-bar"><div class="exp-fill" style="width:36%;background:linear-gradient(90deg,#78350f,#92400e);"></div></div></div></div>
+        <div class="card"><div class="card-h"><span class="card-t">Accounts</span></div><div class="acc"><div class="acc-ic" style="background:rgba(251,191,36,0.08);color:#fbbf24;"><i class="ph ph-bank"></i></div><div class="acc-info"><div class="acc-nm">RBC Business Chequing</div><div class="acc-mt">423 txns</div></div><div class="acc-bal p">$42,180</div></div><div class="acc"><div class="acc-ic" style="background:rgba(248,113,113,0.08);color:#f87171;"><i class="ph ph-credit-card"></i></div><div class="acc-info"><div class="acc-nm">BMO Mastercard</div><div class="acc-mt">318 txns</div></div><div class="acc-bal n">-$3,420</div></div><div class="acc"><div class="acc-ic" style="background:rgba(52,211,153,0.08);color:#34d399;"><i class="ph ph-piggy-bank"></i></div><div class="acc-info"><div class="acc-nm">TD Savings</div><div class="acc-mt">506 txns</div></div><div class="acc-bal p">$128,940</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script>
+function show(n){
+  document.querySelectorAll('.variation').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.switch-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('v'+n).classList.add('active');
+  document.querySelector('[data-v="'+n+'"]').classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>

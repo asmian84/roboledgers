@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { UNCATEGORIZED_CODE } from './constants/accounts.js';
 import {
     useReactTable,
     getCoreRowModel,
@@ -123,9 +124,11 @@ const CASEWARE_THEMES = {
         headerFontSize: '12px',
         rowHeight: 56,
         borderColor: '#e4e7eb',
-        hoverBg: '#f0f9ff',
+        hoverBg: '#dbeafe',
         headerBg: '#eff6ff',
-        headerColor: '#3b82f6'
+        headerColor: '#3b82f6',
+        rowBg: '#f0f9ff',
+        rowBgAlt: '#e0f2fe'
     },
     'spectrum': {
         fontFamily: '"Segoe UI", Tahoma, sans-serif',
@@ -133,39 +136,47 @@ const CASEWARE_THEMES = {
         headerFontSize: '11px',
         rowHeight: 50,
         borderColor: '#e9d5ff',
-        hoverBg: '#faf5ff',
+        hoverBg: '#ede9fe',
         headerBg: '#f3e8ff',
-        headerColor: '#7c3aed'
+        headerColor: '#7c3aed',
+        rowBg: '#faf5ff',
+        rowBgAlt: '#f3e8ff'
     },
     'subliminal': {
         fontFamily: 'Georgia, serif',
         cellFontSize: '11.5px',
         headerFontSize: '10.5px',
         rowHeight: 48,
-        borderColor: '#f5f5f4',
-        hoverBg: '#fafaf9',
-        headerBg: '#f5f5f4',
-        headerColor: '#78716c'
+        borderColor: '#e7e5e4',
+        hoverBg: '#f5f5f4',
+        headerBg: '#e7e5e4',
+        headerColor: '#44403c',
+        rowBg: '#fafaf9',
+        rowBgAlt: '#f5f5f4'
     },
     'subtle': {
         fontFamily: 'Inter, sans-serif',
         cellFontSize: '12px',
         headerFontSize: '11px',
         rowHeight: 50,
-        borderColor: '#f1f5f9',
-        hoverBg: '#f8fafc',
+        borderColor: '#e2e8f0',
+        hoverBg: '#e2e8f0',
         headerBg: '#f1f5f9',
-        headerColor: '#64748b'
+        headerColor: '#64748b',
+        rowBg: '#ffffff',
+        rowBgAlt: '#f1f5f9'
     },
     'tracker': {
         fontFamily: '"SF Mono", Monaco, "Cascadia Code", monospace',
         cellFontSize: '11px',
         headerFontSize: '10px',
         rowHeight: 46,
-        borderColor: '#22c55e',
-        hoverBg: '#f0fdf4',
+        borderColor: '#86efac',
+        hoverBg: '#bbf7d0',
         headerBg: '#dcfce7',
-        headerColor: '#15803d'
+        headerColor: '#15803d',
+        rowBg: '#f0fdf4',
+        rowBgAlt: '#dcfce7'
     },
     'vintage': {
         fontFamily: '"Times New Roman", Times, serif',
@@ -173,19 +184,23 @@ const CASEWARE_THEMES = {
         headerFontSize: '11px',
         rowHeight: 50,
         borderColor: '#d4a373',
-        hoverBg: '#fef3e2',
+        hoverBg: '#fde8cc',
         headerBg: '#fde8cc',
-        headerColor: '#92400e'
+        headerColor: '#92400e',
+        rowBg: '#fff8f0',
+        rowBgAlt: '#fef3e2'
     },
     'wave': {
         fontFamily: '"Trebuchet MS", sans-serif',
         cellFontSize: '12px',
         headerFontSize: '11px',
         rowHeight: 52,
-        borderColor: '#a5f3fc',
-        hoverBg: '#cffafe',
-        headerBg: '#ecfeff',
-        headerColor: '#0e7490'
+        borderColor: '#67e8f9',
+        hoverBg: '#a5f3fc',
+        headerBg: '#cffafe',
+        headerColor: '#0e7490',
+        rowBg: '#ecfeff',
+        rowBgAlt: '#cffafe'
     },
     'webapp': {
         fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -193,9 +208,11 @@ const CASEWARE_THEMES = {
         headerFontSize: '12px',
         rowHeight: 54,
         borderColor: '#e5e5e5',
-        hoverBg: '#fafafa',
+        hoverBg: '#e5e5e5',
         headerBg: '#f5f5f5',
-        headerColor: '#525252'
+        headerColor: '#525252',
+        rowBg: '#ffffff',
+        rowBgAlt: '#f5f5f5'
     }
 };
 
@@ -208,44 +225,44 @@ function getActiveTheme() {
 // Dynamic GRID_TOKENS - merges defaults with active theme
 const GRID_TOKENS_BASE = {
     // Typography - Headers
-    headerFontSize: '12px',
+    headerFontSize: '11px',
     headerFontWeight: 600,
-    headerLetterSpacing: '0.04em',
-    headerColor: '#6B7280',
+    headerLetterSpacing: '0.06em',
+    headerColor: '#94a3b8',
     headerHeight: '36px',
 
     // Typography - Cells
-    cellFontSize: '13.5px',
+    cellFontSize: '13px',
     cellFontWeight: 400,
-    cellColor: '#111827',
-    cellLineHeight: '1.3',
+    cellColor: '#1e293b',
+    cellLineHeight: '1.4',
 
     // Typography - Description Line 1 (Payee)
-    descLine1FontSize: '13.5px',
-    descLine1FontWeight: 500,
-    descLine1Color: '#111827',
+    descLine1FontSize: '13px',
+    descLine1FontWeight: 550,
+    descLine1Color: '#0f172a',
 
-    // Typography - Description Line 2 (Type)
-    descLine2FontSize: '12px',
+    // Typography - Description Line 2 (Type/Memo)
+    descLine2FontSize: '11.5px',
     descLine2FontWeight: 400,
-    descLine2Color: '#6B7280',
+    descLine2Color: '#94a3b8',
 
     // Typography - Numbers
-    numberFontSize: '13.5px',
-    numberFontWeight: 500,
+    numberFontSize: '13px',
+    numberFontWeight: 550,
 
     // Row Dimensions
-    rowHeight: 56, // Comfortable density (px)
-    rowPaddingX: '4px',
+    rowHeight: 52, // Comfortable but not bloated
+    rowPaddingX: '6px',
 
     // Colors
-    debitColor: '#111827',
-    creditColor: '#10b981',
-    negativeColor: '#ef4444',
+    debitColor: '#1e293b',
+    creditColor: '#059669',
+    negativeColor: '#dc2626',
     borderColor: '#f1f5f9',
     hoverBg: '#f8fafc',
     rowBg: '#ffffff',        // Even rows
-    rowBgAlt: '#ffffff',     // Odd rows (same for default)
+    rowBgAlt: '#fafbfc',    // Subtle alternating
     selectedRowBg: '#eff6ff',
 };
 
@@ -284,7 +301,6 @@ let GRID_TOKENS = getActiveGridTokens();
 window.recalculateGridTokens = function () {
     GRID_TOKENS = getActiveGridTokens();
     window.GRID_TOKENS = GRID_TOKENS; // Expose for debugging
-    console.log('[GRID_TOKENS] Recalculated for theme:', window.UI_STATE?.gridTheme);
     return GRID_TOKENS;
 };
 
@@ -363,7 +379,6 @@ function DescriptionCell({ row }) {
 
                     if (secondPart) {
                         cleanedValue = `${firstPart}, ${secondPart}`;
-                        console.log('[SMART COMMA] Injected:', cleanedValue);
                     }
                 }
             }
@@ -564,7 +579,7 @@ function CategoryFilter({ column }) {
         >
             <option value="">All</option>
             <option value="UNCATEGORIZED">Uncategorized</option>
-            {categories.filter(cat => cat.code !== '9970').map(cat => (
+            {categories.filter(cat => cat.code !== UNCATEGORIZED_CODE).map(cat => (
                 <option key={cat.code} value={cat.code}>{cat.name}</option>
             ))}
         </select>
@@ -695,26 +710,31 @@ const columns = [
     }),
 
     // 5. Debit
-    columnHelper.accessor('debit', {
+    // ASSET accounts  (chq/sav):   DEBIT = money OUT  → red
+    // LIABILITY accounts (CC):     DEBIT = payment IN → reduces debt → green
+    //   Accounting convention for liability: purchases flow to CREDIT side, payments to DEBIT side.
+    //   Raw parsers store CC purchases as polarity=DEBIT (bank-statement perspective).
+    //   We flip the display: for CC accounts, raw DEBIT (purchase) shows in Credit column; raw CREDIT (payment) shows in Debit column.
+    columnHelper.display({
+        id: 'debit',
         header: 'DEBIT',
-        size: 85,
-        minSize: 75,
-        maxSize: 100,
-        enableColumnFilter: true,
-        filterFn: 'auto',
+        size: 105,
+        minSize: 90,
+        maxSize: 130,
         cell: info => {
-            const val = info.getValue();
             const row = info.row.original;
             const account = window.RoboLedger?.Accounts?.get(row.account_id);
             const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
                 account?.type === 'liability' || account?.type === 'creditcard';
 
-            // Color logic:
-            // - ASSET accounts (chequing/savings): Debits are BAD (withdrawals) = RED
-            // - LIABILITY accounts (credit cards): Debits are GOOD (payments reduce debt) = GREEN
+            // For LIABILITY: Debit column shows raw CREDIT amounts (payment reducing liability = DR the liability)
+            // For ASSET:     Debit column shows raw DEBIT amounts (money out)
+            const val = isLiability ? (row.credit || 0) : (row.debit || 0);
+
+            // Color: payment/debit on liability is GREEN (reduces what you owe), withdrawal on asset is RED
             const color = isLiability ? '#10b981' : '#ef4444';
 
-            return (
+            return val ? (
                 <span
                     className="text-right block"
                     style={{
@@ -726,31 +746,33 @@ const columns = [
                 >
                     {formatCurrency(val)}
                 </span>
-            );
+            ) : <span className="text-right block" style={{ color: '#cbd5e1' }}>—</span>;
         }
     }),
 
     // 6. Credit
-    columnHelper.accessor('credit', {
+    // ASSET accounts  (chq/sav):   CREDIT = money IN  → green
+    // LIABILITY accounts (CC):     CREDIT = purchase  → increases debt → red
+    columnHelper.display({
+        id: 'credit',
         header: 'CREDIT',
-        size: 85,
-        minSize: 75,
-        maxSize: 100,
-        enableColumnFilter: true,
-        filterFn: 'auto',
+        size: 105,
+        minSize: 90,
+        maxSize: 130,
         cell: info => {
-            const val = info.getValue();
             const row = info.row.original;
             const account = window.RoboLedger?.Accounts?.get(row.account_id);
             const isLiability = (account?.accountType || '').toLowerCase() === 'creditcard' ||
                 account?.type === 'liability' || account?.type === 'creditcard';
 
-            // Color logic:
-            // - ASSET accounts (chequing/savings): Credits are GOOD (deposits) = GREEN
-            // - LIABILITY accounts (credit cards): Credits are BAD (charges increase debt) = RED
+            // For LIABILITY: Credit column shows raw DEBIT amounts (purchase increasing liability = CR the liability)
+            // For ASSET:     Credit column shows raw CREDIT amounts (money in)
+            const val = isLiability ? (row.debit || 0) : (row.credit || 0);
+
+            // Color: purchase/credit on liability is RED (you owe more), deposit on asset is GREEN
             const color = isLiability ? '#ef4444' : '#10b981';
 
-            return (
+            return val ? (
                 <span
                     className="text-right block"
                     style={{
@@ -762,16 +784,16 @@ const columns = [
                 >
                     {formatCurrency(val)}
                 </span>
-            );
+            ) : <span className="text-right block" style={{ color: '#cbd5e1' }}>—</span>;
         }
     }),
 
     //7. Account (COA Dropdown)
     columnHelper.accessor('category', {
         header: 'ACCOUNT',
-        size: 160,
-        minSize: 150,
-        maxSize: 200,
+        size: 230,
+        minSize: 210,
+        maxSize: 320,
         enableColumnFilter: true,
         filterFn: (row, columnId, filterValue) => {
             const categoryValue = row.getValue(columnId);
@@ -820,9 +842,9 @@ const columns = [
     columnHelper.display({
         id: 'balance',
         header: 'BALANCE',
-        size: 85,  // Wide enough for full balance numbers
-        minSize: 80,
-        maxSize: 100,
+        size: 110,  // Wide enough for large balances e.g. $12,345.67
+        minSize: 100,
+        maxSize: 140,
         cell: info => {
             // Get the sorted rows to calculate running balance
             const sortedRows = info.table.getRowModel().rows;
@@ -870,21 +892,39 @@ const columns = [
     // Optional: Sales Tax (GST/HST)
     columnHelper.accessor('tax_cents', {
         header: 'GST/HST',
-        size: 75,
+        size: 80,
         minSize: 70,
         maxSize: 100,
         cell: info => {
             const val = info.getValue();
             const row = info.row.original;
 
-            // Auto-calculate tax if column is visible and province set
+            // No GST on financial / pass-through transactions:
+            //   CC payments, bank transfers, interest income/expense, refunds, cash back,
+            //   dividends, insurance, payroll, e-transfer rounded amounts, inter-bank
+            const noGSTCategories = ['9971', '9970', '7700', '7000', '4900', '4800', '8100'];
+            const desc = (row.raw_description || row.payee || '').toUpperCase();
+            const amount = row.debit || row.credit || 0;
+            // Rounded amount heuristic: amounts like $1500.00, $250.00 — no cents → likely non-taxable
+            const isRoundedAmount = amount > 0 && amount % 100 === 0 && amount >= 5000; // >= $50.00, no cents
+            const isFinancialTx = /\bPAYMENT\b|\bINTEREST\b|\bTRANSFER\b|\bCASH\s*BACK\b|\bREFUND\b|\bREBATE\b|\bDIVIDEND\b|\bINSURANCE\b|\bPAYROLL\b|\bSALARY\b|\bWAGE\b|\bT4\b/.test(desc)
+                || noGSTCategories.includes(row.category)
+                || (row._isCCPayment)
+                || (row._isCashBack)
+                || (row._isBankRebate)
+                || (row.transaction_type_label || '').includes('e-transfer') && isRoundedAmount;
+
+            if (isFinancialTx) {
+                return <span className="text-right block" style={{ color: '#cbd5e1', fontSize: GRID_TOKENS.numberFontSize }}>—</span>;
+            }
+
+            // Auto-calculate tax if not already stored
             let displayValue = val;
             if (!val || val === 0) {
-                const province = window.UI_STATE?.province;
+                const province = window.UI_STATE?.province || 'AB';
                 const amount = row.debit || row.credit || 0;
                 if (province && amount) {
-                    const calculatedTax = calculateTax(amount, province);
-                    displayValue = calculatedTax;
+                    displayValue = calculateTax(amount, province);
                 }
             }
 
@@ -894,11 +934,11 @@ const columns = [
                     style={{
                         fontSize: GRID_TOKENS.numberFontSize,
                         fontWeight: GRID_TOKENS.numberFontWeight,
-                        color: GRID_TOKENS.numberColor,
+                        color: '#64748b',
                         fontVariantNumeric: 'tabular-nums'
                     }}
                 >
-                    {displayValue ? `$${(displayValue / 100).toFixed(2)}` : '-'}
+                    {displayValue ? `$${(displayValue / 100).toFixed(2)}` : '—'}
                 </span>
             );
         }
@@ -915,7 +955,8 @@ export function TransactionsTable({
     gridTheme = 'default',
     gridFontSize = 13.5,
     gridDensity = 'comfortable',
-    columnVisibility: initialColumnVisibility = { tax_cents: true }
+    columnVisibility: initialColumnVisibility = { tax_cents: false },
+    initialCategoryFilter = null,   // Persisted drill-down filter (category COA code)
 }) {
     // CRITICAL: Update UI_STATE with new theme values
     if (window.UI_STATE) {
@@ -939,9 +980,6 @@ export function TransactionsTable({
         GRID_TOKENS.rowHeight = rowHeights[gridDensity];
     }
 
-    console.log('[TRANSACTIONS_TABLE] Rendering with theme:', gridTheme, 'fontSize:', gridFontSize, 'density:', gridDensity, 'rowHeight:', GRID_TOKENS.rowHeight);
-
-
     const [data, setData] = useState(initialData || []);
     const [sorting, setSorting] = useState([{ id: 'date', desc: true }]);
     const [columnVisibility, setColumnVisibility] = useState(initialColumnVisibility); // Use prop or default
@@ -950,15 +988,19 @@ export function TransactionsTable({
     const [density] = useState('comfortable'); // Fixed at comfortable for now
 
     // INLINE FILTERS: State for column-specific filters
-    const [columnFilters, setColumnFilters] = useState([]);
+    // Initialise from persisted drill-down filter if provided (survives re-renders)
+    const [columnFilters, setColumnFilters] = useState(
+        initialCategoryFilter ? [{ id: 'category', value: initialCategoryFilter }] : []
+    );
     const [showFilters, setShowFilters] = useState(false);
 
     // EXPERIMENTAL: Audit sidebar state
     const [auditSidebarOpen, setAuditSidebarOpen] = useState(false);
     const [selectedAuditTransaction, setSelectedAuditTransaction] = useState(null);
 
-    // PANEL SYSTEM: Mutual exclusion - only one panel at a time (null | 'utility' | 'report')
-    const [activePanel, setActivePanel] = useState(null);
+    // PANEL SYSTEM: Tab-based side panel
+    const [isPanelOpen, setIsPanelOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'trial-balance'
 
     // SYNC: Update data when prop changes (for account switching)
     useEffect(() => {
@@ -974,31 +1016,17 @@ export function TransactionsTable({
     useEffect(() => {
         const handleSidebarCollapse = (e) => {
             const isCollapsed = e.detail?.isCollapsed ?? false;
-            console.log('[DETAIL_MODE] Sidebar collapsed event received:', isCollapsed);
-            console.log('[DETAIL_MODE] Current activePanel:', activePanel);
 
             if (isCollapsed) {
-                // DETAIL MODE ON: Open utility bar automatically
-                console.log('[DETAIL_MODE] Activating utility panel');
-                setActivePanel('utility');
-
-                // Auto-scroll to FilterToolbar (hide reconciliation/metadata)
-                console.log('[DETAIL_MODE] Auto-scrolling to FilterToolbar');
+                // DETAIL MODE ON: Open panel with dashboard tab + scroll to top
+                setIsPanelOpen(true);
+                setActiveTab('dashboard');
                 if (parentRef.current) {
-                    setTimeout(() => {
-                        const headerCards = parentRef.current.querySelectorAll('.batch-action-bar, .reconciliation-container, .metadata-container');
-                        let scrollAmount = 0;
-                        headerCards.forEach(card => {
-                            scrollAmount += card.offsetHeight;
-                        });
-                        console.log('[DETAIL_MODE] Scroll amount calculated:', scrollAmount);
-                        parentRef.current.scrollTo({ top: scrollAmount || 250, behavior: 'smooth' });
-                    }, 100);
+                    parentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
                 }
             } else {
-                // DETAIL MODE OFF: Close all panels
-                console.log('[DETAIL_MODE] Deactivating all panels');
-                setActivePanel(null);
+                // DETAIL MODE OFF: Close panel
+                setIsPanelOpen(false);
             }
         };
 
@@ -1013,73 +1041,93 @@ export function TransactionsTable({
     /**
      * Auto-categorize selected transactions using RuleEngine
      */
+    const [bulkCOA, setBulkCOA] = useState('');
+    const [showBulkCOAPicker, setShowBulkCOAPicker] = useState(false);
+    const [showBulkRename, setShowBulkRename] = useState(false);
+    const [bulkRenameValue, setBulkRenameValue] = useState('');
+
+    const getSelectedTxs = () =>
+        Object.keys(rowSelection)
+            .map(id => window.RoboLedger?.Ledger?.get(id))
+            .filter(Boolean);
+
     const handleBulkCategorize = () => {
         const selectedTxIds = Object.keys(rowSelection);
         if (selectedTxIds.length === 0) return;
+        const selectedTxs = getSelectedTxs();
+        if (selectedTxs.length === 0) return alert('No valid transactions selected');
 
-        // Get selected transactions
-        const selectedTxs = selectedTxIds
-            .map(id => window.RoboLedger?.Ledger?.transactions[id])
-            .filter(Boolean);
-
-        if (selectedTxs.length === 0) {
-            alert('No valid transactions selected');
-            return;
-        }
-
-        // Use RuleEngine to bulk categorize
+        // Use RuleEngine to auto-categorize
         const results = window.RoboLedger?.RuleEngine?.bulkCategorize(selectedTxs);
-
         if (results) {
-            // Show results
-            const message = `✅ Categorized ${results.categorized}/${selectedTxs.length} transactions`;
-            console.log('[BULK_CATEGORIZE]', message, results);
-
-            // Show toast if available
-            if (window.showToast) {
-                window.showToast(message, 'success');
-            } else {
-                alert(message);
-            }
-
-            // Clear selection
+            if (window.showToast) window.showToast(`✅ Categorized ${results.categorized}/${selectedTxs.length} transactions`, 'success');
             setRowSelection({});
-
-            // Force re-render
-            setData([...data]);
+            setData([...(window.RoboLedger?.Ledger?.getAll() || data)]);
+            if (window.updateWorkspace) window.updateWorkspace();
         } else {
-            alert('Bulk categorization failed - RuleEngine not available');
+            alert('Bulk categorization failed — RuleEngine not available');
         }
     };
 
-    /**
-     * Delete selected transactions
-     */
+    const handleBulkSetCOA = (code) => {
+        if (!code) return;
+        const selectedTxs = getSelectedTxs();
+        let updated = 0;
+        selectedTxs.forEach(tx => {
+            if (window.RoboLedger?.Ledger?.updateCategory) {
+                window.RoboLedger.Ledger.updateCategory(tx.tx_id, code);
+                updated++;
+            }
+        });
+        const coaName = window.RoboLedger?.COA?.get(code)?.name || code;
+        if (window.showToast) window.showToast(`✅ Set ${updated} transactions → ${coaName}`, 'success');
+        setShowBulkCOAPicker(false);
+        setBulkCOA('');
+        setRowSelection({});
+        setData([...(window.RoboLedger?.Ledger?.getAll() || data)]);
+        if (window.updateWorkspace) window.updateWorkspace();
+    };
+
+    const handleBulkRename = () => {
+        if (!bulkRenameValue.trim()) return;
+        const selectedTxs = getSelectedTxs();
+        let updated = 0;
+        selectedTxs.forEach(tx => {
+            if (window.RoboLedger?.Ledger?.update) {
+                window.RoboLedger.Ledger.update(tx.tx_id, { payee: bulkRenameValue.trim(), raw_description: bulkRenameValue.trim() });
+                updated++;
+            }
+        });
+        if (window.showToast) window.showToast(`✅ Renamed ${updated} transactions`, 'success');
+        setShowBulkRename(false);
+        setBulkRenameValue('');
+        setRowSelection({});
+        setData([...(window.RoboLedger?.Ledger?.getAll() || data)]);
+    };
+
+    const handleAddRow = () => {
+        const accId = window.UI_STATE?.selectedAccount;
+        if (!accId || accId === 'ALL') return alert('Select a specific account first to add a row.');
+        if (window.RoboLedger?.Ledger?.createManual) {
+            window.RoboLedger.Ledger.createManual(accId);
+            setData([...(window.RoboLedger?.Ledger?.getAll() || data)]);
+            if (window.updateWorkspace) window.updateWorkspace();
+        }
+    };
+
     const handleBulkDelete = () => {
         const selectedTxIds = Object.keys(rowSelection);
         if (selectedTxIds.length === 0) return;
+        if (!confirm(`Delete ${selectedTxIds.length} selected transaction${selectedTxIds.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
 
-        if (!confirm(`Delete ${selectedTxIds.length} selected transactions? This cannot be undone.`)) {
-            return;
-        }
-
-        // Delete each transaction
         let deleted = 0;
         selectedTxIds.forEach(txId => {
-            if (window.RoboLedger?.Ledger?.deleteTransaction?.(txId)) {
-                deleted++;
-            }
+            if (window.RoboLedger?.Ledger?.deleteTransaction?.(txId)) deleted++;
         });
-
-        console.log(`[BULK_DELETE] Deleted ${deleted}/${selectedTxIds.length} transactions`);
-
-        // Clear selection
         setRowSelection({});
-
-        // Force re-render by updating data
-        if (window.RoboLedger?.Ledger) {
-            setData(window.RoboLedger.Ledger.getAllTransactions());
-        }
+        if (window.RoboLedger?.Ledger) setData(window.RoboLedger.Ledger.getAll());
+        if (window.updateWorkspace) window.updateWorkspace();
+        if (window.showToast) window.showToast(`🗑 Deleted ${deleted} transaction${deleted !== 1 ? 's' : ''}`, 'info');
     };
 
     // Expose column visibility control to window (for settings drawer)
@@ -1091,19 +1139,8 @@ export function TransactionsTable({
             }));
         };
 
-        // EXPERIMENTAL: Expose audit sidebar function
+        // Expose audit sidebar function
         window.openAuditSidebar = (row) => {
-            const gridContainer = parentRef.current;
-            if (gridContainer) {
-                const scrollTop = gridContainer.scrollTop;
-                const topBarHeight = 280;
-                if (scrollTop < topBarHeight) {
-                    gridContainer.scrollTo({
-                        top: topBarHeight,
-                        behavior: 'smooth'
-                    });
-                }
-            }
             setSelectedAuditTransaction(row);
             setAuditSidebarOpen(true);
         };
@@ -1176,9 +1213,8 @@ export function TransactionsTable({
     useEffect(() => {
         const handleSidebarToggle = (event) => {
             const collapsed = event.detail?.isCollapsed;
-            if (isCollapsed !== undefined) {
-                setIsDetailMode(isCollapsed);
-                console.log('[MODE] Detail mode:', isCollapsed ? 'ON' : 'OFF');
+            if (collapsed !== undefined) {
+                setIsDetailMode(collapsed);
             }
         };
 
@@ -1186,22 +1222,17 @@ export function TransactionsTable({
         return () => window.removeEventListener('sidebarCollapsed', handleSidebarToggle);
     }, []);
 
-    // Reset panel when exiting detail mode
+    // Close panel when exiting detail mode
     useEffect(() => {
-        if (!isDetailMode && activePanel) {
-            setActivePanel(null); // Close panel when leaving detail mode
+        if (!isDetailMode && isPanelOpen) {
+            setIsPanelOpen(false);
         }
     }, [isDetailMode]);
 
-    // Auto-scroll to FilterToolbar when entering detail mode
+    // Scroll to top when entering detail mode (workspace header hidden via CSS)
     useEffect(() => {
         if (isDetailMode && parentRef.current) {
-            setTimeout(() => {
-                const stickyToolbar = parentRef.current?.querySelector('[style*="sticky"]');
-                if (stickyToolbar) {
-                    stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }, 100);
+            parentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }, [isDetailMode]);
 
@@ -1234,7 +1265,7 @@ export function TransactionsTable({
             {/* 77% GRID SECTION */}
             <div
                 style={{
-                    width: isDetailMode && activePanel ? '77%' : '100%',  // 77% only in detail mode with panel
+                    width: isDetailMode && isPanelOpen ? '77%' : '100%',  // 77% only in detail mode with panel
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
@@ -1244,30 +1275,110 @@ export function TransactionsTable({
                     boxSizing: 'border-box'  // Prevent width bleeding
                 }}
             >
-                {/* Batch Action Bar */}
+                {/* Bulk Action Bar — appears when rows are selected */}
                 {Object.keys(rowSelection).length > 0 && (
-                    <div className="flex items-center px-6 py-3 bg-blue-50 border-b border-blue-100 z-30">
-                        <span className="text-sm font-bold text-blue-900">{Object.keys(rowSelection).length} selected</span>
-                        <div className="ml-auto flex items-center gap-2">
-                            <button
-                                onClick={handleBulkCategorize}
-                                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                            >
-                                Categorize
-                            </button>
-                            <button className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">Match</button>
-                            <button
-                                onClick={handleBulkDelete}
-                                className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-white border border-red-300 rounded hover:bg-red-50"
-                            >
-                                Delete
-                            </button>
-                            <button onClick={() => setRowSelection({})} className="ml-2 p-1.5 text-gray-500 hover:text-gray-700">
-                                <i className="ph ph-x text-sm"></i>
+                    <div style={{ position: 'relative', zIndex: 40 }}>
+                        <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ background: '#1e40af', borderColor: '#1d4ed8' }}>
+                            {/* Count badge */}
+                            <div style={{ background: 'white', color: '#1e40af', fontWeight: 800, fontSize: '12px', padding: '2px 10px', borderRadius: '12px', whiteSpace: 'nowrap' }}>
+                                {Object.keys(rowSelection).length} selected
+                            </div>
+
+                            <div className="flex items-center gap-1 ml-2">
+                                {/* Auto-categorize */}
+                                <button onClick={handleBulkCategorize} title="AI auto-categorize selected"
+                                    style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-robot" style={{ fontSize: '13px' }}></i> Auto-Cat
+                                </button>
+
+                                {/* Set COA (Account) */}
+                                <button onClick={() => { setShowBulkCOAPicker(p => !p); setShowBulkRename(false); }} title="Set account for all selected"
+                                    style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-tag" style={{ fontSize: '13px' }}></i> Set Account
+                                </button>
+
+                                {/* Rename */}
+                                <button onClick={() => { setShowBulkRename(p => !p); setShowBulkCOAPicker(false); }} title="Rename/re-describe selected"
+                                    style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-pencil-simple" style={{ fontSize: '13px' }}></i> Rename
+                                </button>
+
+                                {/* Add row */}
+                                <button onClick={handleAddRow} title="Add blank row to current account"
+                                    style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-plus" style={{ fontSize: '13px' }}></i> Add Row
+                                </button>
+
+                                {/* Delete */}
+                                <button onClick={handleBulkDelete} title="Delete selected transactions"
+                                    style={{ padding: '5px 10px', background: 'rgba(239,68,68,0.25)', color: '#fecaca', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <i className="ph ph-trash" style={{ fontSize: '13px' }}></i> Delete
+                                </button>
+                            </div>
+
+                            <button onClick={() => setRowSelection({})} title="Clear selection"
+                                style={{ marginLeft: 'auto', padding: '4px 8px', background: 'transparent', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}>
+                                <i className="ph ph-x"></i>
                             </button>
                         </div>
+
+                        {/* COA Picker sub-bar */}
+                        {showBulkCOAPicker && (
+                            <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>Set Account:</span>
+                                <select
+                                    value={bulkCOA}
+                                    onChange={e => setBulkCOA(e.target.value)}
+                                    style={{ flex: 1, maxWidth: '320px', padding: '4px 8px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
+                                >
+                                    <option value="">— Choose COA account —</option>
+                                    {(window.RoboLedger?.COA?.getAll() || []).map(a => (
+                                        <option key={a.code} value={a.code}>{a.code} · {a.name}</option>
+                                    ))}
+                                </select>
+                                <button onClick={() => handleBulkSetCOA(bulkCOA)} disabled={!bulkCOA}
+                                    style={{ padding: '5px 14px', background: '#1e40af', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: bulkCOA ? 'pointer' : 'not-allowed', opacity: bulkCOA ? 1 : 0.5 }}>
+                                    Apply
+                                </button>
+                                <button onClick={() => setShowBulkCOAPicker(false)} style={{ padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px' }}>
+                                    <i className="ph ph-x"></i>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Rename sub-bar */}
+                        {showBulkRename && (
+                            <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>New name:</span>
+                                <input
+                                    type="text"
+                                    value={bulkRenameValue}
+                                    onChange={e => setBulkRenameValue(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleBulkRename()}
+                                    placeholder="e.g. Costco Wholesale"
+                                    style={{ flex: 1, maxWidth: '320px', padding: '4px 10px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
+                                    autoFocus
+                                />
+                                <button onClick={handleBulkRename} disabled={!bulkRenameValue.trim()}
+                                    style={{ padding: '5px 14px', background: '#1e40af', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: bulkRenameValue.trim() ? 'pointer' : 'not-allowed', opacity: bulkRenameValue.trim() ? 1 : 0.5 }}>
+                                    Rename All
+                                </button>
+                                <button onClick={() => setShowBulkRename(false)} style={{ padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px' }}>
+                                    <i className="ph ph-x"></i>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
+
+                {/* Add Row button (always visible in bottom corner) */}
+                <button onClick={handleAddRow} title="Add blank row to current account"
+                    style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 50, width: '44px', height: '44px', borderRadius: '50%', background: '#1e40af', color: 'white', border: 'none', boxShadow: '0 4px 12px rgba(30,64,175,0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}
+                    onMouseOver={e => e.currentTarget.style.background = '#1d4ed8'}
+                    onMouseOut={e => e.currentTarget.style.background = '#1e40af'}
+                >
+                    <i className="ph ph-plus"></i>
+                </button>
 
                 {/* SCROLL CONTAINER - wraps metadata + toolbar + grid */}
                 <div
@@ -1279,14 +1390,18 @@ export function TransactionsTable({
                         position: 'relative'
                     }}
                 >
-                    {/* Metadata Cards - scrolls away */}
-                    {!isLoading && data.length > 0 && (
-                        <MetadataCards
-                            totalCount={data.length}
-                            totalAmount={data.reduce((sum, tx) => sum + Math.abs((tx.amount_cents || 0)), 0) / 100}
-                            dateRange={getDateRange(data)}
-                            categoryBreakdown={getCategoryBreakdown(data)}
-                        />
+                    {/* Metadata summary - compact stats strip */}
+                    {data.length > 0 && !isDetailMode && (
+                        <div style={{
+                            display: 'flex', gap: '16px', padding: '6px 16px',
+                            fontSize: '11px', color: '#9ca3af', borderBottom: '1px solid #f3f4f6',
+                            background: '#fafbfc'
+                        }}>
+                            <span><strong style={{ color: '#6b7280' }}>{data.length.toLocaleString()}</strong> transactions</span>
+                            <span>Total: <strong style={{ color: '#6b7280' }}>{new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(
+                                data.reduce((sum, tx) => sum + Math.abs((tx.amount_cents || 0)), 0) / 100
+                            )}</strong></span>
+                        </div>
                     )}
 
                     {/* Filter Toolbar - STICKY within scroll container */}
@@ -1294,41 +1409,15 @@ export function TransactionsTable({
                         showFilters={showFilters}
                         onToggleFilters={() => setShowFilters(prev => !prev)}
                         onToggleSettings={() => window.toggleSettings?.(true)}
-                        isDetailMode={isDetailMode}  // Pass mode to control toggle visibility
-                        onToggleReportPanel={() => {
-                            const newPanel = activePanel === 'report' ? null : 'report';
-                            setActivePanel(newPanel);
-
-                            // Auto-scroll to FilterToolbar (hide pink box)
-                            if (newPanel && parentRef.current) {
-                                setTimeout(() => {
-                                    const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
-                                    if (stickyToolbar) {
-                                        stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                    }
-                                }, 350); // Wait for transition
-                            }
-                        }}
-                        onToggleUtilityBar={() => {
-                            const newPanel = activePanel === 'utility' ? null : 'utility';
-                            setActivePanel(newPanel);
-
-                            // Auto-scroll to FilterToolbar (hide pink box)
-                            if (newPanel && parentRef.current) {
-                                setTimeout(() => {
-                                    const stickyToolbar = parentRef.current.querySelector('[style*="sticky"]');
-                                    if (stickyToolbar) {
-                                        stickyToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                    }
-                                }, 350); // Wait for transition
-                            }
-                        }}
+                        isDetailMode={isDetailMode}
+                        isPanelOpen={isPanelOpen}
+                        onTogglePanel={() => setIsPanelOpen(prev => !prev)}
                         onExport={(format) => window.TransactionExporter?.exportCurrentView(format)}
                     />
                 </div>
 
                 {/* Grid Header */}
-                <div className="flex bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-[44px] z-20">
+                <div className="flex bg-[#fafbfc] border-b border-[#e5e7eb] sticky top-[42px] z-20">
                     {table.getFlatHeaders().map(header => (
                         <div
                             key={header.id}
@@ -1340,9 +1429,10 @@ export function TransactionsTable({
                                 flexShrink: 0,
                                 height: GRID_TOKENS.headerHeight,
                                 // Custom padding per column (match cell padding)
-                                padding: header.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
-                                    header.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                        `0 ${GRID_TOKENS.rowPaddingX}`,           // Others: default
+                                padding: header.id === 'select' ? '0' :
+                                    header.id === 'balance' ? '0 8px 0 4px' :
+                                        `0 ${GRID_TOKENS.rowPaddingX}`,
+                                justifyContent: header.id === 'select' ? 'center' : undefined,
                                 fontSize: GRID_TOKENS.headerFontSize,
                                 fontWeight: GRID_TOKENS.headerFontWeight,
                                 letterSpacing: GRID_TOKENS.headerLetterSpacing,
@@ -1372,7 +1462,7 @@ export function TransactionsTable({
 
                 {/* Inline Filters Row - Collapsible */}
                 {showFilters && (
-                    <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[88px] z-19" style={{ transition: 'all 0.2s ease' }}>
+                    <div className="flex bg-[#FFF9C4] border-b border-[#fde047] sticky top-[78px] z-19" style={{ transition: 'all 0.2s ease' }}>
                         {table.getFlatHeaders().map(header => (
                             <div
                                 key={`filter-${header.id}`}
@@ -1382,9 +1472,9 @@ export function TransactionsTable({
                                     flex: header.id === 'description' ? '1 1 0' : undefined,
                                     minWidth: header.id === 'description' ? '250px' : undefined,
                                     flexShrink: 0,
-                                    height: '40px',
-                                    padding: header.id === 'select' ? '0 4px 0 6px' :
-                                        header.id === 'balance' ? '0 6px 0 2px' :
+                                    height: '36px',
+                                    padding: header.id === 'select' ? '0 4px 0 8px' :
+                                        header.id === 'balance' ? '0 8px 0 4px' :
                                             `0 ${GRID_TOKENS.rowPaddingX}`,
                                     borderRight: `1px solid ${GRID_TOKENS.borderColor}`
                                 }}
@@ -1456,10 +1546,10 @@ export function TransactionsTable({
                                                     flex: cell.column.id === 'description' ? '1 1 0' : undefined,
                                                     minWidth: cell.column.id === 'description' ? '250px' : undefined,
                                                     flexShrink: 0,
-                                                    // Custom padding per column - flush left
-                                                    padding: cell.column.id === 'select' ? '0 4px 0 6px' :  // Checkbox: 6px left (symmetric)
-                                                        cell.column.id === 'balance' ? '0 6px 0 2px' :   // Balance: 6px right (SYMMETRIC)
-                                                            '0 8px 0 2px',                               // Others: minimal left, standard right
+                                                    padding: cell.column.id === 'select' ? '0' :
+                                                        cell.column.id === 'balance' ? '0 8px 0 4px' :
+                                                            `0 ${GRID_TOKENS.rowPaddingX}`,
+                                                    justifyContent: cell.column.id === 'select' ? 'center' : undefined,
                                                     borderRight: `1px solid ${GRID_TOKENS.borderColor}`,
                                                     position: cell.column.id === 'category' ? 'relative' : undefined
                                                 }}
@@ -1493,65 +1583,97 @@ export function TransactionsTable({
                 />
             </div>
 
-            {/* 23% SIDE PANEL - DETAIL MODE ONLY */}
-            {isDetailMode && activePanel && (
+            {/* TABBED SIDE PANEL — Detail mode only */}
+            {isDetailMode && isPanelOpen && (
                 <div
                     style={{
                         width: '23%',
                         height: '100%',
-                        borderLeft: '2px solid #e5e7eb',
-                        backgroundColor: '#ffffff',
-                        overflow: 'auto',
-                        padding: '16px',
+                        borderLeft: '1px solid #e5e7eb',
+                        backgroundColor: '#fafbfc',
+                        display: 'flex',
+                        flexDirection: 'column',
                         boxSizing: 'border-box',
-                        boxShadow: '-2px 0 8px rgba(0, 0, 0, 0.05)'
                     }}
                 >
-                    {/* Close Button */}
-                    <button
-                        onClick={() => setActivePanel(null)}
-                        style={{
-                            position: 'absolute',
-                            top: '16px',
-                            right: '16px',
-                            padding: '8px',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#6b7280',
-                            borderRadius: '8px',
-                            transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.target.style.backgroundColor = '#f3f4f6';
-                            e.target.style.color = '#374151';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.target.style.backgroundColor = 'transparent';
-                            e.target.style.color = '#6b7280';
-                        }}
-                        title="Close panel"
-                    >
-                        <i className="ph ph-x" style={{ fontSize: '20px' }}></i>
-                    </button>
+                    {/* Tab Bar */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        borderBottom: '1px solid #e5e7eb',
+                        background: '#ffffff',
+                        padding: '0 4px',
+                        minHeight: '38px',
+                        gap: '0',
+                    }}>
+                        {[
+                            { id: 'dashboard', icon: 'ph-squares-four', label: 'Dashboard' },
+                            { id: 'trial-balance', icon: 'ph-scales', label: 'Trial Balance' },
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '8px 10px',
+                                    fontSize: '11px',
+                                    fontWeight: activeTab === tab.id ? 600 : 500,
+                                    color: activeTab === tab.id ? '#4f46e5' : '#9ca3af',
+                                    background: 'none',
+                                    border: 'none',
+                                    borderBottom: activeTab === tab.id ? '2px solid #4f46e5' : '2px solid transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                <i className={`ph ${tab.icon}`} style={{ fontSize: '13px' }}></i>
+                                {tab.label}
+                            </button>
+                        ))}
+                        {/* Close button */}
+                        <button
+                            onClick={() => setIsPanelOpen(false)}
+                            style={{
+                                marginLeft: 'auto',
+                                padding: '4px 6px',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#9ca3af',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                            }}
+                            title="Close panel"
+                        >
+                            <i className="ph ph-x" style={{ fontSize: '14px' }}></i>
+                        </button>
+                    </div>
 
-                    {/* Panel Content */}
-                    {activePanel === 'utility' && <UtilityBar transactions={data} />}
-                    {activePanel === 'report' && (
-                        <LiveReportPanel
-                            reportType="trial-balance"
-                            transactions={data}
-                            selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
-                            onAccountClick={(accountCode) => {
-                                // Set category column filter
-                                setColumnFilters([{ id: 'category', value: accountCode }]);
-                            }}
-                            onClearFilter={() => {
-                                // Clear category column filter
-                                setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
-                            }}
-                        />
-                    )}
+                    {/* Tab Content */}
+                    <div style={{ flex: 1, overflow: 'auto', padding: activeTab === 'trial-balance' ? '0' : '16px' }}>
+                        {activeTab === 'dashboard' && <UtilityBar transactions={data} />}
+                        {activeTab === 'trial-balance' && (
+                            <LiveReportPanel
+                                reportType="trial-balance"
+                                transactions={data}
+                                selectedAccount={columnFilters.find(f => f.id === 'category')?.value || null}
+                                onAccountClick={(accountCode) => {
+                                    // Persist to UI_STATE so it survives the next renderTransactionsGrid() call
+                                    if (window.UI_STATE) window.UI_STATE.activeCategoryFilter = accountCode;
+                                    setColumnFilters([{ id: 'category', value: accountCode }]);
+                                }}
+                                onClearFilter={() => {
+                                    // Clear persisted filter too
+                                    if (window.UI_STATE) window.UI_STATE.activeCategoryFilter = null;
+                                    setColumnFilters(filters => filters.filter(f => f.id !== 'category'));
+                                }}
+                            />
+                        )}
+                    </div>
                 </div>
             )}
         </div>

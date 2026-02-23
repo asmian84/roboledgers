@@ -18,10 +18,25 @@ import { PDFSnippet } from './PDFSnippet';
 
 export function AuditSidebar({ isOpen, onClose, transaction }) {
     const [showDocViewer, setShowDocViewer] = useState(false);
-    const [showLeftPanel, setShowLeftPanel] = useState(false); // NEW: Left slide-out panel
-    const [viewerDocument, setViewerDocument] = useState(null); // {type, url, name}
+    const [showLeftPanel, setShowLeftPanel] = useState(false);
+    const [viewerDocument, setViewerDocument] = useState(null);
     const [receipts, setReceipts] = useState([]);
+    const [gstDrill, setGstDrill] = useState(null); // null = summary, 'collected'|'paid' = drilled
     const sidebarRef = React.useRef(null);
+
+    // Reset GST drill when transaction changes
+    useEffect(() => { setGstDrill(null); }, [transaction?.tx_id]);
+
+    // Load receipts from storage when transaction changes
+    useEffect(() => {
+        if (!transaction?.tx_id) { setReceipts([]); return; }
+        try {
+            const _SS = window.StorageService;
+            const stored = _SS ? _SS.get(`rl_receipts_${transaction.tx_id}`) : localStorage.getItem(`rl_receipts_${transaction.tx_id}`);
+            if (!stored) { setReceipts([]); return; }
+            setReceipts((typeof stored === 'string') ? JSON.parse(stored) : stored);
+        } catch { setReceipts([]); }
+    }, [transaction?.tx_id]);
 
     // Auto-scroll to sidebar when opened
     useEffect(() => {
@@ -56,15 +71,6 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
 
     if (!isOpen || !transaction) return null;
 
-    // DEBUG: Log transaction structure for source PDF investigation
-    console.log('[AUDIT_SIDEBAR] Transaction object:', transaction);
-    console.log('[AUDIT_SIDEBAR] Has source_pdf?', !!transaction.source_pdf);
-    console.log('[AUDIT_SIDEBAR] source_pdf:', transaction.source_pdf);
-    console.log('[AUDIT_SIDEBAR] Has pdfLocation?', !!transaction.pdfLocation);
-    console.log('[AUDIT_SIDEBAR] pdfLocation:', transaction.pdfLocation);
-    console.log('[AUDIT_SIDEBAR] Has audit?', !!transaction.audit);
-    console.log('[AUDIT_SIDEBAR] audit:', transaction.audit);
-
     const handleViewSourceDocument = () => {
         // NO FALLBACK - show error if no PDF
         if (!transaction.source_pdf?.url) {
@@ -98,11 +104,66 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
     };
 
     const handleUploadReceipt = (e) => {
-        const files = e.target.files;
-        if (files && files.length > 0) {
-            // TODO: Handle file upload
-            console.log('Upload receipt:', files[0]);
-        }
+        const files = Array.from(e.target.files || []);
+        if (!files.length || !transaction?.tx_id) return;
+
+        const readers = files.map(file => new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const dataUrl = ev.target.result;
+                const ext = file.name.split('.').pop().toLowerCase();
+                const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+                resolve({
+                    filename: file.name,
+                    type: ext === 'pdf' ? 'pdf' : (isImage ? ext : 'file'),
+                    url: dataUrl,
+                    // Thumbnail: use dataUrl for images, placeholder icon for PDF/other
+                    thumbnail: isImage ? dataUrl : null,
+                    size: file.size,
+                    uploadedAt: new Date().toISOString(),
+                });
+            };
+            reader.readAsDataURL(file);
+        }));
+
+        Promise.all(readers).then(newReceipts => {
+            setReceipts(prev => {
+                const updated = [...prev, ...newReceipts];
+                try {
+                    const _SS = window.StorageService;
+                    if (_SS) { _SS.set(`rl_receipts_${transaction.tx_id}`, updated); }
+                    else { localStorage.setItem(`rl_receipts_${transaction.tx_id}`, JSON.stringify(updated)); }
+                } catch (err) {
+                    console.warn('[AuditSidebar] Could not persist receipts:', err);
+                }
+                return updated;
+            });
+        });
+
+        // Reset input so same file can be re-uploaded if needed
+        e.target.value = '';
+    };
+
+    const handleDeleteReceipt = (idx) => {
+        setReceipts(prev => {
+            const updated = prev.filter((_, i) => i !== idx);
+            try {
+                const _SS = window.StorageService;
+                if (_SS) { _SS.set(`rl_receipts_${transaction.tx_id}`, updated); }
+                else { localStorage.setItem(`rl_receipts_${transaction.tx_id}`, JSON.stringify(updated)); }
+            } catch { /* ignore */ }
+            return updated;
+        });
+    };
+
+    const handleViewReceiptInViewer = (receipt) => {
+        setViewerDocument({
+            url: receipt.url,
+            type: receipt.type,
+            name: receipt.filename,
+            page: 1,
+        });
+        setShowLeftPanel(true);
     };
 
     return (
@@ -287,13 +348,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                 </div>
                             )}
 
-                            {(() => {
-                                const shouldShow = !!(transaction.pdfLocation || transaction.source_pdf);
-                                console.log('[AUDIT_SIDEBAR] Should show Transaction Identity section?', shouldShow);
-                                console.log('[AUDIT_SIDEBAR] pdfLocation:', transaction.pdfLocation);
-                                console.log('[AUDIT_SIDEBAR] source_pdf:', transaction.source_pdf);
-                                return shouldShow;
-                            })() && (
+                            {!!(transaction.pdfLocation || transaction.source_pdf) && (
                                     <>
                                         <div style={{ marginBottom: '12px' }}>
                                             <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>PDF Location:</div>
@@ -331,13 +386,13 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                                         type: 'pdf',
                                                         url: transaction.source_pdf.url,
                                                         name: transaction.source_pdf.filename || 'statement.pdf',
-                                                        page: transaction.source_pdf.page || transaction.pdfLocation.page,
-                                                        highlightLine: transaction.source_pdf.line_position || {
+                                                        page: transaction.source_pdf.page || transaction.pdfLocation?.page || 1,
+                                                        highlightLine: transaction.source_pdf.line_position || (transaction.pdfLocation ? {
                                                             top: transaction.pdfLocation.top,
                                                             left: transaction.pdfLocation.left,
                                                             width: transaction.pdfLocation.width,
                                                             height: transaction.pdfLocation.height
-                                                        }
+                                                        } : null)
                                                     });
                                                     setShowLeftPanel(true);
                                                 } else {
@@ -351,13 +406,13 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                                         type: 'pdf',
                                                         url: account.pdfUrl,
                                                         name: account.pdfFilename || 'statement.pdf',
-                                                        page: transaction.pdfLocation.page,
-                                                        highlightLine: {
+                                                        page: transaction.pdfLocation?.page || 1,
+                                                        highlightLine: transaction.pdfLocation ? {
                                                             top: transaction.pdfLocation.top,
                                                             left: transaction.pdfLocation.left,
                                                             width: transaction.pdfLocation.width,
                                                             height: transaction.pdfLocation.height
-                                                        }
+                                                        } : null
                                                     });
                                                     setShowLeftPanel(true);
                                                 }
@@ -386,6 +441,49 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         </div>
                     )}
 
+                    {/* ── Account Metadata ─────────────────────────────────────────── */}
+                    {(() => {
+                        const acct = window.RoboLedger?.Accounts?.get?.(transaction.account_id);
+                        if (!acct) return null;
+                        const maskNum = (n) => n ? '••••' + String(n).slice(-4) : '—';
+                        // Build bank display: use bankName field, fallback to parsing it from account name
+                        const bankDisplay = (() => {
+                            if (acct.bankName && !acct.bankName.includes('GENERIC') && acct.bankName !== 'Unknown Bank') return acct.bankName;
+                            // Extract bank prefix from name like "RBC - Visa #1234" → "RBC"
+                            if (acct.name) {
+                                const parts = acct.name.split(' - ');
+                                if (parts.length > 1 && parts[0].length < 20) return parts[0];
+                                return acct.name;
+                            }
+                            return '—';
+                        })();
+                        const rows = [
+                            { label: 'Account', value: acct.ref || acct.id },
+                            { label: 'Bank', value: bankDisplay },
+                            { label: 'Type', value: acct.accountType || acct.brand || acct.cardNetwork || '—' },
+                            { label: 'Number', value: maskNum(acct.accountNumber) },
+                            acct.statementPeriod ? { label: 'Period', value: acct.statementPeriod } : null,
+                            acct.openingBalance != null ? { label: 'Opening Bal', value: `$${Number(acct.openingBalance).toFixed(2)}` } : null,
+                        ].filter(Boolean);
+                        return (
+                            <div style={{ marginBottom: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                    Account
+                                </div>
+                                <div style={{ padding: '8px 12px' }}>
+                                    {rows.map(({ label, value }) => (
+                                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', fontSize: '11px' }}>
+                                            <span style={{ color: '#94a3b8', minWidth: '70px' }}>{label}</span>
+                                            <span style={{ color: '#1e293b', fontWeight: 500, textAlign: 'right' }}>{value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* GST Summary removed — belongs in UtilityBar/GSTReport, not per-transaction audit drawer */}
+
                     {/* PDF Visual Snippet - Shows actual transaction line from PDF */}
                     {transaction.source_pdf?.url && (
                         <div style={{ marginBottom: '20px' }}>
@@ -402,6 +500,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                 pdfUrl={transaction.source_pdf.url}
                                 page={transaction.source_pdf.page || 1}
                                 linePosition={transaction.source_pdf.line_position}
+                                sourceFileId={transaction.sourceFileId}
                             />
                         </div>
                     )}
@@ -470,9 +569,27 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                         borderRadius: '6px',
                                         overflow: 'hidden',
                                         cursor: 'pointer',
-                                        position: 'relative'
-                                    }}>
-                                        <img src={receipt.thumbnail} alt={receipt.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        position: 'relative',
+                                        background: '#f8fafc',
+                                        flexShrink: 0,
+                                    }}
+                                        onClick={() => handleViewReceiptInViewer(receipt)}
+                                        title={receipt.filename}
+                                    >
+                                        {receipt.thumbnail ? (
+                                            <img src={receipt.thumbnail} alt={receipt.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#94a3b8', gap: '4px', padding: '4px', textAlign: 'center' }}>
+                                                <i className={`ph ph-file-${receipt.type === 'pdf' ? 'pdf' : 'text'}`} style={{ fontSize: '28px', color: receipt.type === 'pdf' ? '#ef4444' : '#6b7280' }}></i>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', padding: '0 4px' }}>{receipt.filename}</span>
+                                            </div>
+                                        )}
+                                        {/* Delete button */}
+                                        <button
+                                            onClick={(ev) => { ev.stopPropagation(); handleDeleteReceipt(idx); }}
+                                            style={{ position: 'absolute', top: '2px', right: '2px', width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(239,68,68,0.85)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', lineHeight: 1 }}
+                                            title="Remove receipt"
+                                        >×</button>
                                     </div>
                                 ))}
                             </div>
@@ -514,6 +631,87 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                             </div>
                         </div>
                     </div>
+
+                    {/* Edit History — maps every description change back to original parsed text */}
+                    {transaction.edit_history?.length > 0 && (
+                        <div style={{ marginBottom: '20px' }}>
+                            <div style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: '#64748b',
+                                letterSpacing: '0.5px',
+                                marginBottom: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                            }}>
+                                EDIT HISTORY
+                                <span style={{
+                                    fontSize: '10px',
+                                    fontWeight: 600,
+                                    color: '#f59e0b',
+                                    background: '#fef3c7',
+                                    border: '1px solid #fde68a',
+                                    borderRadius: '10px',
+                                    padding: '1px 6px',
+                                }}>
+                                    {transaction.edit_history.length} edit{transaction.edit_history.length !== 1 ? 's' : ''}
+                                </span>
+                            </div>
+
+                            {/* Original parsed value at top */}
+                            <div style={{
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                borderRadius: '6px',
+                                padding: '8px 10px',
+                                marginBottom: '8px',
+                                fontSize: '11px',
+                            }}>
+                                <div style={{ color: '#15803d', fontWeight: 600, marginBottom: '3px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    Original (parser)
+                                </div>
+                                <div style={{ color: '#166534', fontFamily: 'monospace', fontSize: '12px', wordBreak: 'break-all' }}>
+                                    {transaction.edit_history[0].old_value || '—'}
+                                </div>
+                                {transaction.audit?.rawText && transaction.audit.rawText !== transaction.edit_history[0].old_value && (
+                                    <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '10px' }}>
+                                        Raw line: <span style={{ fontFamily: 'monospace', color: '#374151' }}>{transaction.audit.rawText}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Each edit in chronological order */}
+                            {transaction.edit_history.map((edit, i) => (
+                                <div key={i} style={{
+                                    borderLeft: '2px solid #e2e8f0',
+                                    paddingLeft: '10px',
+                                    marginBottom: '8px',
+                                    position: 'relative',
+                                }}>
+                                    {/* Timeline dot */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: '-5px',
+                                        top: '4px',
+                                        width: '8px',
+                                        height: '8px',
+                                        borderRadius: '50%',
+                                        background: '#6366f1',
+                                        border: '2px solid white',
+                                    }} />
+                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '3px' }}>
+                                        {new Date(edit.timestamp).toLocaleString('en-CA', {
+                                            dateStyle: 'short', timeStyle: 'short'
+                                        })} · {edit.edited_by === 'user' ? 'User edit' : edit.edited_by}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#374151', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                        {edit.new_value}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>

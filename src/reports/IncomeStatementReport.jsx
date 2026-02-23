@@ -2,17 +2,21 @@ import React, { useState } from 'react';
 import ReportGenerator from '../services/ReportGenerator.js';
 import ReportFilters from './components/ReportFilters.jsx';
 import ReportHeader from './components/ReportHeader.jsx';
-import ReportFooter from './components/ReportFooter.jsx';
 import ReportTable from './components/ReportTable.jsx';
+import { ReportControlsBar, FONTS } from './components/ReportControlsBar.jsx';
 
 /**
- * IncomeStatementReport - Professional income statement matching Jazzit template
- * Statement of Income and Retained Earnings format
+ * IncomeStatementReport - Professional income statement
+ * Statement of Income and Retained Earnings — single Amount column, flowing format
  */
 export function IncomeStatementReport() {
     const [reportData, setReportData] = useState(null);
     const [dateRange, setDateRange] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [zoom, setZoom] = useState(100);
+    const [textSize, setTextSize] = useState(13);
+    const [fontFamily, setFontFamily] = useState('caseware');
+    const fontStack = FONTS[fontFamily]?.stack || FONTS.system.stack;
 
     const generateReport = (range) => {
         if (!range?.start || !range?.end) return;
@@ -58,106 +62,61 @@ export function IncomeStatementReport() {
         a.click();
     };
 
-    // Build table rows from report data
+    // Build table rows — single Amount column, flowing format
     const buildTableRows = () => {
         if (!reportData) return [];
 
         const rows = [];
 
         // REVENUES section header
-        rows.push({
-            type: 'section',
-            description: 'REVENUES',
-            values: ['', '']
-        });
+        rows.push({ type: 'section', description: 'REVENUES', values: [''] });
 
         // Revenue line items
         if (reportData.revenue && reportData.revenue.length > 0) {
             reportData.revenue.forEach(item => {
-                rows.push({
-                    description: item.name,
-                    values: [item.amount, 0],
-                    indent: 1
-                });
+                rows.push({ description: item.name, values: [item.amount], indent: 1, coaCode: item.code });
             });
         }
 
         // Total revenue
-        rows.push({
-            type: 'subtotal',
-            description: 'Total Revenue',
-            values: [reportData.totals.revenue, 0]
-        });
+        rows.push({ type: 'subtotal', description: 'Total Revenue', values: [reportData.totals.revenue] });
 
         // Blank line
-        rows.push({ description: '', values: ['', ''] });
+        rows.push({ description: '', values: [''] });
 
-        // COST OF SALES header
-        rows.push({
-            type: 'section',
-            description: 'COST OF SALES',
-            values: ['', '']
-        });
+        // COST OF SALES
+        rows.push({ type: 'section', description: 'COST OF SALES', values: [''] });
 
-        // Cost of sales line items
         if (reportData.cogs && reportData.cogs.length > 0) {
             reportData.cogs.forEach(item => {
-                rows.push({
-                    description: item.name,
-                    values: [item.amount, 0],
-                    indent: 1
-                });
+                rows.push({ description: item.name, values: [item.amount], indent: 1, coaCode: item.code });
             });
         }
 
-        // Cost of sales subtotal
-        rows.push({
-            type: 'subtotal',
-            description: 'Total COGS',
-            values: [reportData.totals.cogs, 0]
-        });
+        rows.push({ type: 'subtotal', description: 'Total Cost of Sales', values: [reportData.totals.cogs] });
 
         // GROSS PROFIT
-        rows.push({
-            type: 'subtotal',
-            description: 'GROSS PROFIT',
-            values: [reportData.totals.grossProfit, 0]
-        });
+        rows.push({ type: 'subtotal', description: 'GROSS PROFIT', values: [reportData.totals.grossProfit] });
 
         // Blank line
-        rows.push({ description: '', values: ['', ''] });
+        rows.push({ description: '', values: [''] });
 
         // EXPENSES
-        rows.push({
-            type: 'section',
-            description: 'EXPENSES',
-            values: ['', '']
-        });
+        rows.push({ type: 'section', description: 'EXPENSES', values: [''] });
 
-        // Expense line items
         if (reportData.expenses && reportData.expenses.length > 0) {
             reportData.expenses.forEach(exp => {
-                rows.push({
-                    description: exp.name,
-                    values: [exp.amount, 0],
-                    indent: 1
-                });
+                rows.push({ description: exp.name, values: [exp.amount], indent: 1, coaCode: exp.code });
             });
         }
 
-        // Total expenses
-        rows.push({
-            type: 'subtotal',
-            description: 'Total Expenses',
-            values: [reportData.totals.expenses, 0]
-        });
+        rows.push({ type: 'subtotal', description: 'Total Expenses', values: [reportData.totals.expenses] });
+
+        // Blank line
+        rows.push({ description: '', values: [''] });
 
         // NET INCOME
-        rows.push({
-            type: 'total',
-            description: 'NET INCOME',
-            values: [reportData.totals.netIncome, 0]
-        });
+        rows.push({ type: 'total', description: 'NET INCOME', values: [reportData.totals.netIncome] });
 
         return rows;
     };
@@ -165,10 +124,10 @@ export function IncomeStatementReport() {
     return (
         <div className="min-h-screen bg-gray-50 p-8">
             {/* Top Section: Filters */}
-            <div className="max-w-7xl mx-auto mb-6">
+            <div className="max-w-5xl mx-auto mb-6">
                 <div className="flex items-center gap-3 mb-4">
                     <button
-                        onClick={() => window.location.hash = '#/reports'}
+                        onClick={() => window.__reportsGoBack?.()}
                         className="text-gray-600 hover:text-gray-900 mr-2"
                     >
                         <i className="ph ph-arrow-left text-2xl"></i>
@@ -181,18 +140,43 @@ export function IncomeStatementReport() {
 
             {/* Loading State */}
             {loading && (
-                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow p-12 text-center">
+                <div className="max-w-5xl mx-auto bg-white rounded-lg shadow p-12 text-center">
                     <i className="ph ph-spinner-gap animate-spin text-4xl text-green-600 mb-4"></i>
                     <p className="text-gray-600">Generating report...</p>
                 </div>
             )}
 
+            {/* Empty state */}
+            {!loading && !reportData && (
+                <div className="max-w-5xl mx-auto bg-white rounded-lg shadow p-16 text-center">
+                    <i className="ph ph-upload-simple text-6xl text-gray-200 mb-5 block"></i>
+                    <p className="text-lg font-semibold text-gray-500 mb-1">Upload statements to get started</p>
+                    <p className="text-sm text-gray-400 mb-6">Import your bank statements to generate this report</p>
+                    <button
+                        onClick={() => window.__reportsGoBack?.()}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                    >
+                        <i className="ph ph-arrow-left text-base"></i>
+                        Back to Reports
+                    </button>
+                </div>
+            )}
+
             {/* Report Content */}
             {!loading && reportData && (
-                <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-lg p-8" style={{ fontFamily: 'Arial, sans-serif' }}>
+                <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+                    {/* Shared Report Controls Bar */}
+                    <ReportControlsBar
+                        zoom={zoom} setZoom={setZoom}
+                        textSize={textSize} setTextSize={setTextSize}
+                        fontFamily={fontFamily} setFontFamily={setFontFamily}
+                        accentColor="green"
+                    />
+
+                    <div className="p-8" style={{ fontSize: `${(textSize * zoom) / 100}px`, fontFamily: fontStack }}>
                     {/* Professional Header */}
                     <ReportHeader
-                        companyName={window.RoboLedger?.companyName || 'Your Company Name'}
+                        companyName={window.UI_STATE?.activeClientName || 'Your Company Name'}
                         reportTitle="Statement of Income and Retained Earnings"
                         period={`Year Ended ${dateRange.end}`}
                     />
@@ -201,11 +185,12 @@ export function IncomeStatementReport() {
                     <ReportTable
                         columns={[
                             { label: '', width: '65%', align: 'left' },
-                            { label: new Date(dateRange.end).getFullYear().toString(), width: '17%', align: 'right', bold: true },
-                            { label: (new Date(dateRange.end).getFullYear() - 1).toString(), width: '17%', align: 'right' }
+                            { label: 'Amount', width: '35%', align: 'right', bold: true }
                         ]}
                         rows={buildTableRows()}
-                        className="mt-6"
+                        className="mt-4"
+                        dateRange={dateRange}
+                        accentColor="green"
                     />
 
                     {/* Export Actions */}
@@ -226,8 +211,7 @@ export function IncomeStatementReport() {
                         </button>
                     </div>
 
-                    {/* Professional Footer */}
-                    <ReportFooter showApproval={true} showPageNumber={true} pageNumber={1} />
+                    </div>{/* end font/zoom wrapper */}
                 </div>
             )}
         </div>

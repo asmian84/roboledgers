@@ -14,7 +14,8 @@ export function ResizablePanel({
     title = "Panel"
 }) {
     const [width, setWidth] = useState(() => {
-        const saved = localStorage.getItem('roboledger-panel-width');
+        const _SS = window.StorageService;
+        const saved = _SS ? _SS.get('roboledger-panel-width') : localStorage.getItem('roboledger-panel-width');
         return saved ? parseInt(saved) : defaultWidth;
     });
     const [isResizing, setIsResizing] = useState(false);
@@ -34,7 +35,9 @@ export function ResizablePanel({
 
         const handleMouseUp = () => {
             setIsResizing(false);
-            localStorage.setItem('roboledger-panel-width', width.toString());
+            const _SS = window.StorageService;
+            if (_SS) { _SS.set('roboledger-panel-width', width); }
+            else { localStorage.setItem('roboledger-panel-width', width.toString()); }
         };
 
         document.addEventListener('mousemove', handleMouseMove);

@@ -8,6 +8,8 @@ class BMOCreditCardParser extends BaseBankParser {
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
+        this._getStmtId(statementText); // Pre-warm cache so inner calls can omit text arg
         this.lastLineMetadata = lineMetadata;
         const lines = statementText.split('\n');
                 // Extract balances using base helper
@@ -43,32 +45,35 @@ class BMOCreditCardParser extends BaseBankParser {
             const description = remainder.substring(0, firstAmt).trim();
             if (!description) continue;
 
-            // Credit card: positive = charge (debit), negative = payment (credit)
+            // BMO CC PDF convention: amounts are POSITIVE for purchases (no suffix),
+            // and suffixed with "CR" for payments/refunds (e.g. "1,419.47CR").
+            // CR = reduces liability (payment received, refund) → debit column.
+            // No CR = increases liability (purchase/charge) → credit column.
             const amount = parseFloat(amounts[0].replace(/,/g, ''));
             const balance = amounts.length > 1 ? parseFloat(amounts[amounts.length - 1].replace(/,/g, '')) : 0;
 
-            // Determine type by keywords
-            const isPayment = /payment|credit|refund/i.test(description);
+            const hasCR = /[\d,]+\.\d{2}\s*CR\b/i.test(remainder);
+            const isCredit = hasCR || /payment|refund/i.test(description);
 
-            const auditData = this.buildAuditData(line, 'BMOCreditCardParser');
+            const auditData = this.buildAuditData(line, 'BMOCreditCardParser', { statementId: this._getStmtId(), lineNumber: ++this._txSeq });
 
             transactions.push({
                 date: isoDate,
                 description,
                 amount,
-                debit: isPayment ? amount : 0,   // Payments REDUCE liability (debit)
-                credit: isPayment ? 0 : amount,  // Purchases INCREASE liability (credit)
+                debit: isCredit ? amount : 0,    // CR / payment / refund → DEBIT (reduces liability)
+                credit: isCredit ? 0 : amount,   // No CR → CREDIT (purchase increases liability)
                 balance,
                 _brand: 'BMO',
                 _tag: 'CreditCard',
                 _accountType: 'CreditCard', // [NEW] Explicit liability flagging
                 rawText: this.cleanRawText(line),
-                pdfLocation: auditData.pdfLocation,
+                parser_ref: this._getStmtId() + '-' + String(this._txSeq).padStart(3, '0'),
+            pdfLocation: auditData.pdfLocation,
                 audit: auditData.audit
             });
         }
 
-        console.log(`[BMO-CC] Parsed ${transactions.length} transactions`);
         return {
             transactions,
             metadata: {
@@ -79,7 +84,26 @@ class BMOCreditCardParser extends BaseBankParser {
             }
         };
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'BMOCC-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; }
+
 }
 
 window.BMOCreditCardParser = BMOCreditCardParser;
 window.bmoCreditCardParser = new BMOCreditCardParser();
+
+// TEST
+
+// PATCH_TEST

@@ -3,6 +3,25 @@
  * Wired to the live Ledger Engine (ledger.core.js)
  */
 (function () {
+  // ── StorageService helpers (IndexedDB via cache, localStorage fallback) ──
+  function _ssGet(key) {
+    const _SS = window.StorageService;
+    if (_SS) return _SS.get(key);
+    const raw = localStorage.getItem(key);
+    if (raw === null) return null;
+    try { return JSON.parse(raw); } catch { return raw; }
+  }
+  function _ssSet(key, value) {
+    const _SS = window.StorageService;
+    if (_SS) { _SS.set(key, value); }
+    else { localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value)); }
+  }
+  function _ssRemove(key) {
+    const _SS = window.StorageService;
+    if (_SS) _SS.remove(key); else localStorage.removeItem(key);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // --- UI STATE & ROUTING ---
   window.UI_STATE = {
     currentRoute: 'home',
@@ -27,23 +46,22 @@
     activeFileId: null,
     isPoppedOut: false,
     popoutWindow: null,
-    recoveryPending: false,
     isSearchOpen: false,
     searchQuery: '',
     refPrefix: 'CHQ1', // Default ref prefix for transaction numbering
     selectedTx: null,
     accountDropdownOpen: false,
     panelState: 'collapsed', // 'closed', 'collapsed', 'expanded'
-    version: '5.1.1',
+    version: '1.5.0', // Last stable before signal-fusion overhaul
     // Settings Persistence
     dexterity: 3,
     fontSize: 13,
     density: 'comfortable',
     autocatEnabled: true,
-    confidenceThreshold: 0.8,
+    confidenceThreshold: 0.60, // Must match SignalFusionEngine.REVIEW_THRESHOLD — below this = manual review
     refOverride: 'TXN',
     dateFormat: 'MM/DD/YYYY',
-    province: 'ON',
+    province: 'AB',
     gstEnabled: true,
     // Grid Appearance Settings (NEW in V5.1)
     gridTheme: 'post-it-note',
@@ -54,10 +72,18 @@
     importSession: null,
 
     // Version
-    version: '5.1.1',
+    version: '1.5.0',
 
     // Transaction Filter State (for drill-down)
     activeFilter: null, // { type, label, filter: function }
+
+    // Multi-Client State
+    activeClientId: null,     // null = legacy/demo mode (no client selected)
+    activeClientName: '',
+
+    // Multi-Accountant State (Admin Layer)
+    activeAccountantId: null,    // null = Admin view (all accountants)
+    activeAccountantName: '',
   };
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
@@ -92,7 +118,7 @@
       validFiles.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
       window.handleFilesSelected(validFiles);
     } else {
-      alert('No PDF or CSV files found in the selected folder.');
+      console.warn('[Upload] No PDF or CSV files found in the selected folder.');
     }
     // Reset so same folder can be re-selected
     event.target.value = '';
@@ -129,18 +155,24 @@
   };
 
   /**
-   * Get all accounts that have at least 1 transaction
+   * Get all accounts that have at least 1 transaction.
+   * Delegates to Accounts.getActive() which also prunes GENERIC PARSER ghosts.
    * @returns {Array} Accounts with transaction data
    */
   function getAccountsWithTransactions() {
-    const accounts = window.RoboLedger?.Accounts?.getAll() || [];
-    const allTxns = window.RoboLedger?.Ledger?.transactions || [];
-
-    return accounts.filter(acc => {
-      const txns = allTxns.filter(t => t.account_id === acc.id);
-      return txns.length > 0;
-    });
+    return window.RoboLedger?.Accounts?.getActive?.()
+        || window.RoboLedger?.Accounts?.getAll()?.filter(acc => {
+            const allTxns = window.RoboLedger?.Ledger?.transactions || [];
+            return allTxns.some(t => t.account_id === acc.id);
+        })
+        || [];
   }
+
+  // Prune ghost accounts from localStorage on every page load
+  // (catches ghosts persisted before this fix was deployed)
+  try {
+    window.RoboLedger?.Accounts?.pruneGhosts?.();
+  } catch (_) { /* silent — runs before full init */ }
 
 
   // IMMEDIATE GLOBAL EXPOSURE (Fix ReferenceError)
@@ -161,11 +193,11 @@
           Object.assign(tx, updatedTx);
         }
       });
-      // Save to localstorage via ledger
-      localStorage.setItem('roboledger_v5_data', JSON.stringify({
-        transactions: window.RoboLedger.Ledger.getRawState().transactions,
-        sigIndex: window.RoboLedger.Ledger.getRawState().sigIndex
-      }));
+      // Save to storage via ledger
+      const _ssData = { transactions: window.RoboLedger.Ledger.getRawState().transactions, sigIndex: window.RoboLedger.Ledger.getRawState().sigIndex };
+      const _SS0 = window.StorageService;
+      if (_SS0) { _SS0.set('roboledger_v5_data', _ssData); }
+      else { localStorage.setItem('roboledger_v5_data', JSON.stringify(_ssData)); }
       window.updateWorkspace();
     } else if (type === 'popIn') {
       window.popInGrid();
@@ -216,7 +248,7 @@
           validFiles.sort((a, b) => (a._path || a.name).localeCompare(b._path || b.name));
           window.handleFilesSelected(validFiles);
         } else {
-          alert('No PDF or CSV files found in the dropped folder.');
+          console.warn('[DROP] No PDF or CSV files found in the dropped folder.');
         }
         return;
       }
@@ -341,8 +373,6 @@
   };
 
   window.handleFilesSelected = async (files) => {
-    console.log('[UPLOAD] Processing', files.length, 'file(s)');
-
     // SMART UX: Only show full overlay for FIRST upload (no existing transactions)
     // Subsequent uploads show inline progress bar while grid stays visible
     const existingTxns = window.RoboLedger.Ledger.getAll();
@@ -370,69 +400,45 @@
       const totalStatements = files.length;
 
       try {
-        const baseProgress = (idx / files.length) * 100;
-        const fileProgressStep = 100 / files.length;
+        // Parsing phase = 0–70% of total bar. Each file gets an equal slice of that 70%.
+        const PARSE_BUDGET = 70; // percent reserved for file parsing
+        const baseProgress = (idx / files.length) * PARSE_BUDGET;
+        const fileProgressStep = PARSE_BUDGET / files.length;
 
-        // Stage 1: Extracting (0-40% of file progress)
+        // Stage 1: Extracting (0-40% of file slice)
         await window.updateProgressBar(
           Math.max(1, Math.round(baseProgress + (fileProgressStep * 0.1))),
           100,
           file.name,
-          `Processing statement ${statementNum} of ${totalStatements} • Extracting transaction data...`,
+          `Parsing ${statementNum} of ${totalStatements} • Extracting text...`,
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Stage 2: Parsing (40-70% of file progress)
+        // Stage 2: Parsing (40-70% of file slice)
         await window.updateProgressBar(
           Math.round(baseProgress + (fileProgressStep * 0.4)),
           100,
           file.name,
-          `Processing statement ${statementNum} of ${totalStatements} • Parsing transactions...`,
+          `Parsing ${statementNum} of ${totalStatements} • Reading transactions...`,
           totalImported
         );
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Process the file (PDF.js has its own 15s timeout at extraction level)
-        console.log(`[UPLOAD-DEBUG] ⏰ Starting processUpload for statement ${statementNum}/${totalStatements}: ${file.name}`);
-        const processingStartTime = Date.now();
-
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
-
-        const elapsed = ((Date.now() - processingStartTime) / 1000).toFixed(1);
-        console.log(`[UPLOAD-DEBUG] ✅ processUpload completed in ${elapsed}s for statement ${statementNum}/${totalStatements}`);
         totalImported += imported;
 
-        // Stage 3: Categorizing (70-85% of file progress)
+        // Stage 3: File done (90% of file slice, max 68% overall)
         await window.updateProgressBar(
-          Math.round(baseProgress + (fileProgressStep * 0.7)),
+          Math.min(68, Math.round(baseProgress + (fileProgressStep * 0.9))),
           100,
           file.name,
-          `Processing statement ${statementNum} of ${totalStatements} • Categorizing transactions...`,
+          `Statement ${statementNum} of ${totalStatements} parsed • ${imported} transactions`,
           totalImported
         );
-        await new Promise(resolve => setTimeout(resolve, 80));
+        await new Promise(resolve => setTimeout(resolve, 60));
 
-        // Stage 4: Cleaning (85-95% of file progress)
-        await window.updateProgressBar(
-          Math.round(baseProgress + (fileProgressStep * 0.85)),
-          100,
-          file.name,
-          `Processing statement ${statementNum} of ${totalStatements} • Cleaning data...`,
-          totalImported
-        );
-        await new Promise(resolve => setTimeout(resolve, 80));
-
-        // Stage 5: Complete (95-100% of file progress)
-        await window.updateProgressBar(
-          Math.round(baseProgress + (fileProgressStep * 0.95)),
-          100,
-          file.name,
-          `Statement ${statementNum} of ${totalStatements} complete • Imported ${imported} transactions`,
-          totalImported
-        );
-
-        console.log(`[UPLOAD] ${statementNum}/${totalStatements} - ${file.name}: ${imported} transactions imported`);
       } catch (err) {
         // Special handling for PDF_TIMEOUT errors (incompatible PDF format)
         if (err.message && err.message.startsWith('PDF_TIMEOUT:')) {
@@ -478,17 +484,26 @@
       }
     }
 
-    // Final update - 100% complete
-    await window.updateProgressBar(100, 100, 'All files processed!', `${totalImported} transactions imported`, totalImported);
+    // ── POST-PARSE PROCESSING with live progress feedback ─────────────────
+    // Parsing used 0–70%. Post-processing gets 70–100%:
+    //   70% → Parsing all done
+    //   75% → Cleanup / account pruning
+    //   80% → Fix CC polarity
+    //   82% → Starting categorization
+    //   82–97% → Categorization (driven by _runAutoCatOnExistingWithProgress)
+    //   98% → GST calculation
+    //  100% → Complete
 
+    await window.updateProgressBar(70, 100, 'All files parsed', `${totalImported} transactions — categorizing...`, totalImported);
 
-    // Hide progress bar after brief delay, then refresh grid
-    setTimeout(() => {
+    // Use async IIFE so we can await auto-categorization before rendering the grid.
+    // This ensures the grid shows categorized data on first paint (no flicker from 9970 → categorized).
+    setTimeout(async () => {
       try {
-        console.log('[UPLOAD] Hiding progress bar and rendering grid...');
+        // ── Step 1: Cleanup (fast) ──────────────────────────────────────
+        await window.updateProgressBar(75, 100, 'Cleaning up accounts...', `${totalImported} transactions imported`, totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-        // CRITICAL: Clean up any empty accounts before rendering
-        // (prevents hangover accounts from failed uploads or zero-transaction files)
         cleanupEmptyAccounts();
 
         // AUTO-SET REF# prefix for the newly imported account
@@ -497,11 +512,36 @@
           const lastAccount = accounts[accounts.length - 1];
           UI_STATE.refPrefix = lastAccount.ref || 'TXN';
           UI_STATE.selectedAccount = lastAccount.id;
-          console.log('[UPLOAD] Auto-set account:', lastAccount.id, 'prefix:', UI_STATE.refPrefix);
         }
 
         // Reset ingesting state so render() excludes progress bar HTML
         UI_STATE.isIngesting = false;
+
+        // Prune any ghost accounts created by this import (metadata stubs with 0 transactions)
+        window.RoboLedger?.Accounts?.pruneGhosts?.();
+
+        // ── Step 2: Fix CC polarity issues (fast) ───────────────────────
+        await window.updateProgressBar(80, 100, 'Fixing credit card classifications...', `${totalImported} transactions`, totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        window.fixCCRefunds?.();
+
+        // ── Step 3: Auto-categorize — THE SLOW PART ─────────────────────
+        // _runAutoCatOnExistingWithProgress drives its own progress from 82→97%
+        await window.updateProgressBar(82, 100, 'Categorizing transactions...', `Running rule engine on ${totalImported} transactions...`, totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        await window._runAutoCatOnExistingWithProgress(totalImported);
+
+        // ── Step 4: GST calculation ─────────────────────────────────────
+        await window.updateProgressBar(98, 100, 'Calculating sales tax...', `Almost done...`, totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        window.initGSTOnTransactions?.();
+
+        // ── Step 5: Done — final message ────────────────────────────────
+        await window.updateProgressBar(100, 100, 'Import complete ✓', `${totalImported} transactions ready`, totalImported);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         // Render - this will naturally exclude progress bar since isIngesting is false
         render();
@@ -512,7 +552,6 @@
           toggleBtn.style.display = 'flex';
         }
 
-        console.log('[UPLOAD] Upload workflow complete - grid should be visible');
       } catch (err) {
         console.error('[UPLOAD] Error in completion flow:', err);
         // Force render anyway
@@ -521,7 +560,6 @@
       }
     }, 500);
 
-    console.log(`[UPLOAD] Complete. Total imported: ${totalImported}`);
   };
 
   // Keep inline COA dropdowns opening downward by centering the row
@@ -545,31 +583,14 @@
     }
   };
 
-  // Update utility bar with current account data
-  window.updateUtilityBar = function () {
-    if (!window.RoboLedger) return;
-
-    const accounts = window.RoboLedger.Accounts.getAll();
-    const totalBalance = accounts.reduce((sum, a) => sum + (a.actualEndingBalance || a.calculatedBalance || 0), 0);
-
-    const balanceEl = document.getElementById('util-total-balance');
-    if (balanceEl) {
-      balanceEl.textContent = `$${(totalBalance / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-      balanceEl.style.color = totalBalance >= 0 ? '#0f766e' : '#ef4444';
-    }
-
-    const badgesEl = document.getElementById('util-account-badges');
-    if (badgesEl) {
-      badgesEl.innerHTML = accounts.map(a => `
-        <div class="utility-badge" onclick="window.switchAccount('${a.id}')">${a.ref || 'N/A'}</div>
-      `).join('');
-    }
-  };
+  // NOTE: window.updateUtilityBar is defined in utility-bar.js with full drill-down support.
+  // Do NOT redefine it here — the utility-bar.js version handles balance, badges, AND all onclick drill wiring.
 
   // Desktop sidebar collapse toggle
   window.toggleSidebar = () => {
-    const sidebar = document.getElementById('sidebar');
-    const toggleBtn = document.getElementById('sidebar-toggle');
+    const sidebar   = document.getElementById('sidebar');
+    // Button is now in the top context bar (moved from sidebar-brand in v5.3)
+    const toggleBtn = document.getElementById('top-sidebar-toggle');
 
     if (sidebar) {
       sidebar.classList.toggle('collapsed');
@@ -580,7 +601,7 @@
 
       // Dispatch event for React components to listen to
       window.dispatchEvent(new CustomEvent('sidebarCollapsed', {
-        detail: { collapsed: isCollapsed }
+        detail: { isCollapsed }
       }));
 
       // Update utility bar content when collapsed
@@ -588,13 +609,14 @@
         setTimeout(() => window.updateUtilityBar(), 100);
       }
 
-      // Update button icon and title
-      if (isCollapsed) {
-        toggleBtn.innerHTML = '<i class="ph ph-caret-right"></i>';
-        toggleBtn.title = 'Exit Detail Mode';
-      } else {
-        toggleBtn.innerHTML = '<i class="ph ph-caret-left"></i>';
-        toggleBtn.title = 'Enter Detail Mode';
+      // Update top-bar button icon to reflect state
+      if (toggleBtn) {
+        toggleBtn.innerHTML = isCollapsed
+          ? '<i class="ph ph-sidebar-simple" style="font-size:18px;"></i>'
+          : '<i class="ph ph-list" style="font-size:18px;"></i>';
+        toggleBtn.title = isCollapsed ? 'Show sidebar' : 'Hide sidebar';
+        // Remove pulse once user has interacted with the button
+        toggleBtn.classList.remove('has-data-pulse');
       }
     }
   };
@@ -687,7 +709,7 @@
         clearInterval(monitor);
         UI_STATE.isPoppedOut = false;
         UI_STATE.popoutWindow = null;
-        window.window.updateWorkspace();
+        window.updateWorkspace();
       }
     }, 500);
   };
@@ -742,6 +764,7 @@
   };
 
   window.toggleSettings = (open) => toggleSettings(open);
+  window.renderSettingsDrawer = () => renderSettingsDrawer();
   window.handleFiles = (files) => handleFiles(files);
 
   window.openSourceFile = function (fileId) {
@@ -896,284 +919,251 @@
     }
   };
 
-  window.handleRecovery = function (action) {
-    const modal = document.getElementById('recovery-modal');
-    if (modal) modal.remove();
-
-    if (action === 'continue') {
-      UI_STATE.recoveryPending = false;
-      window.updateWorkspace();
-    } else {
-      window.RoboLedger.Ledger.reset();
-      UI_STATE.recoveryPending = false;
-      window.updateWorkspace();
-    }
-  };
-
-  function showRecoveryPrompt() {
-    const existingData = window.RoboLedger.Ledger.getAll();
-    const overlay = document.createElement('div');
-    overlay.id = 'recovery-modal';
-    overlay.innerHTML = `
-      <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 99999; display: flex; align-items: center; justify-content: center;">
-        <div style="background: white; border-radius: 12px; padding: 32px; max-width: 480px; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-            <div style="background: #eff6ff; padding: 12px; border-radius: 10px;">
-              <i class="ph ph-database" style="font-size: 28px; color: #3b82f6;"></i>
-            </div>
-            <div>
-              <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #1e293b;">Previous Data Detected</h2>
-              <p style="margin: 4px 0 0; font-size: 0.875rem; color: #64748b;">Found ${existingData.length} transactions from your last session</p>
-            </div>
-          </div>
-          
-          <p style="color: #475569; font-size: 0.9375rem; line-height: 1.6; margin: 20px 0 24px;">
-            Would you like to <strong>continue where you left off</strong>, or <strong>start fresh with a clean workspace</strong>?
-          </p>
-          
-          <div style="display: flex; gap: 12px;">
-            <button onclick="window.handleRecovery('reset')" style="flex: 1; padding: 12px 20px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; font-weight: 600; font-size: 0.9375rem; color: #475569; cursor: pointer; transition: all 0.15s;">
-              <i class="ph ph-trash" style="margin-right: 6px;"></i>
-              Start Fresh
-            </button>
-            <button onclick="window.handleRecovery('continue')" style="flex: 1; padding: 12px 20px; background: #3b82f6; border: none; border-radius: 8px; font-weight: 600; font-size: 0.9375rem; color: white; cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-              <i class="ph ph-arrow-clockwise" style="margin-right: 6px;"></i>
-              Load Previous Data
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-  }
 
 
   // ═══════════════════════════════════════════════════════════════
   // UNIFIED WORKSPACE UPDATE - MAGNETIC CONTAINER COUPLING
   // ═══════════════════════════════════════════════════════════════
   /**
+   * Retroactive CC refund/cashback cleanup.
+   * Scans all stored transactions and re-routes any CC credit that is mis-categorized
+   * as REVENUE (or that is cash back still pointing to 9971/revenue).
+   * Called automatically after import and available as window.fixCCRefunds().
+   */
+  window.fixCCRefunds = function () {
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    const COA = window.RoboLedger?.COA;
+    let fixed = 0;
+
+    const REVENUE_ROOTS = new Set(['REVENUE']);
+    const CC_TYPES = new Set(['creditcard', 'liability', 'credit card']);
+
+    allTxns.forEach(tx => {
+      if (tx.polarity !== 'CREDIT') return;
+
+      const acc = window.RoboLedger?.Accounts?.get(tx.account_id);
+      const accType = (acc?.accountType || acc?.type || '').toLowerCase();
+      const isCCAcct = CC_TYPES.has(accType) || /visa|mastercard|amex|credit/i.test(acc?.name || '');
+      if (!isCCAcct) return;
+
+      const desc = (tx.raw_description || tx.description || '').toUpperCase();
+      const isCashBack = /CASH\s*BACK|CASHBACK|REWARD/i.test(desc);
+      const isCCRefund = /\bREFUND\b/i.test(desc);
+      const isBankRebate = /\bREBATE\b/i.test(desc);
+      const isCCPayment = !isCashBack && !isCCRefund && !isBankRebate;
+
+      if (isCCPayment) return; // Payments are fine wherever they are
+
+      const currentCOA = COA?.get(tx.category);
+      const isRevenue = currentCOA && REVENUE_ROOTS.has(currentCOA.root);
+      const is9971 = tx.category === '9971';
+      const needsFix = isRevenue || (isCashBack && is9971);
+
+      if (!needsFix) return;
+
+      if (isCashBack || isBankRebate) {
+        // Cash back / rebate → 7700 (contra bank fees)
+        window.RoboLedger.Ledger.updateCategory(tx.tx_id, '7700');
+        fixed++;
+        console.log(`[FIX] Cash back/rebate → 7700: ${tx.description || tx.raw_description}`);
+      } else if (isCCRefund) {
+        // Refund → try to mirror same vendor's debit on same account
+        const vendorWords = desc.replace(/\bREFUND\b/gi, '').trim().split(/\s+/).slice(0, 3).join(' ');
+        const matchingDebit = allTxns.find(other =>
+          other.tx_id !== tx.tx_id &&
+          other.account_id === tx.account_id &&
+          other.polarity === 'DEBIT' &&
+          other.category &&
+          !['9970', '9971'].includes(other.category) &&
+          (other.raw_description || other.description || '').toUpperCase().includes(vendorWords)
+        );
+
+        if (matchingDebit) {
+          const mirrorCOA = COA?.get(matchingDebit.category);
+          if (mirrorCOA && mirrorCOA.root !== 'REVENUE' && mirrorCOA.root !== 'LIABILITY') {
+            window.RoboLedger.Ledger.updateCategory(tx.tx_id, matchingDebit.category);
+            fixed++;
+            console.log(`[FIX] Refund mirrored → ${matchingDebit.category}: ${tx.description || tx.raw_description}`);
+            return;
+          }
+        }
+
+        // No mirror found — clear category so it shows as needs_review
+        window.RoboLedger.Ledger.updateCategory(tx.tx_id, null);
+        fixed++;
+        console.log(`[FIX] Refund revenue cleared → needs review: ${tx.description || tx.raw_description}`);
+      }
+    });
+
+    if (fixed > 0) {
+      console.log(`[FIX] CC refund cleanup: fixed ${fixed} transactions`);
+      if (window.showToast) window.showToast(`Fixed ${fixed} CC credit mis-categorization${fixed !== 1 ? 's' : ''}`, 'success');
+    }
+    return fixed;
+  };
+
+  /**
+   * Retroactive GST initializer.
+   * Scans all stored transactions and seeds gst_enabled / tax_cents / gst_account
+   * for any transaction that hasn't been GST-initialized yet.
+   *
+   * Non-taxable categories are explicitly disabled (gst_enabled = false).
+   * All other expense/revenue transactions get gst_enabled = true + computed tax_cents.
+   *
+   * Called automatically after every import via updateWorkspace.
+   */
+  window.initGSTOnTransactions = function (forceReinit = false) {
+    const TAX_RATES = {
+      'ON': 13, 'BC': 12, 'AB': 5,  'QC': 14.975, 'NS': 15,
+      'NB': 15, 'MB': 12, 'SK': 11, 'PE': 15,     'NL': 15,
+      'YT': 5,  'NT': 5,  'NU': 5,
+    };
+    const province = window.UI_STATE?.province || 'AB';
+    const taxRate  = TAX_RATES[province] || 5;
+
+    // These categories are never subject to GST
+    const NON_TAXABLE = new Set([
+      '9971', // CC Payment
+      '9970', // Uncategorized
+      '7700', // Cash back / contra
+      '7000', // Interest expense
+      '2149', '2150', '2160', // GST accounts themselves
+    ]);
+    const NON_TAXABLE_RE = /\b(PAYMENT|INTEREST|TRANSFER|CASH\s*BACK|REBATE|DIVIDEND|INSURANCE|PAYROLL|SALARY|WAGES?|T4|E-TRANSFER|INTERAC)\b/i;
+
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    let seeded = 0;
+
+    allTxns.forEach(tx => {
+      // Only touch transactions that haven't been GST-initialized yet (unless forceReinit)
+      if (!forceReinit && tx.gst_enabled !== undefined) return;
+
+      const catStr  = String(tx.category || '');
+      const desc    = (tx.raw_description || tx.description || '');
+      const amount  = Math.abs(tx.amount_cents || 0);
+
+      const isNonTaxable =
+        NON_TAXABLE.has(catStr) ||
+        NON_TAXABLE_RE.test(desc) ||
+        tx._isCCPayment || tx._isCashBack || tx._isBankRebate ||
+        tx.transaction_type === 'transfer';
+
+      if (isNonTaxable) {
+        try {
+          window.RoboLedger.Ledger.updateMetadata(tx.tx_id, {
+            gst_enabled: false,
+            tax_cents:   0,
+            gst_account: null,
+            gst_type:    null,
+          });
+        } catch(e) { /* ignore individual failures */ }
+        return;
+      }
+
+      // Taxable transaction — compute GST and set account routing
+      const taxCents  = Math.round((amount * taxRate) / 100);
+      // CC account detection — CC charges are EXPENSES regardless of COA code
+      const acctForGST = window.RoboLedger?.Accounts?.get(tx.account_id);
+      const isCCAcct   = !!(acctForGST?.brand || acctForGST?.cardNetwork ||
+                            (acctForGST?.accountType || '').toLowerCase() === 'creditcard');
+      // Revenue = category starts with 4 AND not a CC account
+      // CC accounts NEVER have revenue — charges go to GST ITC (2150)
+      const isRevenue = !isCCAcct && catStr.startsWith('4');
+      try {
+        window.RoboLedger.Ledger.updateMetadata(tx.tx_id, {
+          gst_enabled: true,
+          tax_cents:   taxCents,
+          gst_account: isRevenue ? '2160' : '2150',
+          gst_type:    isRevenue ? 'collected' : 'itc',
+        });
+      } catch(e) { /* ignore individual failures */ }
+      seeded++;
+    });
+
+    if (seeded > 0) {
+      console.log(`[GST] Initialized ${seeded} transactions with GST data (province: ${province}, rate: ${taxRate}%)`);
+    }
+    return seeded;
+  };
+
+  /**
+   * Re-categorize ALL existing transactions using the current rule engine + signal fusion.
+   * This re-runs the full categorization brain on every transaction in the ledger.
+   * Called after rule engine fixes to correct historically mis-categorized data.
+   *
+   * @param {Object} options
+   * @param {boolean} options.skipUserCategorized  - If true, skip txns that were manually set by user (default: false)
+   * @param {boolean} options.skipHighConfidence   - If true, skip txns with confidence >= 0.90 (default: false)
+   * @param {function} options.onProgress          - Optional progress callback(done, total)
+   */
+  window.recategorizeAll = function ({ skipUserCategorized = false, skipHighConfidence = false, onProgress } = {}) {
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    if (!allTxns.length) return { done: 0, total: 0 };
+
+    const ruleEngine = window.RuleEngine;
+    if (!ruleEngine) {
+      console.warn('[RECATEGORIZE] RuleEngine not available');
+      return { done: 0, total: 0 };
+    }
+
+    let done = 0, skipped = 0;
+    const total = allTxns.length;
+
+    allTxns.forEach((tx, i) => {
+      if (skipUserCategorized && tx.category_source === 'user') { skipped++; return; }
+      if (skipHighConfidence && (tx.confidence || 0) >= 0.90) { skipped++; return; }
+
+      const result = ruleEngine.applyRules(tx, null, true);
+      if (result?.coa_code) {
+        window.RoboLedger.Ledger.updateCategory(tx.tx_id, result.coa_code, {
+          confidence:  result.confidence,
+          needsReview: result.needsReview,
+          explanation: result.explanation,
+        });
+        done++;
+      }
+
+      if (onProgress && i % 100 === 0) onProgress(i, total);
+    });
+
+    // Re-run GST routing with force-reinit now that categories are corrected
+    window.initGSTOnTransactions(true);
+
+    console.log(`[RECATEGORIZE] Done: ${done}/${total} recategorized, ${skipped} skipped`);
+    if (window.showToast) window.showToast(`Recategorized ${done} transactions`, 'success');
+
+    // Refresh the grid
+    if (window.updateWorkspace) window.updateWorkspace();
+    return { done, skipped, total };
+  };
+
+  /**
    * Ensures metadata, reconciliation, and grid are MAGNETICALLY coupled
    * This is the SINGLE SOURCE OF TRUTH for updating the workspace
-   * 
+   *
    * @param {string|null} accountId - Account ID to display, or null to use current UI_STATE
    */
   window.updateWorkspace = function (accountId = null) {
-    // HOMEPAGE ROUTE: Render professional homepage
+
+    // HOMEPAGE ROUTE: delegate to React HomePage component
     if (UI_STATE.currentRoute === 'home') {
-      console.log('[WORKSPACE] → Rendering HOMEPAGE');
-
-      // Get live stats and data
-      const allTxns = window.RoboLedger.Ledger.getAll();
-      const accounts = window.RoboLedger.Accounts?.getAll() || [];
-      const reconciled = allTxns.filter(t => t.reconciled).length;
-      const unreconciled = allTxns.length - reconciled;
-      const reconciledPercent = allTxns.length > 0 ? Math.round((reconciled / allTxns.length) * 100) : 0;
-
-      // Get recent transactions (last 5)
-      const recentTxns = allTxns.slice(0, 5);
-
-      // Calculate total balance (simplified - sum of all transaction amounts)
-      const totalBalance = allTxns.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-
-      const stage = document.getElementById('app-stage');
-      if (stage) {
-        stage.innerHTML = `
-          <div style="height: calc(100vh - 140px); overflow: auto; background: #f8fafc;">
-            <div style="max-width: 1600px; margin: 0 auto; padding: 32px 40px;">
-              
-              <!-- Welcome Header -->
-              <div style="margin-bottom: 32px;">
-                <h1 style="font-size: 28px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Good ${new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}</h1>
-                <p style="font-size: 15px; color: #64748b; margin: 0;">Here's what's happening with your business today</p>
-              </div>
-
-              <!-- Financial Overview Cards -->
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 32px;">
-                
-                <!-- Total Balance Card -->
-                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <span style="font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Total Balance</span>
-                    <div style="width: 32px; height: 32px; background: #f0f9ff; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-                      <i class="ph-bold ph-wallet" style="font-size: 16px; color: #0284c7;"></i>
-                    </div>
-                  </div>
-                  <div style="font-size: 32px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">$${Math.abs(totalBalance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div style="font-size: 13px; color: ${totalBalance >= 0 ? '#10b981' : '#ef4444'}; display: flex; align-items: center; gap: 4px;">
-                    <i class="ph-bold ph-${totalBalance >= 0 ? 'arrow-up' : 'arrow-down'}" style="font-size: 12px;"></i>
-                    ${totalBalance >= 0 ? 'Positive' : 'Negative'} balance
-                  </div>
-                </div>
-
-                <!-- Accounts Card -->
-                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <span style="font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Accounts</span>
-                    <div style="width: 32px; height: 32px; background: #fef3c7; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-                      <i class="ph-bold ph-folders" style="font-size: 16px; color: #d97706;"></i>
-                    </div>
-                  </div>
-                  <div style="font-size: 32px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">${accounts.length}</div>
-                  <div style="font-size: 13px; color: #64748b;">Connected sources</div>
-                </div>
-
-                <!-- Transactions Card -->
-                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <span style="font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Transactions</span>
-                    <div style="width: 32px; height: 32px; background: #f0fdf4; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-                      <i class="ph-bold ph-swap" style="font-size: 16px; color: #059669;"></i>
-                    </div>
-                  </div>
-                  <div style="font-size: 32px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">${allTxns.length.toLocaleString()}</div>
-                  <div style="font-size: 13px; color: #64748b;">Total recorded</div>
-                </div>
-
-                <!-- Reconciliation Card -->
-                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <span style="font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Reconciliation</span>
-                    <div style="width: 32px; height: 32px; background: #f5f3ff; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-                      <i class="ph-bold ph-check-circle" style="font-size: 16px; color: #7c3aed;"></i>
-                    </div>
-                  </div>
-                  <div style="font-size: 32px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">${reconciledPercent}%</div>
-                  <div style="font-size: 13px; color: #64748b;">${reconciled} of ${allTxns.length} reconciled</div>
-                </div>
-              </div>
-
-              <!-- Main Content Grid -->
-              <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
-                
-                <!-- Left Column: Quick Actions & Recent Activity -->
-                <div>
-                  <!-- Quick Actions -->
-                  <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 28px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 20px 0;">Quick Actions</h2>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-                      <div onclick="window.navigateTo('import')" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#f1f5f9'; this.style.borderColor='#3b82f6'" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#e2e8f0'">
-                        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6, #2563eb); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-                          <i class="ph-bold ph-upload-simple" style="font-size: 20px; color: white;"></i>
-                        </div>
-                        <div style="font-size: 15px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">Import Transactions</div>
-                        <div style="font-size: 13px; color: #64748b;">Upload bank statements</div>
-                      </div>
-
-                      <div onclick="window.navigateTo('import')" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#f1f5f9'; this.style.borderColor='#10b981'" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#e2e8f0'">
-                        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-                          <i class="ph-bold ph-check-square" style="font-size: 20px; color: white;"></i>
-                        </div>
-                        <div style="font-size: 15px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">Reconcile</div>
-                        <div style="font-size: 13px; color: #64748b;">${unreconciled} items pending</div>
-                      </div>
-
-                      <div onclick="window.navigateTo('coa')" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#f1f5f9'; this.style.borderColor='#8b5cf6'" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#e2e8f0'">
-                        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-                          <i class="ph-bold ph-list-bullets" style="font-size: 20px; color: white;"></i>
-                        </div>
-                        <div style="font-size: 15px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">Accounts</div>
-                        <div style="font-size: 13px; color: #64748b;">Manage chart of accounts</div>
-                      </div>
-
-                      <div onclick="window.navigateTo('reports')" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#f1f5f9'; this.style.borderColor='#f59e0b'" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#e2e8f0'">
-                        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-                          <i class="ph-bold ph-chart-line" style="font-size: 20px; color: white;"></i>
-                        </div>
-                        <div style="font-size: 15px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">Reports</div>
-                        <div style="font-size: 13px; color: #64748b;">View financial insights</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Recent Activity -->
-                  <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-                      <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0;">Recent Transactions</h2>
-                      <a onclick="window.navigateTo('import')" style="font-size: 14px; color: #3b82f6; font-weight: 600; cursor: pointer; text-decoration: none;">View all →</a>
-                    </div>
-                    
-                    ${recentTxns.length > 0 ? recentTxns.map(txn => `
-                      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                        <div style="width: 40px; height: 40px; background: #f8fafc; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                          <i class="ph-bold ph-arrow-${parseFloat(txn.amount) >= 0 ? 'down' : 'up'}" style="font-size: 16px; color: ${parseFloat(txn.amount) >= 0 ? '#10b981' : '#ef4444'};"></i>
-                        </div>
-                        <div style="flex: 1; min-width: 0;">
-                          <div style="font-size: 14px; font-weight: 600; color: #0f172a; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${txn.description || 'Untitled Transaction'}</div>
-                          <div style="font-size: 13px; color: #64748b;">${txn.date || 'No date'}</div>
-                        </div>
-                        <div style="font-size: 15px; font-weight: 700; color: ${parseFloat(txn.amount) >= 0 ? '#10b981' : '#ef4444'}; flex-shrink: 0;">
-                          ${parseFloat(txn.amount) >= 0 ? '+' : ''}$${Math.abs(parseFloat(txn.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                      </div>
-                    `).join('') : `
-                      <div style="text-align: center; padding: 40px 20px;">
-                        <i class="ph ph-receipt" style="font-size: 48px; color: #cbd5e1; margin-bottom: 12px;"></i>
-                        <div style="font-size: 15px; color: #64748b; margin-bottom: 4px;">No transactions yet</div>
-                        <div style="font-size: 13px; color: #94a3b8;">Import your first transaction to get started</div>
-                      </div>
-                    `}
-                  </div>
-                </div>
-
-                <!-- Right Column: Insights & Status -->
-                <div>
-                  <!-- System Status -->
-                  <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 28px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 20px 0;">System Health</h2>
-                    
-                    <div style="margin-bottom: 16px;">
-                      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="font-size: 14px; color: #64748b;">Data Quality</span>
-                        <span style="font-size: 14px; font-weight: 600; color: #10b981;">${reconciledPercent}%</span>
-                      </div>
-                      <div style="height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden;">
-                        <div style="height: 100%; width: ${reconciledPercent}%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 4px; transition: width 0.3s ease;"></div>
-                      </div>
-                    </div>
-
-                    <div style="padding: 16px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; margin-top: 16px;">
-                      <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="width: 32px; height: 32px; background: #10b981; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                          <i class="ph-bold ph-check" style="font-size: 16px; color: white;"></i>
-                        </div>
-                        <div>
-                          <div style="font-size: 14px; font-weight: 600; color: #0f172a; margin-bottom: 2px;">All systems operational</div>
-                          <div style="font-size: 13px; color: #64748b;">Last sync: Just now</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- AI Insights -->
-                  <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); border-radius: 8px; padding: 28px; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                      <div style="width: 40px; height: 40px; background: rgba(255, 255, 255, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                        <i class="ph-bold ph-lightning" style="font-size: 20px; color: white;"></i>
-                      </div>
-                      <h2 style="font-size: 18px; font-weight: 700; color: white; margin: 0;">AI Insights</h2>
-                    </div>
-                    
-                    <p style="font-size: 14px; color: rgba(255, 255, 255, 0.95); margin: 0 0 16px 0; line-height: 1.6;">RoboLedger's AI is actively learning your transaction patterns to provide smarter categorization and detection.</p>
-                    
-                    <div style="padding: 16px; background: rgba(255, 255, 255, 0.15); border-radius: 6px; backdrop-filter: blur(10px);">
-                      <div style="font-size: 13px; color: rgba(255, 255, 255, 0.9); margin-bottom: 4px;">Automation Rate</div>
-                      <div style="font-size: 24px; font-weight: 700; color: white;">AI Powered</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-      return; // Exit early for homepage
+      renderHome();
+      return;
     }
 
     const selectedAccount = accountId || UI_STATE.selectedAccount || 'ALL';
     console.log(`[WORKSPACE] ═══ UNIFIED UPDATE for: ${selectedAccount} ═══`);
 
     const allTxns = window.RoboLedger.Ledger.getAll();
+
+    // Pulse the sidebar toggle button when there are transactions loaded
+    // (gives the user a visual hint that they can collapse the sidebar for more space)
+    if (allTxns.length > 0) {
+      const btn = document.getElementById('top-sidebar-toggle');
+      if (btn && !btn.classList.contains('has-data-pulse')) {
+        btn.classList.add('has-data-pulse');
+      }
+    }
     const filteredTxns = selectedAccount === 'ALL' ? allTxns : allTxns.filter(t => t.account_id === selectedAccount);
     console.log(`[WORKSPACE] Filtered: ${filteredTxns.length} of ${allTxns.length} transactions`);
 
@@ -1389,7 +1379,9 @@
   window.updateRefPrefix = function (newPrefix) {
     const sanitized = newPrefix.toUpperCase().trim().substr(0, 8); // Limit to 8 chars
     UI_STATE.refPrefix = sanitized || 'CHQ1';
-    localStorage.setItem('roboledger_refPrefix', UI_STATE.refPrefix);
+    const _SS = window.StorageService;
+    if (_SS) { _SS.set('roboledger_refPrefix', UI_STATE.refPrefix); }
+    else { localStorage.setItem('roboledger_refPrefix', UI_STATE.refPrefix); }
 
     // Trigger grid re-render to update ref numbers
     window.updateWorkspace();
@@ -1464,24 +1456,39 @@
     // Will be applied after grid renders
     setTimeout(applyThemeToGrid, 100);
 
-    // Persist to unified settings object
-    const settings = {
+    // Persist settings — split into global (user prefs) vs per-client
+    const globalSettings = {
       activeTheme: UI_STATE.activeTheme,
       dexterity: UI_STATE.dexterity,
       fontSize: UI_STATE.fontSize,
       density: UI_STATE.density,
-      autocatEnabled: UI_STATE.autocatEnabled,
-      confidenceThreshold: UI_STATE.confidenceThreshold,
       refOverride: UI_STATE.refOverride,
       dateFormat: UI_STATE.dateFormat,
-      province: UI_STATE.province,
-      gstEnabled: UI_STATE.gstEnabled,
       // Grid appearance settings
       gridTheme: UI_STATE.gridTheme,
       gridFontSize: UI_STATE.gridFontSize
     };
+    const _SS = window.StorageService;
+    if (_SS) { _SS.set('roboledger_v5_settings', globalSettings); }
+    else { localStorage.setItem('roboledger_v5_settings', JSON.stringify(globalSettings)); }
 
-    localStorage.setItem('roboledger_v5_settings', JSON.stringify(settings));
+    // Per-client settings (province, GST, autocat) — scoped to active client
+    if (UI_STATE.activeClientId) {
+      const clientSettings = {
+        province: UI_STATE.province,
+        gstEnabled: UI_STATE.gstEnabled,
+        autocatEnabled: UI_STATE.autocatEnabled,
+        confidenceThreshold: UI_STATE.confidenceThreshold,
+      };
+      if (_SS) { _SS.set('roboledger_settings_' + UI_STATE.activeClientId, clientSettings); }
+      else { localStorage.setItem('roboledger_settings_' + UI_STATE.activeClientId, JSON.stringify(clientSettings)); }
+      console.log(`[SETTINGS] Per-client settings saved for ${UI_STATE.activeClientId}`);
+    } else {
+      // No client active — save as global fallback (backward compat)
+      const fallback = { ...globalSettings, province: UI_STATE.province, gstEnabled: UI_STATE.gstEnabled, autocatEnabled: UI_STATE.autocatEnabled, confidenceThreshold: UI_STATE.confidenceThreshold };
+      if (_SS) { _SS.set('roboledger_v5_settings', fallback); }
+      else { localStorage.setItem('roboledger_v5_settings', JSON.stringify(fallback)); }
+    }
 
     // Close drawer
     toggleSettings(false);
@@ -1527,57 +1534,229 @@
 
   window.setDensity = function (density) {
     UI_STATE.density = density;
-    // Pass density to React component via bridge
-    if (window.updateGridDensity) {
-      window.updateGridDensity(density);
+    // Full re-render so density rowHeight takes effect via GRID_TOKENS
+    window.applyGridSettings();
+  };
+
+  // ─── AUTO-CAT HELPER: run on any existing uncategorized transactions ────────
+  // Called after client restore (init), after switchClient, and after import (awaited).
+  // Waits for RuleEngine.ready so there's no race with the async FuzzyMatcher fetch.
+  window._runAutoCatOnExisting = async function() {
+    // RuleEngine is a deferred ES module — wait up to 5s for it to set window.RuleEngine
+    if (!window.RuleEngine) {
+      console.log('[AUTO-CAT] Waiting for window.RuleEngine to load (ES module defer)...');
+      const start = Date.now();
+      await new Promise(resolve => {
+        const poll = setInterval(() => {
+          if (window.RuleEngine || Date.now() - start > 5000) {
+            clearInterval(poll);
+            resolve();
+          }
+        }, 50);
+      });
+      if (!window.RuleEngine) {
+        console.warn('[AUTO-CAT] RuleEngine never loaded after 5s — categorization skipped');
+        return;
+      }
+      console.log('[AUTO-CAT] window.RuleEngine appeared ✓');
     }
-    // Don't call render() - density is handled by React bridge
+    console.log('[AUTO-CAT] Waiting for RuleEngine.ready...');
+    await window.RuleEngine.ready;
+    console.log('[AUTO-CAT] RuleEngine ready ✓');
+
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+
+    // Collect uncategorized: no category, explicit UNCATEGORIZED string, RAW status, or 9970 fallback
+    // NOTE: do NOT re-try user_categorized transactions (category_source === 'user')
+    const uncategorized = allTxns.filter(tx =>
+      tx.category_source !== 'user' && (
+        !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW' || tx.category === '9970'
+      )
+    );
+
+    console.log(`[AUTO-CAT] ${allTxns.length} total txns, ${uncategorized.length} need categorization`);
+    if (uncategorized.length === 0) {
+      console.log('[AUTO-CAT] All transactions already categorized ✓');
+      return;
+    }
+
+    // Log a sample of what we're trying to categorize (first 3)
+    uncategorized.slice(0, 3).forEach(tx => {
+      console.log(`[AUTO-CAT] Sample: "${(tx.description || tx.raw_description || '').slice(0, 50)}" category=${tx.category} status=${tx.status}`);
+    });
+
+    const result = await window.RuleEngine.bulkCategorize(uncategorized);
+    console.log(`[AUTO-CAT] Done: ${result.categorized} categorized, ${result.flagged} flagged for review, ${result.skipped} skipped (no match)`);
+
+    // Always refresh workspace so the grid reflects the latest state (even if 0 categorized,
+    // the skipped txns may have had their status updated)
+    if (window.updateWorkspace) window.updateWorkspace();
+  };
+
+  /**
+   * Same as _runAutoCatOnExisting but drives the progress bar during bulk categorization.
+   * Called from the post-import flow so the user sees real-time feedback.
+   */
+  window._runAutoCatOnExistingWithProgress = async function(totalImported) {
+    // Progress range: 82–97% (caller sets 82% before calling us, we finish at 97%)
+    const PROGRESS_START = 82;
+    const PROGRESS_END   = 97;
+    // Helper: map internal 0-100% to our 82–97% slice
+    const mapProgress = (internalPct) =>
+      PROGRESS_START + Math.round((internalPct / 100) * (PROGRESS_END - PROGRESS_START));
+
+    // RuleEngine is a deferred ES module — wait up to 5s
+    if (!window.RuleEngine) {
+      await window.updateProgressBar(mapProgress(0), 100, 'Categorizing...', 'Waiting for Rule Engine...', totalImported);
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const start = Date.now();
+      await new Promise(resolve => {
+        const poll = setInterval(() => {
+          if (window.RuleEngine || Date.now() - start > 5000) {
+            clearInterval(poll);
+            resolve();
+          }
+        }, 50);
+      });
+      if (!window.RuleEngine) {
+        console.warn('[AUTO-CAT] RuleEngine never loaded — skipping');
+        return;
+      }
+    }
+    await window.RuleEngine.ready;
+
+    const allTxns = window.RoboLedger?.Ledger?.getAll() || [];
+    const uncategorized = allTxns.filter(tx =>
+      tx.category_source !== 'user' && (
+        !tx.category || tx.category === 'UNCATEGORIZED' || tx.status === 'RAW' || tx.category === '9970'
+      )
+    );
+
+    if (uncategorized.length === 0) {
+      await window.updateProgressBar(PROGRESS_END, 100, 'Categorizing...', 'All transactions already categorized ✓', totalImported);
+      return;
+    }
+
+    const total = uncategorized.length;
+    console.log(`[AUTO-CAT+PROGRESS] ${total} transactions to categorize`);
+
+    // Pass onProgress callback to bulkCategorize — updates progress bar in real time (82→97%)
+    const result = await window.RuleEngine.bulkCategorize(uncategorized, {
+      onProgress: async (done, count) => {
+        const internalPct = Math.round((done / count) * 100);
+        const mappedPct = mapProgress(internalPct);
+        const stage = `Categorizing transactions... ${internalPct}% (${done}/${count})`;
+        await window.updateProgressBar(mappedPct, 100, 'Categorizing...', stage, totalImported);
+      }
+    });
+
+    console.log(`[AUTO-CAT+PROGRESS] Done: ${result.categorized} categorized, ${result.flagged} flagged, ${result.skipped} skipped`);
+    await window.updateProgressBar(PROGRESS_END, 100, 'Categorizing...', `${result.categorized} transactions categorized ✓`, totalImported);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    if (window.updateWorkspace) window.updateWorkspace();
   };
 
   function init() {
-    // STATE VERSION CHECK: Prevent cache hallucination
-    const STATE_VERSION = '5.2.0';
-    const savedData = localStorage.getItem('roboledger_v5_data');
+    const _SS = window.StorageService;
+    // Helper: read from StorageService (parsed objects) or localStorage (JSON strings)
+    function _ssGet(key) {
+      if (_SS) return _SS.get(key);
+      const raw = localStorage.getItem(key);
+      if (raw === null) return null;
+      try { return JSON.parse(raw); } catch { return raw; }
+    }
+    function _ssRemove(key) { if (_SS) _SS.remove(key); else localStorage.removeItem(key); }
 
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        if (parsed.version && parsed.version !== STATE_VERSION) {
-          console.warn(`[STATE] Version mismatch: saved=${parsed.version}, current=${STATE_VERSION}`);
-          console.warn('[STATE] Clearing incompatible cache to prevent bugs');
-          localStorage.clear();
-          window.RoboLedger.Ledger.reset();
+    // STATE VERSION CHECK: Prevent cache hallucination
+    // Multi-client aware: only check legacy key if no client is active
+    const STATE_VERSION = '5.2.0';
+    const savedActiveClient = _ssGet('roboledger_active_client');
+
+    if (!savedActiveClient) {
+      // Legacy / demo mode: check the shared roboledger_v5_data key
+      const savedData = _ssGet('roboledger_v5_data');
+      if (savedData) {
+        try {
+          const parsed = (typeof savedData === 'string') ? JSON.parse(savedData) : savedData;
+          if (parsed.version && parsed.version !== STATE_VERSION) {
+            console.warn(`[STATE] Version mismatch: saved=${parsed.version}, current=${STATE_VERSION}`);
+            _ssRemove('roboledger_v5_data'); // Targeted removal — preserve client keys
+            window.RoboLedger.Ledger.reset();
+          }
+        } catch (e) {
+          console.error('[STATE] Corrupt legacy storage — removing legacy key only', e);
+          _ssRemove('roboledger_v5_data');
         }
-      } catch (e) {
-        console.error('[STATE] Corrupt localStorage detected, clearing', e);
-        localStorage.clear();
       }
     }
+
+    // ── MULTI-CLIENT RESTORE ──────────────────────────────────────────────────
+    if (savedActiveClient) {
+      const savedClients = _ssGet('roboledger_clients') || [];
+      const savedClient  = savedClients.find(c => c.id === savedActiveClient);
+      if (savedClient) {
+        window.RoboLedger.Ledger.loadFromKey('roboledger_v5_data_' + savedActiveClient);
+        UI_STATE.activeClientId   = savedActiveClient;
+        UI_STATE.activeClientName = savedClient.name;
+        console.log(`[CLIENT] Restored active client: ${savedClient.name} (${savedActiveClient})`);
+        // Update sidebar after DOM is ready
+        setTimeout(() => window.updateClientSwitcherUI(savedClient), 0);
+      } else {
+        // Client no longer exists — clear stale reference
+        _ssRemove('roboledger_active_client');
+        console.warn('[CLIENT] Stale active_client reference cleared');
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── MULTI-ACCOUNTANT RESTORE ─────────────────────────────────────────────
+    const savedActiveAccountant = _ssGet('roboledger_active_accountant');
+    if (savedActiveAccountant) {
+      const savedAccountants = _ssGet('roboledger_accountants') || [];
+      const savedAccountant  = savedAccountants.find(a => a.id === savedActiveAccountant);
+      if (savedAccountant) {
+        UI_STATE.activeAccountantId   = savedActiveAccountant;
+        UI_STATE.activeAccountantName = savedAccountant.name;
+        console.log(`[ACCOUNTANT] Restored: ${savedAccountant.name} (${savedActiveAccountant})`);
+        setTimeout(() => { if (window.updateAccountantSwitcherUI) window.updateAccountantSwitcherUI(savedAccountant); }, 0);
+      } else {
+        _ssRemove('roboledger_active_accountant');
+        console.warn('[ACCOUNTANT] Stale active_accountant reference cleared');
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     setupNav();
     setupActions();
 
-    // Check for existing data (Recovery Logic)
-    const existingData = window.RoboLedger.Ledger.getAll();
-    if (existingData.length > 0) {
-      console.log(`[V5 RECOVERY] Detected ${existingData.length} existing transactions. Prompting user.`);
-      UI_STATE.recoveryPending = true;
-    }
-
-    // Load saved settings
-    const savedSettings = localStorage.getItem('roboledger_v5_settings');
+    // Load saved settings — global first, then overlay per-client
+    const savedSettings = _ssGet('roboledger_v5_settings');
     if (savedSettings) {
       try {
-        const settings = JSON.parse(savedSettings);
+        const settings = (typeof savedSettings === 'string') ? JSON.parse(savedSettings) : savedSettings;
         Object.assign(UI_STATE, settings);
-        console.log('[SETTINGS] Loaded user preferences.');
+        console.log('[SETTINGS] Loaded global user preferences.');
       } catch (e) {
         console.error('[SETTINGS] Failed to parse saved settings', e);
       }
     }
+    // Overlay per-client settings (province, GST, autocat) if a client is active
+    if (UI_STATE.activeClientId) {
+      const clientSettingsRaw = _ssGet('roboledger_settings_' + UI_STATE.activeClientId);
+      if (clientSettingsRaw) {
+        try {
+          const clientSettings = (typeof clientSettingsRaw === 'string') ? JSON.parse(clientSettingsRaw) : clientSettingsRaw;
+          Object.assign(UI_STATE, clientSettings);
+          console.log(`[SETTINGS] Loaded per-client settings for ${UI_STATE.activeClientId}`);
+        } catch (e) {
+          console.error('[SETTINGS] Failed to parse per-client settings', e);
+        }
+      }
+    }
 
     // Apply saved theme on page load (legacy support + immediate apply)
-    const savedTheme = localStorage.getItem('roboledger_theme') || 'default';
+    const savedTheme = _ssGet('roboledger_theme') || 'default';
     if (savedTheme) { // Check if savedTheme is not null/undefined
       UI_STATE.activeTheme = savedTheme;
       // Theme will be applied to grid container after render, not to body
@@ -1585,49 +1764,159 @@
     }
 
     render();
+    setTimeout(() => { if (window.updateSidebarState) window.updateSidebarState(); }, 0);
+
+    // Auto-categorize any uncategorized transactions from the restored client
+    // (covers data imported before the RuleEngine.ready fix was in place)
+    window._runAutoCatOnExisting();
   }
 
-  // Navigation function for routing between pages  
+  // Navigation function for routing between pages
   window.navigateTo = function (route) {
+    if (!route) return; // Guard: action-only nav items have no route
+
     console.log(`[NAVIGATE] → ${route}`);
+
+    // Guard: client-only routes require an active client — redirect to portal
+    const _CLIENT_ROUTES = ['import', 'coa', 'reports', 'dashboard'];
+    if (_CLIENT_ROUTES.includes(route) && !UI_STATE.activeClientId) {
+      console.log(`[NAVIGATE] Blocked ${route} — no active client. Showing portal.`);
+      route = 'home';
+    }
 
     UI_STATE.currentRoute = route;
 
-    // Update breadcrumbs
+    // Toggle no-stage-padding class for routes that need edge-to-edge layout (home)
+    document.body.classList.toggle('route-home', route === 'home');
+
+    // ACCOUNTANT LAYER: clear drill-down state when navigating back to admin top
+    if (route === 'accountants') {
+      UI_STATE.activeAccountantId   = null;
+      UI_STATE.activeAccountantName = '';
+      _ssRemove('roboledger_active_accountant');
+      if (window.updateAccountantSwitcherUI) window.updateAccountantSwitcherUI(null);
+    }
+
+    // Update breadcrumbs — Multi-tier: Admin > Accountant > Client > Page
     if (route === 'home') {
-      UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin',   route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: 'Home', active: true },
+        ];
+      } else if (UI_STATE.activeAccountantId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: 'Home', active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home', active: true }];
+      }
+    } else if (route === 'accountants') {
+      UI_STATE.breadcrumbs = [{ label: 'Admin', active: true }];
+    } else if (route === 'clients') {
+      if (UI_STATE.activeAccountantId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Clients', active: true }];
+      }
     } else if (route === 'import') {
-      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: 'Transactions', active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Transactions', active: true }];
+      }
     } else if (route === 'coa') {
-      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: 'Chart of Accounts', active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: 'Chart of Accounts', active: true }];
+      }
+    } else if (route === 'reconciliation') {
+      const _reconAcc = UI_STATE.selectedAccount !== 'ALL'
+        ? (window.RoboLedger?.Accounts?.getAll?.() || []).find(a => a.id === UI_STATE.selectedAccount)
+        : null;
+      const _reconAccLabel = _reconAcc ? (_reconAcc.name || _reconAcc.ref || 'Account') : null;
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        const base = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: 'Transactions', route: 'import' },
+          { label: 'Bank Reconciliation', ...(_reconAccLabel ? { route: 'reconciliation' } : { active: true }) },
+        ];
+        if (_reconAccLabel) base.push({ label: _reconAccLabel, active: true });
+        UI_STATE.breadcrumbs = base;
+      } else {
+        const base = [
+          { label: 'Home' },
+          { label: 'Transactions', route: 'import' },
+          { label: 'Bank Reconciliation', ...(_reconAccLabel ? { route: 'reconciliation' } : { active: true }) },
+        ];
+        if (_reconAccLabel) base.push({ label: _reconAccLabel, active: true });
+        UI_STATE.breadcrumbs = base;
+      }
     } else {
       const label = route.charAt(0).toUpperCase() + route.slice(1);
-      UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
+      if (UI_STATE.activeAccountantId && UI_STATE.activeClientId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: UI_STATE.activeClientName, route: 'clients' },
+          { label: label, active: true },
+        ];
+      } else if (UI_STATE.activeAccountantId) {
+        UI_STATE.breadcrumbs = [
+          { label: 'Admin', route: 'accountants' },
+          { label: UI_STATE.activeAccountantName, route: 'clients' },
+          { label: label, active: true },
+        ];
+      } else {
+        UI_STATE.breadcrumbs = [{ label: 'Home' }, { label: label, active: true }];
+      }
     }
 
     // Render breadcrumbs to DOM
-    const bcContainer = document.getElementById('breadcrumb');
+    const bcContainer = document.getElementById('top-breadcrumb');
     if (bcContainer) {
       bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
-        const isLast = i === UI_STATE.breadcrumbs.length - 1;
-        const isHome = bc.label.toLowerCase() === 'home';
-        const bcRoute = isHome ? 'home' : (bc.label === 'Transactions' ? 'import' : bc.label.toLowerCase());
+        const isLast  = i === UI_STATE.breadcrumbs.length - 1;
+        const isHome  = bc.label.toLowerCase() === 'home';
+        const isAdmin = bc.label === 'Admin';
+        const bcRoute = bc.route
+          ? bc.route
+          : isHome ? 'home'
+          : (bc.label === 'Transactions' ? 'import'
+          : (bc.label === 'Chart of Accounts' ? 'coa'
+          : bc.label.toLowerCase()));
 
         return `
-          <div class="breadcrumb-item ${isLast ? 'active' : ''}" 
+          <div class="breadcrumb-item ${isLast ? 'active' : ''}"
                style="cursor: ${isLast ? 'default' : 'pointer'};"
                onclick="${isLast ? '' : `window.navigateTo('${bcRoute}');`}">
-            ${isHome ? '<i class="ph ph-house breadcrumb-icon" style="margin-right: 6px; font-size: 14px; color: #3b82f6;"></i>' : ''}
-            <span class="breadcrumb-label" style="${!isLast ? 'color: #3b82f6; font-weight: 500;' : ''}">${bc.label}</span>
+            ${isHome  ? '<i class="ph ph-house" style="margin-right:5px;font-size:13px;"></i>' : ''}
+            ${isAdmin ? '<i class="ph ph-shield-check" style="margin-right:5px;font-size:13px;"></i>' : ''}
+            <span>${bc.label}</span>
           </div>
-          ${isLast ? '' : '<span class="breadcrumb-separator" style="margin: 0 10px; color: #cbd5e1;"><i class="ph ph-caret-right" style="font-size: 10px;"></i></span>'}
+          ${isLast ? '' : '<span class="breadcrumb-separator"><i class="ph ph-caret-right"></i></span>'}
         `;
-      }).join('') + `
-        <div style="flex: 1;"></div>
-        <button onclick="window.devReset()" style="padding: 4px 10px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 12px;" title="Clear all localStorage and reset (Dev only)">
-          ⚠️ DEV RESET
-        </button>
-      `;
+      }).join('');
     }
 
     //Update sidebar
@@ -1648,6 +1937,13 @@
     document.querySelectorAll('.nav-item').forEach(item => {
       item.onclick = (e) => {
         const route = e.currentTarget.dataset.route;
+
+        // Action-only nav items (no data-route) — dispatch by action attribute
+        if (!route) {
+          const action = e.currentTarget.dataset.action;
+          if (action === 'clearGrid') window.clearGrid?.();
+          return;
+        }
 
         // Close mobile sidebar when navigation is clicked
         const sidebar = document.getElementById('sidebar');
@@ -1682,6 +1978,7 @@
     console.warn('[DEV RESET] Clearing all state and cache...');
 
     // Clear ALL storage
+    if (window.StorageService?.clearAll) window.StorageService.clearAll();
     localStorage.clear();
     sessionStorage.clear();
     window.RoboLedger.Ledger.reset();
@@ -1810,9 +2107,11 @@
     // Delegated actions (Add Row)
     stage.addEventListener('click', (e) => {
       if (e.target.closest('.btn-add-row')) {
-        const accId = UI_STATE.selectedAccount === 'ALL' ? 'ACC-001' : UI_STATE.selectedAccount;
+        // Use the currently selected account, or the first active account — never a placeholder
+        const accId = UI_STATE.selectedAccount !== 'ALL' ? UI_STATE.selectedAccount
+            : (window.RoboLedger?.Accounts?.getActive?.()?.[0]?.id || UI_STATE.selectedAccount);
         window.RoboLedger.Ledger.createManual(accId);
-        window.window.updateWorkspace();
+        window.updateWorkspace();
       }
     });
 
@@ -1824,29 +2123,15 @@
     document.addEventListener('click', (e) => {
       if (UI_STATE.bulkMenuOpen && !e.target.closest('.bulk-actions-container')) {
         UI_STATE.bulkMenuOpen = false;
-        window.window.updateWorkspace();
+        window.updateWorkspace();
       }
     });
   }
 
+  // handleReset now delegates to clearGrid() which properly scopes the clear
+  // to only transaction/account data while preserving firm and client metadata.
   window.handleReset = () => {
-    if (!UI_STATE.resetConfirm) {
-      UI_STATE.resetConfirm = true;
-      window.updateWorkspace();
-      // Auto-reset confirmation after 3 seconds of inactivity
-      setTimeout(() => {
-        if (UI_STATE.resetConfirm) {
-          UI_STATE.resetConfirm = false;
-          window.updateWorkspace();
-        }
-      }, 3000);
-    } else {
-      window.RoboLedger.Ledger.reset();
-      window.RoboLedger.Accounts.reset(); // Clear cached accounts
-      UI_STATE.resetConfirm = false;
-      UI_STATE.selectedAccount = 'ACC-001';
-      window.updateWorkspace();
-    }
+    window.clearGrid();
   };
 
   window.toggleSearch = function (open) {
@@ -1970,188 +2255,278 @@
   function toggleSettings(open) {
     UI_STATE.isSettingsOpen = open;
     const drawer = document.getElementById('settings-drawer');
+
+    if (open) {
+        // Position drawer to start at the top edge of the grid (FilterToolbar top),
+        // not the top of the viewport — keeps it contained within the grid boundary.
+        // Use the React mount point or the grid-container-wall as the reference element.
+        const gridEl = document.getElementById('tx-grid-root')
+                    || document.querySelector('.grid-container-wall')
+                    || document.querySelector('.stage');
+        if (gridEl) {
+            const rect = gridEl.getBoundingClientRect();
+            // Top of the FilterToolbar (sticky at top of grid area)
+            drawer.style.top    = Math.max(0, rect.top) + 'px';
+            drawer.style.height = (window.innerHeight - Math.max(0, rect.top)) + 'px';
+        } else {
+            // Fallback: FilterToolbar is 42px; assume app shell above is ~42px
+            drawer.style.top    = '42px';
+            drawer.style.height = 'calc(100vh - 42px)';
+        }
+        renderSettingsDrawer();
+    } else {
+        // Reset so CSS class controls position on close
+        drawer.style.top    = '';
+        drawer.style.height = '';
+    }
+
     drawer.classList.toggle('open', open);
-    if (open) renderSettingsDrawer();
   }
 
+  // ── Settings Drawer helpers exposed on window for inline onclick ──────────
+  // Must be defined BEFORE renderSettingsDrawer so they are available in HTML
+  window._settingsThemes = [
+    { val:'default',      label:'Default',    dot:'#e5e7eb' },
+    { val:'vanilla',      label:'Vanilla',    dot:'#fef9c3' },
+    { val:'classic',      label:'Classic',    dot:'#d0d0d0' },
+    { val:'ledger-pad',   label:'Ledger Pad', dot:'#ede9fe' },
+    { val:'post-it-note', label:'Post-it',    dot:'#fef08a' },
+    { val:'rainbow',      label:'Rainbow',    dot:'linear-gradient(90deg,#fee2e2,#fef3c7,#d9f99d,#bfdbfe,#ddd6fe)' },
+    { val:'social',       label:'Social',     dot:'#eff6ff' },
+    { val:'spectrum',     label:'Spectrum',   dot:'#f3e8ff' },
+    { val:'subliminal',   label:'Subliminal', dot:'#f5f5f4' },
+    { val:'subtle',       label:'Subtle',     dot:'#f1f5f9' },
+    { val:'tracker',      label:'Tracker',    dot:'#dcfce7' },
+    { val:'vintage',      label:'Vintage',    dot:'#fde8cc' },
+    { val:'wave',         label:'Wave',       dot:'#cffafe' },
+    { val:'webapp',       label:'WebApp',     dot:'#f5f5f5' },
+  ];
+  window._settingsProvinces = [
+    { val:'AB',label:'Alberta',             tax:'5% GST'              },
+    { val:'BC',label:'British Columbia',    tax:'5% GST + 7% PST'     },
+    { val:'MB',label:'Manitoba',            tax:'5% GST + 7% PST'     },
+    { val:'NB',label:'New Brunswick',       tax:'15% HST'             },
+    { val:'NL',label:'Newfoundland',        tax:'15% HST'             },
+    { val:'NT',label:'NW Territories',      tax:'5% GST'              },
+    { val:'NS',label:'Nova Scotia',         tax:'15% HST'             },
+    { val:'NU',label:'Nunavut',             tax:'5% GST'              },
+    { val:'ON',label:'Ontario',             tax:'13% HST'             },
+    { val:'PE',label:'Prince Edward Is.',   tax:'15% HST'             },
+    { val:'QC',label:'Quebec',              tax:'5% GST + 9.975% QST' },
+    { val:'SK',label:'Saskatchewan',        tax:'5% GST + 6% PST'     },
+    { val:'YT',label:'Yukon',               tax:'5% GST'              },
+  ];
+  window._settingsSetThemeDot = function(val) {
+    const t = window._settingsThemes.find(x => x.val === val);
+    const dot = document.getElementById('settings-theme-dot');
+    if (t && dot) dot.style.background = t.dot;
+  };
+  window._settingsSetProvinceTax = function(val) {
+    const p = window._settingsProvinces.find(x => x.val === val);
+    const el = document.getElementById('settings-province-tax');
+    if (el) el.textContent = p ? p.tax : '';
+  };
+
   function renderSettingsDrawer() {
+    if (window.__settingsTab) { UI_STATE.settingsTab = window.__settingsTab; window.__settingsTab = null; }
+
     const drawer = document.getElementById('settings-drawer');
+    if (!drawer) return;
+
+    const tabs = [
+      { id:'appearance', icon:'ph-paint-brush', label:'Appearance' },
+      { id:'columns',    icon:'ph-columns',      label:'Columns'    },
+      { id:'tax',        icon:'ph-percent',       label:'Tax'        },
+      { id:'data',       icon:'ph-database',      label:'Data'       },
+    ];
+    if (!tabs.find(t => t.id === UI_STATE.settingsTab)) UI_STATE.settingsTab = 'appearance';
+
     drawer.innerHTML = `
-      <div class="drawer-header" style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-              <div style="background: #f1f5f9; padding: 8px; border-radius: 8px; color: #64748b;">
-                  <i class="ph ph-gear-six" style="font-size: 1.2rem;"></i>
-              </div>
-              <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0;">Settings</h2>
-          </div>
-          <i class="ph ph-x close-drawer" style="font-size: 20px; cursor: pointer; color: #94a3b8;" onclick="toggleSettings(false)"></i>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0;background:#1e293b;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <i class="ph ph-gear-six" style="font-size:17px;color:#94a3b8;"></i>
+          <span style="font-size:13px;font-weight:700;color:#fff;letter-spacing:-0.01em;">Preferences</span>
+        </div>
+        <button onclick="window.toggleSettings(false)" style="background:rgba(255,255,255,0.1);border:none;color:#94a3b8;cursor:pointer;padding:5px 7px;border-radius:6px;display:flex;align-items:center;line-height:1;">
+          <i class="ph ph-x" style="font-size:15px;"></i>
+        </button>
       </div>
-      <div class="drawer-tabs">
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'grid' ? 'active' : ''}" data-tab="grid">GRID</div>
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'columns' ? 'active' : ''}" data-tab="columns">COLUMNS</div>
-          <div class="drawer-tab ${UI_STATE.settingsTab === 'data' ? 'active' : ''}" data-tab="data">DATA</div>
+
+      <div style="display:flex;border-bottom:1px solid #e2e8f0;background:#f8fafc;flex-shrink:0;">
+        ${tabs.map(t => `
+          <button onclick="window.__settingsTab='${t.id}'; window.renderSettingsDrawer();"
+            style="flex:1;padding:10px 4px;border:none;border-bottom:2px solid ${UI_STATE.settingsTab===t.id?'#3b82f6':'transparent'};background:transparent;color:${UI_STATE.settingsTab===t.id?'#3b82f6':'#64748b'};font-size:9.5px;font-weight:700;letter-spacing:0.05em;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;">
+            <i class="ph ${t.icon}" style="font-size:15px;"></i>
+            ${t.label.toUpperCase()}
+          </button>
+        `).join('')}
       </div>
-      <div class="drawer-content">
-          ${renderSettingsTabContent()}
+
+      <div style="flex:1;overflow-y:auto;padding:18px;">
+        ${renderSettingsTabContent()}
       </div>
-      <div class="drawer-footer">
-          <button class="btn-restored" style="background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;" onclick="window.resetSettings()">Reset to Defaults</button>
-          <button class="btn-restored" onclick="window.saveSettings()">Save Settings</button>
+
+      <div style="padding:12px 16px;border-top:1px solid #e2e8f0;display:flex;gap:8px;background:#f8fafc;flex-shrink:0;">
+        <button onclick="window.resetSettings()" style="flex:1;padding:8px;border:1px solid #e2e8f0;background:white;color:#64748b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">Reset</button>
+        <button onclick="window.saveSettings()" style="flex:2;padding:8px;border:none;background:#1e293b;color:white;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Save &amp; Apply</button>
       </div>
     `;
-
-    // Wire tab switching
-    drawer.querySelectorAll('.drawer-tab').forEach(tab => {
-      tab.onclick = () => {
-        UI_STATE.settingsTab = tab.dataset.tab;
-        renderSettingsDrawer();
-      };
-    });
   }
 
   function renderSettingsTabContent() {
-    // TAB 1: GRID - All appearance settings
-    if (UI_STATE.settingsTab === 'grid') {
+
+    // ── APPEARANCE ──────────────────────────────────────────────────────────
+    if (UI_STATE.settingsTab === 'appearance') {
+      const themes   = window._settingsThemes;
+      const activeT  = themes.find(t => t.val === (UI_STATE.gridTheme || 'default')) || themes[0];
+      const density  = UI_STATE.density || 'comfortable';
+      const fontSize = UI_STATE.gridFontSize || 13.5;
+
       return `
-            <div class="setting-group">
-                <div class="setting-group-title">Professional Theme</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Preset themes matching professional accounting software</div>
-                <select class="v5-select" id="settings-grid-theme" onchange="window.previewGridTheme(this.value)">
-                    <option value="vanilla" ${UI_STATE.gridTheme === 'vanilla' ? 'selected' : ''}>Vanilla</option>
-                    <option value="classic" ${UI_STATE.gridTheme === 'classic' ? 'selected' : ''}>Classic</option>
-                    <option value="default" ${UI_STATE.gridTheme === 'default' ? 'selected' : ''}>Default</option>
-                    <option value="ledger-pad" ${UI_STATE.gridTheme === 'ledger-pad' ? 'selected' : ''}>Ledger Pad</option>
-                    <option value="post-it-note" ${UI_STATE.gridTheme === 'post-it-note' ? 'selected' : ''}>Post-it Note</option>
-                    <option value="rainbow" ${UI_STATE.gridTheme === 'rainbow' ? 'selected' : ''}>Rainbow</option>
-                    <option value="social" ${UI_STATE.gridTheme === 'social' ? 'selected' : ''}>Social</option>
-                    <option value="spectrum" ${UI_STATE.gridTheme === 'spectrum' ? 'selected' : ''}>Spectrum</option>
-                    <option value="subliminal" ${UI_STATE.gridTheme === 'subliminal' ? 'selected' : ''}>Subliminal</option>
-                    <option value="subtle" ${UI_STATE.gridTheme === 'subtle' ? 'selected' : ''}>Subtle</option>
-                    <option value="tracker" ${UI_STATE.gridTheme === 'tracker' ? 'selected' : ''}>Tracker</option>
-                    <option value="vintage" ${UI_STATE.gridTheme === 'vintage' ? 'selected' : ''}>Vintage</option>
-                    <option value="wave" ${UI_STATE.gridTheme === 'wave' ? 'selected' : ''}>Wave</option>
-                    <option value="webapp" ${UI_STATE.gridTheme === 'webapp' ? 'selected' : ''}>WebApp</option>
-                </select>
-            </div>
-            
-            <div class="setting-group">
-                <div class="setting-group-title">Custom Adjustments</div>
-                <div style="margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label style="font-size: 11px; font-weight: 700; color: #94a3b8;">GRID FONT SIZE</label>
-                        <span id="grid-fontsize-display" style="font-size: 11px; font-weight: 700; color: #3b82f6;">${UI_STATE.gridFontSize}px</span>
-                    </div>
-                    <input type="range" id="settings-grid-fontsize" min="9" max="16" step="0.5" value="${UI_STATE.gridFontSize}" 
-                           style="width: 100%;" 
-                           oninput="window.previewGridFontSize(this.value)">
-                    <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Overrides theme default</div>
-                </div>
-                
-                <div>
-                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 8px;">ROW HEIGHT</label>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'compact' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('compact')">Compact</button>
-                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'comfortable' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('comfortable')">Comfortable</button>
-                        <button class="btn-restored" style="flex: 1; ${UI_STATE.density === 'spacious' ? '' : 'background: white; color: #64748b; border: 1px solid #e2e8f0; box-shadow: none;'}" onclick="window.setDensity('spacious')">Spacious</button>
-                    </div>
-                </div>
-            </div>
-        `;
+        <div style="margin-bottom:22px;">
+          <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">Grid Theme</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span id="settings-theme-dot" style="width:18px;height:18px;border-radius:4px;flex-shrink:0;background:${activeT.dot};border:1px solid rgba(0,0,0,0.12);display:inline-block;"></span>
+            <select id="settings-grid-theme"
+              onchange="window.previewGridTheme(this.value); window._settingsSetThemeDot(this.value);"
+              style="flex:1;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;font-weight:500;color:#1e293b;cursor:pointer;appearance:auto;outline:none;">
+              ${themes.map(t => `<option value="${t.val}" ${(UI_STATE.gridTheme||'default')===t.val?'selected':''}>${t.label}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:22px;">
+          <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">Row Density</div>
+          <div id="density-group" style="display:flex;gap:6px;">
+            ${['compact','comfortable','spacious'].map(d => `
+              <button onclick="window.setDensity('${d}'); document.querySelectorAll('#density-group button').forEach(b=>{ b.style.borderColor='#e2e8f0'; b.style.background='white'; b.style.color='#64748b'; b.style.fontWeight='500'; }); this.style.borderColor='#3b82f6'; this.style.background='#eff6ff'; this.style.color='#1e40af'; this.style.fontWeight='700';"
+                style="flex:1;padding:8px 6px;border:2px solid ${density===d?'#3b82f6':'#e2e8f0'};border-radius:8px;background:${density===d?'#eff6ff':'white'};cursor:pointer;font-size:11px;font-weight:${density===d?'700':'500'};color:${density===d?'#1e40af':'#64748b'};text-transform:capitalize;"
+              >${d}</button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;text-transform:uppercase;">Font Size</div>
+            <span id="grid-fontsize-display" style="font-size:11px;font-weight:700;color:#3b82f6;background:#eff6ff;padding:2px 8px;border-radius:10px;">${fontSize}px</span>
+          </div>
+          <input type="range" id="settings-grid-fontsize" min="9" max="16" step="0.5" value="${fontSize}"
+            style="width:100%;accent-color:#3b82f6;"
+            oninput="window.previewGridFontSize(this.value)">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:2px;"><span>9px</span><span>16px</span></div>
+        </div>
+      `;
     }
 
-    // TAB 2: COLUMNS - Visibility toggles
+    // ── COLUMNS ─────────────────────────────────────────────────────────────
     if (UI_STATE.settingsTab === 'columns') {
-      // Load saved column preferences from localStorage
-      const savedPrefs = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
-
+      const savedPrefs = _ssGet('roboledger_column_prefs') || {};
       const columns = [
-        { field: 'date', label: 'Date', visible: savedPrefs.date !== false }, // default true
-        { field: 'ref', label: 'Ref #', visible: savedPrefs.ref !== false },
-        { field: 'description', label: 'Description', visible: savedPrefs.description !== false },
-        { field: 'debit_col', label: 'Debit', visible: savedPrefs.debit_col !== false },
-        { field: 'credit_col', label: 'Credit', visible: savedPrefs.credit_col !== false },
-        { field: 'balance', label: 'Balance', visible: savedPrefs.balance !== false },
-        { field: 'coa_code', label: 'Category', visible: savedPrefs.coa_code !== false },
-        { field: 'tax_cents', label: 'Sales Tax', visible: savedPrefs.tax_cents === true } // default false
+        { field:'date',        label:'Date',        icon:'ph-calendar-blank',  visible: savedPrefs.date        !== false },
+        { field:'ref',         label:'Ref #',       icon:'ph-hash',            visible: savedPrefs.ref         !== false },
+        { field:'description', label:'Description', icon:'ph-text-aa',         visible: savedPrefs.description !== false },
+        { field:'debit_col',   label:'Debit',       icon:'ph-arrow-up-right',  visible: savedPrefs.debit_col   !== false },
+        { field:'credit_col',  label:'Credit',      icon:'ph-arrow-down-left', visible: savedPrefs.credit_col  !== false },
+        { field:'balance',     label:'Balance',     icon:'ph-scales',          visible: savedPrefs.balance     !== false },
+        { field:'coa_code',    label:'Account',     icon:'ph-tag',             visible: savedPrefs.coa_code    !== false },
+        { field:'tax_cents',   label:'GST/HST',     icon:'ph-percent',         visible: savedPrefs.tax_cents   === true  },
       ];
 
       return `
-            <div class="setting-group">
-                <div class="setting-group-title">Column Visibility</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px;">Show or hide columns in the transaction grid</div>
-                ${columns.map(col => `
-                    <div class="column-toggle">
-                        <label>${col.label}</label>
-                        <label class="switch">
-                            <input type="checkbox" ${col.visible ? 'checked' : ''} onchange="window.toggleGridColumn('${col.field}', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                `).join('')}
+        <div style="font-size:11px;color:#94a3b8;margin-bottom:14px;line-height:1.5;">Toggle columns visible in the transaction grid.</div>
+        ${columns.map(col => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;margin-bottom:6px;background:${col.visible?'#f0f9ff':'#f8fafc'};border:1px solid ${col.visible?'#bae6fd':'#e2e8f0'};border-radius:8px;">
+            <div style="display:flex;align-items:center;gap:9px;">
+              <i class="ph ${col.icon}" style="font-size:15px;color:${col.visible?'#0284c7':'#94a3b8'};"></i>
+              <span style="font-size:12px;font-weight:${col.visible?'600':'400'};color:${col.visible?'#0c4a6e':'#64748b'};">${col.label}</span>
             </div>
-        `;
+            <label class="switch" style="flex-shrink:0;">
+              <input type="checkbox" ${col.visible?'checked':''} onchange="window.toggleGridColumn('${col.field}',this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        `).join('')}
+      `;
     }
 
-    // TAB 3: DATA - Export and management
-    if (UI_STATE.settingsTab === 'data') {
-      const txnCount = window.RoboLedger ? window.RoboLedger.Ledger.getAll().length : 0;
-      const accountCount = window.RoboLedger ? window.RoboLedger.Accounts.getAll().length : 0;
+    // ── TAX ─────────────────────────────────────────────────────────────────
+    if (UI_STATE.settingsTab === 'tax') {
+      const provinces    = window._settingsProvinces;
+      const activeProvObj = provinces.find(p => p.val === (UI_STATE.province||'AB')) || provinces[0];
 
       return `
-            <div class="setting-group">
-                <div class="setting-group-title">Tax Settings</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Configure regional tax rates</div>
-                <div style="margin-bottom: 12px;">
-                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">PROVINCE</label>
-                    <select id="settings-province" class="v5-select">
-                        <option value="ON" ${UI_STATE.province === 'ON' ? 'selected' : ''}>Ontario (13% HST)</option>
-                        <option value="BC" ${UI_STATE.province === 'BC' ? 'selected' : ''}>British Columbia (5% GST + 7% PST)</option>
-                        <option value="AB" ${UI_STATE.province === 'AB' ? 'selected' : ''}>Alberta (5% GST)</option>
-                        <option value="QC" ${UI_STATE.province === 'QC' ? 'selected' : ''}>Quebec (5% GST + 9.975% QST)</option>
-                        <option value="NS" ${UI_STATE.province === 'NS' ? 'selected' : ''}>Nova Scotia (15% HST)</option>
-                        <option value="NB" ${UI_STATE.province === 'NB' ? 'selected' : ''}>New Brunswick (15% HST)</option>
-                        <option value="MB" ${UI_STATE.province === 'MB' ? 'selected' : ''}>Manitoba (5% GST + 7% PST)</option>
-                        <option value="SK" ${UI_STATE.province === 'SK' ? 'selected' : ''}>Saskatchewan (5% GST + 6% PST)</option>
-                        <option value="PE" ${UI_STATE.province === 'PE' ? 'selected' : ''}>Prince Edward Island (15% HST)</option>
-                        <option value="NL" ${UI_STATE.province === 'NL' ? 'selected' : ''}>Newfoundland and Labrador (15% HST)</option>
-                        <option value="YT" ${UI_STATE.province === 'YT' ? 'selected' : ''}>Yukon (5% GST)</option>
-                        <option value="NT" ${UI_STATE.province === 'NT' ? 'selected' : ''}>Northwest Territories (5% GST)</option>
-                        <option value="NU" ${UI_STATE.province === 'NU' ? 'selected' : ''}>Nunavut (5% GST)</option>
-                    </select>
-                </div>
-                <div class="column-toggle">
-                    <label>Enable GST/HST Extraction</label>
-                    <label class="switch">
-                        <input type="checkbox" id="settings-gst-enabled" ${UI_STATE.gstEnabled ? 'checked' : ''}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Automatically calculate tax based on regional rates</div>
-            </div>
-            
-            <div class="setting-group">
-                <div class="setting-group-title">Export Data</div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 12px;">Export your transactions and accounts</div>
-                <div style="padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
-                    <div style="font-size: 12px; font-weight: 600; color: #1e293b;">${txnCount} transactions</div>
-                    <div style="font-size: 11px; color: #64748b;">${accountCount} accounts</div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('csv')">Export CSV</button>
-                    <button class="btn-restored" style="background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0; font-size: 11px;" onclick="window.exportData('json')">Export JSON</button>
-                </div>
-            </div>
-            
-            <div class="setting-group">
-                <div class="setting-group-title">System</div>
-                <div style="font-size: 11px; color: #64748b; margin-bottom: 12px;">
-                    <div>Version: ${UI_STATE.version}</div>
-                    <div>Mode: ${window.location.protocol === 'file:' ? 'Native' : 'Web'}</div>
-                </div>
-                <button class="btn-restored" style="width: 100%; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;" onclick="window.devReset()">Clear All Data</button>
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">⚠️ This will delete all transactions and accounts</div>
-            </div>
-        `;
+        <div style="margin-bottom:20px;">
+          <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">Province / Territory</div>
+          <select id="settings-province"
+            onchange="window._settingsSetProvinceTax(this.value);"
+            style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;font-weight:500;color:#1e293b;cursor:pointer;appearance:auto;outline:none;margin-bottom:6px;">
+            ${provinces.map(p => `<option value="${p.val}" ${(UI_STATE.province||'AB')===p.val?'selected':''}>${p.label}</option>`).join('')}
+          </select>
+          <div id="settings-province-tax" style="font-size:11px;color:#64748b;padding:3px 2px;">${activeProvObj.tax}</div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:${UI_STATE.gstEnabled?'#f0fdf4':'#f8fafc'};border:1px solid ${UI_STATE.gstEnabled?'#86efac':'#e2e8f0'};border-radius:8px;margin-bottom:14px;">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:#1e293b;">Auto-extract GST / HST</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Show calculated tax in GST/HST column</div>
+          </div>
+          <label class="switch" style="flex-shrink:0;">
+            <input type="checkbox" id="settings-gst-enabled" ${UI_STATE.gstEnabled?'checked':''}>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div style="padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:11px;color:#92400e;line-height:1.5;">
+          <i class="ph ph-info" style="margin-right:4px;"></i>
+          GST not applied to: CC payments, transfers, interest, dividends, insurance, or inter-bank transactions.
+        </div>
+      `;
+    }
+
+    // ── DATA ─────────────────────────────────────────────────────────────────
+    if (UI_STATE.settingsTab === 'data') {
+      const txnCount     = window.RoboLedger?.Ledger?.getAll?.()?.length || 0;
+      const accountCount = window.RoboLedger?.Accounts?.getActive?.()?.length || window.RoboLedger?.Accounts?.getAll?.()?.length || 0;
+
+      return `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+          <div style="padding:14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;text-align:center;">
+            <div style="font-size:22px;font-weight:800;color:#0284c7;">${txnCount.toLocaleString()}</div>
+            <div style="font-size:10px;color:#0369a1;font-weight:700;letter-spacing:0.05em;margin-top:2px;">TRANSACTIONS</div>
+          </div>
+          <div style="padding:14px;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;text-align:center;">
+            <div style="font-size:22px;font-weight:800;color:#16a34a;">${accountCount}</div>
+            <div style="font-size:10px;color:#15803d;font-weight:700;letter-spacing:0.05em;margin-top:2px;">ACCOUNTS</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">Export</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <button onclick="window.exportData('csv')" style="padding:10px;border:1px solid #e2e8f0;background:white;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:#374151;">
+              <i class="ph ph-file-csv" style="font-size:16px;color:#10b981;"></i> CSV
+            </button>
+            <button onclick="window.exportData('json')" style="padding:10px;border:1px solid #e2e8f0;background:white;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:#374151;">
+              <i class="ph ph-file-code" style="font-size:16px;color:#3b82f6;"></i> JSON
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">System</div>
+          <div style="padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11px;color:#64748b;line-height:1.9;">
+            <div>Version: <strong style="color:#1e293b;">${UI_STATE.version||'5.1'}</strong></div>
+            <div>Mode: <strong style="color:#1e293b;">${window.location.protocol==='file:'?'Native':'Web'}</strong></div>
+            <div>Storage: <strong style="color:#1e293b;">IndexedDB</strong></div>
+          </div>
+        </div>
+
+        <button onclick="window.devReset()" style="width:100%;padding:10px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <i class="ph ph-trash"></i> Clear All Data
+        </button>
+        <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:6px;">Permanently deletes all transactions and accounts</div>
+      `;
     }
 
     return '';
@@ -2165,7 +2540,7 @@
     UI_STATE.gridFontSize = 13.5;
     UI_STATE.density = 'comfortable';
 
-    localStorage.removeItem('roboledger_v5_settings');
+    _ssRemove('roboledger_v5_settings');
     renderSettingsDrawer();
     window.applyGridSettings();
 
@@ -2303,9 +2678,9 @@
       window.setGridColumnVisibility(columnId, visible);
 
       // Save preference to localStorage
-      const saved = JSON.parse(localStorage.getItem('roboledger_column_prefs') || '{}');
+      const saved = _ssGet('roboledger_column_prefs') || {};
       saved[field] = visible;
-      localStorage.setItem('roboledger_column_prefs', JSON.stringify(saved));
+      _ssSet('roboledger_column_prefs', saved);
 
       console.log(`[SETTINGS] Column ${columnId} ${visible ? 'shown' : 'hidden'} via React bridge`);
     } else {
@@ -2489,43 +2864,39 @@
     document.querySelectorAll('.nav-item').forEach(item => {
       item.classList.toggle('active', item.dataset.route === UI_STATE.currentRoute);
     });
+    if (window.updateSidebarState) window.updateSidebarState();
 
     // 2. Breadcrumbs (Functional Active Routing)
-    const bcContainer = document.getElementById('breadcrumb');
+    const bcContainer = document.getElementById('top-breadcrumb');
     if (bcContainer) {
       bcContainer.innerHTML = UI_STATE.breadcrumbs.map((bc, i) => {
-        const isLast = i === UI_STATE.breadcrumbs.length - 1;
-        const isHome = bc.label.toLowerCase() === 'home';
-        const route = isHome ? 'home' : 'import'; // Map labels to routes
-
+        const isLast  = i === UI_STATE.breadcrumbs.length - 1;
+        const isHome  = bc.label.toLowerCase() === 'home';
+        const isAdmin = bc.label === 'Admin';
+        const bcRoute = bc.route
+          ? bc.route
+          : isHome ? 'home'
+          : (bc.label === 'Transactions' ? 'import'
+          : (bc.label === 'Chart of Accounts' ? 'coa'
+          : bc.label.toLowerCase()));
         return `
-          <div class="breadcrumb-item ${isLast ? 'active' : ''}" 
+          <div class="breadcrumb-item ${isLast ? 'active' : ''}"
                style="cursor: ${isLast ? 'default' : 'pointer'};"
-               onclick="${isLast ? '' : `window.navigateTo('${route}');`}">
-            ${isHome ? '<i class="ph ph-house breadcrumb-icon" style="margin-right: 6px; font-size: 14px; color: #3b82f6;"></i>' : ''}
-            <span class="breadcrumb-label" style="${!isLast ? 'color: #3b82f6; font-weight: 500;' : ''}">${bc.label}</span>
+               onclick="${isLast ? '' : `window.navigateTo('${bcRoute}');`}">
+            ${isHome  ? '<i class="ph ph-house" style="margin-right:5px;font-size:13px;"></i>' : ''}
+            ${isAdmin ? '<i class="ph ph-shield-check" style="margin-right:5px;font-size:13px;"></i>' : ''}
+            <span>${bc.label}</span>
           </div>
-          ${isLast ? '' : '<span class="breadcrumb-separator" style="margin: 0 10px; color: #cbd5e1;"><i class="ph ph-caret-right" style="font-size: 10px;"></i></span>'}
+          ${isLast ? '' : '<span class="breadcrumb-separator"><i class="ph ph-caret-right"></i></span>'}
         `;
-      }).join('') + `
-        <div style="flex: 1;"></div>
-        <button onclick="window.devReset()" style="padding: 4px 10px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 12px;" title="Clear all localStorage and reset (Dev only)">
-          ⚠️ DEV RESET
-        </button>
-      `;
+      }).join('');
     }
 
     // 3. Stage Content
     const stage = document.getElementById('app-stage');
-    stage.innerHTML = `<div class="fade-in">${renderPage()}</div>`;
+    if (UI_STATE.currentRoute !== 'home') { stage.innerHTML = `<div class="fade-in">${renderPage()}</div>`; } else { renderHome(); }
 
-    // 4. Show recovery prompt if data exists from previous session
-    if (UI_STATE.recoveryPending) {
-      showRecoveryPrompt();
-      return; // Don't initialize grid until user chooses
-    }
-
-    //5. Grid Init
+    // 4. Grid Init
     if (UI_STATE.currentRoute === 'import' && !UI_STATE.isIngesting && !UI_STATE.isPoppedOut) {
       const gridDiv = document.querySelector('#txnGrid');
       if (gridDiv) {
@@ -2556,9 +2927,1879 @@
       case 'import': return renderTransactionsRestored();
       case 'coa': return renderCOAPage();
       case 'reports': return renderReportsPage();
-      case 'home': return renderHome();
+      case 'reconciliation': return renderBankRecPage();
+      case 'roadmap': return renderRoadmapPage();
+      case 'accountants': setTimeout(() => window.openContextDrawer(), 0); return '';
+      case 'clients':     setTimeout(() => window.openContextDrawer(), 0); return '';
+      case 'home': renderHome(); return ''; // renderHome() manages stage directly
       default: return renderPlaceholder(UI_STATE.currentRoute.toUpperCase());
     }
+  }
+
+  // ─── CLIENTS PAGE ────────────────────────────────────────────────────────────
+  function renderClientsPage() {
+    let clients = _ssGet('roboledger_clients') || [];
+    // ACCOUNTANT LAYER: filter when drilling into an accountant
+    if (UI_STATE.activeAccountantId) {
+      clients = clients.filter(c => c.accountantId === UI_STATE.activeAccountantId);
+    }
+    const totalTx = clients.reduce((s, c) => s + (c.txCount || 0), 0);
+    const thisYear = new Date().getFullYear();
+
+    const industryColors = {
+      PROFESSIONAL_SERVICES: { bg: '#eff6ff', color: '#2563eb' },
+      SHORT_TERM_RENTAL:     { bg: '#f0fdf4', color: '#16a34a' },
+      RETAIL:                { bg: '#fef3c7', color: '#d97706' },
+      CONSTRUCTION:          { bg: '#fff7ed', color: '#ea580c' },
+      RESTAURANT:            { bg: '#fdf4ff', color: '#9333ea' },
+      REAL_ESTATE:           { bg: '#f0fdfa', color: '#0d9488' },
+      E_COMMERCE:            { bg: '#faf5ff', color: '#7c3aed' },
+      HEALTHCARE:            { bg: '#fef2f2', color: '#dc2626' },
+      TECHNOLOGY:            { bg: '#f0f9ff', color: '#0284c7' },
+      NON_PROFIT:            { bg: '#fdf2f8', color: '#be185d' },
+      AGRICULTURE:           { bg: '#f7fee7', color: '#4d7c0f' },
+      TRANSPORTATION:        { bg: '#fefce8', color: '#a16207' },
+      CONSULTING:            { bg: '#ecfeff', color: '#0e7490' },
+      MANUFACTURING:         { bg: '#f5f3ff', color: '#6d28d9' },
+      OTHER:                 { bg: '#f8fafc', color: '#64748b' },
+    };
+    const industryLabels = {
+      PROFESSIONAL_SERVICES: 'Professional Services',
+      SHORT_TERM_RENTAL:     'Short-Term Rental',
+      RETAIL:                'Retail',
+      CONSTRUCTION:          'Construction',
+      RESTAURANT:            'Restaurant / Food',
+      REAL_ESTATE:           'Real Estate',
+      E_COMMERCE:            'E-Commerce',
+      HEALTHCARE:            'Healthcare',
+      TECHNOLOGY:            'Technology / SaaS',
+      NON_PROFIT:            'Non-Profit',
+      AGRICULTURE:           'Agriculture',
+      TRANSPORTATION:        'Transportation',
+      CONSULTING:            'Consulting',
+      MANUFACTURING:         'Manufacturing',
+      OTHER:                 'Other',
+    };
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const clientCardHTML = (client) => {
+      const initials = (client.name || '?')
+        .split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+      const iStyle = industryColors[client.industry] || industryColors.OTHER;
+      const iLabel = industryLabels[client.industry] || 'Other';
+      const isActive = UI_STATE.activeClientId === client.id;
+      const fyLabel = client.fiscalYearEnd ? MONTH_NAMES[(client.fiscalYearEnd - 1) % 12] : 'Dec';
+      const accentColor = client.color || '#3b82f6';
+      const ringStyle = isActive
+        ? `box-shadow:0 0 0 2px ${accentColor},0 4px 16px rgba(0,0,0,0.1);`
+        : 'box-shadow:0 1px 4px rgba(0,0,0,0.06);';
+
+      return `
+        <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);
+            border-radius:12px;overflow:hidden;transition:box-shadow 0.15s,transform 0.12s;${ringStyle}"
+             onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,0.1)'"
+             onmouseleave="this.style.transform='';this.style.boxShadow='${ringStyle.replace('box-shadow:','').replace(';','')}'">
+          <!-- Color bar -->
+          <div style="height:4px;background:${accentColor};"></div>
+          <div style="padding:16px 18px;">
+            <!-- Header row -->
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+              <div style="width:40px;height:40px;border-radius:10px;background:${accentColor};
+                  color:white;font-size:14px;font-weight:700;display:flex;align-items:center;
+                  justify-content:center;flex-shrink:0;letter-spacing:-0.5px;">${initials}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${client.name}</div>
+                ${client.legalName ? `<div style="font-size:11px;color:var(--text-tertiary,#94a3b8);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${client.legalName}</div>` : ''}
+              </div>
+              ${isActive ? `<span style="background:#dcfce7;color:#16a34a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:0.3px;flex-shrink:0;">ACTIVE</span>` : ''}
+            </div>
+            <!-- Industry badge -->
+            <div style="margin-bottom:12px;">
+              <span style="background:${iStyle.bg};color:${iStyle.color};font-size:11px;font-weight:600;padding:3px 8px;border-radius:5px;">${iLabel}</span>
+              ${client.province ? `<span style="background:var(--bg-tertiary,#f1f5f9);color:var(--text-secondary,#475569);font-size:11px;font-weight:600;padding:3px 8px;border-radius:5px;margin-left:6px;">${client.province}</span>` : ''}
+            </div>
+            <!-- Stats row -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+              <div style="text-align:center;padding:8px 4px;background:var(--bg-secondary,#f8fafc);border-radius:6px;">
+                <div style="font-size:16px;font-weight:700;color:var(--text-primary,#0f172a);">${(client.txCount || 0).toLocaleString()}</div>
+                <div style="font-size:10px;color:var(--text-tertiary,#94a3b8);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Transactions</div>
+              </div>
+              <div style="text-align:center;padding:8px 4px;background:var(--bg-secondary,#f8fafc);border-radius:6px;">
+                <div style="font-size:16px;font-weight:700;color:var(--text-primary,#0f172a);">${client.accountCount || 0}</div>
+                <div style="font-size:10px;color:var(--text-tertiary,#94a3b8);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Accounts</div>
+              </div>
+              <div style="text-align:center;padding:8px 4px;background:var(--bg-secondary,#f8fafc);border-radius:6px;">
+                <div style="font-size:16px;font-weight:700;color:var(--text-primary,#0f172a);">${fyLabel}</div>
+                <div style="font-size:10px;color:var(--text-tertiary,#94a3b8);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">FY End</div>
+              </div>
+            </div>
+            <!-- Footer row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:11px;color:var(--text-tertiary,#94a3b8);">
+                ${client.lastActive ? `Last active ${client.lastActive}` : `Created ${client.created || ''}`}
+              </span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button onclick="event.stopPropagation();window.openEditClientModal('${client.id}')"
+                    title="Edit client"
+                    style="background:transparent;border:1px solid var(--border-color,#e2e8f0);color:var(--text-secondary,#475569);
+                    font-size:13px;padding:4px 8px;border-radius:6px;cursor:pointer;line-height:1;">
+                  <i class="ph ph-pencil"></i>
+                </button>
+                ${!isActive ? `<button onclick="event.stopPropagation();window.deleteClient('${client.id}')"
+                    title="Delete client"
+                    style="background:transparent;border:1px solid #fecaca;color:#dc2626;
+                    font-size:13px;padding:4px 8px;border-radius:6px;cursor:pointer;line-height:1;">
+                  <i class="ph ph-trash"></i>
+                </button>` : ''}
+                <button onclick="window.switchClient('${client.id}')"
+                    style="background:${accentColor};color:white;border:none;
+                    font-size:12px;font-weight:600;padding:6px 13px;border-radius:6px;cursor:pointer;
+                    display:flex;align-items:center;gap:5px;">
+                  Open <i class="ph ph-arrow-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    const emptyStateHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--text-tertiary,#94a3b8);">
+        <div style="width:64px;height:64px;background:var(--bg-tertiary,#f1f5f9);border-radius:16px;
+            display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;">
+          <i class="ph ph-buildings" style="color:var(--text-tertiary,#94a3b8);"></i>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--text-primary,#0f172a);margin-bottom:6px;">No clients yet</div>
+        <div style="font-size:13px;color:var(--text-secondary,#475569);margin-bottom:24px;max-width:320px;margin-left:auto;margin-right:auto;">
+          Create your first client to start tracking their financials separately.
+        </div>
+        <button onclick="window.openCreateClientModal()"
+            style="background:#2563eb;color:white;border:none;padding:10px 22px;
+            border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;
+            align-items:center;gap:8px;">
+          <i class="ph ph-plus"></i> Create First Client
+        </button>
+      </div>
+    `;
+
+    return `
+      <div class="ai-brain-page" style="padding:24px 28px;max-width:1100px;">
+        <!-- Page Header -->
+        <div class="std-page-header">
+          <div class="header-brand">
+            <div class="icon-box" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+              <i class="ph ph-buildings"></i>
+            </div>
+            <div>
+              ${UI_STATE.activeAccountantId ? `<div style="font-size:11px;color:#8b5cf6;font-weight:600;margin-bottom:2px;cursor:pointer;" onclick="window.openContextDrawer()"><i class="ph ph-caret-left" style="font-size:10px;"></i> Accountants</div>` : ''}
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Client Registry</h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">
+                ${clients.length} client${clients.length !== 1 ? 's' : ''} ·
+                ${UI_STATE.activeAccountantId
+                  ? `<span style="color:#8b5cf6;font-weight:600;">${UI_STATE.activeAccountantName}</span>`
+                  : 'Multi-client workspace'}
+              </p>
+            </div>
+          </div>
+          <button onclick="window.openCreateClientModal()"
+              class="btn-restored"
+              style="background:#16a34a;border:none;color:white;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-plus"></i> New Client
+          </button>
+        </div>
+
+        <!-- Stat Row -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;">
+          <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 16px;">
+            <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${clients.length}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Total Clients</div>
+          </div>
+          <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 16px;">
+            <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${totalTx.toLocaleString()}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Total Transactions</div>
+          </div>
+          <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 16px;">
+            <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${thisYear}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Active Fiscal Year</div>
+          </div>
+        </div>
+
+        <!-- Client Grid or Empty State -->
+        ${clients.length === 0
+          ? emptyStateHTML
+          : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;">
+               ${clients.map(clientCardHTML).join('')}
+             </div>`
+        }
+      </div>
+    `;
+  }
+
+  // ─── CLIENT MODAL ─────────────────────────────────────────────────────────────
+  window.openCreateClientModal = function(existingId) {
+    const existing = document.getElementById('client-modal-overlay');
+    if (existing) existing.remove();
+
+    const clients = _ssGet('roboledger_clients') || [];
+    const editClient = existingId ? clients.find(c => c.id === existingId) : null;
+    const isEdit = !!editClient;
+    const v = (field, fallback) => editClient ? (editClient[field] !== undefined ? editClient[field] : fallback) : fallback;
+
+    const INDUSTRIES = [
+      { value: 'PROFESSIONAL_SERVICES', label: 'Professional Services', icon: 'ph-briefcase', desc: 'Consulting, legal, CPA' },
+      { value: 'SHORT_TERM_RENTAL',     label: 'Short-Term Rental', icon: 'ph-house-line', desc: 'Airbnb, vacation rental' },
+      { value: 'RETAIL',               label: 'Retail', icon: 'ph-storefront', desc: 'Brick & mortar shops' },
+      { value: 'CONSTRUCTION',         label: 'Construction', icon: 'ph-hard-hat', desc: 'Contractors, trades' },
+      { value: 'RESTAURANT',           label: 'Restaurant / Food', icon: 'ph-fork-knife', desc: 'Dining, catering' },
+      { value: 'REAL_ESTATE',          label: 'Real Estate', icon: 'ph-buildings', desc: 'Property, brokerage' },
+      { value: 'E_COMMERCE',           label: 'E-Commerce', icon: 'ph-shopping-cart', desc: 'Online retail' },
+      { value: 'HEALTHCARE',           label: 'Healthcare', icon: 'ph-first-aid', desc: 'Medical, dental, pharma' },
+      { value: 'TECHNOLOGY',           label: 'Technology / SaaS', icon: 'ph-code', desc: 'Software, IT services' },
+      { value: 'NON_PROFIT',           label: 'Non-Profit', icon: 'ph-hand-heart', desc: 'Charities, NPOs' },
+      { value: 'AGRICULTURE',          label: 'Agriculture', icon: 'ph-plant', desc: 'Farming, ranching' },
+      { value: 'TRANSPORTATION',       label: 'Transportation', icon: 'ph-truck', desc: 'Trucking, logistics' },
+      { value: 'CONSULTING',           label: 'Consulting', icon: 'ph-chats-circle', desc: 'Advisory, management' },
+      { value: 'MANUFACTURING',        label: 'Manufacturing', icon: 'ph-factory', desc: 'Production, assembly' },
+      { value: 'OTHER',                label: 'Other', icon: 'ph-dots-three', desc: 'Miscellaneous' },
+    ];
+    const PROVINCES = ['AB','BC','MB','NB','NL','NT','NS','NU','ON','PE','QC','SK','YT'];
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const COLORS = ['#3b82f6','#8b5cf6','#16a34a','#dc2626','#d97706','#0d9488','#db2777','#64748b'];
+    const selectedColor = v('color', '#3b82f6');
+
+    const colorSwatches = COLORS.map(c => `
+      <div onclick="document.getElementById('client-color-input').value='${c}';
+           document.querySelectorAll('.client-color-swatch').forEach(s=>{s.style.outline='';s.style.transform='';});
+           this.style.outline='3px solid #0f172a';this.style.transform='scale(1.15)';"
+           class="client-color-swatch"
+           style="width:26px;height:26px;border-radius:7px;background:${c};cursor:pointer;
+           outline:${selectedColor === c ? '3px solid #0f172a' : 'none'};
+           outline-offset:2px;transition:outline 0.1s,transform 0.1s;
+           transform:${selectedColor === c ? 'scale(1.15)' : 'scale(1)'};"></div>
+    `).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'client-modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.65);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:white;border-radius:16px;padding:32px;width:520px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);">
+        <!-- Modal Header -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">
+            <i class="ph ph-buildings"></i>
+          </div>
+          <div>
+            <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:#0f172a;">${isEdit ? 'Edit Client' : 'New Client'}</h2>
+            <p style="margin:2px 0 0;font-size:0.8rem;color:#64748b;">${isEdit ? 'Update client information' : 'Add a new client to your registry'}</p>
+          </div>
+          <button onclick="document.getElementById('client-modal-overlay').remove()"
+              style="margin-left:auto;background:transparent;border:none;font-size:22px;color:#94a3b8;cursor:pointer;padding:4px;line-height:1;border-radius:6px;"
+              onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">×</button>
+        </div>
+
+        <!-- Form -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+              Client / Business Name <span style="color:#dc2626;">*</span>
+            </label>
+            <input id="client-form-name" type="text" value="${v('name','')}"
+                placeholder="e.g. Smith Consulting Inc."
+                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;transition:border 0.15s;"
+                onfocus="this.style.border='1.5px solid #3b82f6'"
+                onblur="this.style.border='1.5px solid #e2e8f0'" />
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+              Legal Name <span style="font-weight:400;color:#94a3b8;">(optional)</span>
+            </label>
+            <input id="client-form-legal" type="text" value="${v('legalName','')}"
+                placeholder="Registered legal entity name"
+                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Industry</label>
+              <select id="client-form-industry"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                ${INDUSTRIES.map(ind => `<option value="${ind.value}" ${v('industry','PROFESSIONAL_SERVICES') === ind.value ? 'selected' : ''}>${ind.label}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Province</label>
+              <select id="client-form-province"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                ${PROVINCES.map(p => `<option value="${p}" ${v('province','ON') === p ? 'selected' : ''}>${p}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Fiscal Year End</label>
+              <select id="client-form-fy"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                ${MONTHS.map((m, i) => `<option value="${i+1}" ${v('fiscalYearEnd',12) == i+1 ? 'selected' : ''}>${m}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Currency</label>
+              <select id="client-form-currency"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                <option value="CAD" ${v('currency','CAD') === 'CAD' ? 'selected' : ''}>CAD — Canadian Dollar</option>
+                <option value="USD" ${v('currency','CAD') === 'USD' ? 'selected' : ''}>USD — US Dollar</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+              GST/HST Number <span style="font-weight:400;color:#94a3b8;">(optional)</span>
+            </label>
+            <input id="client-form-gst" type="text" value="${v('gstNumber','')}"
+                placeholder="123456789RT0001"
+                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Accent Colour</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${colorSwatches}</div>
+            <input type="hidden" id="client-color-input" value="${selectedColor}" />
+          ${UI_STATE.activeAccountantId ? `<input type="hidden" id="client-form-accountant-id" value="${UI_STATE.activeAccountantId}" />` : ''}
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:10px;align-items:center;margin-top:24px;padding-top:20px;border-top:1px solid #e2e8f0;">
+          ${isEdit ? `
+          <button onclick="document.getElementById('client-modal-overlay').remove();window.clearClientLedger('${existingId}')"
+              title="Delete all transactions and accounts — keeps client profile"
+              style="padding:9px 14px;border:1.5px solid #fecaca;background:white;color:#dc2626;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;margin-right:auto;">
+            <i class="ph ph-trash"></i> Clear Ledger
+          </button>` : ''}
+          <button onclick="document.getElementById('client-modal-overlay').remove()"
+              style="padding:9px 18px;border:1.5px solid #e2e8f0;background:white;color:#475569;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;${isEdit ? '' : 'margin-left:auto;'}">
+            Cancel
+          </button>
+          <button onclick="window._submitClientModal(${isEdit ? `'${existingId}'` : 'null'})"
+              style="padding:9px 20px;background:#16a34a;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-check"></i> ${isEdit ? 'Save Changes' : 'Create Client'}
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    setTimeout(() => { const n = document.getElementById('client-form-name'); if (n) n.focus(); }, 60);
+  };
+
+  window.openEditClientModal = function(clientId) {
+    window.openCreateClientModal(clientId);
+  };
+
+  // ─── CLIENT FORM SUBMIT ───────────────────────────────────────────────────────
+  window._submitClientModal = function(existingId) {
+    const name = (document.getElementById('client-form-name')?.value || '').trim();
+    if (!name) {
+      const inp = document.getElementById('client-form-name');
+      if (inp) { inp.style.border = '1.5px solid #dc2626'; inp.focus(); }
+      return;
+    }
+    const clients = _ssGet('roboledger_clients') || [];
+    const today = new Date().toISOString().split('T')[0];
+    const getField = (id, fallback) => {
+      const el = document.getElementById(id);
+      return el ? (el.value || fallback) : fallback;
+    };
+
+    if (existingId && existingId !== 'null') {
+      const idx = clients.findIndex(c => c.id === existingId);
+      if (idx === -1) return;
+      clients[idx].name          = name;
+      clients[idx].legalName     = getField('client-form-legal', '').trim();
+      clients[idx].industry      = getField('client-form-industry', 'PROFESSIONAL_SERVICES');
+      clients[idx].province      = getField('client-form-province', 'ON');
+      clients[idx].fiscalYearEnd = parseInt(getField('client-form-fy', '12'), 10);
+      clients[idx].currency      = getField('client-form-currency', 'CAD');
+      clients[idx].gstNumber     = getField('client-form-gst', '').trim();
+      clients[idx].color         = getField('client-color-input', '#3b82f6');
+      _ssSet('roboledger_clients', clients);
+      if (UI_STATE.activeClientId === existingId) {
+        UI_STATE.activeClientName = name;
+        window.updateClientSwitcherUI(clients[idx]);
+      }
+    } else {
+      const maxId = clients.reduce((max, c) => {
+        const n = parseInt((c.id || '').replace('CLIENT-', ''), 10) || 0;
+        return Math.max(max, n);
+      }, 0);
+      const newClient = {
+        id:            'CLIENT-' + (maxId + 1),
+        name,
+        legalName:     getField('client-form-legal', '').trim(),
+        industry:      getField('client-form-industry', 'PROFESSIONAL_SERVICES'),
+        province:      getField('client-form-province', 'ON'),
+        fiscalYearEnd: parseInt(getField('client-form-fy', '12'), 10),
+        currency:      getField('client-form-currency', 'CAD'),
+        gstNumber:     getField('client-form-gst', '').trim(),
+        color:         getField('client-color-input', '#3b82f6'),
+        accountantId:  getField('client-form-accountant-id', '') || null,
+        created:       today,
+        lastActive:    today,
+        txCount:       0,
+        accountCount:  0,
+      };
+      clients.push(newClient);
+      _ssSet('roboledger_clients', clients);
+    }
+    const overlay = document.getElementById('client-modal-overlay');
+    if (overlay) overlay.remove();
+    // Re-open drawer so user sees the new client in the list
+    _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
+    setTimeout(() => window.openContextDrawer(), 50);
+  };
+
+  // ─── PERIOD MANAGER MODAL ───────────────────────────────────────────────────
+  window.openPeriodManager = function() {
+    const existing = document.getElementById('period-manager-overlay');
+    if (existing) existing.remove();
+
+    const ledger = window.RoboLedger?.Ledger;
+    if (!ledger) return;
+
+    const allTxns = ledger.getAll?.() || [];
+    const lockedPeriods = ledger.getLockedPeriods?.() || [];
+    const lockedSet = new Set(lockedPeriods.map(lp => lp.period));
+
+    // Determine date range from transactions
+    const dates = allTxns.map(t => t.date).filter(Boolean).sort();
+    const earliest = dates[0] || new Date().toISOString().substring(0, 10);
+    const latest = dates[dates.length - 1] || new Date().toISOString().substring(0, 10);
+
+    // Build month cells from earliest to latest
+    const startMonth = earliest.substring(0, 7);
+    const endMonth = latest.substring(0, 7);
+    const months = [];
+    let [sy, sm] = startMonth.split('-').map(Number);
+    const [ey, em] = endMonth.split('-').map(Number);
+    while (sy < ey || (sy === ey && sm <= em)) {
+      const mk = `${sy}-${String(sm).padStart(2, '0')}`;
+      const mTxns = allTxns.filter(t => t.date && t.date.startsWith(mk));
+      const categorized = mTxns.filter(t => t.category && String(t.category) !== '9970').length;
+      const pct = mTxns.length > 0 ? Math.round((categorized / mTxns.length) * 100) : 0;
+      const isLocked = lockedSet.has(mk);
+      const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      months.push({ key: mk, label: `${MNAMES[sm - 1]} ${sy}`, txCount: mTxns.length, catPct: pct, isLocked });
+      sm++;
+      if (sm > 12) { sm = 1; sy++; }
+    }
+
+    const monthCellsHTML = months.map(m => `
+      <div style="background:${m.isLocked ? '#f0fdf4' : '#f8fafc'};border:1.5px solid ${m.isLocked ? '#86efac' : '#e2e8f0'};
+          border-radius:10px;padding:12px;text-align:center;position:relative;">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:2px;">${m.label}</div>
+        <div style="font-size:10px;color:#64748b;">${m.txCount} txns</div>
+        <div style="font-size:10px;color:${m.catPct >= 90 ? '#16a34a' : m.catPct >= 50 ? '#3b82f6' : '#d97706'};font-weight:600;">${m.catPct}% cat</div>
+        <div style="margin-top:6px;height:4px;background:#e2e8f0;border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${m.catPct}%;background:${m.catPct >= 90 ? '#22c55e' : m.catPct >= 50 ? '#3b82f6' : '#f59e0b'};border-radius:4px;"></div>
+        </div>
+        <button onclick="window._togglePeriodLock('${m.key}')"
+            style="margin-top:8px;padding:4px 10px;border:1px solid ${m.isLocked ? '#fecaca' : '#bbf7d0'};
+            background:${m.isLocked ? '#fff5f5' : '#f0fdf4'};color:${m.isLocked ? '#dc2626' : '#16a34a'};
+            border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;width:100%;">
+          <i class="ph ph-${m.isLocked ? 'lock-simple-open' : 'lock-simple'}" style="font-size:10px;margin-right:3px;"></i>
+          ${m.isLocked ? 'Unlock' : 'Lock'}
+        </button>
+        ${m.isLocked ? '<div style="position:absolute;top:4px;right:6px;"><i class="ph ph-lock-simple" style="color:#16a34a;font-size:12px;"></i></div>' : ''}
+      </div>
+    `).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'period-manager-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.65);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:white;border-radius:16px;padding:32px;width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#16a34a,#15803d);color:white;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;">
+            <i class="ph ph-lock-simple"></i>
+          </div>
+          <div>
+            <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:#0f172a;">Period Manager</h2>
+            <p style="margin:2px 0 0;font-size:0.8rem;color:#64748b;">Lock fiscal periods to prevent changes to finalized months</p>
+          </div>
+          <button onclick="document.getElementById('period-manager-overlay').remove()"
+              style="margin-left:auto;background:transparent;border:none;font-size:22px;color:#94a3b8;cursor:pointer;padding:4px;line-height:1;border-radius:6px;"
+              onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">×</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button onclick="window._bulkLockPeriods()" style="padding:6px 14px;border:1px solid #bbf7d0;background:#f0fdf4;color:#16a34a;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">
+            <i class="ph ph-lock-simple" style="margin-right:4px;"></i> Lock All Fully Categorized
+          </button>
+          <button onclick="window._unlockAllPeriods()" style="padding:6px 14px;border:1px solid #fecaca;background:#fff5f5;color:#dc2626;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">
+            <i class="ph ph-lock-simple-open" style="margin-right:4px;"></i> Unlock All
+          </button>
+          <div style="margin-left:auto;font-size:11px;color:#64748b;display:flex;align-items:center;gap:8px;">
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:3px;"></span>Locked</span>
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-right:3px;"></span>Open</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+          ${monthCellsHTML}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  };
+
+  window._togglePeriodLock = function(period) {
+    const ledger = window.RoboLedger?.Ledger;
+    if (!ledger) return;
+    if (ledger.isPeriodLocked(period)) {
+      ledger.unlockPeriod(period);
+    } else {
+      ledger.lockPeriod(period);
+    }
+    // Refresh the modal
+    window.openPeriodManager();
+  };
+
+  window._bulkLockPeriods = function() {
+    const ledger = window.RoboLedger?.Ledger;
+    if (!ledger) return;
+    const allTxns = ledger.getAll?.() || [];
+    // Find months that are >= 90% categorized
+    const monthMap = {};
+    allTxns.forEach(t => {
+      if (!t.date) return;
+      const mk = t.date.substring(0, 7);
+      if (!monthMap[mk]) monthMap[mk] = { total: 0, categorized: 0 };
+      monthMap[mk].total++;
+      if (t.category && String(t.category) !== '9970') monthMap[mk].categorized++;
+    });
+    let locked = 0;
+    Object.entries(monthMap).forEach(([mk, data]) => {
+      const pct = data.total > 0 ? (data.categorized / data.total) * 100 : 0;
+      if (pct >= 90 && !ledger.isPeriodLocked(mk)) {
+        ledger.lockPeriod(mk);
+        locked++;
+      }
+    });
+    console.log(`[PERIOD MANAGER] Bulk locked ${locked} fully-categorized periods`);
+    window.openPeriodManager();
+  };
+
+  window._unlockAllPeriods = function() {
+    const ledger = window.RoboLedger?.Ledger;
+    if (!ledger) return;
+    const periods = ledger.getLockedPeriods();
+    periods.forEach(lp => ledger.unlockPeriod(lp.period));
+    window.openPeriodManager();
+  };
+
+  // ─── CLIENT SWITCHER ──────────────────────────────────────────────────────────
+  window.switchClient = function(clientId) {
+    const clients = _ssGet('roboledger_clients') || [];
+    const client = clients.find(c => c.id === clientId);
+    if (!client) { console.error('[CLIENT] Unknown client id:', clientId); return; }
+
+    console.log(`[CLIENT] Switching to: ${client.name} (${clientId})`);
+
+    // 1. Save current client's ledger data first
+    if (UI_STATE.activeClientId) {
+      const raw   = window.RoboLedger.Ledger.getRawState();
+      const accts = window.RoboLedger.Accounts.getAll();
+      _ssSet('roboledger_v5_data_' + UI_STATE.activeClientId, {
+        version: '2.0.0',
+        transactions: raw.transactions,
+        sigIndex:     raw.sigIndex,
+        accounts:     accts,
+      });
+      console.log(`[CLIENT] Saved ledger for ${UI_STATE.activeClientId}`);
+    }
+
+    // 2. Load new client's ledger data
+    window.RoboLedger.Ledger.loadFromKey('roboledger_v5_data_' + clientId);
+
+    // 3. Update global state
+    UI_STATE.activeClientId   = clientId;
+    UI_STATE.activeClientName = client.name;
+    UI_STATE.selectedAccount  = 'ALL';
+    _ssSet('roboledger_active_client', clientId);
+
+    // 3b. Load per-client settings (province, GST, autocat) — overlay onto UI_STATE
+    const _clientSettingsRaw = _ssGet('roboledger_settings_' + clientId);
+    if (_clientSettingsRaw) {
+      try {
+        const _cs = (typeof _clientSettingsRaw === 'string') ? JSON.parse(_clientSettingsRaw) : _clientSettingsRaw;
+        Object.assign(UI_STATE, _cs);
+        console.log(`[CLIENT] Loaded per-client settings for ${clientId}`);
+      } catch (e) {
+        console.error('[CLIENT] Failed to parse per-client settings', e);
+      }
+    }
+
+    // 4. Update cached counts on client registry entry
+    const idx = clients.findIndex(c => c.id === clientId);
+    if (idx !== -1) {
+      clients[idx].lastActive   = new Date().toISOString().split('T')[0];
+      clients[idx].txCount      = Object.keys(window.RoboLedger.Ledger.getRawState().transactions).length;
+      clients[idx].accountCount = window.RoboLedger.Accounts.getAll().length;
+      _ssSet('roboledger_clients', clients);
+    }
+
+    // 5. Update sidebar UI + navigate to transactions if client has data, else home
+    window.updateClientSwitcherUI(client);
+    const clientTxns = window.RoboLedger.Ledger.getAll();
+    window.navigateTo(clientTxns.length > 0 ? 'import' : 'home');
+    console.log(`[CLIENT] Switch complete → ${client.name} (${clientTxns.length} txns)`);
+
+    // Auto-categorize any uncategorized transactions in this client's ledger
+    window._runAutoCatOnExisting();
+  };
+
+  window.updateClientSwitcherUI = function(client) {
+    // Sync sidebar disabled state whenever client context changes
+    if (window.updateSidebarState) window.updateSidebarState();
+
+    // Update top bar trigger label
+    const labelEl = document.getElementById('top-client-label');
+    if (labelEl) labelEl.textContent = client ? client.name : 'Select client';
+
+    // Update drawer if it's open (re-render right panel with new active state)
+    if (document.getElementById('context-drawer')?.classList.contains('open')) {
+      window._renderDrawerRight(_drawerState.selectedFirmId);
+    }
+  };
+
+  // ─── SIDEBAR STATE GATING ─────────────────────────────────────────────────
+  // Disables client-only nav items when no client is active. Idempotent.
+  window.updateSidebarState = function() {
+    const CLIENT_NAV_ROUTES = ['import', 'dashboard', 'reports', 'coa'];
+    const hasClient = !!UI_STATE.activeClientId;
+    CLIENT_NAV_ROUTES.forEach(route => {
+      const el = document.querySelector(`.nav-item[data-route="${route}"]`);
+      if (!el) return;
+      if (hasClient) {
+        el.classList.remove('disabled');
+        el.removeAttribute('title');
+      } else {
+        el.classList.add('disabled');
+        el.setAttribute('title', 'Select a client first');
+      }
+    });
+  };
+
+  window.deleteClient = function(clientId) {
+    const clients = _ssGet('roboledger_clients') || [];
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return;
+    if (!confirm(`Delete "${client.name}"?\n\nThis will permanently delete all transactions and accounts for this client. This cannot be undone.`)) return;
+
+    if (UI_STATE.activeClientId === clientId) {
+      UI_STATE.activeClientId   = null;
+      UI_STATE.activeClientName = '';
+      _ssRemove('roboledger_active_client');
+      window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
+      window.updateClientSwitcherUI(null);
+    }
+    _ssRemove('roboledger_v5_data_' + clientId);
+    _ssRemove('roboledger_settings_' + clientId);
+    _ssRemove('roboledger_files_' + clientId);
+    const updated = clients.filter(c => c.id !== clientId);
+    _ssSet('roboledger_clients', updated);
+    console.log(`[CLIENT] Deleted: ${client.name} (${clientId}) — data, settings & files purged`);
+    _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
+    setTimeout(() => window.openContextDrawer(), 50);
+  };
+
+  // ─── CLEAR CLIENT LEDGER (wipe data, keep client profile) ───────────────────
+  window.clearClientLedger = function(clientId) {
+    const clients = _ssGet('roboledger_clients') || [];
+    const client  = clients.find(c => c.id === clientId);
+    if (!client) return;
+
+    const txCount = (() => {
+      try {
+        const d = _ssGet('roboledger_v5_data_' + clientId) || {};
+        return Object.keys(d.transactions || {}).length;
+      } catch { return 0; }
+    })();
+
+    if (!confirm(`Clear all data for "${client.name}"?\n\n${txCount} transactions and all accounts will be deleted.\nThe client profile (name, settings) will be kept.\n\nThis cannot be undone.`)) return;
+
+    // Wipe ledger data from storage
+    _ssRemove('roboledger_v5_data_' + clientId);
+
+    // Reset counts on client registry entry
+    const idx = clients.findIndex(c => c.id === clientId);
+    if (idx !== -1) {
+      clients[idx].txCount      = 0;
+      clients[idx].accountCount = 0;
+      clients[idx].lastActive   = null;
+      _ssSet('roboledger_clients', clients);
+    }
+
+    // If this is the active client, reset the in-memory ledger too
+    if (UI_STATE.activeClientId === clientId) {
+      window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__'); // clears in-memory state
+      UI_STATE.selectedAccount = 'ALL';
+    }
+
+    console.log(`[CLIENT] Ledger cleared for: ${client.name} (${clientId})`);
+    if (window.showToast) window.showToast(`Ledger cleared for ${client.name}`, 'success');
+
+    // Refresh portal
+    if (window.renderHome) window.navigateTo('home');
+  };
+
+  // ─── CLEAR ACTIVE CLIENT GRID (quick reset for testing / re-import) ─────────
+  window.clearGrid = function() {
+    if (!UI_STATE.activeClientId) {
+      if (window.showToast) window.showToast('No active client — nothing to clear', 'warning');
+      return;
+    }
+    const clients = _ssGet('roboledger_clients') || [];
+    const client  = clients.find(c => c.id === UI_STATE.activeClientId);
+    const name    = client ? client.name : 'this client';
+
+    const txCount = window.RoboLedger.Ledger.getAll().length;
+    if (!confirm(`Clear all ${txCount} transactions for ${name}?\n\nAll accounts and transaction data will be deleted. The client profile is kept.\n\nThis cannot be undone.`)) return;
+
+    // Wipe storage
+    _ssRemove('roboledger_v5_data_' + UI_STATE.activeClientId);
+
+    // Reset registry counts
+    const idx = clients.findIndex(c => c.id === UI_STATE.activeClientId);
+    if (idx !== -1) {
+      clients[idx].txCount      = 0;
+      clients[idx].accountCount = 0;
+      clients[idx].lastActive   = null;
+      _ssSet('roboledger_clients', clients);
+    }
+
+    // Reset in-memory ledger
+    window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
+    UI_STATE.selectedAccount = 'ALL';
+
+    console.log(`[CLIENT] Grid cleared for active client: ${name}`);
+    if (window.showToast) window.showToast(`Grid cleared for ${name}`, 'success');
+    window.navigateTo('import'); // Back to upload screen
+  };
+
+  // ─── ACCOUNTANT LAYER ────────────────────────────────────────────────────────
+
+  function renderAccountantsPage() {
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const clients     = _ssGet('roboledger_clients') || [];
+
+    const provinceColors = {
+      BC: '#3b82f6', AB: '#f59e0b', ON: '#10b981', QC: '#8b5cf6',
+      MB: '#06b6d4', SK: '#f97316', NS: '#ec4899', NB: '#14b8a6',
+      PE: '#84cc16', NL: '#6366f1', NT: '#a78bfa', YT: '#fb923c', NU: '#94a3b8',
+    };
+
+    if (!accountants.length) {
+      return `
+        <div style="padding:32px 28px;max-width:900px;margin:0 auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;">
+            <div>
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Accountant Registry</h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">0 accountants · Admin workspace</p>
+            </div>
+            <button onclick="window.openCreateAccountantModal()"
+                    style="background:#8b5cf6;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:0.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;">
+              <i class="ph ph-plus"></i> New Accountant
+            </button>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;text-align:center;">
+            <div style="width:72px;height:72px;border-radius:16px;background:rgba(139,92,246,0.08);display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+              <i class="ph ph-user-circle" style="font-size:36px;color:#8b5cf6;"></i>
+            </div>
+            <h3 style="margin:0 0 8px;font-size:1rem;font-weight:700;color:var(--text-primary,#0f172a);">No accountants yet</h3>
+            <p style="margin:0 0 24px;font-size:0.85rem;color:var(--text-tertiary,#94a3b8);max-width:320px;">
+              Add your first accountant or firm to start managing clients under them.
+            </p>
+            <button onclick="window.openCreateAccountantModal()"
+                    style="background:#8b5cf6;color:white;border:none;border-radius:8px;padding:10px 22px;font-size:0.85rem;font-weight:600;cursor:pointer;">
+              Add First Accountant
+            </button>
+          </div>
+        </div>`;
+    }
+
+    const cards = accountants.map(acc => {
+      const accClients    = clients.filter(c => c.accountantId === acc.id);
+      const totalTx       = accClients.reduce((sum, c) => {
+        try {
+          const d = _ssGet('roboledger_v5_data_' + c.id) || {};
+          return sum + Object.keys(d.transactions || {}).length;
+        } catch { return sum; }
+      }, 0);
+      const accentColor   = acc.color || '#8b5cf6';
+      const initials      = (acc.name || '?').slice(0, 2).toUpperCase();
+      const provColor     = provinceColors[acc.province] || '#94a3b8';
+      const lastActive    = acc.lastActive
+        ? new Date(acc.lastActive).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+        : '—';
+
+      return `
+        <div style="background:var(--surface-primary,#fff);border-radius:14px;border:1px solid var(--border-primary,#e2e8f0);overflow:hidden;display:flex;flex-direction:column;transition:box-shadow 0.15s;">
+          <div style="height:4px;background:${accentColor};"></div>
+          <div style="padding:18px 18px 14px;flex:1;">
+            <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
+              <div style="width:40px;height:40px;border-radius:10px;background:${accentColor};color:white;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                ${initials}
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:700;font-size:0.92rem;color:var(--text-primary,#0f172a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${acc.name}</div>
+                ${acc.ownerName ? `<div style="font-size:0.78rem;color:var(--text-secondary,#475569);margin-top:1px;">${acc.ownerName}</div>` : ''}
+                <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">
+                  ${acc.province ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${provColor}22;color:${provColor};letter-spacing:0.5px;">${acc.province}</span>` : ''}
+                  ${acc.licenseNumber ? `<span style="font-size:10px;color:var(--text-tertiary,#94a3b8);">Lic# ${acc.licenseNumber}</span>` : ''}
+                </div>
+              </div>
+            </div>
+            ${acc.email ? `<div style="font-size:0.78rem;color:var(--text-secondary,#475569);margin-bottom:10px;display:flex;align-items:center;gap:5px;"><i class="ph ph-envelope" style="font-size:12px;color:#94a3b8;"></i>${acc.email}</div>` : ''}
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px;background:var(--surface-secondary,#f8fafc);border-radius:8px;">
+              <div style="text-align:center;">
+                <div style="font-size:1.1rem;font-weight:700;color:${accentColor};">${accClients.length}</div>
+                <div style="font-size:0.68rem;color:var(--text-tertiary,#94a3b8);margin-top:1px;">Clients</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">${totalTx.toLocaleString()}</div>
+                <div style="font-size:0.68rem;color:var(--text-tertiary,#94a3b8);margin-top:1px;">Transactions</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:0.78rem;font-weight:600;color:var(--text-secondary,#475569);">${lastActive}</div>
+                <div style="font-size:0.68rem;color:var(--text-tertiary,#94a3b8);margin-top:1px;">Last Active</div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:10px 14px;border-top:1px solid var(--border-primary,#e2e8f0);display:flex;gap:6px;align-items:center;">
+            <button onclick="window.openEditAccountantModal('${acc.id}')"
+                    title="Edit"
+                    style="padding:6px 10px;border-radius:7px;border:1px solid var(--border-primary,#e2e8f0);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary,#475569);display:flex;align-items:center;gap:4px;">
+              <i class="ph ph-pencil"></i>
+            </button>
+            <button onclick="window.deleteAccountant('${acc.id}')"
+                    title="Delete"
+                    style="padding:6px 10px;border-radius:7px;border:1px solid #fecaca;background:transparent;cursor:pointer;font-size:12px;color:#ef4444;display:flex;align-items:center;gap:4px;">
+              <i class="ph ph-trash"></i>
+            </button>
+            <button onclick="window.switchAccountant('${acc.id}')"
+                    style="margin-left:auto;padding:7px 14px;border-radius:7px;background:${accentColor};color:white;border:none;cursor:pointer;font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:5px;">
+              Open <i class="ph ph-arrow-right"></i>
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="padding:32px 28px;max-width:1100px;margin:0 auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Accountant Registry</h1>
+            <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">${accountants.length} accountant${accountants.length !== 1 ? 's' : ''} · Admin workspace</p>
+          </div>
+          <button onclick="window.openCreateAccountantModal()"
+                  style="background:#8b5cf6;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:0.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-plus"></i> New Accountant
+          </button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;">
+          ${cards}
+        </div>
+      </div>`;
+  }
+
+  window.openCreateAccountantModal = function(existingId) {
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const existing    = existingId ? accountants.find(a => a.id === existingId) : null;
+    const title       = existing ? 'Edit Accountant' : 'New Accountant';
+
+    const COLORS = ['#8b5cf6','#6d28d9','#3b82f6','#10b981','#f59e0b','#ef4444','#ec4899','#0ea5e9'];
+    const currentColor = existing?.color || '#8b5cf6';
+
+    const swatches = COLORS.map(c => `
+      <div onclick="document.getElementById('acc-color-input').value='${c}';document.querySelectorAll('.acc-color-swatch').forEach(s=>s.style.outline='none');this.style.outline='3px solid #1e293b';"
+           class="acc-color-swatch"
+           style="width:24px;height:24px;border-radius:6px;background:${c};cursor:pointer;transition:outline 0.1s;outline:${c === currentColor ? '3px solid #1e293b' : 'none'};">
+      </div>`).join('');
+
+    const provinces = ['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT'];
+    const provOptions = provinces.map(p =>
+      `<option value="${p}" ${existing?.province === p ? 'selected' : ''}>${p}</option>`
+    ).join('');
+
+    const html = `
+      <div id="create-accountant-modal-overlay"
+           style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:var(--surface-primary,#fff);border-radius:16px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border-primary,#e2e8f0);display:flex;align-items:center;justify-content:space-between;">
+            <h2 style="margin:0;font-size:1rem;font-weight:700;color:var(--text-primary,#0f172a);">${title}</h2>
+            <button onclick="document.getElementById('create-accountant-modal-overlay').remove()"
+                    style="background:none;border:none;cursor:pointer;color:var(--text-tertiary,#94a3b8);font-size:20px;line-height:1;padding:0;">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+          <div style="padding:20px 24px;">
+            <div style="margin-bottom:14px;">
+              <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Firm / Practice Name *</label>
+              <input id="acc-form-name" type="text" placeholder="e.g. Downtown Accounting" value="${existing?.name || ''}"
+                     style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+            </div>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Owner / Principal Name</label>
+              <input id="acc-form-owner" type="text" placeholder="e.g. Jane Smith CPA" value="${existing?.ownerName || ''}"
+                     style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+              <div>
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Email</label>
+                <input id="acc-form-email" type="email" placeholder="firm@example.com" value="${existing?.email || ''}"
+                       style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+              </div>
+              <div>
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Phone</label>
+                <input id="acc-form-phone" type="tel" placeholder="(604) 555-0123" value="${existing?.phone || ''}"
+                       style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+              <div>
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">Province</label>
+                <select id="acc-form-province"
+                        style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);">
+                  <option value="">— Select —</option>
+                  ${provOptions}
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:5px;">CPA License #</label>
+                <input id="acc-form-license" type="text" placeholder="e.g. BC-12345" value="${existing?.licenseNumber || ''}"
+                       style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);font-size:0.875rem;outline:none;background:var(--surface-primary,#fff);color:var(--text-primary,#0f172a);" />
+              </div>
+            </div>
+            <div style="margin-bottom:20px;">
+              <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary,#475569);display:block;margin-bottom:8px;">Accent Color</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">${swatches}</div>
+              <input type="hidden" id="acc-color-input" value="${currentColor}" />
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button onclick="document.getElementById('create-accountant-modal-overlay').remove()"
+                      style="padding:9px 18px;border-radius:8px;border:1px solid var(--border-primary,#e2e8f0);background:transparent;cursor:pointer;font-size:0.875rem;color:var(--text-secondary,#475569);font-weight:500;">
+                Cancel
+              </button>
+              <button onclick="window._submitAccountantModal('${existingId || ''}')"
+                      style="padding:9px 18px;border-radius:8px;background:#8b5cf6;color:white;border:none;cursor:pointer;font-size:0.875rem;font-weight:600;">
+                ${existing ? 'Save Changes' : 'Create Accountant'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+    setTimeout(() => document.getElementById('acc-form-name')?.focus(), 50);
+  };
+
+  window.openEditAccountantModal = function(id) {
+    window.openCreateAccountantModal(id);
+  };
+
+  window._submitAccountantModal = function(existingId) {
+    const getVal = id => (document.getElementById(id)?.value || '').trim();
+    const name   = getVal('acc-form-name');
+    if (!name) { alert('Firm / Practice Name is required.'); return; }
+
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const now         = new Date().toISOString();
+
+    if (existingId) {
+      const idx = accountants.findIndex(a => a.id === existingId);
+      if (idx === -1) return;
+      accountants[idx] = {
+        ...accountants[idx],
+        name,
+        ownerName:     getVal('acc-form-owner'),
+        email:         getVal('acc-form-email'),
+        phone:         getVal('acc-form-phone'),
+        province:      getVal('acc-form-province'),
+        licenseNumber: getVal('acc-form-license'),
+        color:         getVal('acc-color-input') || '#8b5cf6',
+        lastActive:    now,
+      };
+      if (UI_STATE.activeAccountantId === existingId) {
+        UI_STATE.activeAccountantName = name;
+        window.updateAccountantSwitcherUI(accountants[idx]);
+      }
+    } else {
+      const nextNum = accountants.length + 1;
+      const newAcc  = {
+        id:            'ACC-' + nextNum,
+        name,
+        ownerName:     getVal('acc-form-owner'),
+        email:         getVal('acc-form-email'),
+        phone:         getVal('acc-form-phone'),
+        province:      getVal('acc-form-province'),
+        licenseNumber: getVal('acc-form-license'),
+        color:         getVal('acc-color-input') || '#8b5cf6',
+        created:       now,
+        lastActive:    now,
+      };
+      accountants.push(newAcc);
+      console.log(`[ACCOUNTANT] Created: ${newAcc.name} (${newAcc.id})`);
+    }
+
+    _ssSet('roboledger_accountants', accountants);
+    document.getElementById('create-accountant-modal-overlay')?.remove();
+    _drawerState.selectedFirmId = null;
+    setTimeout(() => window.openContextDrawer(), 50);
+  };
+
+  window.switchAccountant = function(accountantId) {
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const acc         = accountants.find(a => a.id === accountantId);
+    if (!acc) return;
+
+    UI_STATE.activeAccountantId   = accountantId;
+    UI_STATE.activeAccountantName = acc.name;
+
+    // Clear any active client when switching accountants
+    UI_STATE.activeClientId   = null;
+    UI_STATE.activeClientName = '';
+    _ssRemove('roboledger_active_client');
+    window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
+    window.updateClientSwitcherUI(null);
+
+    _ssSet('roboledger_active_accountant', accountantId);
+
+    // Update lastActive
+    const idx = accountants.findIndex(a => a.id === accountantId);
+    if (idx !== -1) {
+      accountants[idx].lastActive = new Date().toISOString();
+      _ssSet('roboledger_accountants', accountants);
+    }
+
+    window.updateAccountantSwitcherUI(acc);
+    console.log(`[ACCOUNTANT] Switched to: ${acc.name}`);
+    // Open context drawer to the firm's client list instead of navigating to a page
+    _drawerState.selectedFirmId = accountantId;
+    setTimeout(() => window.openContextDrawer(), 50);
+  };
+
+  window.updateAccountantSwitcherUI = function(accountant) {
+    // Tint the top bar drawer trigger icon to the firm's accent colour
+    const triggerBtn = document.getElementById('top-drawer-trigger');
+    if (triggerBtn) {
+      const color = accountant?.color || '#6d28d9';
+      triggerBtn.style.borderColor = color + '55';
+    }
+    // Re-render drawer left panel if open
+    if (document.getElementById('context-drawer')?.classList.contains('open')) {
+      window._renderDrawerLeft();
+    }
+  };
+
+  window.deleteAccountant = function(accountantId) {
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const acc         = accountants.find(a => a.id === accountantId);
+    if (!acc) return;
+
+    const clients     = _ssGet('roboledger_clients') || [];
+    const ownedClients = clients.filter(c => c.accountantId === accountantId);
+    const clientCount  = ownedClients.length;
+
+    const msg = clientCount > 0
+      ? `Delete "${acc.name}"?\n\nThis will also permanently delete ${clientCount} client${clientCount !== 1 ? 's' : ''} and all their transactions. This cannot be undone.`
+      : `Delete "${acc.name}"?\n\nThis cannot be undone.`;
+
+    if (!confirm(msg)) return;
+
+    // Cascade: delete all owned clients' ledger data
+    ownedClients.forEach(c => {
+      _ssRemove('roboledger_v5_data_' + c.id);
+    });
+
+    // Remove clients from registry
+    const remainingClients = clients.filter(c => c.accountantId !== accountantId);
+    _ssSet('roboledger_clients', remainingClients);
+
+    // Remove accountant
+    const remaining = accountants.filter(a => a.id !== accountantId);
+    _ssSet('roboledger_accountants', remaining);
+
+    // Clear active state if this was the active accountant
+    if (UI_STATE.activeAccountantId === accountantId) {
+      UI_STATE.activeAccountantId   = null;
+      UI_STATE.activeAccountantName = '';
+      UI_STATE.activeClientId       = null;
+      UI_STATE.activeClientName     = '';
+      _ssRemove('roboledger_active_accountant');
+      _ssRemove('roboledger_active_client');
+      window.RoboLedger.Ledger.loadFromKey('__nonexistent_client__');
+      window.updateClientSwitcherUI(null);
+      window.updateAccountantSwitcherUI(null);
+    }
+
+    console.log(`[ACCOUNTANT] Deleted: ${acc.name} (${accountantId}), cascade-deleted ${clientCount} clients`);
+    _drawerState.selectedFirmId = null;
+    setTimeout(() => window.openContextDrawer(), 50);
+  };
+
+  // ─── CONTEXT DRAWER ──────────────────────────────────────────────────────────
+  // Two-panel slide-in: Firms (left) × Clients (right). No page navigation needed.
+
+  let _drawerState = { selectedFirmId: null };
+
+  window.openContextDrawer = function() {
+    // Seed selection from active state
+    _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
+
+    // Create overlay if absent
+    if (!document.getElementById('context-drawer-overlay')) {
+      const overlay = document.createElement('div');
+      overlay.id = 'context-drawer-overlay';
+      overlay.onclick = window.closeContextDrawer;
+      document.body.appendChild(overlay);
+
+      const drawer = document.createElement('div');
+      drawer.id = 'context-drawer';
+      drawer.innerHTML = `
+        <div id="context-drawer-header">
+          <h2><i class="ph ph-buildings" style="margin-right:7px;color:#8b5cf6;"></i>Switch Context</h2>
+          <button onclick="window.closeContextDrawer()"
+                  style="background:none;border:none;cursor:pointer;font-size:20px;color:#94a3b8;line-height:1;padding:0;">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+        <div id="context-drawer-panels">
+          <div id="context-drawer-left"></div>
+          <div id="context-drawer-right"></div>
+        </div>`;
+      document.body.appendChild(drawer);
+
+      // Keyboard close
+      document.addEventListener('keydown', function _escDrawer(e) {
+        if (e.key === 'Escape') { window.closeContextDrawer(); document.removeEventListener('keydown', _escDrawer); }
+      });
+    }
+
+    // Render panels then open
+    window._renderDrawerLeft();
+    window._renderDrawerRight(_drawerState.selectedFirmId);
+    requestAnimationFrame(() => {
+      document.getElementById('context-drawer-overlay').classList.add('open');
+      document.getElementById('context-drawer').classList.add('open');
+    });
+  };
+
+  window.closeContextDrawer = function() {
+    const overlay = document.getElementById('context-drawer-overlay');
+    const drawer  = document.getElementById('context-drawer');
+    if (overlay) overlay.classList.remove('open');
+    if (drawer)  drawer.classList.remove('open');
+  };
+
+  window._renderDrawerLeft = function() {
+    const container   = document.getElementById('context-drawer-left');
+    if (!container) return;
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const clients     = _ssGet('roboledger_clients') || [];
+
+    const adminSelected = !_drawerState.selectedFirmId;
+
+    let html = `
+      <div style="padding:10px 14px 6px;font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;">FIRMS</div>
+      <div class="drawer-firm-item ${adminSelected ? 'selected' : ''}"
+           onclick="window._drawerSelectFirm(null)"
+           style="${adminSelected ? 'border-left:3px solid #6d28d9;background:#ede9fe;' : ''}">
+        <div class="drawer-firm-avatar" style="background:#6d28d9;font-size:11px;">
+          <i class="ph ph-shield-check"></i>
+        </div>
+        <span class="drawer-firm-name" style="${adminSelected ? 'color:#6d28d9;' : ''}">Admin</span>
+        <span class="drawer-firm-count">${clients.filter(c => !c.accountantId).length}</span>
+      </div>`;
+
+    accountants.forEach(acc => {
+      const count    = clients.filter(c => c.accountantId === acc.id).length;
+      const color    = acc.color || '#8b5cf6';
+      const initials = (acc.name || '?').slice(0, 2).toUpperCase();
+      const sel      = _drawerState.selectedFirmId === acc.id;
+      html += `
+        <div class="drawer-firm-item ${sel ? 'selected' : ''}"
+             onclick="window._drawerSelectFirm('${acc.id}')"
+             style="${sel ? `border-left:3px solid ${color};background:${color}18;` : ''}display:flex;align-items:center;gap:8px;">
+          <div class="drawer-firm-avatar" style="background:${color};">${initials}</div>
+          <span class="drawer-firm-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${sel ? `color:${color};` : ''}">${acc.name}</span>
+          <div style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation();">
+            <button onclick="window.closeContextDrawer();setTimeout(()=>window.openEditAccountantModal('${acc.id}'),50);"
+                    title="Edit firm"
+                    style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                    onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">
+              <i class="ph ph-pencil"></i>
+            </button>
+            <button onclick="window.closeContextDrawer();setTimeout(()=>window.deleteAccountant('${acc.id}'),50);"
+                    title="Delete firm"
+                    style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                    onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
+              <i class="ph ph-trash"></i>
+            </button>
+          </div>
+          <span class="drawer-firm-count">${count}</span>
+        </div>`;
+    });
+
+    html += `
+      <div style="margin-top:auto;padding:14px;">
+        <button onclick="window.closeContextDrawer();setTimeout(()=>window.openCreateAccountantModal(),50);"
+                style="width:100%;padding:8px;border-radius:8px;border:1px dashed #cbd5e1;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:#64748b;display:flex;align-items:center;justify-content:center;gap:5px;">
+          <i class="ph ph-plus"></i> New Firm
+        </button>
+      </div>`;
+
+    container.innerHTML = html;
+  };
+
+  window._renderDrawerRight = function(accountantId) {
+    const container = document.getElementById('context-drawer-right');
+    if (!container) return;
+    const allClients  = _ssGet('roboledger_clients') || [];
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const acc         = accountantId ? accountants.find(a => a.id === accountantId) : null;
+
+    const filtered = accountantId
+      ? allClients.filter(c => c.accountantId === accountantId)
+      : allClients.filter(c => !c.accountantId);
+
+    const firmName = acc ? acc.name : 'Admin — Unassigned';
+    const firmColor = acc?.color || '#6d28d9';
+
+    let header = `
+      <div style="padding:14px 18px 10px;border-bottom:1px solid #f1f5f9;flex-shrink:0;">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;margin-bottom:2px;">CLIENTS</div>
+        <div style="font-size:0.88rem;font-weight:700;color:#0f172a;">${firmName}</div>
+      </div>`;
+
+    let body = '';
+    if (!filtered.length) {
+      body = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;">
+          <div style="width:48px;height:48px;border-radius:12px;background:${firmColor}14;display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+            <i class="ph ph-buildings" style="font-size:24px;color:${firmColor};"></i>
+          </div>
+          <div style="font-size:0.85rem;font-weight:700;color:#1e293b;margin-bottom:6px;">No clients yet</div>
+          <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:18px;">Add a client to get started</div>
+        </div>`;
+    } else {
+      body = filtered.map(client => {
+        const color    = client.color || '#3b82f6';
+        const initials = (client.name || '?').split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+        const isActive = client.id === UI_STATE.activeClientId;
+        const txCount  = (() => {
+          try { const d = _ssGet('roboledger_v5_data_' + client.id) || {}; return Object.keys(d.transactions || {}).length; } catch { return 0; }
+        })();
+        return `
+          <div class="drawer-client-item ${isActive ? 'active-client' : ''}"
+               onclick="window._drawerPickClient('${accountantId || ''}','${client.id}')">
+            <div class="drawer-client-avatar" style="background:${color};">${initials}</div>
+            <div style="flex:1;min-width:0;">
+              <div class="drawer-client-name">${client.name}</div>
+              <div class="drawer-client-meta">${client.industry || ''} ${txCount ? '· ' + txCount.toLocaleString() + ' txns' : ''}</div>
+            </div>
+            <div style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation();">
+              <button onclick="window.closeContextDrawer();setTimeout(()=>window.openEditClientModal('${client.id}'),50);"
+                      title="Edit client"
+                      style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                      onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">
+                <i class="ph ph-pencil"></i>
+              </button>
+              ${!isActive ? `<button onclick="window.closeContextDrawer();setTimeout(()=>window.deleteClient('${client.id}'),50);"
+                      title="Delete client"
+                      style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                      onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
+                <i class="ph ph-trash"></i>
+              </button>` : ''}
+            </div>
+            ${isActive ? '<span class="drawer-client-active-badge">Active</span>' : ''}
+          </div>`;
+      }).join('');
+    }
+
+    const footer = `
+      <div style="padding:12px 16px;border-top:1px solid #f1f5f9;flex-shrink:0;margin-top:auto;">
+        <button onclick="window.closeContextDrawer();setTimeout(()=>window.openCreateClientModal(),50);"
+                style="width:100%;padding:8px;border-radius:8px;border:1px dashed #cbd5e1;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:#64748b;display:flex;align-items:center;justify-content:center;gap:5px;">
+          <i class="ph ph-plus"></i> New Client
+        </button>
+      </div>`;
+
+    container.innerHTML = header + `<div style="flex:1;overflow-y:auto;">` + body + `</div>` + footer;
+  };
+
+  window._drawerSelectFirm = function(accountantId) {
+    _drawerState.selectedFirmId = accountantId;
+    window._renderDrawerLeft();
+    window._renderDrawerRight(accountantId);
+  };
+
+  window._drawerPickClient = function(accountantId, clientId) {
+    // If switching to a different firm, set accountant context first
+    if (accountantId && accountantId !== UI_STATE.activeAccountantId) {
+      const accountants = _ssGet('roboledger_accountants') || [];
+      const acc = accountants.find(a => a.id === accountantId);
+      if (acc) {
+        UI_STATE.activeAccountantId   = accountantId;
+        UI_STATE.activeAccountantName = acc.name;
+        _ssSet('roboledger_active_accountant', accountantId);
+        window.updateAccountantSwitcherUI(acc);
+      }
+    } else if (!accountantId && UI_STATE.activeAccountantId) {
+      UI_STATE.activeAccountantId   = null;
+      UI_STATE.activeAccountantName = '';
+      _ssRemove('roboledger_active_accountant');
+      window.updateAccountantSwitcherUI(null);
+    }
+    window.closeContextDrawer();
+    window.switchClient(clientId);
+  };
+
+  // ─── ROADMAP PAGE ────────────────────────────────────────────────────────────
+  // Merged from: Mega Game Plan (Feb 2026) + Antigravity SDLC review
+  function renderRoadmapPage() {
+    if (!window._roadmapState) window._roadmapState = { filter: 'all' };
+    const S = window._roadmapState;
+
+    // ── RELEASE MILESTONES (shown in header timeline) ──────────────────────────
+    const milestones = [
+      { label: 'Alpha',  gate: 'After Phase 1', audience: 'Internal only' },
+      { label: 'Beta',   gate: 'After Phase 2', audience: '10–20 friendly accountants' },
+      { label: 'Launch', gate: 'After Phase 4', audience: 'Public · 400 clients' },
+    ];
+
+    // ── PHASES ─────────────────────────────────────────────────────────────────
+    const phases = [
+      // ── COMPLETED ──────────────────────────────────────────────────────────
+      {
+        id: 'p0',
+        label: 'Phase 0 — What We Built',
+        period: 'Completed · Feb 2026',
+        accentColor: '#16a34a',
+        headerBg: '#f0fdf4',
+        progressColor: '#16a34a',
+        icon: 'ph-check-circle',
+        iconBg: '#dcfce7',
+        items: [
+          // Parser infrastructure
+          { status: 'done', label: '26 Bank PDF Parsers', detail: 'RBC (4), BMO (6), TD (3), Scotia (6), CIBC (3), HSBC, ATB, Amex — all major Canadian banks' },
+          { status: 'done', label: 'Amex Audit Parity — all parsers', detail: 'parser_ref, statementId, lineNumber, pdfLocation, audit.rawText emitted on every transaction from every parser' },
+          // Categorization
+          { status: 'done', label: 'SignalFusion Engine (9-signal)', detail: 'Weighted categorization: vendor type, CC polarity, refund mirror, amount bracket, frequency, training brain' },
+          { status: 'done', label: 'CategorizationEngine 3-layer deterministic', detail: 'VENDOR_PATTERNS → ROUTING_TABLE → ACCOUNT_GUARDS · ATM withdrawals routed to 9970 with ATM_OWNER_DRAW flag' },
+          { status: 'done', label: 'CC Polarity Enforcement', detail: '3-layer guard — credit card charges never routed to revenue accounts under any signal combination' },
+          { status: 'done', label: 'Refund / Contra-Expense Routing', detail: 'CC refunds, cashback, rebates auto-routed as contra-expenses to mirror original purchase account' },
+          { status: 'done', label: 'Training Brain', detail: 'Accountant corrections on SWIFT workpapers feed back into signal weights for higher first-import accuracy on next client' },
+          // COA + GST
+          { status: 'done', label: 'COA Engine', detail: 'Full ASSET/LIABILITY/EQUITY/REVENUE/EXPENSE hierarchy, root type resolution, GIFI code mapping' },
+          { status: 'done', label: 'GST Auto-Calculation', detail: 'Province-aware (AB 5%, BC 12%, ON 13%, QC 14.975%), gst_enabled toggle per transaction, tax_cents + gst_account routing' },
+          // UI
+          { status: 'done', label: 'Transaction Grid (TanStack)', detail: 'Virtualized, 10k+ rows smooth, inline category edit, bulk actions, filter toolbar, breadcrumb navigation' },
+          { status: 'done', label: 'Utility Bar Full Drill-Down', detail: '3-level: All › Category › Payee — all stat tiles drillable: Uncategorized, Needs Review, In/Out, Revenue/Expenses' },
+          { status: 'done', label: 'Audit Sidebar + PDF DocumentViewer', detail: 'parser_ref trace, raw bank text, PDF highlight on exact source line, Account Metadata panel, GST drill' },
+          { status: 'done', label: 'Bulk Action Bar', detail: '3 inline bulk operations: recategorize selection, toggle GST, flag for review' },
+          { status: 'done', label: 'Settings Drawer', detail: 'Theme/density/font size, province selector, GST registration config, collapsible nav' },
+          // Reports
+          { status: 'done', label: 'Trial Balance', detail: 'CaseWare standard, prior year import + side-by-side compare, equity + retained earnings synthesis, GST section' },
+          { status: 'done', label: 'Income Statement', detail: 'GAAP — Revenue, COGS, Gross Profit, Operating Expenses, Net Income' },
+          { status: 'done', label: 'Balance Sheet', detail: 'GAAP — Assets, Liabilities, Equity with year-end retained earnings roll-forward' },
+          { status: 'done', label: 'General Ledger Report', detail: 'Per-account transaction detail, net signed amount column, running balance, closing balance card' },
+          { status: 'done', label: 'General Journal Report', detail: 'All entries chronological, net signed amount (credits in red), COA account code + name' },
+          { status: 'done', label: 'COA Summary Report', detail: 'Category breakdown by root type with transaction counts and totals per account' },
+          { status: 'done', label: 'GST Report (full drill-down)', detail: 'Collected / ITC Paid / Net payable per period, individual transaction drill, CRA-format layout' },
+          { status: 'done', label: 'Financial Ratios Report', detail: 'Current ratio, quick ratio, debt-to-equity, gross margin — balance sheet derived' },
+          // Export
+          { status: 'done', label: 'CaseWare ZIP Export', detail: 'Trial Balance in CaseWare Working Papers format, downloadable ZIP, prior year import' },
+          { status: 'done', label: 'XLSX / CSV Export', detail: 'Any filtered grid view exported to Excel or CSV in one click' },
+        ]
+      },
+
+      // ── PHASE 1: STABILIZATION ─────────────────────────────────────────────
+      {
+        id: 'p1',
+        label: 'Phase 1 — Stabilization',
+        period: 'Weeks 1–2 · Gate: all blockers cleared before proceeding',
+        accentColor: '#dc2626',
+        headerBg: '#fef2f2',
+        progressColor: '#dc2626',
+        icon: 'ph-shield-warning',
+        iconBg: '#fee2e2',
+        items: [
+          { status: 'todo', tag: 'Blocker', group: 'Bug Fixes', label: 'Grid disappears on account switch', detail: 'TanStack grid loses its DOM node when switching accounts in the account switcher. Must re-init cleanly. Priority #1 — reproduces in production every time.' },
+          { status: 'todo', tag: 'Blocker', group: 'Bug Fixes', label: 'ALL mode account metadata broken', detail: 'When viewing all accounts combined, the 2-line description and masked card number in the Account Metadata panel display incorrectly. Aggregation logic needs a fix.' },
+          { status: 'todo', tag: 'Blocker', group: 'Bug Fixes', label: 'Balance calculation audit', detail: 'Verify running balance, account-level totals, and reconciliation numbers match across the grid, utility bar stat tiles, and all reports — no silent discrepancies.' },
+          { status: 'todo', tag: 'Blocker', group: 'Bug Fixes', label: 'Grid persistence on page refresh', detail: 'Loaded transactions must survive a full page refresh via localStorage recovery. Currently inconsistent — some sessions lose all data on reload.' },
+        ]
+      },
+
+      // ── PHASE 2: MULTI-CLIENT CORE ─────────────────────────────────────────
+      {
+        id: 'p2',
+        label: 'Phase 2 — Multi-Client Core',
+        period: 'Weeks 3–8 · Alpha after this · Internal only',
+        accentColor: '#b45309',
+        headerBg: '#fffbeb',
+        progressColor: '#d97706',
+        icon: 'ph-buildings',
+        iconBg: '#fef3c7',
+        items: [
+          // Architecture sub-group
+          { status: 'in-progress', tag: 'Critical', group: 'Architecture', label: 'Client Registry — Multi-Client Shell', detail: 'Firm dashboard with client list, create/select/archive. Navigation: Firm → Client → FY → Account → Transactions. The architectural foundation — everything else sits on it.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Scoped Ledger per Client (client_id everywhere)', detail: 'All transactions, accounts, statements, and reports filtered by active client_id. Zero data bleed between clients. Single most important architectural change.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'IndexedDB Persistence (replace localStorage)', detail: '50MB+/origin, survives browser wipe, binary PDF blob support. SQLite via WASM (wa-sqlite) — one .db file per client. localStorage is a 5MB dead end.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Fiscal Year Management UI', detail: 'Per-client: open FY, set start/end dates, view/switch between years, FY-scoped reports. Year-end rollover carries retained earnings forward automatically.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Industry Profile on Client Creation', detail: 'Drives COA default mappings, signal boost table, GST applicability, T4A flag. Profiles: SHORT_TERM_RENTAL, PROFESSIONAL_SERVICES, RETAIL, CONSTRUCTION, RESTAURANT, REAL_ESTATE, E_COMMERCE.' },
+          { status: 'todo', tag: 'Critical', group: 'Architecture', label: 'Period Locking', detail: 'Finalized FY gets locked — no edits allowed. Standard professional accounting requirement. Prevents retroactive changes after client sign-off.' },
+          // Reports sub-group
+          { status: 'todo', tag: 'High', group: 'Reports', label: 'Cash Flow Statement', detail: 'Indirect method: Net Income ± operating WC changes ± investing ± financing = Net Change in Cash. Required for a complete financial package.' },
+          { status: 'todo', tag: 'High', group: 'Reports', label: 'Bank Reconciliation Module', detail: 'Side-by-side: book balance (GL) vs bank statement balance. Outstanding cheques + deposits-in-transit list. Reconciliation sign-off. Audit-defensible.' },
+          { status: 'todo', tag: 'High', group: 'Reports', label: 'Adjusting Journal Entries (AJEs)', detail: 'Dr/Cr entry screen with COA picker. AJEs flow through to Trial Balance and all reports. Reversal option. Year-end: accruals, depreciation, prepaid amortization.' },
+          { status: 'todo', tag: 'High', group: 'Reports', label: 'Comparative Reports (P&L + BS)', detail: 'Current vs prior year side-by-side in Income Statement and Balance Sheet. Variance columns in $ and %.' },
+          // Data integrity sub-group
+          { status: 'todo', tag: 'High', group: 'Data Integrity', label: 'Undo / Redo', detail: 'Ctrl+Z / Ctrl+Y for category changes, GST toggle, flag changes. Session-scoped action stack. Required before any real accountant use — mistakes happen constantly.' },
+          { status: 'todo', tag: 'High', group: 'Data Integrity', label: 'Backup / Restore + Import Merge', detail: 'Full ledger backup as downloadable .json or .db. Restore from file. Import merge: detect and skip duplicate transactions when re-importing a statement already loaded.' },
+        ]
+      },
+
+      // ── PHASE 3: CRA COMPLIANCE + PROFESSIONAL OUTPUT ──────────────────────
+      {
+        id: 'p3',
+        label: 'Phase 3 — CRA Compliance & Professional Output',
+        period: 'Weeks 9–14 · Beta after this · 10–20 accountants',
+        accentColor: '#0369a1',
+        headerBg: '#f0f9ff',
+        progressColor: '#0284c7',
+        icon: 'ph-seal-check',
+        iconBg: '#e0f2fe',
+        items: [
+          // CRA compliance sub-group
+          { status: 'todo', tag: 'High', group: 'CRA Compliance', label: 'CaseWare Full Working Paper Export', detail: 'TB + JE + AJE + Financial Statements + Notes in CaseWare-compatible ZIP. Full year-end deliverable from one download.' },
+          { status: 'todo', tag: 'High', group: 'CRA Compliance', label: 'HST-34 Auto-Fill', detail: 'GST Report data flows into CRA HST-34 lines: 101 Sales, 105 Collected, 106 ITC, 109 Net. Export as printable PDF or CRA NETFILE XML. Quarterly + annual.' },
+          { status: 'todo', tag: 'High', group: 'CRA Compliance', label: 'T4A Generation', detail: 'Flag vendors as T4A recipients. Year-end slips auto-generated with Box 020 (fees for services) and Box 048 (contractor payments). CRA XML export.' },
+          { status: 'todo', tag: 'High', group: 'CRA Compliance', label: 'AR/AP Aging Report', detail: '30/60/90/90+ day aging buckets by vendor/customer. Outstanding balance summary. Collector-ready printable format.' },
+          // Parser expansion sub-group
+          { status: 'todo', tag: 'Medium', group: 'Parser Expansion', label: 'More Parsers', detail: 'National Bank (6th major bank), Tangerine, Simplii, EQ Bank, Desjardins. Covers ~98% of Canadian client bank accounts.' },
+          { status: 'todo', tag: 'Medium', group: 'Parser Expansion', label: 'FX / USD Transaction Support', detail: 'FX Rate + Foreign Amount columns in grid. CAD equivalent at transaction date. USD bank accounts (BMO US, RBC US) treated correctly. Required for any client with cross-border spend.' },
+          // Grid sub-group
+          { status: 'todo', tag: 'Medium', group: 'Grid & UX', label: 'Extended Grid Columns', detail: 'Match Status (reconciled/unmatched), Split Indicator, Confidence Score visible in grid, Attachments count badge.' },
+          { status: 'todo', tag: 'Medium', group: 'Grid & UX', label: 'Duplicate Detection', detail: 'Flag transactions with same date + amount + description within a configurable window. Surfaces in Needs Review tile. Prevents double-counting when statements overlap.' },
+          { status: 'todo', tag: 'Medium', group: 'Grid & UX', label: 'In-App Onboarding + Tooltips', detail: 'First-run walkthrough for new users. Contextual tooltips on key UI elements. Empty-state guides. Accountant-specific quick-start guide.' },
+        ]
+      },
+
+      // ── PHASE 4: OPERATIONAL INTELLIGENCE ─────────────────────────────────
+      {
+        id: 'p4',
+        label: 'Phase 4 — Operational Intelligence',
+        period: 'Weeks 15–20 · Public launch after this',
+        accentColor: '#6d28d9',
+        headerBg: '#f5f3ff',
+        progressColor: '#7c3aed',
+        icon: 'ph-chart-line-up',
+        iconBg: '#ede9fe',
+        items: [
+          // Intelligence sub-group
+          { status: 'todo', tag: 'Medium', group: 'Intelligence', label: 'Anomaly Detection Engine', detail: 'Duplicate tx alerts (same amount + vendor, within 7 days), new high-value payee alerts, amount spikes (3× rolling avg), GST inconsistency flags. All surfaced in UB Needs Review.' },
+          { status: 'todo', tag: 'Medium', group: 'Intelligence', label: 'Vendor Intelligence DB (Firm-Level)', detail: 'Shared vendor → COA mapping across 400 clients. Firm rules override client rules override system defaults. Dramatically improves first-import accuracy for new clients.' },
+          // Reports sub-group
+          { status: 'todo', tag: 'Medium', group: 'Reports & Dashboards', label: 'Budget vs Actual', detail: 'Import budget from Excel or enter per COA/period. Monthly variance report: actual vs budget in $ and %. Flags over-budget accounts.' },
+          { status: 'todo', tag: 'Medium', group: 'Reports & Dashboards', label: 'CFO Dashboard per Client', detail: 'Burn rate, cash runway, quick ratio, current ratio, DSO, DPO, gross margin at a glance. One-page printable for client meetings.' },
+          { status: 'todo', tag: 'Medium', group: 'Reports & Dashboards', label: 'More Financial Ratios', detail: 'EBITDA margin, gross margin %, working capital, interest coverage, DSO (Days Sales Outstanding), DPO (Days Payable Outstanding). CFO-grade metrics.' },
+          // Export sub-group
+          { status: 'todo', tag: 'Medium', group: 'Export', label: 'QBO / Xero Export', detail: 'QuickBooks Online bank feed CSV/IIF or REST API. Xero Statement CSV or REST API. For clients on QBO/Xero who need catch-up bookkeeping from RoboLedger.' },
+          // QA gate sub-group
+          { status: 'todo', tag: 'Medium', group: 'QA Gate', label: 'Testing & QA (80% coverage)', detail: '80%+ test coverage on categorization engine, parser outputs, COA calculations, GST math. UAT with 3–5 real accountants who have never seen the software — before public launch.' },
+        ]
+      },
+
+      // ── PHASE 5: PLATFORM SCALE ────────────────────────────────────────────
+      {
+        id: 'p5',
+        label: 'Phase 5 — Platform Scale',
+        period: '2027+ · Tier 2 & 3 · Multi-Firm SaaS',
+        accentColor: '#475569',
+        headerBg: '#f8fafc',
+        progressColor: '#64748b',
+        icon: 'ph-globe',
+        iconBg: '#f1f5f9',
+        items: [
+          { status: 'todo', tag: 'Future', group: 'Client Platform', label: 'Client Portal (Tier 2)', detail: 'Read-only client view with annotation, receipt upload, transaction flagging. Email magic link auth. Year-end digital sign-off. Accountant controls all — client annotates, never overrides.' },
+          { status: 'todo', tag: 'Future', group: 'Client Platform', label: 'Live Bank Feed (Tier 3)', detail: 'Flinks/Inverite Canadian bank feed API. Webhook receiver slots into same parser pipeline, real-time. Bill C-37 compliant (Canada open banking 2026–2027). First target: firm operating account.' },
+          { status: 'todo', tag: 'Future', group: 'Investments & Crypto', label: 'Investment Bookkeeping (ACB)', detail: 'T1 Schedule 3 capital gains tracking. Questrade/Wealthsimple/TD Direct/RBC Direct CSV parsers. DRIP handling. Annual ACB report per security.' },
+          { status: 'todo', tag: 'Future', group: 'Investments & Crypto', label: 'Crypto Bookkeeping', detail: 'Coinbase/Kraken/Bitbuy/Newton CSV + on-chain wallet history. ACB per coin. Staking income (T1 Line 13000). Annual gain/loss report. CRA property treatment.' },
+          { status: 'todo', tag: 'Future', group: 'AI Layer', label: 'CRA Letter Analysis (AI)', detail: 'Upload CRA letter PDF → AI identifies type (HST audit, assessment, clearance), extracts figures, cross-references client ledger, drafts response letter. Accountant reviews + sends.' },
+          { status: 'todo', tag: 'Future', group: 'AI Layer', label: 'AI Memo / Narrative Generator', detail: 'Year-end plain-English financial summary from P&L + BS + ratios. Accountant edits and signs off. CPD-quality client letter output.' },
+          { status: 'todo', tag: 'Future', group: 'SaaS', label: 'Multi-Firm SaaS', detail: 'Tenant isolation per accounting firm. Firm onboarding + subscription billing. RoboLedger as a product sold to other accounting firms beyond Swift Accounting.' },
+        ]
+      },
+
+      // ── TECHNICAL DEBT ────────────────────────────────────────────────────
+      {
+        id: 'td',
+        label: 'Technical Debt Register',
+        period: 'Addressed progressively alongside phases',
+        accentColor: '#475569',
+        headerBg: '#f8fafc',
+        progressColor: '#94a3b8',
+        icon: 'ph-wrench',
+        iconBg: '#f1f5f9',
+        items: [
+          { status: 'todo', tag: 'Debt', group: 'Architecture', label: 'TD-1: Dual-Layer Architecture', detail: 'TypeScript core (src/core/) never called at runtime. Vanilla JS (app.js, ledger.core.js) is the real engine. Commit to JS runtime; delete dead TS after multi-client shell ships.' },
+          { status: 'todo', tag: 'Debt', group: 'Architecture', label: 'TD-2: localStorage Ceiling', detail: '~5MB limit, wiped on browser clear, no binary blob support. Fix: migrate to IndexedDB / SQLite via WASM (wa-sqlite) in Phase 2.' },
+          { status: 'todo', tag: 'Debt', group: 'Architecture', label: 'TD-3: Monolithic app.js (4,200+ lines)', detail: 'UI, state, events, parsing, reporting all in one file. Fix: decompose progressively → WorkspaceManager, LedgerController, AccountManager, ReportEngine.' },
+          { status: 'todo', tag: 'Debt', group: 'Architecture', label: 'TD-4: ScoringEngine Mocked', detail: 'src/brain/scoring.ts returns 0 for all 5 dimensions — never been real. Fix: bridge scoring.ts → window.RoboLedger.SignalFusionEngine, or port SignalFusion to TS.' },
+          { status: 'done', tag: 'Fixed', group: 'Resolved', label: 'TD-5: Dead Dependencies Cleaned', detail: 'Tabulator CSS and AG-Grid CSS fragments referenced but not installed. Removed from imports. npm pruned.' },
+          { status: 'done', tag: 'Fixed', group: 'Resolved', label: 'TD-6: PDF Highlight Y-Coord Fixed', detail: 'DocumentViewer.jsx now uses page.getViewport({ scale: 1.0 }).height as the unscaled reference for correct Y-axis inversion on PDF highlight boxes.' },
+        ]
+      },
+    ];
+
+    // ── Assign global sequential point numbers to todo/in-progress items only ──
+    let pointCounter = 0;
+    phases.forEach(ph => ph.items.forEach(item => {
+      if (item.status !== 'done') item._pt = ++pointCounter;
+    }));
+    const totalPoints = pointCounter;
+
+    // Compute totals (all items including done)
+    let totalItems = 0, doneItems = 0, inProgressItems = 0;
+    phases.forEach(ph => ph.items.forEach(item => {
+      totalItems++;
+      if (item.status === 'done') doneItems++;
+      if (item.status === 'in-progress') inProgressItems++;
+    }));
+    const pctDone = Math.round((doneItems / totalItems) * 100);
+    const remaining = totalItems - doneItems - inProgressItems;
+
+    // Tag badge styling
+    const tagStyle = (tag) => {
+      const map = {
+        'Blocker':  'background:#fee2e2;color:#991b1b;',
+        'Critical': 'background:#fee2e2;color:#991b1b;',
+        'High':     'background:#fff7ed;color:#9a3412;',
+        'Medium':   'background:#fefce8;color:#854d0e;',
+        'Future':   'background:#f5f3ff;color:#5b21b6;',
+        'Debt':     'background:#f1f5f9;color:#475569;',
+        'Fixed':    'background:#f0fdf4;color:#166534;',
+      };
+      return (map[tag] || 'background:#f1f5f9;color:#64748b;') + 'font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;letter-spacing:0.2px;';
+    };
+
+    const filterBtns = ['all', 'done', 'todo'].map(f => {
+      const active = S.filter === f;
+      const labels = { all: 'All items', done: 'Completed', todo: 'Upcoming' };
+      return `<button onclick="window._roadmapSetFilter('${f}')"
+        style="padding:5px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;
+          border:1px solid ${active ? 'var(--primary-color,#2563eb)' : 'var(--border-color,#e2e8f0)'};
+          background:${active ? 'var(--primary-color,#2563eb)' : 'var(--bg-primary,white)'};
+          color:${active ? 'white' : 'var(--text-secondary,#475569)'};
+          transition:all 0.15s;">${labels[f]}</button>`;
+    }).join('');
+
+    const phaseHtml = phases.map(ph => {
+      const visibleItems = ph.items.filter(item => {
+        if (S.filter === 'all') return true;
+        if (S.filter === 'done') return item.status === 'done';
+        if (S.filter === 'todo') return item.status === 'todo' || item.status === 'in-progress';
+        return true;
+      });
+      if (visibleItems.length === 0) return '';
+
+      const phDone  = ph.items.filter(i => i.status === 'done').length;
+      const phTotal = ph.items.length;
+      const phPct   = Math.round((phDone / phTotal) * 100);
+
+      // Group items by their sub-group label if present
+      let currentGroup = null;
+      const rows = visibleItems.map(item => {
+        const isDone   = item.status === 'done';
+        const isInProg = item.status === 'in-progress';
+
+        const checkIcon = isDone
+          ? `<i class="ph ph-check-circle-fill" style="color:#16a34a;font-size:15px;flex-shrink:0;margin-top:2px;"></i>`
+          : isInProg
+          ? `<i class="ph ph-arrows-clockwise" style="color:#d97706;font-size:15px;flex-shrink:0;margin-top:2px;"></i>`
+          : `<i class="ph ph-circle" style="color:#cbd5e1;font-size:15px;flex-shrink:0;margin-top:2px;"></i>`;
+
+        // Point number badge (only for non-done items)
+        const ptBadge = !isDone && item._pt
+          ? `<span style="display:inline-flex;align-items:center;justify-content:center;
+               width:22px;height:22px;border-radius:50%;flex-shrink:0;
+               background:${ph.accentColor};color:white;
+               font-size:10px;font-weight:800;font-family:monospace;margin-top:1px;">${item._pt}</span>`
+          : '';
+
+        // Sub-group divider
+        let groupHtml = '';
+        if (item.group && item.group !== currentGroup) {
+          currentGroup = item.group;
+          groupHtml = `<div style="font-size:10px;font-weight:700;color:var(--text-tertiary,#94a3b8);
+              text-transform:uppercase;letter-spacing:0.6px;padding:10px 0 4px 0;
+              border-top:1px solid var(--border-subtle,#f1f5f9);margin-top:4px;">${item.group}</div>`;
+        }
+
+        return groupHtml + `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:6px;
+            background:${isDone ? '#f8fffe' : 'var(--bg-primary,white)'};
+            border:1px solid ${isDone ? '#d1fae5' : 'var(--border-subtle,#f1f5f9)'};
+            margin-bottom:4px;">
+          ${isDone ? checkIcon : ptBadge || checkIcon}
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:2px;">
+              <span style="font-size:13px;font-weight:600;color:${isDone ? '#166534' : 'var(--text-primary,#0f172a)'};">${item.label}</span>
+              ${item.tag ? `<span style="${tagStyle(item.tag)}">${item.tag}</span>` : ''}
+            </div>
+            <div style="font-size:11.5px;color:var(--text-tertiary,#94a3b8);line-height:1.5;">${item.detail}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Phase point range label (e.g. "Points 1–4")
+      const phTodoItems = ph.items.filter(i => i.status !== 'done' && i._pt);
+      const ptRange = phTodoItems.length
+        ? `Points ${phTodoItems[0]._pt}–${phTodoItems[phTodoItems.length - 1]._pt}`
+        : '';
+
+      return `<div style="margin-bottom:16px;background:var(--bg-primary,white);border-radius:10px;
+          border:1px solid var(--border-color,#e2e8f0);overflow:hidden;
+          box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+        <div style="background:${ph.headerBg};padding:14px 18px;border-bottom:1px solid var(--border-color,#e2e8f0);
+            display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:${ph.iconBg};border-radius:8px;
+              display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="ph ${ph.icon}" style="font-size:18px;color:${ph.accentColor};"></i>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${ph.label}</div>
+            <div style="font-size:11px;color:var(--text-tertiary,#94a3b8);margin-top:1px;">${ph.period}${ptRange ? ' · <strong style="color:'+ph.accentColor+'">'+ptRange+'</strong>' : ''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:14px;font-weight:700;color:${ph.accentColor};">${phDone}<span style="font-size:11px;font-weight:500;color:var(--text-tertiary,#94a3b8);">/${phTotal}</span></div>
+            <div style="background:var(--bg-tertiary,#f1f5f9);border-radius:99px;height:4px;width:60px;margin-top:4px;overflow:hidden;">
+              <div style="height:100%;width:${phPct}%;background:${ph.progressColor};border-radius:99px;"></div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;">
+          ${rows}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="ai-brain-page" style="padding:24px 28px;max-width:960px;">
+
+        <!-- Page Header (matches site std-page-header style) -->
+        <div class="std-page-header">
+          <div class="header-brand">
+            <div style="width:44px;height:44px;background:var(--primary-color,#2563eb);color:white;border-radius:12px;
+                display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">
+              <i class="ph ph-map-trifold"></i>
+            </div>
+            <div>
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">Roadmap</h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">Swift Accounting · Branch: hungry-villani · Last updated Feb 18, 2026</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span style="background:var(--primary-subtle,#eff6ff);color:var(--primary-color,#2563eb);
+                font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid #bfdbfe;letter-spacing:0.3px;">WIP TRACKER</span>
+          </div>
+        </div>
+
+        <!-- Stat Cards -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+          <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 16px;">
+            <div style="font-size:24px;font-weight:800;color:var(--text-primary,#0f172a);">${totalItems}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Total Items</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #d1fae5;border-radius:8px;padding:14px 16px;">
+            <div style="font-size:24px;font-weight:800;color:#16a34a;">${doneItems}</div>
+            <div style="font-size:11px;font-weight:600;color:#16a34a;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Completed</div>
+          </div>
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;">
+            <div style="font-size:24px;font-weight:800;color:#d97706;">${inProgressItems}</div>
+            <div style="font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">In Progress</div>
+          </div>
+          <div style="background:var(--primary-subtle,#eff6ff);border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;">
+            <div style="font-size:24px;font-weight:800;color:var(--primary-color,#2563eb);">${remaining}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--primary-color,#2563eb);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;">Remaining</div>
+          </div>
+        </div>
+
+        <!-- Progress + Filters -->
+        <div style="background:var(--bg-primary,white);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:16px 18px;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:12px;font-weight:700;color:var(--text-secondary,#475569);text-transform:uppercase;letter-spacing:0.4px;">Overall Progress</span>
+            <span style="font-size:13px;font-weight:700;color:var(--primary-color,#2563eb);">${pctDone}%</span>
+          </div>
+          <div style="background:var(--bg-tertiary,#f1f5f9);border-radius:99px;height:6px;overflow:hidden;margin-bottom:14px;">
+            <div style="height:100%;width:${pctDone}%;background:var(--primary-color,#2563eb);border-radius:99px;transition:width 0.4s ease;"></div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <span style="font-size:11px;font-weight:600;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.3px;margin-right:4px;">Show:</span>
+            ${filterBtns}
+          </div>
+        </div>
+
+        <!-- Vision + Release Strategy -->
+        <div style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <i class="ph ph-target" style="font-size:15px;color:var(--primary-color,#2563eb);"></i>
+            <span style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);text-transform:uppercase;letter-spacing:0.4px;">Goal</span>
+          </div>
+          <p style="font-size:13px;color:var(--text-primary,#0f172a);line-height:1.6;margin:0 0 12px 0;">
+            The operating system for accounting firms — 95% automation, 5% human oversight. 400 clients, one platform, CRA-ready output.
+          </p>
+          <!-- Tier breakdown -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;border-top:1px solid var(--border-color,#e2e8f0);padding-top:10px;margin-bottom:12px;">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--primary-color,#2563eb);text-transform:uppercase;margin-bottom:3px;">Tier 1 · Now</div>
+              <div style="font-size:11px;color:var(--text-secondary,#475569);">Drop PDFs → Auto-categorize → 8 reports → CaseWare export</div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#d97706;text-transform:uppercase;margin-bottom:3px;">Tier 2 · Mid-Term</div>
+              <div style="font-size:11px;color:var(--text-secondary,#475569);">Client portal · See your books · Flag transactions · Upload receipts</div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;margin-bottom:3px;">Tier 3 · Long-Term</div>
+              <div style="font-size:11px;color:var(--text-secondary,#475569);">Live bank feed (Flinks) · CRA letter analysis · Real-time bookkeeping</div>
+            </div>
+          </div>
+          <!-- Release milestones -->
+          <div style="border-top:1px solid var(--border-color,#e2e8f0);padding-top:10px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text-tertiary,#94a3b8);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Release Strategy</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+              ${milestones.map((m, i) => {
+                const colors = ['#2563eb','#d97706','#16a34a'];
+                const bgs    = ['#eff6ff','#fffbeb','#f0fdf4'];
+                const borders = ['#bfdbfe','#fde68a','#bbf7d0'];
+                return `<div style="background:${bgs[i]};border:1px solid ${borders[i]};border-radius:6px;padding:8px 10px;">
+                  <div style="font-size:12px;font-weight:800;color:${colors[i]};margin-bottom:2px;">${m.label}</div>
+                  <div style="font-size:10px;color:var(--text-tertiary,#94a3b8);margin-bottom:2px;">${m.gate}</div>
+                  <div style="font-size:11px;font-weight:600;color:var(--text-secondary,#475569);">${m.audience}</div>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+
+        <!-- Phase Cards -->
+        ${phaseHtml}
+
+        <div style="text-align:center;padding:16px 0;font-size:11px;color:var(--text-tertiary,#94a3b8);">
+          RoboLedger · Branch: hungry-villani · Swift Accounting and Business Solutions Ltd. · February 2026
+        </div>
+
+      </div>
+    `;
+  }
+
+  // Roadmap filter handler — must be global for inline onclick
+  window._roadmapSetFilter = function(filter) {
+    if (!window._roadmapState) window._roadmapState = { filter: 'all' };
+    window._roadmapState.filter = filter;
+    const stage = document.getElementById('app-stage');
+    if (stage) stage.innerHTML = `<div class="fade-in">${renderRoadmapPage()}</div>`;
+  };
+  // ─── END ROADMAP PAGE ─────────────────────────────────────────────────────────
+
+  /**
+   * Compute live balances for all COA accounts from transaction data.
+   * Groups transactions by COA code (via category field or sourceAccountId),
+   * applies effectivePolarity to get correct debit/credit treatment.
+   * Returns a Map<coaCode, balanceDollars>.
+   */
+  function computeCOABalances() {
+    const ledger = window.RoboLedger;
+    if (!ledger) return new Map();
+
+    // === STEP 1: Retroactively assign COA codes to accounts that predate this feature ===
+    const allBankAccounts = ledger.Accounts?.getAll() || [];
+    allBankAccounts.forEach(acc => {
+      if (!acc.coaCode && ledger.Accounts._assignCOACode) {
+        ledger.Accounts._assignCOACode(acc);
+      }
+    });
+
+    // === STEP 2: Build reverse lookup AFTER assignment so new codes are captured ===
+    const allCOAAccounts = ledger.COA?.getAll() || [];
+    const balances = new Map();
+    allCOAAccounts.forEach(a => balances.set(a.code, 0));
+
+    const accountToCoaCode = new Map();
+    // From COA entries with sourceAccountId (set by _assignCOACode)
+    allCOAAccounts.forEach(a => {
+      if (a.sourceAccountId) accountToCoaCode.set(a.sourceAccountId, a.code);
+    });
+    // From bank account objects with coaCode (belt-and-suspenders)
+    allBankAccounts.forEach(acc => {
+      if (acc.coaCode && !accountToCoaCode.has(acc.id)) {
+        accountToCoaCode.set(acc.id, acc.coaCode);
+        if (!balances.has(acc.coaCode)) balances.set(acc.coaCode, 0);
+      }
+    });
+
+    console.log(`[COA] accountToCoaCode map: ${accountToCoaCode.size} entries`, [...accountToCoaCode.entries()]);
+
+    // Helper: detect credit-normal source (CC = liability account)
+    function isSourceCreditNormal(accountId) {
+      const acc = ledger.Accounts?.get(accountId);
+      if (!acc) return false;
+      if ((acc.accountType || '').toLowerCase() === 'creditcard') return true;
+      if (acc.cardNetwork || acc.brand) return true;
+      return false;
+    }
+
+    // === STEP 3: Iterate all transactions ===
+    const txns = ledger.Ledger?.getAll() || [];
+    for (const tx of txns) {
+      const isCCSource = isSourceCreditNormal(tx.account_id);
+      const absAmount = (tx.amount_cents || 0) / 100;
+      if (!absAmount) continue;
+
+      // ── Balance Sheet side: accumulate into the SOURCE BANK/CC account's COA code ──
+      // This gives the running balance of each bank/CC account on the COA page.
+      const sourceCoaCode = accountToCoaCode.get(tx.account_id);
+      if (sourceCoaCode) {
+        let delta;
+        if (isCCSource) {
+          // CC (liability): CREDIT = new charge → liability increases (+)
+          //                 DEBIT  = payment   → liability decreases (-)
+          delta = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
+        } else {
+          // CHQ/SAV (asset): DEBIT  = deposit    → balance increases (+)
+          //                  CREDIT = withdrawal → balance decreases (-)
+          delta = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
+        }
+        balances.set(sourceCoaCode, (balances.get(sourceCoaCode) || 0) + delta);
+      }
+
+      // ── Income Statement side: accumulate by tx.category ──
+      const catCode = tx.category;
+      if (!catCode || catCode === 'uncategorized' || catCode === '9970') continue;
+      if (catCode === sourceCoaCode) continue; // avoid double-counting
+
+      // Use COA sign field to determine credit-normal vs debit-normal
+      // Revenue (credit-normal): CREDIT increases balance (+), DEBIT decreases (-)
+      // Expense (debit-normal):  DEBIT increases balance (+), CREDIT decreases (-)
+      const coaEntry = allCOAAccounts.find(a => a.code === catCode);
+      const isCatCreditNormal = coaEntry?.sign === 'Credit';
+      const signedAmount = tx.polarity === 'DEBIT'
+        ? (isCatCreditNormal ? -absAmount : absAmount)
+        : (isCatCreditNormal ? absAmount : -absAmount);
+      balances.set(catCode, (balances.get(catCode) || 0) + signedAmount);
+    }
+
+    return balances;
   }
 
   function renderCOAPage() {
@@ -2614,6 +4855,27 @@
     `;
   }
 
+  // ─── BANK RECONCILIATION PAGE ─────────────────────────────────────────────
+  function renderBankRecPage() {
+    // Mount the React BankReconciliationReport component after a brief delay
+    // to ensure the DOM shell is ready
+    setTimeout(() => {
+      if (window.mountBankRecPage) {
+        window.mountBankRecPage();
+      } else {
+        // Fallback: if React bridge not yet available, show a loading state
+        const container = document.getElementById('bankrec-container');
+        if (container) {
+          container.innerHTML = '<div style="padding:40px;text-align:center;color:#64748b;">Loading reconciliation...</div>';
+        }
+      }
+    }, 50);
+
+    return `
+      <div id="bankrec-container" style="width:100%;height:100%;display:flex;flex-direction:column;"></div>
+    `;
+  }
+
   // Global shared grid state (Exposed for Forensic Debug)
   window.coaTable = null;
 
@@ -2630,25 +4892,32 @@
       layout: "fitColumns",
       placeholder: "No Accounts Found",
       columns: [
-        { title: "Account #", field: "code", width: 120, sorter: "number", headerSortStartingDir: "asc" },
+        { title: "Account #", field: "code", width: 100, sorter: "number", headerSortStartingDir: "asc",
+          formatter: (cell) => `<span style="font-family:monospace;font-weight:600;color:#1e293b;">${cell.getValue()}</span>` },
         { title: "Account Name", field: "name", widthGrow: 1, headerSort: false },
-        { title: "Type", field: "root", width: 120, formatter: (cell) => cell.getValue()?.toUpperCase() },
+        { title: "Sign", field: "sign", width: 80, hozAlign: "center",
+          formatter: (cell) => {
+            const v = cell.getValue();
+            if (!v) return '-';
+            const color = v === 'Debit' ? '#059669' : '#dc2626';
+            return `<span style="color:${color};font-size:11px;font-weight:600;">${v}</span>`;
+          }
+        },
+        { title: "Type", field: "type", width: 130, headerSort: false,
+          formatter: (cell) => `<span style="font-size:11px;color:#64748b;">${cell.getValue() || '-'}</span>` },
+        { title: "L/S", field: "ls", width: 60, hozAlign: "center",
+          formatter: (cell) => `<span style="font-family:monospace;font-size:11px;font-weight:600;color:#6366f1;">${cell.getValue() || '-'}</span>` },
         {
           title: "Balance",
           field: "balance",
           width: 140,
           hozAlign: "right",
-          formatter: "money",
-          formatterParams: { symbol: "$", decimal: ".", thousand: "," }
-        },
-        { title: "Tx", field: "tx_count", width: 80, hozAlign: "center", formatter: (cell) => cell.getValue() || "-" },
-        {
-          title: "",
-          field: "actions",
-          width: 60,
-          headerSort: false,
-          hozAlign: "center",
-          formatter: () => `<button class="btn-coa-delete"><i class="ph ph-x"></i></button>`
+          formatter: (cell) => {
+            const val = cell.getValue() || 0;
+            const formatted = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Math.abs(val));
+            const color = val > 0 ? '#059669' : val < 0 ? '#dc2626' : '#94a3b8';
+            return `<span style="font-family:monospace;font-weight:600;color:${color};">${val < 0 ? '(' + formatted + ')' : formatted}</span>`;
+          }
         }
       ]
     });
@@ -2687,9 +4956,18 @@
 
       if (!window.coaTable) initCOAGrid();
 
-      // Update grid data
+      // Compute live balances from transactions
+      const liveBalances = computeCOABalances();
+
+      // Update grid data with live balances
       const allAccounts = window.RoboLedger.COA.getAll();
-      const filtered = allAccounts.filter(a => a.root.toLowerCase() === catId);
+      const filtered = allAccounts
+        .filter(a => a.root.toLowerCase() === catId)
+        .map(a => ({
+          ...a,
+          balance: liveBalances.get(a.code) || 0
+        }))
+        .sort((a, b) => parseInt(a.code) - parseInt(b.code));
 
       if (window.coaTable) {
         // Use a small delay to ensure container is fully rendered
@@ -2711,20 +4989,744 @@
     }
   };
 
-  function renderHome() {
-    // Mount the React HomePage component
-    console.log('[RENDER_HOME] Scheduling HomePage mount...');
-    setTimeout(() => {
-      console.log('[RENDER_HOME] Attempting to mount HomePage, mountHomePage exists:', !!window.mountHomePage);
-      if (window.mountHomePage) {
-        console.log('[RENDER_HOME] Calling mountHomePage()');
-        window.mountHomePage();
-      } else {
-        console.error('[RENDER_HOME] window.mountHomePage not found! Check main.jsx loading');
-      }
-    }, 100); // Increased delay to ensure Vite module loads
+  // ─── ADMIN DASHBOARD (GOD VIEW) ──────────────────────────────────────────────
+  // Shows aggregate stats across ALL accountants and ALL clients.
+  // Visible when no accountant and no client is selected.
+  function renderAdminDashboard() {
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const allClients  = _ssGet('roboledger_clients') || [];
 
-    return `<div id="home-container" style="width: 100%; height: 100vh; overflow: auto;"></div>`;
+    // ── Aggregate stats across ALL clients ─────────────────────────────────
+    let totalTxns = 0, totalAccounts = 0, totalUncat = 0, totalRevenue = 0, totalExpenses = 0;
+    const firmStats = [];
+    const healthCounts = { good: 0, attention: 0, urgent: 0 };
+    const industryMap = {};
+    const recentImports = [];
+
+    const readClientLedger = (clientId) => {
+      try {
+        const raw = _ssGet('roboledger_v5_data_' + clientId);
+        return raw || {};
+      } catch { return {}; }
+    };
+
+    allClients.forEach(client => {
+      const ledger   = readClientLedger(client.id);
+      const txList   = Object.values(ledger.transactions || {});
+      const accounts = ledger.accounts || [];
+      const txCount  = txList.length;
+      const acctCount = accounts.length;
+
+      totalTxns     += txCount;
+      totalAccounts += acctCount;
+
+      const uncatCount = txList.filter(t => {
+        const cat = (t.category || '').trim();
+        return !cat || cat === 'UNCATEGORIZED';
+      }).length;
+      totalUncat += uncatCount;
+
+      // Revenue (4000-series) and Expenses (5000-9000 series)
+      // Use canonical amount_cents + polarity (debit/credit fields are deprecated)
+      txList.forEach(t => {
+        const code = parseInt(t.category) || 0;
+        const absAmt = (t.amount_cents || 0) / 100;
+        const isDebit = t.polarity === 'DEBIT';
+        // Revenue is credit-normal: CREDIT increases revenue, DEBIT decreases
+        if (code >= 4000 && code < 5000) totalRevenue  += isDebit ? -absAmt : absAmt;
+        // Expenses are debit-normal: DEBIT increases expense, CREDIT decreases
+        if (code >= 5000 && code < 9970) totalExpenses += isDebit ? absAmt : -absAmt;
+      });
+
+      // Health
+      const reviewCount = txList.filter(t => t.needsReview || t.status === 'needs_review').length;
+      let health = 'good';
+      if (reviewCount > 0 || (txCount > 0 && uncatCount / txCount > 0.3)) health = 'urgent';
+      else if (uncatCount > 0) health = 'attention';
+      healthCounts[health]++;
+
+      // Industry distribution
+      const ind = client.industry || 'OTHER';
+      industryMap[ind] = (industryMap[ind] || 0) + 1;
+
+      // Recent imports
+      if (txList.length > 0) {
+        const dates = txList.map(t => t.date ? new Date(t.date) : null).filter(Boolean);
+        if (dates.length > 0) {
+          const mostRecent = new Date(Math.max(...dates.map(d => d.getTime())));
+          recentImports.push({ name: client.name, date: mostRecent, count: txCount, color: client.color || '#3b82f6' });
+        }
+      }
+    });
+
+    // Per-accountant aggregates
+    accountants.forEach(acc => {
+      const accClients = allClients.filter(c => c.accountantId === acc.id);
+      let firmTxns = 0, firmUncat = 0;
+      accClients.forEach(c => {
+        const ledger = readClientLedger(c.id);
+        const txList = Object.values(ledger.transactions || {});
+        firmTxns  += txList.length;
+        firmUncat += txList.filter(t => { const cat = (t.category || '').trim(); return !cat || cat === 'UNCATEGORIZED'; }).length;
+      });
+      firmStats.push({ name: acc.name, color: acc.color || '#8b5cf6', clients: accClients.length, txns: firmTxns, uncat: firmUncat, id: acc.id });
+    });
+
+    // Unassigned clients
+    const unassigned = allClients.filter(c => !c.accountantId);
+    if (unassigned.length > 0) {
+      let uTxns = 0, uUncat = 0;
+      unassigned.forEach(c => {
+        const ledger = readClientLedger(c.id);
+        const txList = Object.values(ledger.transactions || {});
+        uTxns  += txList.length;
+        uUncat += txList.filter(t => { const cat = (t.category || '').trim(); return !cat || cat === 'UNCATEGORIZED'; }).length;
+      });
+      firmStats.push({ name: 'Unassigned', color: '#94a3b8', clients: unassigned.length, txns: uTxns, uncat: uUncat, id: null });
+    }
+
+    // Sort recent imports by date descending
+    recentImports.sort((a, b) => b.date - a.date);
+
+    const fmt = (n) => n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
+    const catPct = totalTxns > 0 ? Math.round(((totalTxns - totalUncat) / totalTxns) * 100) : 0;
+    const netIncome = totalRevenue - totalExpenses;
+
+    // Industry labels
+    const indLabels = {
+      PROFESSIONAL_SERVICES: 'Professional', SHORT_TERM_RENTAL: 'Short-Term Rental',
+      RETAIL: 'Retail', CONSTRUCTION: 'Construction', RESTAURANT: 'Restaurant',
+      REAL_ESTATE: 'Real Estate', E_COMMERCE: 'E-Commerce', HEALTHCARE: 'Healthcare',
+      TECHNOLOGY: 'Technology', NON_PROFIT: 'Non-Profit', AGRICULTURE: 'Agriculture',
+      TRANSPORTATION: 'Transport', CONSULTING: 'Consulting', MANUFACTURING: 'Manufacturing',
+      OTHER: 'Other',
+    };
+    const indColors = {
+      PROFESSIONAL_SERVICES: '#3b82f6', SHORT_TERM_RENTAL: '#16a34a', RETAIL: '#d97706',
+      CONSTRUCTION: '#ea580c', RESTAURANT: '#9333ea', REAL_ESTATE: '#0d9488',
+      E_COMMERCE: '#7c3aed', HEALTHCARE: '#dc2626', TECHNOLOGY: '#0284c7',
+      NON_PROFIT: '#be185d', AGRICULTURE: '#4d7c0f', TRANSPORTATION: '#a16207',
+      CONSULTING: '#0e7490', MANUFACTURING: '#6d28d9', OTHER: '#64748b',
+    };
+
+    // ── KPI Cards ────────────────────────────────────────────────────────────
+    const kpiCards = `
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px;">
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-buildings" style="font-size:18px;color:#8b5cf6;"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Firms</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${accountants.length}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${allClients.length} total clients</div>
+        </div>
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-receipt" style="font-size:18px;color:#3b82f6;"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Transactions</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${totalTxns.toLocaleString()}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${totalAccounts} accounts</div>
+        </div>
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-trend-up" style="font-size:18px;color:#16a34a;"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Revenue</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:#16a34a;">${fmt(totalRevenue)}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">across all clients</div>
+        </div>
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-trend-down" style="font-size:18px;color:#ef4444;"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Expenses</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:#ef4444;">${fmt(totalExpenses)}</div>
+          <div style="font-size:10px;color:${netIncome >= 0 ? '#16a34a' : '#ef4444'};margin-top:2px;font-weight:600;">Net: ${fmt(netIncome)}</div>
+        </div>
+        <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <i class="ph ph-check-circle" style="font-size:18px;color:${catPct >= 90 ? '#16a34a' : catPct >= 60 ? '#d97706' : '#ef4444'};"></i>
+            <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">Categorized</span>
+          </div>
+          <div style="font-size:28px;font-weight:800;color:var(--text-primary,#0f172a);">${catPct}%</div>
+          <div style="font-size:10px;color:${totalUncat > 0 ? '#d97706' : '#16a34a'};margin-top:2px;">${totalUncat > 0 ? `${totalUncat.toLocaleString()} remaining` : 'All done ✓'}</div>
+        </div>
+      </div>`;
+
+    // ── Categorization progress bar ──────────────────────────────────────────
+    const progressBar = totalTxns > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:11px;font-weight:600;color:var(--text-secondary,#475569);">Practice-Wide Categorization</span>
+          <span style="font-size:11px;color:#94a3b8;">${(totalTxns - totalUncat).toLocaleString()} / ${totalTxns.toLocaleString()}</span>
+        </div>
+        <div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden;">
+          <div style="height:100%;width:${catPct}%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:99px;transition:width 0.5s;"></div>
+        </div>
+      </div>` : '';
+
+    // ── Health Distribution ──────────────────────────────────────────────────
+    const totalH = healthCounts.good + healthCounts.attention + healthCounts.urgent;
+    const healthBar = totalH > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Client Health</div>
+        <div style="display:flex;height:10px;border-radius:99px;overflow:hidden;margin-bottom:12px;">
+          ${healthCounts.good > 0 ? `<div style="width:${(healthCounts.good/totalH*100)}%;background:#16a34a;" title="${healthCounts.good} good"></div>` : ''}
+          ${healthCounts.attention > 0 ? `<div style="width:${(healthCounts.attention/totalH*100)}%;background:#f59e0b;" title="${healthCounts.attention} attention"></div>` : ''}
+          ${healthCounts.urgent > 0 ? `<div style="width:${(healthCounts.urgent/totalH*100)}%;background:#ef4444;" title="${healthCounts.urgent} urgent"></div>` : ''}
+        </div>
+        <div style="display:flex;gap:18px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;"></span>
+            <span style="font-size:11px;color:#475569;"><strong>${healthCounts.good}</strong> Good</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;"></span>
+            <span style="font-size:11px;color:#475569;"><strong>${healthCounts.attention}</strong> Attention</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></span>
+            <span style="font-size:11px;color:#475569;"><strong>${healthCounts.urgent}</strong> Urgent</span>
+          </div>
+        </div>
+      </div>` : '';
+
+    // ── Firm Workload Table ──────────────────────────────────────────────────
+    const firmTable = firmStats.length > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Workload by Firm</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid #f1f5f9;">
+              <th style="text-align:left;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Firm</th>
+              <th style="text-align:center;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Clients</th>
+              <th style="text-align:center;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Txns</th>
+              <th style="text-align:center;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Uncategorized</th>
+              <th style="text-align:right;padding:6px 8px;font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Progress</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${firmStats.map(f => {
+              const pct = f.txns > 0 ? Math.round(((f.txns - f.uncat) / f.txns) * 100) : 100;
+              return `
+                <tr style="border-bottom:1px solid #f8fafc;cursor:${f.id ? 'pointer' : 'default'};" ${f.id ? `onclick="window.switchAccountant('${f.id}')"` : ''}>
+                  <td style="padding:10px 8px;display:flex;align-items:center;gap:8px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${f.color};flex-shrink:0;"></span>
+                    <span style="font-size:12px;font-weight:600;color:var(--text-primary,#0f172a);">${f.name}</span>
+                  </td>
+                  <td style="text-align:center;padding:10px 8px;font-size:12px;font-weight:700;color:var(--text-primary,#0f172a);">${f.clients}</td>
+                  <td style="text-align:center;padding:10px 8px;font-size:12px;color:var(--text-secondary,#475569);">${f.txns.toLocaleString()}</td>
+                  <td style="text-align:center;padding:10px 8px;font-size:12px;color:${f.uncat > 0 ? '#d97706' : '#16a34a'};font-weight:600;">${f.uncat > 0 ? f.uncat.toLocaleString() : '✓'}</td>
+                  <td style="text-align:right;padding:10px 8px;">
+                    <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+                      <div style="width:60px;height:5px;background:#f1f5f9;border-radius:99px;overflow:hidden;">
+                        <div style="width:${pct}%;height:100%;background:${pct >= 90 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#ef4444'};border-radius:99px;"></div>
+                      </div>
+                      <span style="font-size:11px;font-weight:600;color:${pct >= 90 ? '#16a34a' : pct >= 60 ? '#d97706' : '#ef4444'};">${pct}%</span>
+                    </div>
+                  </td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` : '';
+
+    // ── Industry Distribution ────────────────────────────────────────────────
+    const industries = Object.entries(industryMap).sort((a, b) => b[1] - a[1]);
+    const industrySection = industries.length > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Client Industries</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${industries.map(([ind, count]) => `
+            <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:${indColors[ind] || '#64748b'}12;border-radius:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${indColors[ind] || '#64748b'};"></span>
+              <span style="font-size:11px;font-weight:600;color:${indColors[ind] || '#64748b'};">${indLabels[ind] || ind}</span>
+              <span style="font-size:10px;font-weight:700;color:var(--text-secondary,#475569);background:var(--bg-secondary,#f8fafc);padding:1px 6px;border-radius:4px;">${count}</span>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    // ── Recent Activity Feed ─────────────────────────────────────────────────
+    const activityFeed = recentImports.length > 0 ? `
+      <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary,#475569);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Recent Activity</div>
+        <div style="display:flex;flex-direction:column;gap:0;">
+          ${recentImports.slice(0, 8).map(item => {
+            const dateStr = item.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+            return `
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f8fafc;">
+                <span style="width:6px;height:6px;border-radius:50%;background:${item.color};flex-shrink:0;"></span>
+                <span style="font-size:12px;font-weight:600;color:var(--text-primary,#0f172a);flex:1;">${item.name}</span>
+                <span style="font-size:11px;color:#94a3b8;">${item.count.toLocaleString()} txns</span>
+                <span style="font-size:10px;color:#94a3b8;min-width:50px;text-align:right;">${dateStr}</span>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>` : '';
+
+    // ── Quick Actions ────────────────────────────────────────────────────────
+    const quickActions = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+        <button onclick="window.openCreateAccountantModal()"
+                style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:18px;cursor:pointer;text-align:left;transition:all 0.15s;">
+          <div style="width:36px;height:36px;border-radius:9px;background:#8b5cf620;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            <i class="ph ph-user-circle-plus" style="font-size:18px;color:#8b5cf6;"></i>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary,#0f172a);margin-bottom:3px;">New Accountant</div>
+          <div style="font-size:11px;color:#94a3b8;">Add a firm or CPA to the practice</div>
+        </button>
+        <button onclick="window.openCreateClientModal()"
+                style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:18px;cursor:pointer;text-align:left;transition:all 0.15s;">
+          <div style="width:36px;height:36px;border-radius:9px;background:#3b82f620;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            <i class="ph ph-buildings" style="font-size:18px;color:#3b82f6;"></i>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary,#0f172a);margin-bottom:3px;">New Client</div>
+          <div style="font-size:11px;color:#94a3b8;">Register a new business client</div>
+        </button>
+        <button onclick="window.navigateTo('accountants')"
+                style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:12px;padding:18px;cursor:pointer;text-align:left;transition:all 0.15s;">
+          <div style="width:36px;height:36px;border-radius:9px;background:#16a34a20;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            <i class="ph ph-list-dashes" style="font-size:18px;color:#16a34a;"></i>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary,#0f172a);margin-bottom:3px;">Manage Registry</div>
+          <div style="font-size:11px;color:#94a3b8;">View all accountants and clients</div>
+        </button>
+      </div>`;
+
+    // ── Assemble ─────────────────────────────────────────────────────────────
+    return `
+      <div class="ai-brain-page" style="padding:24px 28px;max-width:1200px;">
+        <div class="std-page-header" style="margin-bottom:20px;">
+          <div class="header-brand">
+            <div class="icon-box" style="background:linear-gradient(135deg,#6d28d9,#4f46e5);">
+              <i class="ph ph-shield-check"></i>
+            </div>
+            <div>
+              <h1 style="margin:0;font-size:1.15rem;font-weight:700;color:var(--text-primary,#0f172a);">Admin Dashboard</h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">
+                ${accountants.length} firm${accountants.length !== 1 ? 's' : ''} · ${allClients.length} client${allClients.length !== 1 ? 's' : ''} · Practice overview
+              </p>
+            </div>
+          </div>
+          <button onclick="window.openContextDrawer()" class="btn-restored"
+                  style="background:#6d28d9;border:none;color:white;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-arrows-left-right"></i> Switch Context
+          </button>
+        </div>
+
+        ${kpiCards}
+        ${progressBar}
+        ${quickActions}
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          ${firmTable}
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            ${healthBar}
+            ${industrySection}
+          </div>
+        </div>
+
+        ${activityFeed}
+      </div>`;
+  }
+
+  // ─── ACCOUNTANT PORTAL ───────────────────────────────────────────────────────
+  // Renders the no-client landing page. Reads all client ledger data directly
+  // from localStorage without switching context (no loadFromKey calls).
+  function renderAccountantPortal() {
+    // ── 1. CLIENT LIST ──────────────────────────────────────────────────────
+    let clients = _ssGet('roboledger_clients') || [];
+    if (UI_STATE.activeAccountantId) {
+      clients = clients.filter(c => c.accountantId === UI_STATE.activeAccountantId);
+    }
+
+    // ── 2. LOCAL LABEL MAPS (local constants — cannot share with renderClientsPage) ─
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const industryLabels = {
+      PROFESSIONAL_SERVICES: 'Professional Services',
+      SHORT_TERM_RENTAL:     'Short-Term Rental',
+      RETAIL:                'Retail',
+      CONSTRUCTION:          'Construction',
+      RESTAURANT:            'Restaurant / Food',
+      REAL_ESTATE:           'Real Estate',
+      E_COMMERCE:            'E-Commerce',
+      HEALTHCARE:            'Healthcare',
+      TECHNOLOGY:            'Technology / SaaS',
+      NON_PROFIT:            'Non-Profit',
+      AGRICULTURE:           'Agriculture',
+      TRANSPORTATION:        'Transportation',
+      CONSULTING:            'Consulting',
+      MANUFACTURING:         'Manufacturing',
+      OTHER:                 'Other',
+    };
+    const industryColors = {
+      PROFESSIONAL_SERVICES: { bg: '#eff6ff', color: '#2563eb' },
+      SHORT_TERM_RENTAL:     { bg: '#f0fdf4', color: '#16a34a' },
+      RETAIL:                { bg: '#fef3c7', color: '#d97706' },
+      CONSTRUCTION:          { bg: '#fff7ed', color: '#ea580c' },
+      RESTAURANT:            { bg: '#fdf4ff', color: '#9333ea' },
+      REAL_ESTATE:           { bg: '#f0fdfa', color: '#0d9488' },
+      E_COMMERCE:            { bg: '#faf5ff', color: '#7c3aed' },
+      HEALTHCARE:            { bg: '#fef2f2', color: '#dc2626' },
+      TECHNOLOGY:            { bg: '#f0f9ff', color: '#0284c7' },
+      NON_PROFIT:            { bg: '#fdf2f8', color: '#be185d' },
+      AGRICULTURE:           { bg: '#f7fee7', color: '#4d7c0f' },
+      TRANSPORTATION:        { bg: '#fefce8', color: '#a16207' },
+      CONSULTING:            { bg: '#ecfeff', color: '#0e7490' },
+      MANUFACTURING:         { bg: '#f5f3ff', color: '#6d28d9' },
+      OTHER:                 { bg: '#f8fafc', color: '#64748b' },
+    };
+
+    // ── 3. PER-CLIENT STATS (read localStorage directly, no context switch) ─
+    const today = new Date();
+
+    const computeStats = (client) => {
+      let ledger = {};
+      try {
+        const raw = _ssGet('roboledger_v5_data_' + client.id);
+        if (raw) ledger = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+      } catch (e) {
+        console.warn('[PORTAL] Could not parse ledger for', client.id, e);
+      }
+      const txList   = Object.values(ledger.transactions || {});
+      const accounts = ledger.accounts || [];
+      const txCount  = txList.length;
+      const acctCount = accounts.length;
+
+      const uncatCount = txList.filter(t => {
+        const cat = (t.category || '').trim();
+        return !cat || cat === 'UNCATEGORIZED';
+      }).length;
+
+      const reviewCount = txList.filter(t =>
+        t.needsReview === true || t.status === 'needs_review'
+      ).length;
+
+      let daysSince = null;
+      if (txList.length > 0) {
+        const dates = txList.map(t => t.date ? new Date(t.date) : null).filter(Boolean);
+        if (dates.length > 0) {
+          const mostRecent = new Date(Math.max(...dates.map(d => d.getTime())));
+          daysSince = Math.floor((today - mostRecent) / 86400000);
+        }
+      }
+      if (daysSince === null && client.lastActive) {
+        daysSince = Math.floor((today - new Date(client.lastActive)) / 86400000);
+      }
+
+      const hasDiscrepancy = accounts.some(a => {
+        if (!(a.openingBalance || 0)) return false;
+        return txList.filter(t => t.account_id === a.id).length === 0;
+      });
+
+      let health = 'good';
+      if (reviewCount > 0 || (txCount > 0 && uncatCount / txCount > 0.3) || daysSince > 60) {
+        health = 'urgent';
+      } else if (uncatCount > 0 || daysSince > 30) {
+        health = 'attention';
+      }
+
+      return { txCount, acctCount, uncatCount, reviewCount, daysSince, hasDiscrepancy, health };
+    };
+
+    const clientStats = clients.map(c => ({ client: c, stats: computeStats(c) }));
+
+    // ── 4. SUMMARY AGGREGATES ───────────────────────────────────────────────
+    const totalTxns      = clientStats.reduce((s, { stats }) => s + stats.txCount, 0);
+    const totalUncat     = clientStats.reduce((s, { stats }) => s + stats.uncatCount, 0);
+    const urgentCount    = clientStats.filter(({ stats }) => stats.health === 'urgent').length;
+    const attentionCount = clientStats.filter(({ stats }) => stats.health !== 'good').length;
+
+    // ── 4b. FINANCIAL AGGREGATES (Revenue/Expense across all clients) ─────
+    let _portalRevenue = 0, _portalExpenses = 0;
+    const _fmtPortal = (n) => n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
+    clients.forEach(client => {
+      try {
+        const raw = _ssGet('roboledger_v5_data_' + client.id);
+        if (!raw) return;
+        const ledger = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+        Object.values(ledger.transactions || {}).forEach(t => {
+          const code = parseInt(t.category) || 0;
+          const absAmt = (t.amount_cents || 0) / 100;
+          const isDebit = t.polarity === 'DEBIT';
+          if (code >= 4000 && code < 5000) _portalRevenue  += isDebit ? -absAmt : absAmt;
+          if (code >= 5000 && code < 9970) _portalExpenses += isDebit ? absAmt : -absAmt;
+        });
+      } catch {}
+    });
+    const _portalNetIncome = _portalRevenue - _portalExpenses;
+    const _portalCatPct = totalTxns > 0 ? Math.round(((totalTxns - totalUncat) / totalTxns) * 100) : 0;
+
+    // ── FY Deadline tracking ──────────────────────────────────────────────
+    const _now = new Date();
+    const _currentMonth = _now.getMonth() + 1;
+    const _deadlineSoon = clients.filter(c => {
+      if (!c.fiscalYearEnd) return false;
+      const monthsUntil = ((c.fiscalYearEnd - _currentMonth + 12) % 12);
+      return monthsUntil <= 2 && monthsUntil >= 0;
+    });
+
+    // ── 5. HEALTH BADGE ─────────────────────────────────────────────────────
+    const healthBadge = (health) => {
+      const cfg = {
+        good:      { dot: '#16a34a', bg: '#dcfce7', color: '#15803d', label: 'Good' },
+        attention: { dot: '#d97706', bg: '#fef3c7', color: '#b45309', label: 'Attention' },
+        urgent:    { dot: '#dc2626', bg: '#fee2e2', color: '#b91c1c', label: 'Urgent' },
+      }[health] || { dot: '#94a3b8', bg: '#f1f5f9', color: '#64748b', label: '—' };
+      return `<span class="portal-health-badge" style="background:${cfg.bg};color:${cfg.color};">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+                     background:${cfg.dot};margin-right:5px;flex-shrink:0;"></span>${cfg.label}</span>`;
+    };
+
+    // ── 6. SUMMARY STRIP ────────────────────────────────────────────────────
+    const summaryStrip = `
+      <div class="portal-summary-strip">
+        <div class="portal-summary-cell">
+          <div class="portal-summary-value">${clientStats.length}</div>
+          <div class="portal-summary-label">Clients</div>
+        </div>
+        <div class="portal-summary-divider"></div>
+        <div class="portal-summary-cell">
+          <div class="portal-summary-value">${totalTxns.toLocaleString()}</div>
+          <div class="portal-summary-label">Total Transactions</div>
+          <div class="portal-summary-sub" style="${totalUncat > 0 ? 'color:#d97706;' : 'color:#16a34a;'}">
+            ${totalUncat > 0 ? `${totalUncat.toLocaleString()} uncategorized` : 'All categorized ✓'}
+          </div>
+        </div>
+        <div class="portal-summary-divider"></div>
+        <div class="portal-summary-cell">
+          <div class="portal-summary-value" style="color:${attentionCount > 0 ? '#d97706' : '#16a34a'};">
+            ${attentionCount}
+          </div>
+          <div class="portal-summary-label">Need Attention</div>
+          ${urgentCount > 0 ? `<div class="portal-summary-sub" style="color:#dc2626;">${urgentCount} urgent</div>` : ''}
+        </div>
+      </div>`;
+
+    // ── 7. CLIENT CARD ──────────────────────────────────────────────────────
+    const clientCard = ({ client, stats }) => {
+      const color    = client.color || '#3b82f6';
+      const initials = (client.name || '?').split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+      const iLabel   = industryLabels[client.industry] || 'Other';
+      const iStyle   = industryColors[client.industry] || industryColors.OTHER;
+      const fyLabel  = client.fiscalYearEnd ? MONTH_NAMES[(client.fiscalYearEnd - 1) % 12] : '—';
+      const stripe   = { good: '#16a34a', attention: '#f59e0b', urgent: '#dc2626' }[stats.health] || '#94a3b8';
+
+      const dayLabel = stats.daysSince === null ? 'No imports yet'
+        : stats.daysSince === 0 ? 'Imported today'
+        : `${stats.daysSince}d since last import`;
+
+      const catLine = stats.uncatCount === 0
+        ? `<span style="color:#16a34a;font-size:11px;">✓ All categorized</span>`
+        : `<span style="color:#d97706;font-size:11px;">⚠ ${stats.uncatCount} uncategorized</span>`;
+
+      return `
+        <div class="portal-client-card" style="border-top:3px solid ${stripe};">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <div style="width:36px;height:36px;border-radius:9px;background:${color};color:white;
+                        font-size:13px;font-weight:700;display:flex;align-items:center;
+                        justify-content:center;flex-shrink:0;">${initials}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);
+                          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${client.name}</div>
+              <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap;">
+                <span style="background:${iStyle.bg};color:${iStyle.color};font-size:10px;
+                             font-weight:600;padding:1px 6px;border-radius:4px;">${iLabel}</span>
+                ${client.province ? `<span style="background:#f1f5f9;color:#475569;font-size:10px;
+                             font-weight:600;padding:1px 6px;border-radius:4px;">${client.province}</span>` : ''}
+              </div>
+            </div>
+            ${healthBadge(stats.health)}
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px;">
+            <div style="text-align:center;padding:5px 3px;background:var(--bg-secondary,#f8fafc);border-radius:5px;">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${stats.txCount.toLocaleString()}</div>
+              <div style="font-size:9px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Txns</div>
+            </div>
+            <div style="text-align:center;padding:5px 3px;background:var(--bg-secondary,#f8fafc);border-radius:5px;">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${stats.acctCount}</div>
+              <div style="font-size:9px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Accts</div>
+            </div>
+            <div style="text-align:center;padding:5px 3px;background:var(--bg-secondary,#f8fafc);border-radius:5px;">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary,#0f172a);">${fyLabel}</div>
+              <div style="font-size:9px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">FY End</div>
+            </div>
+          </div>
+
+          <div style="padding:7px 9px;background:var(--bg-secondary,#f8fafc);border-radius:6px;margin-bottom:10px;">
+            ${catLine}
+            ${stats.reviewCount > 0 ? `<div style="font-size:11px;color:#dc2626;margin-top:2px;">▶ ${stats.reviewCount} need review</div>` : ''}
+            ${stats.hasDiscrepancy ? `<div style="font-size:11px;color:#9333ea;margin-top:2px;">― Balance discrepancy</div>` : ''}
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">
+              <i class="ph ph-clock" style="font-size:10px;"></i> ${dayLabel}
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button onclick="event.stopPropagation();window.openEditClientModal('${client.id}')"
+                    title="Edit client profile"
+                    style="background:transparent;border:1px solid var(--border-color,#e2e8f0);
+                    color:var(--text-secondary,#475569);font-size:12px;padding:5px 9px;border-radius:5px;cursor:pointer;">
+              <i class="ph ph-pencil"></i>
+            </button>
+            <button onclick="event.stopPropagation();window.clearClientLedger('${client.id}')"
+                    title="Clear all transaction data (keep profile)"
+                    style="background:transparent;border:1px solid #fecaca;
+                    color:#dc2626;font-size:12px;padding:5px 9px;border-radius:5px;cursor:pointer;">
+              <i class="ph ph-trash"></i>
+            </button>
+            <button onclick="window.switchClient('${client.id}')"
+                    style="background:${color};color:white;border:none;font-size:12px;font-weight:600;
+                    padding:6px 14px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:5px;margin-left:auto;">
+              Open <i class="ph ph-arrow-right"></i>
+            </button>
+          </div>
+        </div>`;
+    };
+
+    // ── 8. EMPTY STATE ──────────────────────────────────────────────────────
+    const emptyState = `
+      <div style="text-align:center;padding:80px 20px;">
+        <div style="width:60px;height:60px;background:#f1f5f9;border-radius:14px;
+                    display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;">
+          <i class="ph ph-buildings" style="color:#94a3b8;"></i>
+        </div>
+        <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:6px;">No clients yet</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:20px;">Create your first client to get started.</div>
+        <button onclick="window.openCreateClientModal()"
+                style="background:#2563eb;color:white;border:none;padding:10px 22px;border-radius:8px;
+                font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;">
+          <i class="ph ph-plus"></i> Create First Client
+        </button>
+      </div>`;
+
+    // ── 9. ASSEMBLE ─────────────────────────────────────────────────────────
+    const contextLabel = UI_STATE.activeAccountantId
+      ? `<span style="color:#8b5cf6;font-weight:600;">${UI_STATE.activeAccountantName}</span>`
+      : `<span style="color:#94a3b8;">All firms · Admin workspace</span>`;
+
+    return `
+      <div class="ai-brain-page" style="padding:24px 28px;max-width:1200px;">
+        <div class="std-page-header">
+          <div class="header-brand">
+            <div class="icon-box" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+              <i class="ph ph-user-circle-gear"></i>
+            </div>
+            <div>
+              ${UI_STATE.activeAccountantId ? `
+                <div style="font-size:11px;color:#8b5cf6;font-weight:600;margin-bottom:2px;cursor:pointer;"
+                     onclick="window.openContextDrawer()">
+                  <i class="ph ph-caret-left" style="font-size:10px;"></i> Accountants
+                </div>` : ''}
+              <h1 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-primary,#0f172a);">
+                Accountant Portal
+              </h1>
+              <p style="margin:0;font-size:0.8rem;color:var(--text-tertiary,#94a3b8);">${contextLabel}</p>
+            </div>
+          </div>
+          <button onclick="window.openCreateClientModal()" class="btn-restored"
+                  style="background:#16a34a;border:none;color:white;display:flex;align-items:center;gap:7px;">
+            <i class="ph ph-plus"></i> New Client
+          </button>
+        </div>
+        ${clientStats.length > 0 ? summaryStrip : ''}
+        ${clientStats.length > 0 ? `
+        <!-- Financial KPI Strip -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
+          <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <i class="ph ph-trend-up" style="font-size:14px;color:#16a34a;"></i>
+              <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Revenue</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:#16a34a;">${_fmtPortal(_portalRevenue)}</div>
+          </div>
+          <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <i class="ph ph-trend-down" style="font-size:14px;color:#ef4444;"></i>
+              <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Expenses</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:#ef4444;">${_fmtPortal(_portalExpenses)}</div>
+          </div>
+          <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <i class="ph ph-scales" style="font-size:14px;color:${_portalNetIncome >= 0 ? '#3b82f6' : '#ef4444'};"></i>
+              <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Net Income</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:${_portalNetIncome >= 0 ? '#3b82f6' : '#ef4444'};">${_fmtPortal(_portalNetIncome)}</div>
+          </div>
+          <div style="background:var(--surface-primary,#fff);border:1px solid var(--border-primary,#e2e8f0);border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <i class="ph ph-chart-bar" style="font-size:14px;color:${_portalCatPct >= 90 ? '#16a34a' : '#d97706'};"></i>
+              <span style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;">Categorized</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:var(--text-primary,#0f172a);">${_portalCatPct}%</div>
+            <div style="height:4px;background:#f1f5f9;border-radius:99px;overflow:hidden;margin-top:6px;">
+              <div style="height:100%;width:${_portalCatPct}%;background:${_portalCatPct >= 90 ? '#16a34a' : _portalCatPct >= 60 ? '#f59e0b' : '#ef4444'};border-radius:99px;"></div>
+            </div>
+          </div>
+        </div>
+        ${_deadlineSoon.length > 0 ? `
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:10px;">
+          <i class="ph ph-warning-circle" style="font-size:18px;color:#d97706;flex-shrink:0;"></i>
+          <div>
+            <span style="font-size:12px;font-weight:600;color:#92400e;">Fiscal Year-End Approaching:</span>
+            <span style="font-size:12px;color:#78350f;margin-left:4px;">
+              ${_deadlineSoon.map(c => c.name).join(', ')}
+            </span>
+          </div>
+        </div>` : ''}
+        ` : ''}
+        ${clientStats.length === 0
+          ? emptyState
+          : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;">
+               ${clientStats.map(clientCard).join('')}
+             </div>`}
+      </div>`;
+  }
+
+  function renderHome() {
+    const stage = document.getElementById('app-stage');
+    if (!stage) return;
+
+    // ── ADMIN BRANCH: no accountant + no client → admin dashboard ───────────
+    if (!UI_STATE.activeAccountantId && !UI_STATE.activeClientId) {
+      const existingContainer = document.getElementById('home-container');
+      if (existingContainer) existingContainer.remove();
+      stage.innerHTML = `<div class="fade-in" style="overflow-y:auto;height:100%;">${renderAdminDashboard()}</div>`;
+      return;
+    }
+
+    // ── PORTAL BRANCH: accountant active, no client → accountant portal ─────
+    if (!UI_STATE.activeClientId) {
+      const existingContainer = document.getElementById('home-container');
+      if (existingContainer) existingContainer.remove();
+      stage.innerHTML = `<div class="fade-in" style="overflow-y:auto;height:100%;">${renderAccountantPortal()}</div>`;
+      return;
+    }
+
+    // ── CLIENT BRANCH: client active → existing React home page ─────────────
+
+    // If the container already exists and React is mounted, just re-render in place
+    if (document.getElementById('home-container') && window.mountHomePage) {
+      window.mountHomePage();
+      return;
+    }
+
+    // First visit: inject container then mount React
+    stage.innerHTML = `<div id="home-container" style="width:100%;height:100vh;overflow:auto;"></div>`;
+
+    const _tryMount = (attemptsLeft) => {
+      if (window.mountHomePage) {
+        window.mountHomePage();
+      } else if (attemptsLeft > 0) {
+        setTimeout(() => _tryMount(attemptsLeft - 1), 80);
+      } else {
+        console.error('[RENDER_HOME] window.mountHomePage not found after retries');
+      }
+    };
+    setTimeout(() => _tryMount(20), 30); // up to ~1.6s total
   }
 
 
@@ -2755,7 +5757,7 @@
     const getSingleIcon = (iconCode, size = 28) => {
       const bank = (iconCode || '').toLowerCase();
       const iconStyle = `width: ${size}px; height: ${size}px; border-radius: 4px; object-fit: contain;`;
-      const basePath = '/src/ui/enterprise/assets/logos/';
+      const basePath = '/logos/';
 
       // Bank icons
       if (bank === 'rbc' || bank.includes('royal')) return `<img src="${basePath}rbc.png" alt="RBC" style="${iconStyle}" />`;
@@ -2950,16 +5952,24 @@
           periodText = dates[0].toISOString().split('T')[0] + ' TO ' + dates[dates.length - 1].toISOString().split('T')[0];
         }
 
-        // Account badges
+        // Account badges — balanced row layout
         var allBadge = '<span style="background: #1e293b; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace;">ALL</span>';
-        var badgesList = accounts.map(function (a) {
+        var allBadges = [allBadge];
+        accounts.forEach(function (a) {
           var isRecon = isAccountReconciled(a);
-          return '<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>';
-        }).join(' ');
+          allBadges.push('<span onclick="window.switchAccount(\'' + a.id + '\')" title="' + (a.name || a.ref) + '" style="background: #3b82f6; color: white; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; font-family: \'JetBrains Mono\', monospace; cursor: pointer;">' + (a.ref || 'N/A') + (isRecon ? ' \u2713' : '') + '</span>');
+        });
+        // Split into balanced rows: e.g. 11 items → 6+5, 7 → 4+3, 13 → 7+6
+        var badgesPerRow = Math.ceil(allBadges.length / Math.ceil(allBadges.length / 8));
+        if (badgesPerRow < 1) badgesPerRow = allBadges.length;
+        var badgeRows = '';
+        for (var bi = 0; bi < allBadges.length; bi += badgesPerRow) {
+          badgeRows += '<div style="display: flex; align-items: center; gap: 4px; margin-bottom: 3px;">' + allBadges.slice(bi, bi + badgesPerRow).join(' ') + '</div>';
+        }
 
         metaContent.innerHTML = '<div style="font-family: ' + terminalFont + '; font-size: 10px; color: #1e293b; min-height: 85px;">' +
           '<div style="font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 1px; margin-bottom: 4px;">ACCOUNT METADATA</div>' +
-          '<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">' + allBadge + ' ' + badgesList + '</div>' +
+          '<div style="margin-bottom: 6px;">' + badgeRows + '</div>' +
           '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 10px; color: #64748b; margin-bottom: 6px;">' +
           '<span style="color: #1e293b; font-weight: 600;">Consolidated View</span> • ' + accounts.length + ' accounts' +
           '</div>' +
@@ -3058,9 +6068,25 @@
 
   // --- WORKSPACE HTML GENERATORS ---
 
+  // Shared helpers: sort accounts by type group (CHQ, SAV, VISA, MC, AMEX, etc.) then by number
+  const _typeOrder = { 'CHQ': 1, 'SAV': 2, 'TD': 3, 'VISA': 4, 'MC': 5, 'AMEX': 6 };
+  const _parseRef = (ref) => {
+    const match = (ref || '').match(/^([A-Za-z]+)(\d*)$/);
+    if (!match) return { type: ref || '', num: 0 };
+    return { type: match[1].toUpperCase(), num: parseInt(match[2] || '0', 10) };
+  };
+
   function getAccountWorkspaceHeaderHTML() {
     const acc = UI_STATE.selectedAccount !== 'ALL' ? window.RoboLedger.Accounts.get(UI_STATE.selectedAccount) : null;
-    const accounts = window.RoboLedger.Accounts.getAll();
+    const accounts = (window.RoboLedger.Accounts.getActive?.() || window.RoboLedger.Accounts.getAll())
+      .slice().sort((a, b) => {
+        const ra = _parseRef(a.ref || a.name);
+        const rb = _parseRef(b.ref || b.name);
+        const orderA = _typeOrder[ra.type] || 99;
+        const orderB = _typeOrder[rb.type] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return ra.num - rb.num;
+      });
     const allTxns = window.RoboLedger.Ledger.getAll(); // MOVED UP: declare before use
 
     // CRITICAL: Don't render header at all if no transactions exist (empty grid)
@@ -3135,7 +6161,7 @@
     const getBankIcon = (bankName) => {
       const bank = (bankName || '').toLowerCase();
       const iconStyle = 'width: 28px; height: 28px; border-radius: 4px; object-fit: contain; vertical-align: middle;';
-      const basePath = '/src/ui/enterprise/assets/logos/';
+      const basePath = '/logos/';
       if (bank.includes('rbc') || bank.includes('royal')) return '<img src="' + basePath + 'rbc.png" alt="RBC" style="' + iconStyle + '" />';
       if (bank.includes('td') || bank.includes('dominion')) return '<img src="' + basePath + 'td.png" alt="TD" style="' + iconStyle + '" />';
       if (bank.includes('bmo') || bank.includes('montreal')) return '<img src="' + basePath + 'bmo.png" alt="BMO" style="' + iconStyle + '" />';
@@ -3177,9 +6203,29 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; flex-direction: column;">
             <div style="display: flex; align-items: center; gap: 8px;">
+              ${(() => {
+                if (!acc) return '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
+                // Check bankIcon, bankName, AND account name — account name is most reliable since it's always set
+                const _bank = (acc.bankIcon || acc.bankName || acc.name || '').toLowerCase();
+                const _brand = (acc.brand || acc.cardNetwork || '').toLowerCase();
+                const _ref = (acc.ref || '').toUpperCase();
+                const _is = `width:24px;height:24px;border-radius:4px;object-fit:contain;`;
+                const _bp = '/logos/';
+                // Card networks — check brand first, then ref prefix
+                if (_brand.includes('visa') || _ref.startsWith('VISA')) return `<img src="${_bp}visa.png" style="${_is}" />`;
+                if (_brand.includes('mc') || _brand.includes('mastercard') || _ref.startsWith('MC')) return `<img src="${_bp}mastercard.png" style="${_is}" />`;
+                if (_brand.includes('amex') || _ref.startsWith('AMEX')) return `<img src="${_bp}amex.png" style="${_is}" />`;
+                // Banks — check name/bankName, then ref prefix
+                if (_bank.includes('rbc') || _bank.includes('royal') || _ref.startsWith('CHQ') || _ref.startsWith('SAV')) return `<img src="${_bp}rbc.png" style="${_is}" />`;
+                if (_bank.includes('td') || _bank.includes('dominion') || _ref.startsWith('TD')) return `<img src="${_bp}td.png" style="${_is}" />`;
+                if (_bank.includes('bmo') || _bank.includes('montreal') || _ref.startsWith('BMO')) return `<img src="${_bp}bmo.png" style="${_is}" />`;
+                if (_bank.includes('scotia') || _ref.startsWith('SCOTIA')) return `<img src="${_bp}scotia.png" style="${_is}" />`;
+                if (_bank.includes('cibc') || _ref.startsWith('CIBC')) return `<img src="${_bp}cibc.png" style="${_is}" />`;
+                return '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
+              })()}
               <select id="account-selector" onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 4px 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase; outline: none; transition: opacity 0.2s;">
                 <option value="ALL" ${UI_STATE.selectedAccount === 'ALL' ? 'selected' : ''}>ALL ACCOUNTS</option>
-                ${accounts.map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${(a.name || a.ref).toUpperCase()}</option>`).join('')}
+                ${accounts.filter(a => a.name && a.name.trim() !== '' && a.name !== 'New Account').map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${(a.name || a.ref).toUpperCase()}</option>`).join('')}
               </select>
               <i class="ph ph-caret-down" style="font-size: 14px; color: #64748b;"></i>
             </div>
@@ -3219,7 +6265,15 @@
   }
 
   function getFilterToolbarHTML() {
-    const accounts = window.RoboLedger.Accounts.getAll();
+    const accounts = (window.RoboLedger.Accounts.getActive?.() || window.RoboLedger.Accounts.getAll())
+      .slice().sort((a, b) => {
+        const ra = _parseRef(a.ref || a.name);
+        const rb = _parseRef(b.ref || b.name);
+        const orderA = _typeOrder[ra.type] || 99;
+        const orderB = _typeOrder[rb.type] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return ra.num - rb.num;
+      });
     const refPrefix = UI_STATE.refPrefix || 'CHQ1';
 
     return `
@@ -3291,6 +6345,14 @@
          <!-- Settings Gear (existing) -->
           <button onclick="window.toggleSettings(true)" style="padding: 7px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'" title="Grid Settings (Appearance & Columns)">
             <i class="ph ph-gear-six" style="font-size: 16px; color: #64748b;"></i>
+          </button>
+
+          <!-- Divider -->
+          <div style="width: 1px; height: 20px; background: #e2e8f0;"></div>
+
+          <!-- Clear Grid Button -->
+          <button onclick="window.clearGrid()" style="padding: 7px 10px; border: 1px solid #fecaca; background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'" title="Clear Grid — removes all transactions (keeps client profile)">
+            <i class="ph ph-trash" style="font-size: 16px; color: #ef4444;"></i>
           </button>
         </div>
       </div>
@@ -3409,12 +6471,12 @@
         
         <!-- Bank Icons Row -->
         <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; max-width: 600px; margin-left: auto; margin-right: auto;">
-          <img src="/src/ui/enterprise/assets/logos/rbc.png" alt="RBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="RBC Royal Bank">
-          <img src="/src/ui/enterprise/assets/logos/td.png" alt="TD" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="TD Canada Trust">
-          <img src="/src/ui/enterprise/assets/logos/bmo.png" alt="BMO" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="BMO Bank of Montreal">
-          <img src="/src/ui/enterprise/assets/logos/scotia.png" alt="Scotia" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="Scotiabank">
-          <img src="/src/ui/enterprise/assets/logos/cibc.png" alt="CIBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="CIBC">
-          <img src="/src/ui/enterprise/assets/logos/amex.png" alt="Amex" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="American Express">
+          <img src="/logos/rbc.png" alt="RBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="RBC Royal Bank">
+          <img src="/logos/td.png" alt="TD" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="TD Canada Trust">
+          <img src="/logos/bmo.png" alt="BMO" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="BMO Bank of Montreal">
+          <img src="/logos/scotia.png" alt="Scotia" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="Scotiabank">
+          <img src="/logos/cibc.png" alt="CIBC" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="CIBC">
+          <img src="/logos/amex.png" alt="Amex" style="height: 32px; width: 32px; object-fit: contain; opacity: 0.7;" title="American Express">
         </div>
         
         <div style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 8px;">No transactions yet.</div>
@@ -3610,7 +6672,7 @@
     const targets = []; // Get from React selection
     if (confirm(`Delete ${ targets.length } transactions ? `)) {
       targets.forEach(t => window.RoboLedger.Ledger.delete(t.tx_id));
-      window.window.updateWorkspace();
+      window.updateWorkspace();
     }
     */
   };
@@ -3813,7 +6875,17 @@
   // Clean up empty accounts on initialization (prevents hangover accounts)
   cleanupEmptyAccounts();
 
-  if (typeof init === 'function') init();
+  // Initialize StorageService (IndexedDB + cache) BEFORE app init
+  (async () => {
+    try {
+      if (window.StorageService?.init) {
+        await window.StorageService.init();
+      }
+    } catch (e) {
+      console.warn('[APP] StorageService init failed, falling back to localStorage', e);
+    }
+    if (typeof init === 'function') init();
+  })();
 })();
 
 
@@ -3839,7 +6911,6 @@ window.updateFileType = function () {
     buttonText.textContent = 'Import Files';
   }
 
-  console.log('[UPLOAD] File type set to:', fileType);
 };
 
 window.updateBrowseMode = function () {
@@ -3855,14 +6926,12 @@ window.updateBrowseMode = function () {
     input.setAttribute('mozdirectory', '');
     input.setAttribute('directory', '');
     if (helpText) helpText.style.display = 'block';
-    console.log('[UPLOAD] Folder browsing enabled');
   } else {
     // Disable folder browsing (single files)
     input.removeAttribute('webkitdirectory');
     input.removeAttribute('mozdirectory');
     input.removeAttribute('directory');
     if (helpText) helpText.style.display = 'none';
-    console.log('[UPLOAD] Single file mode enabled');
   }
 };
 
@@ -3881,8 +6950,6 @@ window.handleMainUpload = function (input) {
   const fileType = select.value;
   const isFolderMode = checkbox && checkbox.checked;
 
-  console.log('[UPLOAD] Processing:', files.length, 'files, Type:', fileType, 'Folder mode:', isFolderMode);
-
   let filteredFiles = files;
 
   // Apply filter based on selected type
@@ -3895,8 +6962,6 @@ window.handleMainUpload = function (input) {
     });
   }
   // 'all' means no filtering
-
-  console.log('[UPLOAD] Filtered:', filteredFiles.length, 'files');
 
   if (filteredFiles.length === 0) {
     alert(`No ${fileType === 'pdf' ? 'PDF' : 'CSV/Excel'} files found in selection.`);
@@ -3911,27 +6976,11 @@ window.handleMainUpload = function (input) {
     fileType === 'csv' ? 'CSV/Excel file' :
       'file';
 
-  console.log('[UPLOAD] File count differentiation:', {
-    totalCount,
-    filteredCount,
-    fileTypeName,
-    showingDifferentiation: filteredCount !== totalCount
-  });
-
-  let confirmMessage;
-  if (filteredCount === totalCount) {
-    // All files match the filter
-    confirmMessage = `Upload ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} to this site?\n\nThis will upload all files from "${isFolderMode ? 'selected folders' : 'selection'}". Only do this if you trust the site.`;
+  // Log summary to console (no confirmation popup)
+  if (filteredCount !== totalCount) {
+    console.log(`[Upload] Processing ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} (${totalCount - filteredCount} non-matching files skipped)`);
   } else {
-    // Show filtered vs total count
-    confirmMessage = `Upload ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''} (out of ${totalCount} total files)?\n\nThis will upload all ${fileTypeName}s from "${isFolderMode ? 'selected folders' : 'selection'}". Only do this if you trust the site.`;
-  }
-
-  console.log('[UPLOAD] Confirmation message:', confirmMessage);
-
-  if (!confirm(confirmMessage)) {
-    input.value = '';
-    return;
+    console.log(`[Upload] Processing ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''}`);
   }
 
   // Show subfolder summary for folder mode
@@ -3951,10 +7000,6 @@ window.handleMainUpload = function (input) {
       // Removed modal alert - info logged to console instead
       // alert('Found ' + filteredFiles.length + ' ' + typeName + ' files across ' + folders.size + ' subfolders:\n\n' + folderList + moreText + '\n\nReady to process.');
     }
-  }
-
-  if (filteredFiles.length < files.length) {
-    console.log('[UPLOAD] Filtered out', files.length - filteredFiles.length, 'files');
   }
 
   window.handleFilesSelected(filteredFiles);

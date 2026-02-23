@@ -1,84 +1,110 @@
 /**
- * RuleEngine - Pattern-based transaction categorization
- * 
- * Features:
- * - Condition matching (contains, equals, regex, numerical)
- * - Multiple conditions with AND/OR logic
- * - Priority-based rule application
- * - Auto-categorization and bulk operations
- * - ML-based fuzzy matching fallback
+ * RuleEngine.js — UPDATED to use SignalFusionEngine
+ *
+ * DROP THIS FILE INTO: src/services/RuleEngine.js
+ * (Replace your existing RuleEngine.js entirely)
+ *
+ * Changes from previous version:
+ *   - applyRules() now delegates to SignalFusionEngine.categorize()
+ *   - All bug fixes from audit still apply (batch save, race condition, etc.)
+ *   - matchesConditions() and evaluateCondition() kept as-is (still used by fusion)
+ *   - importDefaultRules() kept and updated
  */
 
 import FuzzyMatcher from './FuzzyMatcher.js';
 import VendorNormalizer from './VendorNormalizer.js';
 import UserCorrections from './UserCorrections.js';
+import SignalFusionEngine, { getConfidenceTier } from './SignalFusionEngine.js';
 
 class RuleEngine {
     constructor() {
-        this.STORAGE_KEY = 'roboledger_categorization_rules';
-        this.rules = this.loadRules();
-
-        // Initialize vendor matcher (existing)
-        this.vendorMatcher = new window.VendorMatcher();
-
-        // Initialize user corrections
+        this.STORAGE_KEY    = 'roboledger_categorization_rules';
+        this.rules          = this.loadRules();
         this.userCorrections = new UserCorrections();
+        this.vendorMatcher  = new window.VendorMatcher();
+        this.fuzzyMatcher   = null;
+        this._fuzzyReady    = false;
+        this.fusionEngine   = null;
 
-        // Initialize fuzzy matcher with training data + user corrections
+        // Promise that resolves when fusionEngine is ready (after async FuzzyMatcher fetch)
+        // Callers can await window.RuleEngine.ready before calling bulkCategorize()
+        this.ready = new Promise(resolve => { this._resolveReady = resolve; });
+
         this.initializeFuzzyMatcher();
 
-        // Auto-import default rules if none exist
         if (this.rules.length === 0) {
             console.log('[RULE_ENGINE] No rules found, importing defaults...');
             this.importDefaultRules();
         }
     }
 
-    /**
-     * Initialize fuzzy matcher with training data and user corrections
-     */
+    // ─── Initialization ──────────────────────────────────────────────────────
+
     async initializeFuzzyMatcher() {
         try {
-            const response = await fetch('/src/data/vendor_training.json');
+            const response   = await fetch('/src/data/vendor_training.json');
             const trainingData = await response.json();
+            const corrections  = this.userCorrections.getCorrections();
 
-            // Load user corrections
-            const userCorrections = this.userCorrections.getCorrections();
+            this.fuzzyMatcher = new FuzzyMatcher(trainingData, corrections);
 
-            // Initialize with both datasets
-            this.fuzzyMatcher = new FuzzyMatcher(trainingData, userCorrections);
+            // Spin up the fusion engine now that fuzzyMatcher is ready
+            this._initFusionEngine();
+            this._resolveReady(); // Signal that categorization is ready
 
+            this._fuzzyReady = true;
             const stats = this.fuzzyMatcher.getStats();
-            const userStats = this.userCorrections.getStats();
-            console.log(`[RULE_ENGINE] 🧠 FuzzyMatcher loaded: ${stats.totalVendors} vendors`);
-            console.log(`[RULE_ENGINE] 📚 User trained: ${userStats.vendors} vendors, ${userStats.totalCorrections} corrections`);
+            console.log(`[RULE_ENGINE] FuzzyMatcher loaded: ${stats.totalVendors} vendors`);
         } catch (e) {
-            console.warn('[RULE_ENGINE] Failed to load fuzzy matcher:', e);
-            this.fuzzyMatcher = null;
+            console.warn('[RULE_ENGINE] FuzzyMatcher load failed, fusion will run without it:', e);
+            this._initFusionEngine(); // still init fusion without fuzzy
+            this._resolveReady(); // Signal ready even without fuzzy matcher
+            this._fuzzyReady = true;
         }
     }
 
+    _initFusionEngine() {
+        // Pull vendor dictionary from VendorMatcher if it's loaded
+        const dict = this.vendorMatcher?.dictionary || [];
+
+        this.fusionEngine = new SignalFusionEngine({
+            vendorDictionary: dict,
+            fuzzyMatcher:     this.fuzzyMatcher,
+            allTransactions:  [], // populated by calling updateTransactionContext()
+        });
+
+        console.log('[RULE_ENGINE] ✅ fusionEngine ready — categorization active');
+    }
+
     /**
-     * Load rules from storage
+     * IMPORTANT: Call this whenever you load or update the full transaction list.
+     * The fusion engine needs it for recurring detection.
+     *
+     * Example: call this right after loading transactions from storage.
+     *   ruleEngine.updateTransactionContext(allTransactions);
      */
+    updateTransactionContext(transactions) {
+        this.fusionEngine?.updateTransactionList(transactions);
+    }
+
+    // ─── Storage ─────────────────────────────────────────────────────────────
+
     loadRules() {
         try {
-            const stored = localStorage.getItem(this.STORAGE_KEY);
-            if (stored) {
-                return JSON.parse(stored);
-            }
+            const _SS = window.StorageService;
+            const stored = _SS ? _SS.get(this.STORAGE_KEY) : localStorage.getItem(this.STORAGE_KEY);
+            if (stored) return (typeof stored === 'string') ? JSON.parse(stored) : stored;
         } catch (e) {
             console.error('[RULE_ENGINE] Failed to load rules:', e);
         }
         return [];
     }
 
-    /**
-     * Save rules to storage
-     */
     saveRules(rules = this.rules) {
         try {
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(rules));
+            const _SS = window.StorageService;
+            if (_SS) { _SS.set(this.STORAGE_KEY, rules); }
+            else { localStorage.setItem(this.STORAGE_KEY, JSON.stringify(rules)); }
             this.rules = rules;
             return true;
         } catch (e) {
@@ -87,764 +113,418 @@ class RuleEngine {
         }
     }
 
-    /**
-     * Create new rule
-     */
+    // ─── CRUD ─────────────────────────────────────────────────────────────────
+
     createRule(name, conditions, action, logic = 'AND', priority = 5, enabled = true) {
         const newRule = {
             id: `rule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            name,
-            enabled,
-            priority,
-            conditions,
-            logic,
-            action,
-            stats: {
-                matches_count: 0,
-                last_matched: null
-            },
+            name, enabled, priority, conditions, logic, action,
+            stats: { matches_count: 0, last_matched: null },
             created_at: new Date().toISOString()
         };
-
         this.rules.push(newRule);
         this.saveRules();
-        // console.log(`[RULE_ENGINE] Created rule: ${name}`);
         return newRule;
     }
 
-    /**
-     * Update existing rule
-     */
     updateRule(id, updates) {
         const index = this.rules.findIndex(r => r.id === id);
         if (index === -1) return null;
-
-        this.rules[index] = {
-            ...this.rules[index],
-            ...updates
-        };
-
+        this.rules[index] = { ...this.rules[index], ...updates };
         this.saveRules();
-        console.log(`[RULE_ENGINE] Updated rule: ${id}`);
         return this.rules[index];
     }
 
-    /**
-     * Delete rule
-     */
     deleteRule(id) {
         const index = this.rules.findIndex(r => r.id === id);
         if (index === -1) return false;
-
         this.rules.splice(index, 1);
         this.saveRules();
-        console.log(`[RULE_ENGINE] Deleted rule: ${id}`);
         return true;
     }
 
-    /**
-     * Get all rules
-     */
-    getRules() {
-        return this.rules;
-    }
-
-    /**
-     * Get enabled rules sorted by priority
-     */
+    getRules()       { return this.rules; }
     getEnabledRules() {
         return this.rules
             .filter(r => r.enabled)
             .sort((a, b) => b.priority - a.priority);
     }
 
+    // ─── Main Categorization ─────────────────────────────────────────────────
+
     /**
-     * Apply rules to a transaction
-     * Returns { coa_code, rule_id, confidence, method } or null
+     * Categorize a single transaction using the SignalFusionEngine.
+     *
+     * Returns:
+     *   {
+     *     coa_code:    '6800',
+     *     confidence:  0.87,
+     *     method:      'fusion',
+     *     signals:     [...],
+     *     explanation: 'Categorized because: ...',
+     *     needsReview: false,
+     *     tier:        { label: 'Auto', color: '#10b981', dot: '🟢' }
+     *   }
+     *
+     * Or null if fusion engine not ready yet (very brief startup window).
      */
-    applyRules(transaction, rules = null) {
-        const activeRules = rules || this.getEnabledRules();
+    applyRules(transaction, _rules = null, _skipSave = false) {
+        if (!this.fusionEngine) {
+            console.warn('[RULE_ENGINE] applyRules called but fusionEngine not ready — tx:', transaction?.tx_id);
+            return null;
+        }
 
-        // SMART GUARDS: Polarity-aware categorization
-        const amount = Math.abs((transaction.amount_cents || 0) / 100);
-        const isCredit = transaction.polarity === 'CREDIT';
-        const isDebit = transaction.polarity === 'DEBIT';
+        const activeRules = _rules || this.getEnabledRules();
+        const result      = this.fusionEngine.categorize(transaction, activeRules, this);
 
-        // Try rule-based matching first
-        for (const rule of activeRules) {
-            if (this.matchesConditions(transaction, rule.conditions, rule.logic)) {
-                const coaCode = rule.action.coa_code;
-                const account = window.RoboLedger?.COA?.get(coaCode);
+        // Debug: log every categorization decision
+        console.log(`[RULE_ENGINE] "${(transaction.description || transaction.raw_description || '').slice(0, 45)}" → ${result.coa_code || 'NO MATCH'} (conf: ${result.confidence?.toFixed(2)}, method: ${result.method})`);
 
-                // GUARD: Credits should NEVER be categorized as expenses
-                if (isCredit && (account?.root === 'EXPENSE' || account?.class === 'COGS')) {
-                    console.log(`[RULE_ENGINE] ⚠️ Blocked CREDIT from expense category ${coaCode} (${account?.name})`);
-                    continue; // Skip this rule
-                }
-
-                // GUARD: Bank fees are never more than $30
-                if (isDebit && amount > 30 && (coaCode === '7700' || coaCode === '8700' || coaCode === '8800')) {
-                    console.log(`[RULE_ENGINE] ⚠️ Blocked bank fee categorization for $${amount} (too large)`);
-                    continue;
-                }
-
-                // GUARD: Interest charges rarely exceed $500 for small businesses
-                if (isDebit && amount > 500 && (coaCode === '7700' || coaCode === '7800')) {
-                    console.log(`[RULE_ENGINE] ⚠️ Blocked interest categorization for $${amount} (too large)`);
-                    continue;
-                }
-
-                // Update stats
+        // Update rule match stats if a user rule won
+        if (result.ruleId && !_skipSave) {
+            const rule = this.rules.find(r => r.id === result.ruleId);
+            if (rule) {
                 rule.stats.matches_count++;
                 rule.stats.last_matched = new Date().toISOString();
                 this.saveRules();
-
-                // console.log(`[RULE_ENGINE] Matched rule "${rule.name}" for transaction:`, transaction.description);
-
-                return {
-                    coa_code: rule.action.coa_code,
-                    rule_id: rule.id,
-                    confidence: 1.0,
-                    method: 'rule'
-                };
             }
         }
 
-        // Fallback to vendor dictionary matching
-        if (this.vendorMatcher && this.vendorMatcher.dictionary) {
-            // Pass full transaction for context-aware matching
-            const match = this.vendorMatcher.findMatch(transaction, 0.6);
-            if (match) {
-                const account = window.RoboLedger?.COA?.get(match.coaCode);
+        // Attach UI tier
+        result.tier = getConfidenceTier(result.confidence);
 
-                // GUARD: Apply same polarity checks to vendor matches
-                if (isCredit && (account?.root === 'EXPENSE' || account?.class === 'COGS')) {
-                    console.log(`[RULE_ENGINE] ⚠️ Blocked vendor match for CREDIT to expense ${match.coaCode}`);
-                } else if (isDebit && amount > 30 && (match.coaCode === '7700' || match.coaCode === '8700' || match.coaCode === '8800')) {
-                    console.log(`[RULE_ENGINE] ⚠️ Blocked bank fee vendor match for $${amount}`);
-                } else {
-                    // console.log(`[RULE_ENGINE] Vendor match for "${transaction.description}":`, match);
-                    return {
-                        coa_code: match.coaCode,
-                        confidence: match.confidence,
-                        method: 'vendor_dictionary',
-                        vendor: match.vendor,
-                        industry: match.industry,
-                        appliedRule: match.appliedRule // Track which smart rule was applied
-                    };
-                }
-            }
-        }
-
-        // Fallback to ML-based fuzzy matching
-        if (this.fuzzyMatcher) {
-            const match = this.fuzzyMatcher.match(transaction.description);
-            if (match && match.coa && match.confidence > 0.7) {
-                const account = window.RoboLedger?.COA?.get(match.coa);
-
-                // GUARD: Apply polarity checks to fuzzy matches
-                if (isCredit && (account?.root === 'EXPENSE' || account?.class === 'COGS')) {
-                    console.log(`[RULE_ENGINE] ⚠️ Blocked fuzzy match for CREDIT to expense ${match.coa}`);
-                } else {
-                    // console.log(`[RULE_ENGINE] Fuzzy match for "${transaction.description}":`, match);
-                    return {
-                        coa_code: match.coa,
-                        confidence: match.confidence,
-                        method: 'fuzzy_ml',
-                        match_type: match.matchType,
-                        matched_vendor: match.matchedVendor,
-                        similarity_score: match.similarityScore,
-                        training_count: match.count
-                    };
-                }
-            }
-        }
-
-        // LAST RESORT: Default all uncategorized credits to revenue
-        if (isCredit) {
-            console.log(`[RULE_ENGINE] 💰 Defaulting uncategorized CREDIT ($${amount}) to Sales Revenue (4001)`);
-            return {
-                coa_code: '4001', // Sales Revenue
-                confidence: 0.5,
-                method: 'default_revenue'
-            };
-        }
-
-        return null;
+        return result;
     }
 
-
-
     /**
-     * Check if transaction matches all/any conditions based on logic
+     * Bulk categorize — async, yields to browser every CHUNK_SIZE transactions.
+     * Prevents "Aw Snap" / tab crash caused by blocking the main thread with
+     * 16,501-vendor fuzzy ML matching on large imports.
      */
+    async bulkCategorize(transactions, { chunkSize = 10, onProgress } = {}) {
+        const results  = { categorized: 0, skipped: 0, flagged: 0, details: [] };
+        let rulesDirty = false;
+
+        for (let i = 0; i < transactions.length; i += chunkSize) {
+            const chunk = transactions.slice(i, i + chunkSize);
+
+            chunk.forEach(tx => {
+                const match = this.applyRules(tx, null, true);
+
+                if (!match?.coa_code) {
+                    results.skipped++;
+                    return;
+                }
+
+                if (match.needsReview) results.flagged++;
+
+                if (window.RoboLedger?.Ledger?.updateCategory) {
+                    window.RoboLedger.Ledger.updateCategory(tx.tx_id, match.coa_code, {
+                        confidence:  match.confidence,
+                        needsReview: match.needsReview,
+                        explanation: match.explanation,
+                    });
+                    results.categorized++;
+                    results.details.push({
+                        tx_id:       tx.tx_id,
+                        description: tx.description,
+                        coa_code:    match.coa_code,
+                        confidence:  match.confidence,
+                        method:      match.method,
+                        needsReview: match.needsReview,
+                    });
+                    if (match.ruleId) rulesDirty = true;
+                }
+            });
+
+            if (onProgress) onProgress(Math.min(i + chunkSize, transactions.length), transactions.length);
+
+            // Yield to the browser event loop so the tab stays responsive
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+
+        if (rulesDirty) this.saveRules();
+
+        console.log(`[RULE_ENGINE] Bulk complete: ${results.categorized} categorized, ${results.flagged} flagged for review, ${results.skipped} skipped`);
+        return results;
+    }
+
+    // ─── Condition Matching (still used by fusion engine) ────────────────────
+
     matchesConditions(transaction, conditions, logic = 'AND') {
-        const results = conditions.map(cond =>
-            this.evaluateCondition(transaction, cond)
-        );
-
-        return logic === 'AND'
-            ? results.every(Boolean)
-            : results.some(Boolean);
+        const results = conditions.map(cond => this.evaluateCondition(transaction, cond));
+        return logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
     }
 
-    /**
-     * Evaluate single condition
-     */
     evaluateCondition(transaction, condition) {
         let fieldValue = transaction[condition.field];
 
-        // Handle nested fields (e.g., "audit.rawText")
+        // ── Virtual field: account_type ───────────────────────────────────────
+        // Resolved from account registry so rules can distinguish CC vs CHQ/SAV.
+        // Value is lowercased accountType (e.g. 'creditcard', 'chequing', 'savings').
+        if (condition.field === 'account_type') {
+            const acct = window.RoboLedger?.Accounts?.get(transaction.account_id);
+            fieldValue = (acct?.accountType || acct?.type || '').toLowerCase();
+            // Also treat metadata.brand / cardNetwork presence as creditcard
+            if (!fieldValue && (transaction.metadata?.brand || transaction.metadata?.cardNetwork ||
+                                transaction._isCCAcct)) {
+                fieldValue = 'creditcard';
+            }
+        }
+
         if (condition.field.includes('.')) {
-            const parts = condition.field.split('.');
-            fieldValue = parts.reduce((obj, key) => obj?.[key], transaction);
+            fieldValue = condition.field.split('.').reduce((obj, key) => obj?.[key], transaction);
         }
 
-        if (fieldValue === undefined || fieldValue === null) {
-            return false;
+        // Virtual field: is_cc — boolean shorthand for account_type === 'creditcard'
+        if (condition.field === 'is_cc') {
+            const acct = window.RoboLedger?.Accounts?.get(transaction.account_id);
+            const isCCByAcct = !!(acct?.brand || acct?.cardNetwork ||
+                                  (acct?.accountType || '').toLowerCase() === 'creditcard');
+            fieldValue = isCCByAcct || !!transaction._isCCAcct;
         }
 
-        const conditionValue = condition.value;
+        if (fieldValue === undefined || fieldValue === null) return false;
+
+        const val = condition.value;
 
         switch (condition.operator) {
             case 'contains':
-                return String(fieldValue)
-                    .toLowerCase()
-                    .includes(String(conditionValue).toLowerCase());
-
+                return String(fieldValue).toLowerCase().includes(String(val).toLowerCase());
+            case 'not_contains':
+                return !String(fieldValue).toLowerCase().includes(String(val).toLowerCase());
             case 'equals':
-                return fieldValue === conditionValue;
-
+                return String(fieldValue).toLowerCase() === String(val).toLowerCase();
+            case 'not_equals':   // canonical snake_case
+            case 'notEquals':    // camelCase alias
+                return String(fieldValue).toLowerCase() !== String(val).toLowerCase();
             case 'starts_with':
-                return String(fieldValue)
-                    .toLowerCase()
-                    .startsWith(String(conditionValue).toLowerCase());
-
+                return String(fieldValue).toLowerCase().startsWith(String(val).toLowerCase());
             case 'ends_with':
-                return String(fieldValue)
-                    .toLowerCase()
-                    .endsWith(String(conditionValue).toLowerCase());
-
+                return String(fieldValue).toLowerCase().endsWith(String(val).toLowerCase());
             case 'regex':
-                try {
-                    const regex = new RegExp(conditionValue, 'i');
-                    return regex.test(String(fieldValue));
-                } catch (e) {
-                    console.error('[RULE_ENGINE] Invalid regex:', conditionValue);
-                    return false;
-                }
-
+                try { return new RegExp(val, 'i').test(String(fieldValue)); }
+                catch { return false; }
             case 'greater_than':
-                return parseFloat(fieldValue) > parseFloat(conditionValue);
-
+                return parseFloat(fieldValue) > parseFloat(val);
             case 'less_than':
-                return parseFloat(fieldValue) < parseFloat(conditionValue);
-
-            case 'between':
-                const [min, max] = conditionValue;
-                const numValue = parseFloat(fieldValue);
-                return numValue >= min && numValue <= max;
-
+                return parseFloat(fieldValue) < parseFloat(val);
+            case 'between': {
+                const [min, max] = val;
+                return parseFloat(fieldValue) >= min && parseFloat(fieldValue) <= max;
+            }
             default:
                 console.warn('[RULE_ENGINE] Unknown operator:', condition.operator);
                 return false;
         }
     }
 
-    /**
-     * Test rule against sample transactions (for preview)
-     */
     testRule(rule, transactions) {
-        const matches = [];
-
-        for (const tx of transactions) {
-            if (this.matchesConditions(tx, rule.conditions, rule.logic)) {
-                matches.push(tx);
-            }
-        }
-
-        return matches;
+        return transactions.filter(tx => this.matchesConditions(tx, rule.conditions, rule.logic));
     }
 
-    /**
-     * Bulk categorize transactions using rules
-     * Populates ACCOUNT field with COA codes
-     */
-    bulkCategorize(transactions) {
-        const results = {
-            categorized: 0,
-            skipped: 0,
-            details: []
-        };
-
-        transactions.forEach(tx => {
-            const match = this.applyRules(tx);
-            if (match && match.coa_code) {
-                // Update transaction ACCOUNT field using updateCategory
-                if (window.RoboLedger?.Ledger?.updateCategory) {
-                    window.RoboLedger.Ledger.updateCategory(tx.tx_id, match.coa_code);
-                    results.categorized++;
-                    results.details.push({
-                        tx_id: tx.tx_id,
-                        description: tx.description,
-                        coa_code: match.coa_code,
-                        rule_id: match.rule_id
-                    });
-                }
-            } else {
-                results.skipped++;
-            }
-        });
-
-        console.log(`[RULE_ENGINE] Bulk categorize complete:`, results);
-        return results;
-    }
-
-    /**
-     * Suggest COA code based on common patterns in description
-     */
-    suggestCategory(description) {
-        // Simple keyword-based suggestions mapped to COA codes
-        const keywords = {
-            '6400': ['telus', 'rogers', 'bell', 'internet', 'phone', 'mobile', 'cellular', 'openphone'],
-            '7200': ['software', 'saas', 'netflix', 'spotify', 'adobe', 'github', 'subscription'],
-            '8300': ['gas', 'fuel', 'petro', 'shell', 'esso', 'chevron'],
-            '8200': ['repair', 'mechanic', 'auto', 'tire', 'oil change'],
-            '8500': ['hotel', 'airbnb', 'flight', 'uber', 'lyft', 'taxi', 'travel'],
-            '8550': ['restaurant', 'starbucks', 'tim hortons', 'mcdonald', 'dining'],
-            '8400': ['staples', 'office depot', 'supplies'],
-            '8700': ['bank fee', 'service charge', 'monthly fee']
-        };
-
-        const lowerDesc = description.toLowerCase();
-
-        for (const [coaCode, words] of Object.entries(keywords)) {
-            for (const word of words) {
-                if (lowerDesc.includes(word)) {
-                    return {
-                        coa_code: coaCode,
-                        confidence: 0.8,
-                        reason: `Contains keyword "${word}"`
-                    };
-                }
-            }
-        }
-
-        return null;
-    }
+    // ─── Default Rules ────────────────────────────────────────────────────────
 
     importDefaultRules() {
         const defaultRules = [
-            // ═══════════════════════════════════════════════════════
-            // TELECOMMUNICATIONS (COA 6400)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'TELUS → Telephone & Internet (6400)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'TELUS[-\\s]?(MOBILITY|CUSTOMER|ACCOUNT)?' }],
-                action: { coa_code: '6400' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'OPENPHONE → Telephone & Internet (6400)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'OPENPHONE' }],
-                action: { coa_code: '6400' },
-                logic: 'AND',
-                priority: 9
-            },
+            // TELCO — COA 9100 Telephone & Internet (corrected from 6400 which is wrong)
+            { name: 'TELUS → Telephone & Internet (9100)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'TELUS[-\\s]?(MOBILITY|CUSTOMER|ACCOUNT)?' }],
+              action: { coa_code: '9100' }, logic: 'AND', priority: 9 },
+            { name: 'ROGERS / FIDO → Telephone & Internet (9100)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'ROGERS|FIDO WIRELESS' }],
+              action: { coa_code: '9100' }, logic: 'AND', priority: 9 },
+            { name: 'OPENPHONE → Telephone & Internet (9100)',
+              conditions: [{ field: 'description', operator: 'contains', value: 'OPENPHONE' }],
+              action: { coa_code: '9100' }, logic: 'AND', priority: 9 },
 
-            // ═══════════════════════════════════════════════════════
-            // SOFTWARE & SUBSCRIPTIONS (COA 6800)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'PRICELABS → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'PRICELABS?|DYNAPRIC' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'IGMS → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'IGMS|AIRGMS' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'NETFLIX → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'NETFLIX' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'RANKBREEZE → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'RANKBREEZE' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'LOOM → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'LOOM SUBSCRIPTION' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'NORTON → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'NORTON' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'MONDAY.COM → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'MONDAY\\.?COM|BLS\\*MONDAY' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'HOSTGATOR → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'HOSTGATOR|WEB\\*HOSTGATOR|EIG\\*HOSTGATOR' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'WORDPRESS → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'WORDPRESS|PAYPAL.*WORDPRESS' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'TRUSTINDEX → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'TRUSTINDEX' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'EXPERTFLYER → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'EXPERTFLYER' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'MICROSOFT 365 → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'MICROSOFT.*365|MSBILL' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'RBOY APPS → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'RBOY APPS' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'AMAZON BUSINESS PRIME → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'BUSINESS PRIME AMAZON' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'MINUT → Software & Subscriptions (6800)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'MINUT' }],
-                action: { coa_code: '6800' },
-                logic: 'AND',
-                priority: 8
-            },
+            // SOFTWARE
+            { name: 'PRICELABS → Software (6800)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'PRICELABS?|DYNAPRIC' }],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
+            { name: 'IGMS → Software (6800)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'IGMS|AIRGMS' }],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
+            { name: 'MICROSOFT 365 → Software (6800)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'MICROSOFT.*365|MSBILL' }],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
+            { name: 'MONDAY.COM → Software (6800)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'MONDAY\\.?COM|BLS\\*MONDAY' }],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
+            { name: 'RBOY APPS → Software (6800)',
+              conditions: [{ field: 'description', operator: 'contains', value: 'RBOY APPS' }],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 8 },
+            { name: 'MINUT → Software (6800)',
+              conditions: [{ field: 'description', operator: 'contains', value: 'MINUT' }],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 8 },
 
-            // ═══════════════════════════════════════════════════════
-            // REPAIRS & MAINTENANCE (COA 7300)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'BANFF PLUMBING → Repairs & Maintenance (7300)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'BANFF PLUMBING|BOW VALLEY.*PLUMBIN' }],
-                action: { coa_code: '7300' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'HOME DEPOT → Repairs & Maintenance (7300)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'HOME DEPOT|PAYPAL.*HOMEDEPOT' }],
-                action: { coa_code: '7300' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'EECOL ELECTRIC → Repairs & Maintenance (7300)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'EECOL ELECTRIC' }],
-                action: { coa_code: '7300' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'CLEANING SERVICES → Repairs & Maintenance (7300)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'SHOTOVER CLEANING|MCKNIGHT CLEANI|BIG BEN.*CLEANI' }],
-                action: { coa_code: '7300' },
-                logic: 'AND',
-                priority: 8
-            },
+            // REVENUE — AIRBNB payouts on CHQ/SAV only (CREDIT polarity, non-CC account)
+            // AirbnbMENTS / Account Payable Payment = Airbnb remitting rental income
+            { name: 'AIRBNB → Rental Revenue (4900)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'AIRBNB' },
+                  { field: 'polarity',    operator: 'equals',  value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
+              ],
+              action: { coa_code: '4900' }, logic: 'AND', priority: 10 },
 
-            // ═══════════════════════════════════════════════════════
-            // VEHICLE EXPENSES (COA 8400)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'AUTO DEALERS → Vehicle Expenses (8400)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'VILLAGE HONDA|CHARLESGLEN TOYOTA|NORTHSTAR FORD|PACIFIC MOTORS|SPARKS TOYOTA' }],
-                action: { coa_code: '8400' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'CANADIAN TIRE → Vehicle Expenses (8400)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'CDN TIRE|CANADIAN TIRE' }],
-                action: { coa_code: '8400' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'GAS STATIONS → Vehicle Expenses (8400)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'ESSO|PETROCAN|PETRO-?CAN|SHELL|CO-?OP GAS|CHEVRON|CALG CO-?OP' }],
-                action: { coa_code: '8400' },
-                logic: 'AND',
-                priority: 9
-            },
+            // REVENUE — E-Transfer Credits = Rental Revenue on CHQ/SAV accounts only
+            // IMPORTANT: This must NOT fire on CC accounts — CC credits are charges, not income
+            { name: 'E-Transfer Credit → Rental Revenue (4900)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'E-TRANSFER|INTERAC|E-TRF|AUTODEPOSIT' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
+              ],
+              action: { coa_code: '4900' }, logic: 'AND', priority: 9 },
 
-            // ═══════════════════════════════════════════════════════
-            // INSURANCE (COA 7100 & 6500)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'SECURITY NATIONAL → Insurance (7100)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'SECURITY NATIONAL INSUR' }],
-                action: { coa_code: '7100' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'BLUE CROSS → Employee Benefits (6500)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'IP PLAN.*BLUE CROSS' }],
-                action: { coa_code: '6500' },
-                logic: 'AND',
-                priority: 9
-            },
+            // REPAIRS
+            { name: 'HOME DEPOT → Repairs & Maintenance (7300)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'HOME DEPOT|PAYPAL.*HOMEDEPOT' }],
+              action: { coa_code: '7300' }, logic: 'AND', priority: 8 },
+            { name: 'CLEANING SERVICES → Repairs (7300)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'SHOTOVER CLEANING|MCKNIGHT CLEANI|BIG BEN.*CLEANI' }],
+              action: { coa_code: '7300' }, logic: 'AND', priority: 8 },
+            { name: 'BANFF PLUMBING → Repairs (7300)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'BANFF PLUMBING|BOW VALLEY.*PLUMBIN' }],
+              action: { coa_code: '7300' }, logic: 'AND', priority: 9 },
 
-            // ═══════════════════════════════════════════════════════
-            // OFFICE SUPPLIES (COA 8600)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'MEMORY EXPRESS → Office Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'MEMORY EXPRESS' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'WALMART → Office Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'WAL-?MART' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 7
-            },
-            {
-                name: 'YOUPRENEUR → Office Expenses (8600)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'YOUPRENEUR' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'ULINE → Office Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'ULINE' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'ALIBABA → Office Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'ALIBABA' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'LONDON DRUGS → Office Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'LONDON DRUGS' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 7
-            },
-            {
-                name: 'PHONE/WIRELESS → Office Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'PHONE EXPERTS|APEX WIRELESS' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'OTTERBOX → Office Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'OTTERBOX|LIFEPROOF' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'PATAGONIA → Uniforms/Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'PATAGONIA' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 7
-            },
-            {
-                name: 'SP HOTEL TOILETRIES → Office Supplies (8600)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'SP HOTEL TOILETRIES' }],
-                action: { coa_code: '8600' },
-                logic: 'AND',
-                priority: 8
-            },
+            // VEHICLE / GAS — COA 7400 Fuel and Oil (CORRECTED: 8400 is Management Remuneration, NEVER fuel)
+            { name: 'GAS STATIONS → Fuel & Oil (7400)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'ESSO|PETROCAN|PETRO-?CAN|SHELL|CO-?OP GAS|CHEVRON|CALG CO-?OP|FAS GAS|CARDLOCK|ULTRAMAR|HUSKY' }],
+              action: { coa_code: '7400' }, logic: 'AND', priority: 9 },
 
-            // ═══════════════════════════════════════════════════════
-            // MEALS & ENTERTAINMENT (COA 8100)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'RESTAURANTS → Meals & Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'BR RESTAURANT|JAMESONS|KILKENNY|GRIZZLY PAW|MARKET BISTRO' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'FAST FOOD → Meals & Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'SUBWAY|MCDONALD|PIZZAHUT|TIM HORTON' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 7
-            },
-            {
-                name: '7-ELEVEN → Meals & Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'contains', value: '7-ELEVEN' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 6
-            },
-            {
-                name: 'ANA PAC → Meals & Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'ANA PAC' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 7
-            },
+            // TRAVEL — COA 9200 Travel & Accommodations (corrected from 8500 which is wrong in this COA)
+            { name: 'AIRLINES → Travel (9200)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'WESTJET|PAC-WESTJET|WIFIONBOARD|AIR CANADA' }],
+              action: { coa_code: '9200' }, logic: 'AND', priority: 9 },
+            { name: 'HOTELS → Travel (9200)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'BANFF SPRINGS HOTEL|GEORGETOWN INN|MARRIOTT|HILTON' }],
+              action: { coa_code: '9200' }, logic: 'AND', priority: 8 },
 
-            // ═══════════════════════════════════════════════════════
-            // REVENUE (COA 4000)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'AIRBNB → Rental Revenue (4000)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'AIRBNB|PAYMENTS.*ACCOUNT PAYABLE' }],
-                action: { coa_code: '4000' },
-                logic: 'AND',
-                priority: 9
-            },
+            // INSURANCE — COA 7600 (CORRECTED: 7100 is Equipment Repairs in this COA, not Insurance)
+            { name: 'SECURITY NATIONAL → Insurance (7600)',
+              conditions: [{ field: 'description', operator: 'contains', value: 'SECURITY NATIONAL INSUR' }],
+              action: { coa_code: '7600' }, logic: 'AND', priority: 9 },
+            // Employee Benefits (Blue Cross group plan) — COA 6900
+            { name: 'BLUE CROSS → Employee Benefits (6900)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'IP PLAN.*BLUE CROSS|AB BLUE CROSS|ALBERTA BLUE CROSS' }],
+              action: { coa_code: '6900' }, logic: 'AND', priority: 9 },
 
-            // ═══════════════════════════════════════════════════════
-            // TRAVEL & ENTERTAINMENT (COA 8100)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'WIFI/AIRLINE → Travel & Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'WIFIONBOARD|WESTJET|PAC-WESTJET' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'PARKS CANADA → Travel & Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'PARKS CANADA' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'HOTELS → Travel & Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'BANFF SPRINGS HOTEL|GEORGETOWN INN' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 7
-            },
-            {
-                name: 'ALPINE HELICOPTERS → Client Entertainment (8100)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'ALPINE HELICOPTERS' }],
-                action: { coa_code: '8100' },
-                logic: 'AND',
-                priority: 8
-            },
+            // PROFESSIONAL — COA 8700 Professional Fees (CORRECTED: 6100 is Amortization — journal entry ONLY)
+            { name: 'ALLISON ASSOCIATES → Professional Fees (8700)',
+              conditions: [{ field: 'description', operator: 'contains', value: 'ALLISON ASSOCIATES' }],
+              action: { coa_code: '8700' }, logic: 'AND', priority: 9 },
+            { name: 'REAL ESTATE COUNCIL → Professional Dev (6900)',
+              conditions: [{ field: 'description', operator: 'contains', value: 'REAL ESTATE COUNCIL' }],
+              action: { coa_code: '6900' }, logic: 'AND', priority: 9 },
+            { name: 'REGISTRIES → Licenses (6900)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'REGISTRY|ALBERTA ?REGISTRY' }],
+              action: { coa_code: '6900' }, logic: 'AND', priority: 8 },
 
-            // ═══════════════════════════════════════════════════════
-            // PROFESSIONAL SERVICES (COA 6100, 6900)
-            // ═══════════════════════════════════════════════════════
-            {
-                name: 'ALLISON ASSOCIATES → Professional Fees (6100)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'ALLISON ASSOCIATES' }],
-                action: { coa_code: '6100' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'REAL ESTATE COUNCIL → Professional Development (6900)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'REAL ESTATE COUNCIL' }],
-                action: { coa_code: '6900' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'BCIT → Professional Development (6900)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'BCIT ICES' }],
-                action: { coa_code: '6900' },
-                logic: 'AND',
-                priority: 9
-            },
-            {
-                name: 'REGISTRIES → Licenses & Permits (6900)',
-                conditions: [{ field: 'description', operator: 'regex', value: 'REGISTRY|ALBERTA ?REGISTRY' }],
-                action: { coa_code: '6900' },
-                logic: 'AND',
-                priority: 8
-            },
-            {
-                name: 'PRINCE OF TRAVEL → Professional Development (6900)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'PRINCE OF TRAVEL' }],
-                action: { coa_code: '6900' },
-                logic: 'AND',
-                priority: 7
-            },
-            {
-                name: 'SE CANADA → Professional Services (6100)',
-                conditions: [{ field: 'description', operator: 'contains', value: 'SE CANADA INC' }],
-                action: { coa_code: '6100' },
-                logic: 'AND',
-                priority: 8
-            }
+            // MEALS — COA 6415 Meals & Entertainment (corrected from 8100 which is wrong in this COA)
+            { name: 'FAST FOOD → Meals & Entertainment (6415)',
+              conditions: [{ field: 'description', operator: 'regex', value: 'SUBWAY|MCDONALD|PIZZAHUT|TIM HORTON|STARBUCKS|A&W|HARVEYS|WENDYS|BURGER KING' }],
+              action: { coa_code: '6415' }, logic: 'AND', priority: 7 },
+
+            // OFFICE
+            { name: 'ULINE → Office Supplies (8600)',
+              conditions: [{ field: 'description', operator: 'contains', value: 'ULINE' }],
+              action: { coa_code: '8600' }, logic: 'AND', priority: 9 },
+            { name: 'AMAZON BUSINESS PRIME → Software (6800)',
+              conditions: [{ field: 'description', operator: 'contains', value: 'BUSINESS PRIME AMAZON' }],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
+
+            // CC PAYMENTS FROM CHQ/SAV — "AMEX REGULAR", "VISA", "MC" Online Banking Payments
+            // Debit from chequing/savings going to pay a credit card = inter-account transfer → 9971
+            { name: 'AMEX Payment from CHQ → CC Payment (9971)',
+              conditions: [
+                  { field: 'description', operator: 'regex',     value: 'AMEX\\s*(REGULAR|GOLD|PLAT|PLATINUM|BUSINESS|CREDIT|CARD)?' },
+                  { field: 'polarity',    operator: 'equals',    value: 'DEBIT' },
+                  { field: 'account_type',operator: 'not_equals',value: 'creditcard' },
+              ],
+              action: { coa_code: '9971' }, logic: 'AND', priority: 10 },
+            { name: 'VISA Payment from CHQ → CC Payment (9971)',
+              conditions: [
+                  { field: 'description', operator: 'regex',     value: 'VISA\\s*(PAYMENT|PAYABLE|CARD|CREDIT)?' },
+                  { field: 'polarity',    operator: 'equals',    value: 'DEBIT' },
+                  { field: 'account_type',operator: 'not_equals',value: 'creditcard' },
+              ],
+              action: { coa_code: '9971' }, logic: 'AND', priority: 10 },
+            { name: 'MC/Mastercard Payment from CHQ → CC Payment (9971)',
+              conditions: [
+                  { field: 'description', operator: 'regex',     value: 'MASTERCARD|\\bM\\.?C\\.?\\s*(PAYMENT|PAYABLE)' },
+                  { field: 'polarity',    operator: 'equals',    value: 'DEBIT' },
+                  { field: 'account_type',operator: 'not_equals',value: 'creditcard' },
+              ],
+              action: { coa_code: '9971' }, logic: 'AND', priority: 10 },
+
+            // PAYROLL / EMPLOYEE EXPENSES
+            // PAY EMP-VENDOR = owner/director management remuneration → 8400 (NOT 6000 Advertising)
+            // Flag for review so accountant can confirm owner vs employee split
+            { name: 'PAY EMP-VENDOR → Management Remuneration (8400)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'PAY\\s*EMP[-\\s]?VENDOR' },
+                  { field: 'polarity',    operator: 'equals', value: 'DEBIT' },
+              ],
+              action: { coa_code: '8400' }, logic: 'AND', priority: 10 },
+            // Employee payroll runs → 9800 Wages & Benefits
+            { name: 'Direct Deposit Payroll → Wages (9800)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: '\\bPAYROLL\\b|SALARY\\s*DEPOSIT|WAGES\\s*DEPOSIT' },
+                  { field: 'polarity',    operator: 'equals', value: 'DEBIT' },
+              ],
+              action: { coa_code: '9800' }, logic: 'AND', priority: 9 },
+
+            // BANK / SAVINGS INTEREST INCOME
+            // "Deposit interest", "Interest credited" on SAV/CHQ = interest income → 4860
+            // CORRECTED: 7100 is Equipment Repairs in this COA — deposit interest is REVENUE → 4860
+            { name: 'Deposit Interest → Interest Income (4860)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'DEPOSIT\\s*INTEREST|INTEREST\\s*CREDIT|INTEREST\\s*PAID|SAVINGS\\s*INTEREST|INT\\s*PAID' },
+                  { field: 'polarity',    operator: 'equals', value: 'CREDIT' },
+              ],
+              action: { coa_code: '4860' }, logic: 'AND', priority: 10 },
+
+            // PURCHASE INTEREST charged on CC balance = bank charge → 7700 (corrected from any expense)
+            { name: 'Purchase Interest Charge → Bank Charges (7700)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'PURCHASE\\s*INTEREST|INTEREST\\s*CHARG' },
+                  { field: 'polarity',    operator: 'equals', value: 'CREDIT' },
+                  { field: 'account_type',operator: 'equals', value: 'creditcard' },
+              ],
+              action: { coa_code: '7700' }, logic: 'AND', priority: 10 },
+
+            // AMAZON PURCHASES — expense not revenue (CC charges)
+            // Amazon.ca purchases on AMEX/VISA = supplies/office expense
+            { name: 'Amazon Purchase → Office Supplies (8600)',
+              conditions: [
+                  { field: 'description', operator: 'regex',  value: 'AMAZON\\.CA|AMZN\\s*MKTP|AMZ\\*AMAZON' },
+                  { field: 'polarity',    operator: 'equals', value: 'CREDIT' },
+                  { field: 'account_type',operator: 'equals', value: 'creditcard' },
+              ],
+              action: { coa_code: '8600' }, logic: 'AND', priority: 9 },
+
+            // NETFLIX — streaming subscription on CC = software/subscription expense
+            { name: 'Netflix → Software Subscriptions (6800)',
+              conditions: [
+                  { field: 'description', operator: 'contains', value: 'NETFLIX' },
+              ],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
+
+            // GOOGLE — ads or workspace on CC = software/marketing expense
+            { name: 'Google → Software/Advertising (6800)',
+              conditions: [
+                  { field: 'description', operator: 'regex', value: 'GOOGLE\\*|GOOGLE\\s*(ADS?|WORKSPACE|PLAY|CC)' },
+              ],
+              action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
         ];
 
-        defaultRules.forEach(r => {
-            this.createRule(r.name, r.conditions, r.action, r.logic, r.priority);
-        });
-
-        console.log(`[RULE_ENGINE] Imported ${defaultRules.length} default categorization rules`);
+        defaultRules.forEach(r => this.createRule(r.name, r.conditions, r.action, r.logic, r.priority));
+        console.log(`[RULE_ENGINE] Imported ${defaultRules.length} default rules`);
     }
 }
 
-// Singleton instance
 const ruleEngine = new RuleEngine();
-
-// Make available globally
 window.RuleEngine = ruleEngine;
-
 export default ruleEngine;

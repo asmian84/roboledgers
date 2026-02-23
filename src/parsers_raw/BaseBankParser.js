@@ -62,12 +62,14 @@ class BaseBankParser {
     /**
      * UNIVERSAL HELPER: Build complete audit data for source document viewing
      * Creates both pdfLocation (for PDF highlighting) and audit (for metadata)
+     * [UPDATED] Now includes allPdfLines array matching AMEX audit drawer structure
      * 
      * @param {string|Array} rawText - Raw transaction line(s) from PDF
      * @param {string} parserName - Name of parser (e.g., "BMOChequingParser")
+     * @param {Object} options - Optional { statementId, lineNumber }
      * @returns {Object} { pdfLocation, audit } ready to add to transaction
      */
-    buildAuditData(rawText, parserName = null) {
+    buildAuditData(rawText, parserName = null, options = {}) {
         const lines = Array.isArray(rawText) ? rawText : [rawText];
         const auditMetadata = lines.map(line => this.getSpatialMetadata(line)).filter(Boolean);
 
@@ -89,15 +91,49 @@ class BaseBankParser {
             height: mergedAudit.height || 12
         };
 
-        // Build audit metadata
+        // Build allPdfLines array (AMEX pattern) - array of {line, coords, type}
+        const allPdfLines = [];
+
+        // Add main line
+        if (lines.length > 0 && auditMetadata.length > 0) {
+            allPdfLines.push({
+                line: lines[0],
+                coords: {
+                    page: auditMetadata[0].page || 1,
+                    top: auditMetadata[0].y || 0,
+                    left: 50,
+                    width: 500,
+                    height: auditMetadata[0].height || 12,
+                    lineText: lines[0]
+                },
+                type: 'main'
+            });
+        }
+
+        // Add continuation lines if multi-line transaction
+        for (let i = 1; i < lines.length && i < auditMetadata.length; i++) {
+            allPdfLines.push({
+                line: lines[i],
+                coords: {
+                    page: auditMetadata[i].page || 1,
+                    top: auditMetadata[i].y || 0,
+                    left: 50,
+                    width: 500,
+                    height: auditMetadata[i].height || 12,
+                    lineText: lines[i]
+                },
+                type: 'continuation'
+            });
+        }
+
+        // Build audit metadata matching AMEX structure exactly
         const audit = {
             parser: parserName || this.bankName,
             parsedAt: new Date().toISOString(),
-            lineNumber: null, // Parser can override
+            statementId: options.statementId || null,
+            lineNumber: options.lineNumber || null,
             rawText: lines.join('\n'),
-            page: mergedAudit.page || 1,
-            y: mergedAudit.y || 0,
-            height: mergedAudit.height || 12
+            allPdfLines: allPdfLines  // ← AMEX pattern: array of {line, coords, type}
         };
 
         return { pdfLocation, audit };

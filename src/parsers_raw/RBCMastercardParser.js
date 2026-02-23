@@ -16,8 +16,9 @@ RBC MASTERCARD FORMAT:
     }
 
     async parse(statementText, metadata = null, lineMetadata = []) {
+        this._resetAuditState(); // Reset per-file audit state (singleton parser reuse)
+        this._getStmtId(statementText); // Pre-warm cache so finalizeTransaction() can call without text arg
         this.lastLineMetadata = lineMetadata;
-        console.warn('⚡ [RBC-MC] Starting CALIBRATED extraction...');
 
         const lines = statementText.split('\n');
         // Extract balances using base helper
@@ -35,6 +36,7 @@ RBC MASTERCARD FORMAT:
             statementText.match(/(\d{4}[\s-]+\d{2}\*\*[\s-]+\*{4}[\s-]+\d{4})/i);
 
         const rawAcct = acctMatch ? acctMatch[1].replace(/-/g, ' ') : 'XXXX XXXX XXXX XXXX'; // Normalize to spaces
+        this._rawAcct = rawAcct; // Store on instance so finalizeTransaction() can access it
 
         const parsedMetadata = {
             _acct: rawAcct,
@@ -115,7 +117,6 @@ RBC MASTERCARD FORMAT:
             transactions.push(this.finalizeTransaction(pending));
         }
 
-        console.log(`[RBC-MC] Parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 
@@ -178,9 +179,12 @@ RBC MASTERCARD FORMAT:
             cleanDesc = cleanDesc.replace(/FEE/gi, '').trim() || "Bank Fee";
         }
 
-        // 6. DEBIT/CREDIT Logic (User Validated)
-        // RBC: "-$100.00" or "$100.00-" is a PAYMENT -> DEBIT
-        // RBC: "$100.00" is a PURCHASE -> CREDIT
+        // 6. DEBIT/CREDIT Logic
+        // RBC PDF convention: positive = purchase/charge, negative = payment/refund
+        // RoboLedger CC convention (matches 10/12 parsers):
+        //   debit  = payment (reduces liability)
+        //   credit = purchase/charge (increases liability)
+        // This ensures all CC parsers emit consistent polarity downstream.
 
         let valStr = pending.rawAmt.replace(/[$,]/g, '');
         let isNegative = false;
@@ -198,12 +202,12 @@ RBC MASTERCARD FORMAT:
         let credit = 0;
 
         if (isNegative) {
-            // Payment/Refund -> MONEY IN -> CREDIT
-            credit = value;
+            // Negative on RBC CC PDF = payment/refund → debit column (reduces liability)
+            debit = value;
             if (type === "Purchase") type = "Refund";
         } else {
-            // Expense -> MONEY OUT -> DEBIT
-            debit = value;
+            // Positive on RBC CC PDF = purchase/charge → credit column (increases liability)
+            credit = value;
         }
 
         // 7. ENSURE 2-LINE FORMAT
@@ -211,7 +215,7 @@ RBC MASTERCARD FORMAT:
         const finalDescription = `${cleanDesc}\n${type}`;
 
         // Build audit data for source document viewing
-        const auditData = this.buildAuditData(pending.fullRaw, 'RBCMastercardParser');
+        const auditData = this.buildAuditData(pending.fullRaw, 'RBCMastercardParser', { statementId: this._getStmtId(), lineNumber: ++this._txSeq });
 
         return {
             date: pending.date,
@@ -228,12 +232,28 @@ RBC MASTERCARD FORMAT:
             _accountType: 'CreditCard',
             _inst: '003',
             _transit: '00000',
-            _acct: pending.accountNumber || '',
+            _acct: this._rawAcct || '',
             rawText: pending.fullRaw,
+            parser_ref: this._getStmtId() + '-' + String(this._txSeq).padStart(3, '0'),
             pdfLocation: auditData.pdfLocation,
             audit: auditData.audit
         };
     }
+    // ── Audit identity helpers (Amex parity) ─────────────────────────────────
+    _getStmtId(text) {
+        if (this._cachedStmtId) return this._cachedStmtId;
+        let year = new Date().getFullYear().toString();
+        let month = 'UNK';
+        const ym = (text || '').match(/20\d{2}/);
+        if (ym) year = ym[0];
+        const mm = (text || '').match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i);
+        if (mm) month = mm[1].substring(0, 3).toUpperCase();
+        this._cachedStmtId = 'RBCMC-' + year + month;
+        this._txSeq = 0; // Reset sequence for new statement
+        return this._cachedStmtId;
+    }
+    _resetAuditState() { this._cachedStmtId = null; this._txSeq = 0; this._rawAcct = null; }
+
 }
 
 window.RBCMastercardParser = RBCMastercardParser;

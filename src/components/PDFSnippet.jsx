@@ -3,8 +3,13 @@ import React, { useEffect, useRef, useState } from 'react';
 /**
  * PDFSnippet - Renders a small cropped section of a PDF page
  * Used to show the transaction line under audit metadata
+ *
+ * Strategy:
+ *   1. Try blob URL directly (works when file was just uploaded this session)
+ *   2. If that fails (stale blob after HMR/nav), fall back to loading raw bytes
+ *      from the in-memory file store via Accounts.getFile(sourceFileId)
  */
-export function PDFSnippet({ pdfUrl, page, linePosition }) {
+export function PDFSnippet({ pdfUrl, page, linePosition, sourceFileId }) {
     const canvasRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -20,7 +25,20 @@ export function PDFSnippet({ pdfUrl, page, linePosition }) {
             setError(null);
 
             try {
-                const loadingTask = window.pdfjsLib.getDocument(pdfUrl);
+                // Resolve PDF source: prefer blob URL, fall back to in-memory file store
+                // (blob URLs go stale after HMR / navigation; file store survives in-session)
+                let pdfSource = pdfUrl;
+                if (pdfUrl.startsWith('blob:')) {
+                    // Probe the blob URL — if it's been revoked, switch to arrayBuffer mode
+                    const probe = await fetch(pdfUrl).catch(() => null);
+                    if (!probe || !probe.ok) {
+                        const fileBlob = sourceFileId && window.RoboLedger?.Accounts?.getFile?.(sourceFileId);
+                        if (!fileBlob) throw new Error('PDF source is no longer available. Please re-upload the statement to view this snippet.');
+                        pdfSource = { data: await fileBlob.arrayBuffer() };
+                    }
+                }
+
+                const loadingTask = window.pdfjsLib.getDocument(pdfSource);
                 const pdf = await loadingTask.promise;
                 const pdfPage = await pdf.getPage(page);
 
