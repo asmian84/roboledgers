@@ -47,6 +47,7 @@ SMART PARSING RULES:
             accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
             _brand: 'TD',
             _bank: 'TD',
+            bankIcon: 'TD',
             _tag: 'Chequing'
         };
 

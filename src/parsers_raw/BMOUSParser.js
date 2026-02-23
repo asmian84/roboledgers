@@ -84,6 +84,7 @@ BMO US FORMAT:
             transactions,
             metadata: {
                 _brand: 'BMOUS',
+                bankIcon: 'BMO',
                 _tag: 'Chequing',
                 currency: isUSD ? 'USD' : 'CAD'
             }

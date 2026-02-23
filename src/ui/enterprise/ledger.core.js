@@ -468,6 +468,19 @@ window.RoboLedger = (function () {
                         _migDirty = true;
                     }
 
+                    // Step 0b: Backfill bankIcon from bankName (for accounts created before parsers set bankIcon)
+                    if (!acc.bankIcon && acc.bankName) {
+                        const _bn = acc.bankName.toUpperCase();
+                        if (_bn.includes('RBC') || _bn.includes('ROYAL')) acc.bankIcon = 'RBC';
+                        else if (_bn.includes('TD') || _bn.includes('DOMINION')) acc.bankIcon = 'TD';
+                        else if (_bn.includes('BMO') || _bn.includes('MONTREAL')) acc.bankIcon = 'BMO';
+                        else if (_bn.includes('SCOTIA')) acc.bankIcon = 'SCOTIA';
+                        else if (_bn.includes('CIBC')) acc.bankIcon = 'CIBC';
+                        else if (_bn.includes('HSBC')) acc.bankIcon = 'HSBC';
+                        else if (_bn.includes('ATB')) acc.bankIcon = 'ATB';
+                        if (acc.bankIcon) _migDirty = true;
+                    }
+
                     // Step 1: Rebuild acc.name from metadata (fully inlined)
                     const _raw = acc.bankName || '';
                     const _isGen = _raw.includes('GENERIC PARSER') || _raw === 'Unknown Bank';

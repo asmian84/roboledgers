@@ -150,6 +150,7 @@ SMART PARSING RULES:
       // NOTE: Do NOT set `brand` here — brand is for card networks (MASTERCARD, VISA).
       // Setting brand: 'RBC' caused updateMetadata() to treat this as a credit card.
       bankName: 'RBC',          // ← correct field for the issuing bank
+      bankIcon: 'RBC',
       bank: 'RBC',
       tag: 'Savings',
       accountType: 'SAVINGS',   // downstream name builder uses this for "RBC - Savings #XXXX"

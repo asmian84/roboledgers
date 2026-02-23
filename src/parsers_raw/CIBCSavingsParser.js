@@ -40,6 +40,7 @@ CIBC CHEQUING FORMAT:
             accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
             _brand: 'CIBC',
             _bank: 'CIBC',
+            bankIcon: 'CIBC',
             _tag: 'Savings'
         };
 
