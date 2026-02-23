@@ -151,70 +151,82 @@ function maskNumber(num) {
  * Uses known bank abbreviations with brand colors, falls back to generic card icon.
  */
 function BankIcon({ account, size = 32, className = '' }) {
-    const bankName  = (account?.bankName || account?.name || '').toUpperCase();
+    const bankName  = (account?.bankName || account?.bankIcon || account?.name || '').toUpperCase();
     const brand     = (account?.brand || account?.cardNetwork || '').toUpperCase();
-    const acctType  = (account?.accountType || '').toLowerCase();
-    const isCC      = acctType === 'creditcard' || !!account?.brand || !!account?.cardNetwork;
 
-    // Known bank → icon colour map
-    const BANK_STYLES = {
-        RBC:   { bg: '#003168', text: '#fff', abbr: 'RBC' },
-        'ROYAL BANK': { bg: '#003168', text: '#fff', abbr: 'RBC' },
-        TD:    { bg: '#00a850', text: '#fff', abbr: 'TD' },
-        'TORONTO DOMINION': { bg: '#00a850', text: '#fff', abbr: 'TD' },
-        BMO:   { bg: '#0079c1', text: '#fff', abbr: 'BMO' },
-        'BANK OF MONTREAL': { bg: '#0079c1', text: '#fff', abbr: 'BMO' },
-        CIBC:  { bg: '#c41f3e', text: '#fff', abbr: 'CIBC' },
-        SCOTIABANK: { bg: '#ec111a', text: '#fff', abbr: 'NS' },
-        SCOTIA: { bg: '#ec111a', text: '#fff', abbr: 'NS' },
-        ATB:   { bg: '#003057', text: '#fff', abbr: 'ATB' },
-        'ATB FINANCIAL': { bg: '#003057', text: '#fff', abbr: 'ATB' },
-        HSBC:  { bg: '#db0011', text: '#fff', abbr: 'HSBC' },
-        AMEX:  { bg: '#016fce', text: '#fff', abbr: 'AX' },
-        'AMERICAN EXPRESS': { bg: '#016fce', text: '#fff', abbr: 'AX' },
-        VISA:  { bg: '#1a1f71', text: '#fff', abbr: 'VISA' },
-        MASTERCARD: { bg: '#eb001b', text: '#fff', abbr: 'MC' },
-        MC:    { bg: '#eb001b', text: '#fff', abbr: 'MC' },
+    // Map bank/brand keywords → logo filename in /logos/
+    const LOGO_MAP = {
+        RBC: 'rbc.png', 'ROYAL BANK': 'rbc.png', 'ROYAL': 'rbc.png',
+        TD: 'td.png', 'TORONTO DOMINION': 'td.png', DOMINION: 'td.png',
+        BMO: 'bmo.png', 'BANK OF MONTREAL': 'bmo.png', MONTREAL: 'bmo.png',
+        CIBC: 'cibc.png',
+        SCOTIABANK: 'scotia.png', SCOTIA: 'scotia.png',
+        ATB: 'rbc.png', 'ATB FINANCIAL': 'rbc.png',
+        HSBC: 'rbc.png',
+        AMEX: 'amex.png', 'AMERICAN EXPRESS': 'amex.png',
+        VISA: 'visa.png',
+        MASTERCARD: 'mastercard.png', MC: 'mastercard.png',
     };
 
-    // Try matching on bank name first, then brand
-    let style = null;
-    for (const key of Object.keys(BANK_STYLES)) {
-        if (bankName.includes(key) || brand.includes(key)) {
-            style = BANK_STYLES[key];
-            break;
+    // Find logo by matching bankIcon, bankName, or brand
+    let logoFile = null;
+    const bankIcon = (account?.bankIcon || '').toUpperCase();
+    if (bankIcon && LOGO_MAP[bankIcon]) {
+        logoFile = LOGO_MAP[bankIcon];
+    }
+    if (!logoFile) {
+        for (const key of Object.keys(LOGO_MAP)) {
+            if (bankName.includes(key) || brand.includes(key)) {
+                logoFile = LOGO_MAP[key];
+                break;
+            }
         }
     }
 
-    if (!style) {
-        // Generic fallback — use account type colour
-        const col = accountTypeColor(account);
-        const initials = (account?.ref || account?.name || '?').slice(0, 3).toUpperCase();
+    // For CC accounts with both bank + network, show dual icon (bank on top, network below)
+    const isCC = !!account?.brand || !!account?.cardNetwork;
+    if (isCC && bankIcon && LOGO_MAP[bankIcon]) {
+        const networkKey = brand === 'MC' ? 'MC' : brand;
+        const networkLogo = LOGO_MAP[networkKey];
+        const bankLogo = LOGO_MAP[bankIcon];
+        if (bankLogo && networkLogo && bankLogo !== networkLogo) {
+            const half = size / 2;
+            return (
+                <div
+                    className={`flex flex-col rounded-md overflow-hidden border border-gray-200 flex-shrink-0 ${className}`}
+                    style={{ width: size, height: size }}
+                >
+                    <div style={{ height: half, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #e2e8f0' }}>
+                        <img src={`/logos/${bankLogo}`} alt="" style={{ width: half - 2, height: half - 2, objectFit: 'contain' }} />
+                    </div>
+                    <div style={{ height: half, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img src={`/logos/${networkLogo}`} alt="" style={{ width: half - 2, height: half - 2, objectFit: 'contain' }} />
+                    </div>
+                </div>
+            );
+        }
+    }
+
+    if (logoFile) {
         return (
-            <div
-                className={`flex items-center justify-center rounded-lg flex-shrink-0 text-[10px] font-bold ${className}`}
-                style={{ width: size, height: size, background: col.bg, border: `1px solid ${col.border}`, color: col.text }}
-            >
-                {isCC
-                    ? <i className="ph ph-credit-card" style={{ fontSize: size * 0.45 }}></i>
-                    : initials
-                }
-            </div>
+            <img
+                src={`/logos/${logoFile}`}
+                alt=""
+                className={`rounded-md flex-shrink-0 ${className}`}
+                style={{ width: size, height: size, objectFit: 'contain', border: '1px solid #e2e8f0' }}
+            />
         );
     }
 
+    // Fallback — generic icon
+    const col = accountTypeColor(account);
+    const initials = (account?.ref || account?.name || '?').slice(0, 3).toUpperCase();
     return (
         <div
-            className={`flex items-center justify-center rounded-lg flex-shrink-0 font-bold ${className}`}
-            style={{
-                width: size, height: size,
-                background: style.bg,
-                color: style.text,
-                fontSize: size <= 28 ? 8 : size <= 36 ? 10 : 12,
-                letterSpacing: '-0.02em',
-            }}
+            className={`flex items-center justify-center rounded-lg flex-shrink-0 text-[10px] font-bold ${className}`}
+            style={{ width: size, height: size, background: col.bg, border: `1px solid ${col.border}`, color: col.text }}
         >
-            {style.abbr}
+            {initials}
         </div>
     );
 }
@@ -486,12 +498,12 @@ export function UtilityBar({
 
             {/* ── OVERVIEW: 3-column count grid ───────────────────────────── */}
             <div className="p-3 bg-white border-b border-gray-200">
-                <div className="bg-pink-50 border border-pink-200 rounded-md overflow-hidden">
-                    <div className="grid grid-cols-3 divide-x divide-pink-200">
+                <div className="bg-gray-50 border border-gray-200 rounded-md overflow-hidden">
+                    <div className="grid grid-cols-3 divide-x divide-gray-200">
 
                         {/* Total — clears all filters */}
                         <div
-                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            className="p-3 text-center cursor-pointer hover:bg-gray-100 transition-colors"
                             onClick={() => onClearFilter?.()}
                         >
                             <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
@@ -500,7 +512,7 @@ export function UtilityBar({
 
                         {/* Categorized */}
                         <div
-                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            className="p-3 text-center cursor-pointer hover:bg-gray-100 transition-colors"
                             onClick={() => drill('Categorized',
                                 t => !!(t.category && t.category !== 'UNCAT' && String(t.category) !== '9970'))}
                         >
@@ -510,7 +522,7 @@ export function UtilityBar({
 
                         {/* Uncategorized */}
                         <div
-                            className="p-3 text-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            className="p-3 text-center cursor-pointer hover:bg-gray-100 transition-colors"
                             onClick={() => drill('Uncategorized',
                                 t => !t.category || t.category === 'UNCAT' || String(t.category) === '9970')}
                         >
@@ -523,7 +535,7 @@ export function UtilityBar({
                     {/* Needs Review — below the grid */}
                     {stats.needsReview > 0 && (
                         <div
-                            className="border-t border-pink-200 px-3 py-2 flex justify-between items-center cursor-pointer hover:bg-pink-100 transition-colors"
+                            className="border-t border-gray-200 px-3 py-2 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition-colors"
                             onClick={() => drill('Needs Review',
                                 t => t.status === 'needs_review' || (t.confidence != null && t.confidence < 0.7))}
                         >
@@ -534,45 +546,7 @@ export function UtilityBar({
                 </div>
             </div>
 
-            {/* ── BANK ACCOUNTS ICONS ─────────────────────────────────────── */}
-            {accounts.length > 0 && (
-                <div className="p-3 bg-white border-b border-gray-200">
-                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Bank Accounts</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {accounts.map(acc => {
-                            const isSelected = selectedAccount === acc.id;
-                            // Calculate account balance from transactions
-                            const accTxs = transactions.filter(t => t.account_id === acc.id);
-                            const bal = accTxs.reduce((sum, t) => {
-                                const amt = (t.amount_cents || 0) / 100;
-                                return t.polarity === 'DEBIT' ? sum - amt : sum + amt;
-                            }, 0);
-                            return (
-                                <div
-                                    key={acc.id}
-                                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-all ${
-                                        isSelected
-                                            ? 'bg-indigo-50 border border-indigo-300 ring-1 ring-indigo-200'
-                                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
-                                    }`}
-                                    onClick={() => onAccountChange?.(isSelected ? 'ALL' : acc.id)}
-                                    title={`${acc.name || acc.ref} — ${accTxs.length} transactions`}
-                                >
-                                    <BankIcon account={acc} size={22} />
-                                    <div className="leading-tight">
-                                        <div className="text-[10px] font-semibold text-gray-700 truncate max-w-[70px]">
-                                            {(acc.ref || acc.name || '').slice(0, 10)}
-                                        </div>
-                                        <div className="text-[9px] font-mono text-gray-400">
-                                            {accTxs.length}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+            {/* BANK ACCOUNTS grid removed — icons now show in the dropdown above */}
 
             {/* ── GST SUMMARY ─────────────────────────────────────────────── */}
             <div className="p-4 bg-white border-b border-gray-200">
