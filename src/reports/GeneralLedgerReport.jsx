@@ -17,23 +17,32 @@ export function GeneralLedgerReport() {
         setCoaAccounts(accounts.sort((a, b) => parseInt(a.code) - parseInt(b.code)));
     }, []);
 
-    const generateReport = (range) => {
-        if (!range?.start || !range?.end || !selectedCode) return;
+    const generateReport = (range, code) => {
+        const effectiveCode = code || selectedCode;
+        const effectiveRange = range || dateRange;
+        if (!effectiveRange?.start || !effectiveRange?.end || !effectiveCode) return;
         setLoading(true);
         try {
             const generator = new ReportGenerator(
                 window.RoboLedger.Ledger,
                 window.RoboLedger.COA
             );
-            const data = generator.generateGeneralLedger(range.start, range.end, selectedCode);
+            const data = generator.generateGeneralLedger(effectiveRange.start, effectiveRange.end, effectiveCode);
             setReportData(data);
-            setDateRange(range);
+            setDateRange(effectiveRange);
         } catch (error) {
             console.error('[GENERAL_LEDGER] Generation failed:', error);
         } finally {
             setLoading(false);
         }
     };
+
+    // Re-generate when selectedCode changes (user picks a new account)
+    useEffect(() => {
+        if (selectedCode && dateRange) {
+            generateReport(dateRange, selectedCode);
+        }
+    }, [selectedCode]);
 
     const fmt = (amount) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
 
@@ -124,37 +133,45 @@ export function GeneralLedgerReport() {
                     </div>
 
                     {/* Transaction Table */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Date</th>
-                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Description</th>
-                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Amount</th>
-                                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Balance</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {reportData.transactions.map((tx, i) => {
-                                    const amount = (tx.amount_cents || 0) / 100;
-                                    const isCredit = (tx.effPolarity || tx.polarity) === 'CREDIT';
-                                    const net = isCredit ? -amount : amount;
-                                    return (
-                                        <tr key={tx.tx_id || i} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-600">{tx.date}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{tx.description || tx.raw_description}</td>
-                                            <td className={`px-4 py-3 text-right text-sm tabular-nums font-mono ${isCredit ? 'text-red-600' : 'text-gray-900'}`}>
-                                                {fmt(net)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-sm tabular-nums font-mono font-semibold">
-                                                {fmt(tx.balance)}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                    {reportData.transactions.length === 0 ? (
+                        <div className="p-12 text-center">
+                            <i className="ph ph-magnifying-glass text-5xl text-gray-300 mb-4"></i>
+                            <p className="text-gray-500 font-medium">No transactions found for this account in the selected period</p>
+                            <p className="text-gray-400 text-sm mt-1">Try selecting a different account or adjusting the date range</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Date</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Description</th>
+                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Amount</th>
+                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {reportData.transactions.map((tx, i) => {
+                                        const amount = (tx.amount_cents || 0) / 100;
+                                        const isCredit = (tx.effPolarity || tx.polarity) === 'CREDIT';
+                                        const net = isCredit ? -amount : amount;
+                                        return (
+                                            <tr key={tx.tx_id || i} className="hover:bg-gray-50">
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-600">{tx.date}</td>
+                                                <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{tx.description || tx.raw_description}</td>
+                                                <td className={`px-4 py-3 text-right text-sm tabular-nums font-mono ${isCredit ? 'text-red-600' : 'text-gray-900'}`}>
+                                                    {fmt(net)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-sm tabular-nums font-mono font-semibold">
+                                                    {fmt(tx.balance)}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

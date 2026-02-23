@@ -30,10 +30,53 @@ window.RoboLedger = (function () {
         accounts: [],
         coa: {},         // account_code -> entry
         categoryPredictions: {}, // raw_desc -> account_code
-        fileStorage: new Map(),  // fileId -> Blob (In-memory for v5.1)
+        fileStorage: new Map(),  // fileId -> Blob (in-memory cache, backed by IndexedDB)
         lockedPeriods: [],       // [{period:"2024-01", lockedAt:ISO, lockedBy:"admin"}, ...]
         journalEntries: {},      // journalId -> {lines:[tx_id,...], date, description, type}
     };
+
+    // --- IndexedDB helpers for persistent blob storage ---
+    const IDB_NAME = 'roboledger_files';
+    const IDB_STORE = 'blobs';
+    const IDB_VERSION = 1;
+
+    function _openIDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+            req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function _idbPut(fileId, blob) {
+        try {
+            const db = await _openIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readwrite');
+                tx.objectStore(IDB_STORE).put(blob, fileId);
+                tx.oncomplete = () => { db.close(); resolve(); };
+                tx.onerror = () => { db.close(); reject(tx.error); };
+            });
+        } catch (e) {
+            console.warn('[IDB] Put failed:', e);
+        }
+    }
+
+    async function _idbGet(fileId) {
+        try {
+            const db = await _openIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readonly');
+                const req = tx.objectStore(IDB_STORE).get(fileId);
+                req.onsuccess = () => { db.close(); resolve(req.result || null); };
+                req.onerror = () => { db.close(); reject(req.error); };
+            });
+        } catch (e) {
+            console.warn('[IDB] Get failed:', e);
+            return null;
+        }
+    }
 
     // --- COA DATA (V5 PRE-SEED) ---
     // Caseware Leadsheet Names (standard Canadian accounting leadsheet codes)
@@ -2029,11 +2072,22 @@ window.RoboLedger = (function () {
             return { success: true };
         },
         getFile: function (id) {
-            return state.fileStorage.get(id);
+            // Try in-memory cache first, then IndexedDB
+            const cached = state.fileStorage.get(id);
+            if (cached) return cached;
+            // Return a Promise for async callers (IndexedDB fallback)
+            return _idbGet(id).then(blob => {
+                if (blob) {
+                    state.fileStorage.set(id, blob); // re-cache
+                }
+                return blob;
+            });
         },
         storeFile: function (blob) {
             const id = 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
             state.fileStorage.set(id, blob);
+            // Persist to IndexedDB (fire-and-forget)
+            _idbPut(id, blob).catch(e => console.warn('[FILE] IDB persist failed:', e));
             return id;
         },
         remove: function (id) {

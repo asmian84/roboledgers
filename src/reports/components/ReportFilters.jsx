@@ -20,9 +20,17 @@ export function ReportFilters({ onFilterChange }) {
             const transactions = window.RoboLedger.Ledger.getAllTransactions();
 
             if (transactions.length > 0) {
-                const dates = transactions.map(tx => new Date(tx.date)).sort((a, b) => a - b);
-                const earliest = dates[0];
-                const latest = dates[dates.length - 1];
+                // Filter out impossible dates (parser fallback 1900-01-01 etc.)
+                const MIN_VALID_YEAR = 2000;
+                const validDates = transactions
+                    .map(tx => new Date(tx.date))
+                    .filter(d => !isNaN(d.getTime()) && d.getFullYear() >= MIN_VALID_YEAR)
+                    .sort((a, b) => a - b);
+
+                if (validDates.length === 0) return; // no valid dates at all
+
+                const earliest = validDates[0];
+                const latest = validDates[validDates.length - 1];
 
                 setDetectedPeriod({
                     start: earliest.toISOString().split('T')[0],

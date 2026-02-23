@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
  * Supports: PDF, JPG, PNG, DOCX (read-only preview)
  * Features: Hover-based zoom, highlight support
  */
-export function DocumentViewer({ document, onBack }) {
+export function DocumentViewer({ document, onBack, sourceFileId }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const renderTaskRef = useRef(null); // CRITICAL: Track render task to prevent canvas reuse
@@ -42,8 +42,26 @@ export function DocumentViewer({ document, onBack }) {
 
             try {
                 if (document.type === 'pdf') {
+                    // Resolve PDF source: prefer blob URL, fall back to IndexedDB file store
+                    let pdfSource = document.url;
+                    if (document.url && document.url.startsWith('blob:')) {
+                        const probe = await fetch(document.url).catch(() => null);
+                        if (!probe || !probe.ok) {
+                            // Blob URL is stale — try recovering from file store
+                            const fid = sourceFileId || document.sourceFileId;
+                            const fileBlob = fid && await Promise.resolve(window.RoboLedger?.Accounts?.getFile?.(fid));
+                            if (fileBlob) {
+                                pdfSource = { data: await fileBlob.arrayBuffer() };
+                            } else {
+                                console.error('[DOC VIEWER] PDF source expired and no file backup for', fid);
+                                setIsLoading(false);
+                                return;
+                            }
+                        }
+                    }
+
                     // Load PDF using PDF.js
-                    const loadingTask = window.pdfjsLib.getDocument(document.url);
+                    const loadingTask = window.pdfjsLib.getDocument(pdfSource);
                     const pdf = await loadingTask.promise;
                     setPdfDoc(pdf);
 
