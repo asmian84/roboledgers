@@ -32,7 +32,7 @@ export function PDFSnippet({ pdfUrl, page, linePosition, sourceFileId }) {
                     // Probe the blob URL — if it's been revoked, switch to arrayBuffer mode
                     const probe = await fetch(pdfUrl).catch(() => null);
                     if (!probe || !probe.ok) {
-                        const fileBlob = sourceFileId && window.RoboLedger?.Accounts?.getFile?.(sourceFileId);
+                        const fileBlob = sourceFileId && await Promise.resolve(window.RoboLedger?.Accounts?.getFile?.(sourceFileId));
                         if (!fileBlob) throw new Error('PDF source is no longer available. Please re-upload the statement to view this snippet.');
                         pdfSource = { data: await fileBlob.arrayBuffer() };
                     }
