@@ -225,6 +225,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                         <div style={{ flex: 1, overflow: 'auto', background: '#f1f5f9' }}>
                             <DocumentViewer
                                 document={viewerDocument}
+                                sourceFileId={viewerDocument?.sourceFileId || transaction?.sourceFileId}
                                 onClose={() => setShowLeftPanel(false)}
                             />
                         </div>
@@ -387,6 +388,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                                         url: transaction.source_pdf.url,
                                                         name: transaction.source_pdf.filename || 'statement.pdf',
                                                         page: transaction.source_pdf.page || transaction.pdfLocation?.page || 1,
+                                                        sourceFileId: transaction.sourceFileId,
                                                         highlightLine: transaction.source_pdf.line_position || (transaction.pdfLocation ? {
                                                             top: transaction.pdfLocation.top,
                                                             left: transaction.pdfLocation.left,
@@ -407,6 +409,7 @@ export function AuditSidebar({ isOpen, onClose, transaction }) {
                                                         url: account.pdfUrl,
                                                         name: account.pdfFilename || 'statement.pdf',
                                                         page: transaction.pdfLocation?.page || 1,
+                                                        sourceFileId: transaction.sourceFileId || account.sourceFileId,
                                                         highlightLine: transaction.pdfLocation ? {
                                                             top: transaction.pdfLocation.top,
                                                             left: transaction.pdfLocation.left,
