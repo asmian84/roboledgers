@@ -643,11 +643,21 @@ window.RoboLedger = (function () {
         const upper = raw.toUpperCase();
 
         // ── 1. Credit card payments ────────────────────────────────────────────
+        // CC-side: "PAYMENT - THANK YOU", "PAIEMENT - MERCI"
         if (/PAYMENT\s*[-–]?\s*THANK\s*YOU|THANK\s*YOU.*PAYMENT|PAIEMENT.*MERCI|MERCI.*PAIEMENT/i.test(raw)) {
             return { payee: 'Payment', transaction_type_label: 'credit card payment' };
         }
         if (/^PAYMENT\s*[-–]\s*THANK\s*YOU/i.test(raw)) {
             return { payee: 'Payment', transaction_type_label: 'credit card payment' };
+        }
+        // CHQ-side: "Online Banking payment - RBC ROYAL BANK VISA", "BILL PAYMENT TD VISA",
+        //           "VISA PYMT", "MC PAYMENT", "MASTERCARD PAYMENT", "CREDIT CARD PAYMENT"
+        if (/\b(?:VISA|MASTERCARD|MC|AMEX)\b/i.test(raw) && /\b(?:PAY|PYMT|PMT|PAYMENT|BILL\s*PAY)/i.test(raw)
+            || /\bCREDIT\s*CARD\s*(?:PAY|PYMT|PMT|PAYMENT)\b/i.test(raw)) {
+            // Extract the card brand for a cleaner payee name
+            const brandMatch = raw.match(/\b(VISA|MASTERCARD|MC|AMEX|AMERICAN\s*EXPRESS)\b/i);
+            const brand = brandMatch ? brandMatch[1].replace(/^mc$/i, 'Mastercard') : 'Credit Card';
+            return { payee: `${toTitleCase(brand)} Payment`, transaction_type_label: 'credit card payment · clearing' };
         }
 
         // ── 2. Cash back / rewards ─────────────────────────────────────────────
@@ -889,12 +899,21 @@ window.RoboLedger = (function () {
         },
 
         // ── BALANCE SHEET / CLEARING ─────────────────────────────────────────
-        // CC payment: DEBIT polarity on a CC account = payment received (reduces liability)
-        // CHQ payment to CC: DEBIT polarity on CHQ = outflow → already routed to 9971 by description match
+        // CC-side: DEBIT polarity on a CC account = payment received (reduces liability)
         {
             pattern: /payment\s*-?\s*thank\s*you|paiement\s*-?\s*merci|payment received|autopay/i,
             test: (tx) => tx.polarity === 'DEBIT' && _isLiabilityTx(tx),
-            category: '9971', // CC Payment clearing — CC account only
+            category: '9971', // CC Payment clearing — CC side
+            confidence: 0.92,
+            status: 'auto_categorized'
+        },
+        // CHQ-side: DEBIT on CHQ/SAV where description mentions a credit card brand
+        // Catches: "Online Banking payment - RBC ROYAL BANK VISA", "BILL PAYMENT TD VISA",
+        //          "MC PYMT", "MASTERCARD PAYMENT", "AMEX PAYMENT", "VISA PAYMENT", etc.
+        {
+            pattern: /\b(?:visa|mastercard|mc)\s*(?:pay|pymt|pmt|payment)|(?:pay|pymt|pmt|payment)\s*[-–]?\s*(?:visa|mastercard|mc)\b|\bamex\s*(?:pay|pymt|pmt|payment)|(?:pay|pymt|pmt|payment)\s*[-–]?\s*amex\b|\b(?:visa|mastercard|mc|amex)\b.*\b(?:online\s*(?:banking\s*)?pay|bill\s*pay)|(?:online\s*(?:banking\s*)?pay|bill\s*pay).*\b(?:visa|mastercard|mc|amex)\b|\bcredit\s*card\s*(?:pay|pymt|pmt|payment)/i,
+            test: (tx) => tx.polarity === 'DEBIT' && !_isLiabilityTx(tx),
+            category: '9971', // CC Payment clearing — CHQ/SAV side
             confidence: 0.92,
             status: 'auto_categorized'
         },
@@ -2990,12 +3009,31 @@ window.RoboLedger = (function () {
                     && !isCashBack
                     && !isBankRebate;
 
+                // CHQ-side CC payment detection: DEBIT on chequing/savings where
+                // description mentions a credit card brand (VISA, MC, MASTERCARD, AMEX)
+                // combined with payment language. Catches:
+                //   "Online Banking payment - RBC ROYAL BANK VISA"
+                //   "BILL PAYMENT TD VISA", "VISA PYMT", "MC PAYMENT", "AMEX PAYMENT"
+                //   "MASTERCARD PAYMENT", "CREDIT CARD PAYMENT"
+                const isCHQCCPayment = !isLiabilityAcct && !isLoanAsset
+                    && polarity === Polarity.DEBIT
+                    && (
+                        // Brand + payment language in any order
+                        /\b(?:VISA|MASTERCARD|MC|AMEX)\b/i.test(upperDescForGuard)
+                        && /\b(?:PAY|PYMT|PMT|PAYMENT|BILL\s*PAY)\b/i.test(upperDescForGuard)
+                    || /\bCREDIT\s*CARD\s*(?:PAY|PYMT|PMT|PAYMENT)\b/i.test(upperDescForGuard)
+                    );
+
                 if (predicted_code) {
                     const predictedRoot = COA.get(predicted_code)?.root;
 
                     if (isBankRebate) {
                         // Rebate on any account → contra bank charges, regardless of brain prediction
                         predicted_code = '7700';
+                    } else if (isCHQCCPayment) {
+                        // CHQ/SAV DEBIT with CC brand in description = paying a credit card
+                        // This is a clearing entry, not an expense. Force 9971.
+                        predicted_code = '9971';
                     } else if (isLiabilityAcct) {
                         if (isCCPayment) {
                             // DEBIT on a credit card = payment received (chequing → card)
@@ -3029,6 +3067,9 @@ window.RoboLedger = (function () {
                     // No brain prediction path — use guard flags to assign special codes
                     if (isBankRebate) {
                         predicted_code = '7700'; // Rebate always → contra bank charges
+                    } else if (isCHQCCPayment) {
+                        // CHQ/SAV DEBIT with CC brand → clearing account
+                        predicted_code = '9971';
                     } else if (isLiabilityAcct) {
                         if (isCCPayment) {
                             // CC DEBIT with payment language → clearing account
