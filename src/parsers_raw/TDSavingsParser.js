@@ -460,4 +460,4 @@ SMART PARSING RULES:
 
 // Expose to window for file:// compatibility
 window.TDSavingsParser = TDSavingsParser;
-window.tdChequingParser = new TDSavingsParser();
+window.tdSavingsParser = new TDSavingsParser();

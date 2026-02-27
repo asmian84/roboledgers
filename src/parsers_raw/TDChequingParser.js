@@ -34,14 +34,17 @@ SMART PARSING RULES:
         // TD format: Branch No. 9083, Account No. 0928-5217856
         const transitMatch = statementText.match(/(?:Branch No\.|Transit)[:#]?\s*(\d{4,5})/i);
         const acctMatch = statementText.match(/(?:Account No\.|Account)[:#]?\s*([\d-]{7,})/i);
+        // [EasyWeb] TD online banking export: "TD BASIC BUSINESS PLAN - 5289507" or "Account :   TD ... - 5289507"
+        const ewAcctMatch = !acctMatch ? (statementText.match(/PLAN\s*[-–]\s*(\d{5,})/i) || statementText.match(/Account\s*:.*?[-–]\s*(\d{5,})/i)) : null;
+        const rawAcct = acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : (ewAcctMatch ? ewAcctMatch[1] : '-----');
 
         const metaObj = {
             _inst: '004', // TD Institution Code
             _transit: transitMatch ? transitMatch[1] : '-----',
-            _acct: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
+            _acct: rawAcct,
             institutionCode: '004',
             transit: transitMatch ? transitMatch[1] : '-----',
-            accountNumber: acctMatch ? acctMatch[1].replace(/[-\s]/g, '') : '-----',
+            accountNumber: rawAcct,
             _brand: 'TD',
             _bank: 'TD',
             bankIcon: 'TD',
@@ -58,8 +61,34 @@ SMART PARSING RULES:
         let pendingLineCount = 0; // Track lines for multi-line transactions
         let lastMonth = null;
 
+        // [EasyWeb polarity] Delta-match approach for determining debit/credit.
+        // EasyWeb is newest-first between days but chronological within days.
+        // For consecutive EasyWeb transactions, we compare the balance delta to the amount:
+        //   delta ≈ +amount → CREDIT (balance went up by exactly the transaction amount)
+        //   delta ≈ -amount → DEBIT  (balance went down by exactly the transaction amount)
+        // If delta doesn't match (cross-day boundary or gaps), falls back to keyword heuristic.
+        let prevEWBalance = null; // last EasyWeb running balance
+
         // Date regex: "JAN 15", "FEB02" (flexible spacing, no start anchor)
         const dateRegex = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2})/i;
+
+        // [EasyWeb] Two date formats observed in browser-printed TD EasyWeb PDFs:
+        //   Format A (month-first): "Feb 1, 2026  DESCRIPTION  AMOUNT  BALANCE"
+        //   Format B (year-first):  "2026 Feb 11  DESCRIPTION  AMOUNT  BALANCE"  ← most common
+        //
+        // IMPORTANT: EasyWeb PDFs (printed from browser) often have the date on its OWN line,
+        // separate from the description and amounts. e.g.:
+        //   Line 1: "Feb 11, 2026"              ← date cell only, nothing after the year
+        //   Line 2: "CALGARY LOCK AN 167.95 92,287.08"  ← description + amounts
+        //
+        // The trailing (?:\s+|$) allows the regex to match a date-only line (end-of-line after
+        // the year/day), so we can correctly set currentDate and clear pendingDescription before
+        // the description+amounts line arrives. Without this, the date-only line fell through to
+        // the QCM dateRegex which left the year ("2026") in pendingDescription, producing
+        // descriptions like "2026 CALGARY LOCK AN" instead of "CALGARY LOCK AN".
+        const easyWebDateRegex  = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s*(\d{4})(?:\s+|$)/i;
+        const easyWebDateRegexB = /^(\d{4})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:\s+|$)/i;
+        const ewMonthMap = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' };
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -71,6 +100,74 @@ SMART PARSING RULES:
             if (trimmed.match(/CAD\s*EVERY\s*DAY|CAD\s*BASIC|BUSINESS\s*CHEQUING/i)) continue;
             if (trimmed.match(/Description\s*Cheque|Date\s*Balance/i)) continue; // Table headers
             if (trimmed.match(/^(Debits|Credits)\s+\d/i)) continue; // Counts like "Debits 5"
+            // [EasyWeb] Skip navigation and header lines from browser-printed TD EasyWeb pages
+            if (trimmed.match(/^(TD Home|Account\s*:|Account Activity|Help\s*\||Current Balance|Available Balance|Balance Date|Direct deposit|Your transactions|30 days|Search by Month|View$|Month\s+Year|From\s+To\s+Search|Date\s+Transaction)/i)) continue;
+            // [EasyWeb] Skip browser print timestamp/URL lines e.g. "Feb 11 2026 2/11/26, 6:20 PM EasyWeb https://..."
+            if (trimmed.match(/EasyWeb\s+https?:\/\//i)) continue;
+            if (trimmed.match(/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}/)) continue; // timestamp like "2/11/26, 6:20 PM"
+
+            // [EasyWeb] Handle date formats from browser-printed TD EasyWeb PDFs.
+            // Format A (month-first): "Feb 1, 2026  DESCRIPTION  AMOUNT  BALANCE"
+            // Format B (year-first):  "2026 Feb 11  DESCRIPTION  AMOUNT  BALANCE"
+            let ewMatch = trimmed.match(easyWebDateRegex);
+            let ewYear, ewMon, ewDay, lineAfterEWDate;
+
+            if (ewMatch) {
+                // Format A: month=group1, day=group2, year=group3
+                ewMon  = ewMatch[1].substring(0, 3).toLowerCase();
+                ewDay  = String(parseInt(ewMatch[2])).padStart(2, '0');
+                ewYear = ewMatch[3];
+                lineAfterEWDate = trimmed.substring(ewMatch[0].length).trim();
+            } else {
+                const ewMatchB = trimmed.match(easyWebDateRegexB);
+                if (ewMatchB) {
+                    // Format B: year=group1, month=group2, day=group3
+                    ewYear = ewMatchB[1];
+                    ewMon  = ewMatchB[2].substring(0, 3).toLowerCase();
+                    ewDay  = String(parseInt(ewMatchB[3])).padStart(2, '0');
+                    lineAfterEWDate = trimmed.substring(ewMatchB[0].length).trim();
+                    ewMatch = ewMatchB; // treat as matched
+                }
+            }
+
+            if (ewMatch) {
+                currentDate = `${ewYear}-${ewMonthMap[ewMon]}-${ewDay}`;
+                pendingDescription = '';
+                pendingRawLines = [];
+                pendingAuditData = [];
+                // lineAfterEWDate was already computed above for both Format A and B
+                const ewExtracted = this.extractTransaction(lineAfterEWDate, currentDate);
+                if (ewExtracted) {
+                    // [EasyWeb polarity fix] Delta-match approach.
+                    // Compare balance delta to the transaction amount:
+                    //   delta ≈ +amount → CREDIT (balance went up by exactly the tx amount)
+                    //   delta ≈ -amount → DEBIT  (balance went down by exactly the tx amount)
+                    // If delta doesn't match (cross-day gap, missing txns), keep keyword heuristic.
+                    if (prevEWBalance !== null && ewExtracted.balance > 0 && prevEWBalance > 0) {
+                        const delta = ewExtracted.balance - prevEWBalance;
+                        const amt = ewExtracted.amount;
+                        const tolerance = 0.02; // floating point tolerance
+                        if (amt > 0 && Math.abs(delta - amt) < tolerance) {
+                            // Balance increased by exactly the amount → CREDIT
+                            ewExtracted.credit = amt;
+                            ewExtracted.debit = 0;
+                        } else if (amt > 0 && Math.abs(delta + amt) < tolerance) {
+                            // Balance decreased by exactly the amount → DEBIT
+                            ewExtracted.debit = amt;
+                            ewExtracted.credit = 0;
+                        }
+                        // else: delta doesn't match → keep heuristic from extractTransaction
+                    }
+
+                    const _stId = this._getStmtId(statementText);
+                    ewExtracted.parser_ref = _stId + '-' + String(++this._txSeq).padStart(3, '0');
+
+                    prevEWBalance = ewExtracted.balance;
+
+                    transactions.push(ewExtracted);
+                }
+                continue;
+            }
 
             // Find valid audit metadata for this line
             const currentAudit = this.findAuditMetadata(trimmed, this.lastLineMetadata);
@@ -87,19 +184,34 @@ SMART PARSING RULES:
                 // Determine Format: Personal (Date First) vs Business (Date Middle/Fourth Column)
                 const isDateFirst = matchIndex === 0;
 
-                // Year rollover detection: if month goes backwards (e.g., DEC→JAN, NOV→MAR)
-                const monthIndex = this.getMonthIndex(monthName);
-                if (lastMonth !== null && monthIndex < lastMonth) {
-                    this.currentYear++;
-                }
-                lastMonth = monthIndex;
-
-                currentDate = this.formatDate(day, monthName, this.currentYear);
-
                 if (isDateFirst) {
                     // STANDARD PERSONAL FORMAT: Date | Description | Amounts...
                     // Remove date from line to get description part
                     const lineAfterDate = trimmed.substring(dateMatch[0].length).trim();
+
+                    // ── [EasyWeb fallback] ──────────────────────────────────────────
+                    // When EasyWeb date-only lines (e.g., "Dec 31, 2025") slip through
+                    // the EasyWeb regex and land here, lineAfterDate is just ", 2025"
+                    // or similar. Detect this pattern, extract the EXPLICIT year, set
+                    // currentDate correctly, and continue without poisoning lastMonth
+                    // or pendingDescription.
+                    const ewDateOnlyMatch = lineAfterDate.match(/^[,.\s]*(20\d{2})\s*$/);
+                    if (ewDateOnlyMatch) {
+                        currentDate = this.formatDate(day, monthName, parseInt(ewDateOnlyMatch[1]));
+                        pendingDescription = '';
+                        pendingRawLines = [];
+                        pendingAuditData = [];
+                        pendingLineCount = 0;
+                        continue; // desc+amounts follow on subsequent lines
+                    }
+
+                    // Year rollover detection (QCM only — skipped for EasyWeb date-only above)
+                    const monthIndex = this.getMonthIndex(monthName);
+                    if (lastMonth !== null && monthIndex < lastMonth) {
+                        this.currentYear++;
+                    }
+                    lastMonth = monthIndex;
+                    currentDate = this.formatDate(day, monthName, this.currentYear);
 
                     const extracted = this.extractTransaction(lineAfterDate, currentDate);
                     if (extracted) {
@@ -123,6 +235,14 @@ SMART PARSING RULES:
 
                 } else {
                     // BUSINESS FORMAT: Description | Debit/Credit | Date | Balance
+                    // Year rollover detection for business format lines
+                    const monthIndex = this.getMonthIndex(monthName);
+                    if (lastMonth !== null && monthIndex < lastMonth) {
+                        this.currentYear++;
+                    }
+                    lastMonth = monthIndex;
+                    currentDate = this.formatDate(day, monthName, this.currentYear);
+
                     const extracted = this.extractBusinessTransaction(trimmed, dateMatch, currentDate);
                     if (extracted) {
                         if (currentAudit) {
@@ -302,11 +422,14 @@ SMART PARSING RULES:
             const amt = amounts[0];
             balance = amounts[1];
 
-            // Heuristic: If balance increased, it's a credit
-            if (balance > amt) {
-                credit = amt;
+            // Default to DEBIT until the EasyWeb retroactive balance-delta fix overrides it.
+            // The old heuristic (balance > amt) fired for virtually every transaction since
+            // the running balance is almost always larger than any single transaction amount,
+            // causing ALL transactions to be mis-classified as credits.
+            if (this.isCredit(description)) {
+                credit = amt; // keyword match (deposit, refund, etc.) — safe heuristic
             } else {
-                debit = amt;
+                debit = amt; // conservative default: assume debit, let balance-delta fix credits
             }
         } else {
             // Single amount - assume it's the balance
@@ -345,6 +468,13 @@ SMART PARSING RULES:
     cleanTDDescription(desc) {
         // 1. Normalize whitespace
         desc = desc.replace(/\s+/g, ' ').trim();
+
+        // 1b. Strip leading year prefix — artifact of EasyWeb date-only lines.
+        // When "Dec 31, 2025" goes through QCM, ", 2025" becomes pendingDescription,
+        // which gets prepended to the actual description → ", 2025 SERVICE CHARGE".
+        // After whitespace normalization, this becomes "2025 SERVICE CHARGE" or
+        // ", 2025 SERVICE CHARGE". Strip it.
+        desc = desc.replace(/^[,.\s]*(20\d{2})\s+/, '');
 
         // 2. Remove TD-specific noise
         desc = desc.replace(/CHQ#\d+-\d+/gi, '');  // Cheque numbers
@@ -428,7 +558,15 @@ SMART PARSING RULES:
     isCredit(description) {
         const creditKeywords = [
             'deposit', 'credit', 'transfer in', 'refund', 'reversal',
-            'interest earned', 'payment received'
+            'interest earned', 'payment received',
+            // EasyWeb-specific deposit patterns
+            'send e-tfr', 'e-tfr', 'autodeposit', 'direct deposit',
+            // TD cheque deposit format: "View Cheque CHQ#00001-"
+            'view cheque', 'chq#',
+            // Condo management companies (credits to property management account)
+            'lockwood ccn', 'bellerose ccn', 'condominium cor', 'bonavista',
+            // Government rebates/credits
+            'carbon rebate', 'gst credit', 'gst/hst', 'canada carbon'
         ];
 
         const descLower = description.toLowerCase();
