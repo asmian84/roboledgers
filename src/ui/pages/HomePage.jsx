@@ -247,7 +247,7 @@ const HomePage = () => {
         <div className="min-h-screen bg-[#f4f6f8]">
 
             {/* ── Compact Header ────────────────────────────────────────── */}
-            <div className="bg-[#1e293b] text-white px-8 py-5">
+            <div className="bg-[#1e293b] text-white px-4 py-4 md:px-8 md:py-5">
                 <div className="flex items-center justify-between gap-6">
                     <div>
                         <div className="flex items-center gap-3">
@@ -275,11 +275,11 @@ const HomePage = () => {
                 </div>
             </div>
 
-            <div className="max-w-6xl mx-auto px-8 py-6 space-y-5">
+            <div className="max-w-6xl mx-auto px-4 py-4 md:px-8 md:py-6 space-y-5">
 
                 {/* ── Financial KPI Cards ────────────────────────────────── */}
                 {hasData && (
-                    <div className="grid grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         <KpiCard icon="ph-trend-up" label="Revenue" value={fmt(stats.revenue)}
                             color="green" sub="4000-series" />
                         <KpiCard icon="ph-trend-down" label="Expenses" value={fmt(stats.expenses)}
@@ -316,7 +316,7 @@ const HomePage = () => {
                                 )}
                             </div>
                         </div>
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                             {stats.fiscalYear.quarters.map((q, i) => {
                                 const statusColors = {
                                     locked:  { bg: 'bg-green-50', border: 'border-green-200', badge: 'bg-green-100 text-green-700', icon: 'ph-lock-simple' },
@@ -496,10 +496,10 @@ const HomePage = () => {
 
                 {/* ── Two Column Layout ──────────────────────────────────── */}
                 {hasData && (
-                    <div className="grid grid-cols-5 gap-5">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
 
                         {/* Left Column: 3/5 */}
-                        <div className="col-span-3 space-y-5">
+                        <div className="col-span-1 md:col-span-3 space-y-5">
 
                             {/* Monthly Cash Flow */}
                             {stats.monthlyData.length > 1 && (
@@ -584,7 +584,7 @@ const HomePage = () => {
                         </div>
 
                         {/* Right Column: 2/5 */}
-                        <div className="col-span-2 space-y-5">
+                        <div className="col-span-1 md:col-span-2 space-y-5">
 
                             {/* Top Expense Categories */}
                             {stats.topExpenses.length > 0 && (

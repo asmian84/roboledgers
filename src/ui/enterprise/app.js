@@ -593,6 +593,12 @@
 
   // Desktop sidebar collapse toggle
   window.toggleSidebar = () => {
+    // On mobile, delegate to the slide-in mobile sidebar
+    if (window.innerWidth <= 768) {
+      window.toggleMobileSidebar();
+      return;
+    }
+
     const sidebar   = document.getElementById('sidebar');
     // Button is now in the top context bar (moved from sidebar-brand in v5.3)
     const toggleBtn = document.getElementById('top-sidebar-toggle');
