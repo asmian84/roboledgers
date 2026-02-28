@@ -1135,7 +1135,7 @@ export function TransactionsTable({
         window.setGridColumnVisibility = (columnId, visible) => {
             setColumnVisibility(prev => ({
                 ...prev,
-                [columnId]: !visible // TanStack uses inverted logic
+                [columnId]: visible // TanStack: true = visible, false = hidden
             }));
         };
 
