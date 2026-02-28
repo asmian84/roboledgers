@@ -2,6 +2,7 @@ import { SystemGuard } from './system_guard.ts';
 import type { CanonicalTransaction } from '../types/transaction.ts';
 import { TransactionStatus } from '../types/transaction.ts';
 import { InvariantViolationError } from './errors.ts';
+import { onTransactionPosted } from './event_bus_wrapper.ts';
 
 /**
  * RoboLedgers: Core Ledger Service
@@ -34,11 +35,14 @@ export class LedgerService {
             );
         }
 
-        // 2. Persist
+        // 2. Persist locally (ledger ownership unchanged)
         this.transactions.set(tx.tx_id, { ...tx });
         this.sigIndex.set(tx.txsig, tx.tx_id);
 
         console.log(`[LEDGER] POSTED: ${tx.tx_id} | ${tx.amount_cents} ${tx.currency} | ${tx.txsig}`);
+
+        // 3. Emit financial_event after commit (fire-and-forget, never blocks)
+        onTransactionPosted(tx).catch(() => { });
     }
 
     /**

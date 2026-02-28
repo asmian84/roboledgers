@@ -4319,16 +4319,23 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
 
 #top-context-bar {
     position: fixed;
-    top: 0; left: 0; right: 0;
+    top: 0;
+    left: var(--sidebar-width);
+    right: 0;
     height: 44px;
     background: #ffffff;
     border-bottom: 1px solid var(--border-color, #e2e8f0);
     display: flex;
     align-items: center;
-    padding: 0 16px 0 0;
+    padding: 0 16px 0 12px;
     gap: 0;
     z-index: 200;
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* When sidebar collapses, top bar shifts left */
+body.sidebar-collapsed #top-context-bar {
+    left: 64px;
 }
 
 #top-sidebar-toggle {
@@ -4338,7 +4345,7 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
     border: none;
     background: none;
     cursor: pointer;
-    display: flex;
+    display: none;  /* Hidden by default; shown on Transactions page via JS */
     align-items: center;
     justify-content: center;
     color: #64748b;
@@ -4355,11 +4362,12 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
     flex: 1;
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 2px;
     font-size: 13px;
     color: #64748b;
     overflow: hidden;
-    padding: 0 12px;
+    padding: 0 12px 0 20px;
     min-width: 0;
 }
 .top-breadcrumb-trail .breadcrumb-item {
@@ -4427,9 +4435,11 @@ body.sidebar-collapsed .sidebar-toggle-btn i {
 .app-layout {
     padding-top: 44px;
 }
+/* Sidebar goes full height — top bar sits beside it, not above */
 .sidebar {
-    top: 44px !important;
-    height: calc(100vh - 44px) !important;
+    top: 0 !important;
+    height: 100vh !important;
+    z-index: 250; /* Above the top bar */
 }
 /* Keep utility bar aligned too */
 .utility-bar {

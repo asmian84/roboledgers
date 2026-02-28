@@ -1,6 +1,7 @@
 import { TransactionStatus } from '../types/transaction.ts';
 import type { ReconciliationProof } from './proof_object.ts';
 import { InvariantViolationError } from '../core/errors.ts';
+import { onReconciliationComplete } from '../core/event_bus_wrapper.ts';
 
 /**
  * RoboLedgers: Reconciliation State Machine
@@ -29,5 +30,8 @@ export class ReconciliationStateMachine {
         }
 
         console.log(`[RECON] ACCOUNT RECONCILED: ${accountId} (Proof: ${proof.proof_hash.substring(0, 8)}...)`);
+
+        // Emit reconciliation_complete (fire-and-forget, ledger ownership unchanged)
+        onReconciliationComplete(proof).catch(() => { });
     }
 }

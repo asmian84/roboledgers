@@ -768,9 +768,8 @@ const columns = [
     //7. Account (COA Dropdown)
     columnHelper.accessor('category', {
         header: 'ACCOUNT',
-        size: 160,
-        minSize: 150,
-        maxSize: 200,
+        size: 220,
+        minSize: 180,
         enableColumnFilter: true,
         filterFn: (row, columnId, filterValue) => {
             const categoryValue = row.getValue(columnId);

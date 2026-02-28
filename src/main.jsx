@@ -1,5 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import AuthGate from './auth/AuthGate.jsx';
+// Initialize Supabase client + expose window.__supabaseSignOut
+import './lib/supabaseClient.js';
+// User management modal (admin-only)
+import './auth/userManagement.js';
 import { TransactionsTable } from './TransactionsTable2.jsx';  // TESTING EXPERIMENTAL VERSION
 import { ReportsPage } from './reports/ReportsPage';
 import HomePage from './ui/pages/HomePage.jsx';
@@ -395,4 +400,21 @@ window.unmountHomePage = () => {
         window._homeRootContainer = null;
     }
 };
+
+/**
+ * Auth Gate — mounts over the entire app until the user is authenticated.
+ * Mounts immediately on page load via index.html #auth-gate div.
+ */
+const _authGateContainer = document.getElementById('auth-gate');
+if (_authGateContainer) {
+    ReactDOM.createRoot(_authGateContainer).render(
+        <React.StrictMode>
+            <AuthGate />
+        </React.StrictMode>
+    );
+}
+
+// Sidebar user card (name + avatar + role) is now populated by AuthGate → _populateProfile()
+// window.__userRole    — 'admin' | 'power_user' | 'normal_user'
+// window.__userProfile — { id, email, role, full_name }
 
