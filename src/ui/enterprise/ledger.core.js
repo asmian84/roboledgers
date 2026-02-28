@@ -2266,16 +2266,18 @@ window.RoboLedger = (function () {
                 !upper.includes('AMERICAN EXPRESS') && !upper.includes('AMEX BANK')) {
                 console.log('[PARSER] Detected TD statement');
 
-                if (upper.includes('VISA') || upper.includes('AEROPLAN')) {
+                // [FIX] TD EasyWeb (online banking) shows "VISA" in nav links but is chequing.
+                // "BASIC BUSINESS" (TD BASIC BUSINESS PLAN) identifies it as chequing → don't route to Visa.
+                if (!upper.includes('BASIC BUSINESS') && (upper.includes('VISA') || upper.includes('AEROPLAN'))) {
                     console.log('[PARSER] Routing to TD Visa Parser');
                     if (window.tdVisaParser) {
-                        result = await window.tdVisaParser.parse(text);
+                        result = await window.tdVisaParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] TD Visa returned:', result);
                     }
                 } else {
                     console.log('[PARSER] Routing to TD Chequing Parser');
                     if (window.tdChequingParser) {
-                        result = await window.tdChequingParser.parse(text);
+                        result = await window.tdChequingParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] TD Chequing returned:', result);
                     }
                 }
@@ -2292,25 +2294,25 @@ window.RoboLedger = (function () {
                     //          "BUSINESS ESSENTIALS SAVINGS", "RBC SAVINGS", etc.
                     console.log('[PARSER] Routing to RBC Savings Parser');
                     if (window.rbcSavingsParser) {
-                        result = await window.rbcSavingsParser.parse(text);
+                        result = await window.rbcSavingsParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] RBC Savings returned:', result);
                     }
                 } else if (upper.includes('BUSINESS ACCOUNT STATEMENT') || upper.includes('CHEQU')) {
                     console.log('[PARSER] Routing to RBC Chequing Parser');
                     if (window.rbcChequingParser) {
-                        result = await window.rbcChequingParser.parse(text);
+                        result = await window.rbcChequingParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] RBC Chequing returned:', result);
                     }
                 } else if (upper.includes('MASTERCARD') || upper.includes('MASTER CARD') || upper.includes('BUSINESS CASH BACK') || upper.includes('CASHBACK MASTERCARD') || (upper.includes('MC') && !upper.includes('VISA') && /5[1-5]\d{2}[\s\-\*]/.test(text))) {
                     console.log('[PARSER] Routing to RBC Mastercard Parser');
                     if (window.rbcMastercardParser) {
-                        result = await window.rbcMastercardParser.parse(text);
+                        result = await window.rbcMastercardParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] RBC Mastercard returned:', result);
                     }
                 } else if (upper.includes('VISA')) {
                     console.log('[PARSER] Routing to RBC Visa Parser');
                     if (window.rbcVisaParser) {
-                        result = await window.rbcVisaParser.parse(text);
+                        result = await window.rbcVisaParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] RBC Visa returned:', result);
                     }
                 }
@@ -2323,31 +2325,31 @@ window.RoboLedger = (function () {
                 if (upper.includes('CHEQU') || upper.includes('SAVINGS')) {
                     console.log('[PARSER] Routing to BMO Chequing Parser');
                     if (window.bmoChequingParser) {
-                        result = await window.bmoChequingParser.parse(text);
+                        result = await window.bmoChequingParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] BMO Chequing returned:', result);
                     }
                 } else if (upper.includes('MASTERCARD') || upper.includes('MASTER CARD')) {
                     console.log('[PARSER] Routing to BMO Mastercard Parser');
                     if (window.bmoMastercardParser) {
-                        result = await window.bmoMastercardParser.parse(text);
+                        result = await window.bmoMastercardParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] BMO Mastercard returned:', result);
                     }
                 } else if (upper.includes('VISA')) {
                     console.log('[PARSER] Routing to BMO Visa Parser');
                     if (window.bmoVisaParser) {
-                        result = await window.bmoVisaParser.parse(text);
+                        result = await window.bmoVisaParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] BMO Visa returned:', result);
                     }
                 } else if (upper.includes('CREDIT CARD')) {
                     console.log('[PARSER] Routing to BMO Credit Card Parser');
                     if (window.bmoCreditCardParser) {
-                        result = await window.bmoCreditCardParser.parse(text);
+                        result = await window.bmoCreditCardParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] BMO CC returned:', result);
                     }
                 } else if (upper.includes('USD') || upper.includes('US ACCOUNT')) {
                     console.log('[PARSER] Routing to BMO US Account Parser');
                     if (window.bmoUSParser) {
-                        result = await window.bmoUSParser.parse(text);
+                        result = await window.bmoUSParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] BMO US returned:', result);
                     }
                 }
@@ -2358,16 +2360,17 @@ window.RoboLedger = (function () {
             else if (upper.includes('TD CANADA') || upper.includes('TD BANK') || upper.includes('TORONTO-DOMINION') || upper.includes('TORONTO DOMINION')) {
                 console.log('[PARSER] Detected TD statement (secondary block)');
 
-                if (upper.includes('VISA') || upper.includes('AEROPLAN')) {
+                // [FIX] Same EasyWeb guard as primary block
+                if (!upper.includes('BASIC BUSINESS') && (upper.includes('VISA') || upper.includes('AEROPLAN'))) {
                     console.log('[PARSER] Routing to TD Visa Parser');
                     if (window.tdVisaParser) {
-                        result = await window.tdVisaParser.parse(text);
+                        result = await window.tdVisaParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] TD Visa returned:', result);
                     }
                 } else {
                     console.log('[PARSER] Routing to TD Chequing Parser');
                     if (window.tdChequingParser) {
-                        result = await window.tdChequingParser.parse(text);
+                        result = await window.tdChequingParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] TD Chequing returned:', result);
                     }
                 }
@@ -2380,31 +2383,31 @@ window.RoboLedger = (function () {
                 if (upper.includes('AMEX') || upper.includes('AMERICAN EXPRESS')) {
                     console.log('[PARSER] Routing to Scotia Amex Parser');
                     if (window.scotiaAmexParser) {
-                        result = await window.scotiaAmexParser.parse(text);
+                        result = await window.scotiaAmexParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] Scotia Amex returned:', result);
                     }
                 } else if (upper.includes('MASTERCARD') || upper.includes('MASTER CARD')) {
                     console.log('[PARSER] Routing to Scotia Mastercard Parser');
                     if (window.scotiaMastercardParser) {
-                        result = await window.scotiaMastercardParser.parse(text);
+                        result = await window.scotiaMastercardParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] Scotia MC returned:', result);
                     }
                 } else if (upper.includes('VISA')) {
                     console.log('[PARSER] Routing to Scotia Visa Parser');
                     if (window.scotiaVisaParser) {
-                        result = await window.scotiaVisaParser.parse(text);
+                        result = await window.scotiaVisaParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] Scotia Visa returned:', result);
                     }
                 } else if (upper.includes('CREDIT CARD')) {
                     console.log('[PARSER] Routing to Scotia Credit Card Parser');
                     if (window.scotiaCreditCardParser) {
-                        result = await window.scotiaCreditCardParser.parse(text);
+                        result = await window.scotiaCreditCardParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] Scotia CC returned:', result);
                     }
                 } else {
                     console.log('[PARSER] Routing to Scotia Chequing Parser');
                     if (window.scotiaChequingParser) {
-                        result = await window.scotiaChequingParser.parse(text);
+                        result = await window.scotiaChequingParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] Scotia Chequing returned:', result);
                     }
                 }
@@ -2417,13 +2420,13 @@ window.RoboLedger = (function () {
                 if (upper.includes('VISA')) {
                     console.log('[PARSER] Routing to CIBC Visa Parser');
                     if (window.cibcVisaParser) {
-                        result = await window.cibcVisaParser.parse(text);
+                        result = await window.cibcVisaParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] CIBC Visa returned:', result);
                     }
                 } else {
                     console.log('[PARSER] Routing to CIBC Chequing Parser');
                     if (window.cibcChequingParser) {
-                        result = await window.cibcChequingParser.parse(text);
+                        result = await window.cibcChequingParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] CIBC Chequing returned:', result);
                     }
                 }
@@ -2442,7 +2445,7 @@ window.RoboLedger = (function () {
             else if (upper.includes('ATB FINANCIAL') || upper.includes('ATB')) {
                 console.log('[PARSER] Detected ATB statement');
                 if (window.atbParser) {
-                    result = await window.atbParser.parse(text);
+                    result = await window.atbParser.parse(text, null, lineCoordinates);
                     if (result) console.log('[PARSER] ATB returned:', result);
                 }
             }
@@ -2451,7 +2454,7 @@ window.RoboLedger = (function () {
             else if (upper.includes('HSBC')) {
                 console.log('[PARSER] Detected HSBC statement');
                 if (window.hsbcParser) {
-                    result = await window.hsbcParser.parse(text);
+                    result = await window.hsbcParser.parse(text, null, lineCoordinates);
                     if (result) console.log('[PARSER] HSBC returned:', result);
                 }
             }
@@ -2464,7 +2467,7 @@ window.RoboLedger = (function () {
                 (upper.includes('MASTERCARD') || upper.includes('MASTER CARD') || /5[1-5]\d{2}[\s\-\*]/.test(text))) {
                 console.log('[PARSER] Mastercard catch-all: trying RBC Mastercard parser as format handler');
                 if (window.rbcMastercardParser) {
-                    result = await window.rbcMastercardParser.parse(text);
+                    result = await window.rbcMastercardParser.parse(text, null, lineCoordinates);
                     if (result && result.transactions && result.transactions.length > 0) {
                         console.log('[PARSER] Mastercard catch-all succeeded:', result.transactions.length, 'txns');
                         // Fix the bank name — the MC parser always stamps 'RBC' but this may not be RBC
@@ -2784,36 +2787,34 @@ window.RoboLedger = (function () {
 
 
                 // Attach source file id AND PDF blob URL to each parsed row
-                // NOW with coordinate matching for highlights!
+                // Coordinate priority: parser's pdfLocation > generic lineCoordinate matching
                 rows = rows.map(r => {
-                    // Try to find matching coordinate for this transaction
-                    // Use first 25 chars of description for broader matching
-                    const searchText = (r.description || '').substring(0, 25).trim();
-                    // Amount: try debit, credit, then raw amount field
-                    const rawAmt = r.debit || r.credit || r.amount || '';
-                    const searchAmount = rawAmt ? String(rawAmt).replace(/[$,]/g, '').trim() : '';
-
+                    // Prefer parser's own spatial metadata (matched raw PDF text — most accurate).
+                    // Only fall back to generic coordinate matching when parser didn't provide pdfLocation.
                     let matchedCoord = null;
-                    for (const coord of lineCoordinates) {
-                        const coordText = coord.text || '';
-                        // 1. Match by description substring (strongest signal)
-                        if (searchText && searchText.length > 5 && coordText.includes(searchText)) {
-                            matchedCoord = coord;
-                            break;
-                        }
-                        // 2. Match by amount (only if we have a meaningful amount)
-                        if (searchAmount && searchAmount.length > 3 && coordText.includes(searchAmount)) {
-                            matchedCoord = coord;
-                            break;
-                        }
-                    }
-                    // 3. If still no match, try shorter description prefix (10 chars)
-                    if (!matchedCoord && searchText.length > 10) {
-                        const shortSearch = searchText.substring(0, 10);
+                    if (!r.pdfLocation) {
+                        const searchText = (r.description || '').split('\n')[0].substring(0, 25).trim();
+                        const rawAmt = r.debit || r.credit || r.amount || '';
+                        const searchAmount = rawAmt ? String(rawAmt).replace(/[$,]/g, '').trim() : '';
+
                         for (const coord of lineCoordinates) {
-                            if (coord.text && coord.text.includes(shortSearch)) {
+                            const coordText = coord.text || '';
+                            if (searchText && searchText.length > 5 && coordText.includes(searchText)) {
                                 matchedCoord = coord;
                                 break;
+                            }
+                            if (searchAmount && searchAmount.length > 3 && coordText.includes(searchAmount)) {
+                                matchedCoord = coord;
+                                break;
+                            }
+                        }
+                        if (!matchedCoord && searchText.length > 10) {
+                            const shortSearch = searchText.substring(0, 10);
+                            for (const coord of lineCoordinates) {
+                                if (coord.text && coord.text.includes(shortSearch)) {
+                                    matchedCoord = coord;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -2824,18 +2825,18 @@ window.RoboLedger = (function () {
                         source_pdf: {
                             url: pdfBlobUrl,
                             filename: file.name,
-                            page: matchedCoord?.page || r.pdfLocation?.page || 1,
+                            page: r.pdfLocation?.page || matchedCoord?.page || 1,
                             raw_line: r.rawText || r.raw_line || (matchedCoord?.text) || `${r.date} ${r.description} ${r.debit || r.credit || r.amount || ''}`.trim(),
-                            line_position: matchedCoord ? {
-                                top: matchedCoord.y,
-                                left: 50,
-                                width: 500,
-                                height: matchedCoord.height
-                            } : (r.pdfLocation ? {
+                            line_position: r.pdfLocation ? {
                                 top: r.pdfLocation.top,
                                 left: r.pdfLocation.left || 50,
                                 width: r.pdfLocation.width || 500,
                                 height: r.pdfLocation.height || 12
+                            } : (matchedCoord ? {
+                                top: matchedCoord.y,
+                                left: 50,
+                                width: 500,
+                                height: matchedCoord.height
                             } : null)
                         }
                     };

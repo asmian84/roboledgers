@@ -104,7 +104,9 @@ const HomePage = () => {
             // Derive FY from the TRANSACTION DATA, not today's date
             // Use the latest transaction date to determine which FY the data belongs to
             const txDates = allTxns.map(t => t.date).filter(Boolean).sort();
-            const refDate = txDates.length > 0 ? new Date(txDates[txDates.length - 1]) : now;
+            // Guard: skip dates that JavaScript's Date can't parse (prevents Invalid time value crash)
+            const validTxDates = txDates.filter(d => !isNaN(new Date(d).getTime()));
+            const refDate = validTxDates.length > 0 ? new Date(validTxDates[validTxDates.length - 1]) : now;
             const refMonth = refDate.getMonth() + 1; // 1-12
             const refYear = refDate.getFullYear();
 

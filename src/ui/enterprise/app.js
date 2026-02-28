@@ -546,10 +546,15 @@
         // Render - this will naturally exclude progress bar since isIngesting is false
         render();
 
-        // DETAIL MODE: Show animated sidebar toggle after grid loads
-        const toggleBtn = document.getElementById('sidebar-toggle');
-        if (toggleBtn) {
-          toggleBtn.style.display = 'flex';
+        // DETAIL MODE: Show sidebar toggle after grid loads (only on Transactions page)
+        if (UI_STATE.currentRoute === 'import') {
+          const toggleBtn = document.getElementById('top-sidebar-toggle');
+          if (toggleBtn) {
+            toggleBtn.style.display = 'flex';
+            if (!toggleBtn.classList.contains('has-data-pulse')) {
+              toggleBtn.classList.add('has-data-pulse');
+            }
+          }
         }
 
       } catch (err) {
@@ -1924,6 +1929,26 @@
       item.classList.toggle('active', item.dataset.route === route);
     });
 
+    // SIDEBAR TOGGLE: Only show on Transactions page when data is loaded
+    const sidebarToggleBtn = document.getElementById('top-sidebar-toggle');
+    if (sidebarToggleBtn) {
+      const hasTransactions = (window.RoboLedger?.Ledger?.getAll?.() || []).length > 0;
+      const isTransactionsRoute = route === 'import';
+      sidebarToggleBtn.style.display = (isTransactionsRoute && hasTransactions) ? 'flex' : 'none';
+
+      // If leaving Transactions page while sidebar is collapsed, expand it back
+      if (!isTransactionsRoute) {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar && sidebar.classList.contains('collapsed')) {
+          sidebar.classList.remove('collapsed');
+          document.body.classList.remove('sidebar-collapsed');
+          window.dispatchEvent(new CustomEvent('sidebarCollapsed', { detail: { isCollapsed: false } }));
+          sidebarToggleBtn.innerHTML = '<i class="ph ph-list" style="font-size:18px;"></i>';
+          sidebarToggleBtn.title = 'Hide sidebar';
+        }
+      }
+    }
+
     // Render
     if (route === 'home') {
       window.updateWorkspace(); // Enhanced homepage
@@ -3046,12 +3071,12 @@
                     font-size:13px;padding:4px 8px;border-radius:6px;cursor:pointer;line-height:1;">
                   <i class="ph ph-pencil"></i>
                 </button>
-                ${!isActive ? `<button onclick="event.stopPropagation();window.deleteClient('${client.id}')"
+                <button onclick="event.stopPropagation();window.deleteClient('${client.id}')"
                     title="Delete client"
                     style="background:transparent;border:1px solid #fecaca;color:#dc2626;
                     font-size:13px;padding:4px 8px;border-radius:6px;cursor:pointer;line-height:1;">
                   <i class="ph ph-trash"></i>
-                </button>` : ''}
+                </button>
                 <button onclick="window.switchClient('${client.id}')"
                     style="background:${accentColor};color:white;border:none;
                     font-size:12px;font-weight:600;padding:6px 13px;border-radius:6px;cursor:pointer;
@@ -4107,19 +4132,24 @@
     const accountants = _ssGet('roboledger_accountants') || [];
     const clients     = _ssGet('roboledger_clients') || [];
 
-    const adminSelected = !_drawerState.selectedFirmId;
+    const unassignedSelected = !_drawerState.selectedFirmId;
+    const unassignedCount    = clients.filter(c => !c.accountantId).length;
 
     let html = `
-      <div style="padding:10px 14px 6px;font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;">FIRMS</div>
-      <div class="drawer-firm-item ${adminSelected ? 'selected' : ''}"
+      <div style="padding:10px 14px 6px;font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;">FIRMS</div>`;
+
+    if (unassignedCount > 0 || unassignedSelected) {
+      html += `
+      <div class="drawer-firm-item ${unassignedSelected ? 'selected' : ''}"
            onclick="window._drawerSelectFirm(null)"
-           style="${adminSelected ? 'border-left:3px solid #6d28d9;background:#ede9fe;' : ''}">
-        <div class="drawer-firm-avatar" style="background:#6d28d9;font-size:11px;">
-          <i class="ph ph-shield-check"></i>
+           style="${unassignedSelected ? 'border-left:3px solid #64748b;background:#f1f5f9;' : ''}">
+        <div class="drawer-firm-avatar" style="background:#64748b;font-size:11px;">
+          <i class="ph ph-folder-dashed"></i>
         </div>
-        <span class="drawer-firm-name" style="${adminSelected ? 'color:#6d28d9;' : ''}">Admin</span>
-        <span class="drawer-firm-count">${clients.filter(c => !c.accountantId).length}</span>
+        <span class="drawer-firm-name" style="${unassignedSelected ? 'color:#475569;' : ''}">Unassigned</span>
+        <span class="drawer-firm-count">${unassignedCount}</span>
       </div>`;
+    }
 
     accountants.forEach(acc => {
       const count    = clients.filter(c => c.accountantId === acc.id).length;
@@ -4172,7 +4202,7 @@
       ? allClients.filter(c => c.accountantId === accountantId)
       : allClients.filter(c => !c.accountantId);
 
-    const firmName = acc ? acc.name : 'Admin — Unassigned';
+    const firmName = acc ? acc.name : 'Unassigned';
     const firmColor = acc?.color || '#6d28d9';
 
     let header = `
@@ -4214,12 +4244,12 @@
                       onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">
                 <i class="ph ph-pencil"></i>
               </button>
-              ${!isActive ? `<button onclick="window.closeContextDrawer();setTimeout(()=>window.deleteClient('${client.id}'),50);"
+              <button onclick="window.closeContextDrawer();setTimeout(()=>window.deleteClient('${client.id}'),50);"
                       title="Delete client"
                       style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
                       onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
                 <i class="ph ph-trash"></i>
-              </button>` : ''}
+              </button>
             </div>
             ${isActive ? '<span class="drawer-client-active-badge">Active</span>' : ''}
           </div>`;
@@ -5771,8 +5801,8 @@
       if (bank === 'mc' || bank === 'mastercard') return `<img src="${basePath}mastercard.png" alt="Mastercard" style="${iconStyle}" />`;
       if (bank === 'amex' || bank.includes('american express')) return `<img src="${basePath}amex.png" alt="American Express" style="${iconStyle}" />`;
 
-      // Fallback
-      return `<img src="${basePath}rbc.png" alt="Bank" style="${iconStyle}" />`;
+      // Fallback — generic icon (not RBC)
+      return `<i class="ph ph-bank" style="font-size: ${size}px; color: #94a3b8;"></i>`;
     };
 
     // Helper: Get bank icon (supports dual-icon for credit cards)
@@ -5815,9 +5845,12 @@
             bank.includes('bmo') || bank.includes('montreal') ? 'bmo' :
               bank.includes('scotia') ? 'scotia' :
                 bank.includes('cibc') ? 'cibc' :
-                  'rbc' // default fallback
+                  bank.includes('atb') ? 'atb' :
+                    null // [FIX] was 'rbc' — don't default unknown banks to RBC icon
       );
 
+      // [FIX] Guard null iconName — render generic bank icon instead of crashing/showing wrong bank
+      if (!iconName) return '<i class="ph ph-bank" style="font-size: 48px; color: #94a3b8;"></i>';
       return getSingleIcon(iconName, 48); // INCREASED from 28px to 48px
     };
 
@@ -5843,6 +5876,31 @@
     const subtitle = document.getElementById('account-subtitle');
     if (subtitle) {
       subtitle.textContent = `${acc ? acc.bankName || 'Royal Bank of Canada' : 'Consolidated View'} • ${acc ? acc.currency || 'CAD' : 'CAD'}`;
+    }
+
+    // [FIX] Update header bank icon dynamically on account switch
+    // The header HTML is generated once; this ensures the icon updates when switching accounts
+    const headerIcon = document.getElementById('header-bank-icon');
+    if (headerIcon) {
+      if (isAllMode || !acc) {
+        headerIcon.innerHTML = '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
+      } else {
+        const _bank = (acc.bankIcon || acc.bankName || acc.name || '').toLowerCase();
+        const _brand = (acc.brand || acc.cardNetwork || '').toLowerCase();
+        const _ref = (acc.ref || '').toUpperCase();
+        const _is = 'width:24px;height:24px;border-radius:4px;object-fit:contain;';
+        const _bp = '/logos/';
+        let iconHTML = '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
+        if (_brand.includes('visa') || _ref.startsWith('VISA')) iconHTML = `<img src="${_bp}visa.png" style="${_is}" />`;
+        else if (_brand.includes('mc') || _brand.includes('mastercard') || _ref.startsWith('MC')) iconHTML = `<img src="${_bp}mastercard.png" style="${_is}" />`;
+        else if (_brand.includes('amex') || _ref.startsWith('AMEX')) iconHTML = `<img src="${_bp}amex.png" style="${_is}" />`;
+        else if (_bank.includes('rbc') || _bank.includes('royal')) iconHTML = `<img src="${_bp}rbc.png" style="${_is}" />`;
+        else if (_bank.includes('td') || _bank.includes('dominion') || _ref.startsWith('TD')) iconHTML = `<img src="${_bp}td.png" style="${_is}" />`;
+        else if (_bank.includes('bmo') || _bank.includes('montreal') || _ref.startsWith('BMO')) iconHTML = `<img src="${_bp}bmo.png" style="${_is}" />`;
+        else if (_bank.includes('scotia') || _ref.startsWith('SCOTIA')) iconHTML = `<img src="${_bp}scotia.png" style="${_is}" />`;
+        else if (_bank.includes('cibc') || _ref.startsWith('CIBC')) iconHTML = `<img src="${_bp}cibc.png" style="${_is}" />`;
+        headerIcon.innerHTML = iconHTML;
+      }
     }
 
     // Update selector
@@ -5985,8 +6043,8 @@
         var accTxns = window.RoboLedger.Ledger.getAll().filter(function (t) { return t.account_id === acc.id; });
         var periodText = 'No transactions';
         if (accTxns.length > 0) {
-          var dates = accTxns.map(function (t) { return new Date(t.date_iso || t.date); }).sort(function (a, b) { return a - b; });
-          periodText = dates[0].toISOString().split('T')[0] + ' TO ' + dates[dates.length - 1].toISOString().split('T')[0];
+          var dates = accTxns.map(function (t) { return new Date(t.date_iso || t.date); }).filter(function(d) { return !isNaN(d.getTime()); }).sort(function (a, b) { return a - b; });
+          if (dates.length > 0) { periodText = dates[0].toISOString().split('T')[0] + ' TO ' + dates[dates.length - 1].toISOString().split('T')[0]; }
         }
 
         // Calculate transaction counts
@@ -6167,7 +6225,8 @@
       if (bank.includes('bmo') || bank.includes('montreal')) return '<img src="' + basePath + 'bmo.png" alt="BMO" style="' + iconStyle + '" />';
       if (bank.includes('scotia')) return '<img src="' + basePath + 'scotia.png" alt="Scotia" style="' + iconStyle + '" />';
       if (bank.includes('cibc')) return '<img src="' + basePath + 'cibc.png" alt="CIBC" style="' + iconStyle + '" />';
-      return '<img src="' + basePath + 'rbc.png" alt="Bank" style="' + iconStyle + '" />';
+      // [FIX] was 'rbc.png' — don't show RBC logo for unknown banks
+      return '<i class="ph ph-bank" style="font-size: 20px; color: #94a3b8; vertical-align: middle;"></i>';
     };
 
     const terminalFont = "'Courier New', Courier, monospace";
@@ -6203,7 +6262,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; flex-direction: column;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              ${(() => {
+              <span id="header-bank-icon">${(() => {
                 if (!acc) return '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
                 // Check bankIcon, bankName, AND account name — account name is most reliable since it's always set
                 const _bank = (acc.bankIcon || acc.bankName || acc.name || '').toLowerCase();
@@ -6215,14 +6274,14 @@
                 if (_brand.includes('visa') || _ref.startsWith('VISA')) return `<img src="${_bp}visa.png" style="${_is}" />`;
                 if (_brand.includes('mc') || _brand.includes('mastercard') || _ref.startsWith('MC')) return `<img src="${_bp}mastercard.png" style="${_is}" />`;
                 if (_brand.includes('amex') || _ref.startsWith('AMEX')) return `<img src="${_bp}amex.png" style="${_is}" />`;
-                // Banks — check name/bankName, then ref prefix
-                if (_bank.includes('rbc') || _bank.includes('royal') || _ref.startsWith('CHQ') || _ref.startsWith('SAV')) return `<img src="${_bp}rbc.png" style="${_is}" />`;
+                // Banks — check bankIcon/bankName first (most reliable), then ref prefix as fallback
+                if (_bank.includes('rbc') || _bank.includes('royal')) return `<img src="${_bp}rbc.png" style="${_is}" />`;
                 if (_bank.includes('td') || _bank.includes('dominion') || _ref.startsWith('TD')) return `<img src="${_bp}td.png" style="${_is}" />`;
                 if (_bank.includes('bmo') || _bank.includes('montreal') || _ref.startsWith('BMO')) return `<img src="${_bp}bmo.png" style="${_is}" />`;
                 if (_bank.includes('scotia') || _ref.startsWith('SCOTIA')) return `<img src="${_bp}scotia.png" style="${_is}" />`;
                 if (_bank.includes('cibc') || _ref.startsWith('CIBC')) return `<img src="${_bp}cibc.png" style="${_is}" />`;
                 return '<i class="ph ph-bank" style="font-size: 20px; color: #64748b;"></i>';
-              })()}
+              })()}</span>
               <select id="account-selector" onchange="window.switchAccount(this.value)" style="appearance: none; border: none; padding: 4px 0; font-size: 18px; font-weight: 800; color: #1e293b; background: transparent; cursor: pointer; text-transform: uppercase; outline: none; transition: opacity 0.2s;">
                 <option value="ALL" ${UI_STATE.selectedAccount === 'ALL' ? 'selected' : ''}>ALL ACCOUNTS</option>
                 ${accounts.filter(a => a.name && a.name.trim() !== '' && a.name !== 'New Account').map(a => `<option value="${a.id}" ${UI_STATE.selectedAccount === a.id ? 'selected' : ''}>${(a.name || a.ref).toUpperCase()}</option>`).join('')}

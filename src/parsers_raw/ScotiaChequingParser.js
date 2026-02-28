@@ -59,7 +59,9 @@ SMART PARSING RULES:
 
     // EXTRACT METADATA (Institution, Transit, Account)
     // Scotia format: Account Number: 02469 01458 15
-    const combinedMatch = text.match(/Account Number:?\s*(\d{5})\s+([\d\s-]{7,})/i);
+    // [FIX] PDF.js puts "Business Account" between "Account Number:" and the digits on the next line.
+    // [^0-9]* skips any non-digit chars (including letters like "Business Account \n") before the transit.
+    const combinedMatch = text.match(/Account Number[^0-9]*(\d{5})\s+([\d\s-]{7,})/i);
     const transitMatch = combinedMatch ? [combinedMatch[0], combinedMatch[1]] : text.match(/(?:Transit|Branch)[:#]?\s*(\d{5})/i);
     const acctMatch = combinedMatch ? [combinedMatch[0], combinedMatch[2]] : text.match(/(?:Account)[:#]?\s*([\d-]{7,})/i);
 
@@ -80,9 +82,11 @@ SMART PARSING RULES:
     const dateRegex2 = /^(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/;
 
     // Amount pattern: TWO numbers at line end (Amount + Balance)
-    // This distinguishes real transactions from "BALANCE FORWARD" lines (which have only 1 number)
-    // Examples: "393.30   41,580.68-" or "1,450.00 37,835.92-"
-    const twoAmountPattern = /([\d,]+\.\d{2}-?)\s+([\d,]+\.?\d{0,2}-?)(?:\s|$)/;
+    // FIX: First number (amount) may be a whole dollar (e.g. 500, 10,000) with NO decimal.
+    //      Second number (balance) always has exactly 2 decimal places.
+    //      Anchored to end-of-line so reference codes (46541015) aren't mistaken for amounts.
+    // Examples: "500 44,452.18"  "6.25 35,387.93"  "10,000 34,452.18"
+    const twoAmountPattern = /([\d,]+(?:\.\d{2})?)\s+([\d,]+\.\d{2}-?)\s*$/;
 
     // Single amount pattern (for fallback or BALANCE FORWARD detection)
     const singleAmountPattern = /([\d,]+\.\d{2}-?)(?:\s|$)/;
@@ -188,6 +192,25 @@ SMART PARSING RULES:
       }
     }
 
+    // ── POST-PROCESS: use running balance to correct credit/debit polarity ──
+    // Keyword detection above misses credits like "ACCOUNTS PAYABLE - ALBERTA TREASURY BRANCH"
+    // or "CANADA CARBON REBATE". Balance change is the ground truth.
+    if (openingBalance > 0 && transactions.length > 0) {
+      let prevBal = openingBalance;
+      for (const tx of transactions) {
+        if (tx.balance !== null && tx.balance > 0) {
+          const diff = tx.balance - prevBal;
+          if (Math.abs(diff) > 0.001) {
+            const isCredit = diff > 0;
+            tx.amount  = Math.round(Math.abs(diff) * 100) / 100;
+            tx.debit   = isCredit ? 0 : tx.amount;
+            tx.credit  = isCredit ? tx.amount : 0;
+          }
+          prevBal = tx.balance;
+        }
+      }
+    }
+
     return {
       transactions: transactions,
       metadata: metadata,
@@ -233,8 +256,9 @@ SMART PARSING RULES:
     }
 
     // Determine Debit vs Credit based on keywords
+    // NOTE: balance-based post-processing in parseWithRegex() will correct any misses
     let isCredit = false;
-    const creditKeywords = /DEPOSIT|CREDIT\s+MEMO|REFUND|PAYROLL|EMAIL\s+MONEY\s+TRF|E-TRANSFER.*RECEIVED|ACCOUNTS\s+PAYABLE\s+DEPOSIT/i;
+    const creditKeywords = /DEPOSIT|CREDIT\s+MEMO|REFUND|PAYROLL|EMAIL\s+MONEY\s+TRF|E-TRANSFER.*RECEIVED|ACCOUNTS\s+PAYABLE|TRANSFER\s+FROM|CANADA.*REBATE|REBATE|GOVERNMENT.*BENEFIT|REVENUE.*CANADA|DIRECT\s+DEPOSIT|INCOMING|ATB\s+DEPOSIT/i;
     if (description.match(creditKeywords)) {
       isCredit = true;
     }

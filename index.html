@@ -40,6 +40,9 @@
 </head>
 
 <body>
+    <!-- Auth Gate: covers entire app until Supabase session is confirmed -->
+    <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:#0a0a0f;"></div>
+
     <!-- Mobile Menu Toggle -->
     <button class="mobile-menu-toggle" onclick="window.toggleMobileSidebar()" aria-label="Toggle Menu">
         <i class="ph ph-list" style="font-size: 24px;"></i>
@@ -140,15 +143,39 @@
                 </div>
             </nav>
 
-            <!-- Restored Alex Johnson Card -->
+            <!-- User / Sign Out -->
             <footer class="sidebar-footer">
+                <!-- Admin-only: Manage Users — shown by AuthGate for admins -->
+                <button
+                    id="manage-users-btn"
+                    onclick="window.openUserManagementModal && window.openUserManagementModal()"
+                    title="Manage users & roles"
+                    style="display:none;width:100%;background:none;border:none;cursor:pointer;
+                           padding:7px 12px;border-radius:8px;color:#94a3b8;
+                           font-size:11.5px;font-weight:600;letter-spacing:0.01em;
+                           display:none;align-items:center;gap:8px;margin-bottom:6px;
+                           transition:background 0.15s,color 0.15s;"
+                    onmouseover="this.style.background='rgba(124,58,237,0.10)';this.style.color='#a78bfa'"
+                    onmouseout="this.style.background='none';this.style.color='#94a3b8'"
+                >
+                    <i class="ph ph-users-three" style="font-size:14px;flex-shrink:0;"></i>
+                    Manage Users
+                </button>
                 <div class="user-card">
-                    <div class="user-avatar">AJ</div>
+                    <div class="user-avatar" id="auth-user-avatar">?</div>
                     <div class="user-info">
-                        <div class="user-name">Alex Johnson</div>
-                        <div class="user-role">Premium Plan</div>
+                        <div class="user-name" id="auth-user-name" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;">Loading…</div>
+                        <div class="user-role" id="auth-user-role">Loading…</div>
                     </div>
-                    <i class="ph ph-dots-three nav-icon" style="margin-left: auto; cursor: pointer;"></i>
+                    <button
+                        onclick="window.__supabaseSignOut && window.__supabaseSignOut()"
+                        title="Sign out"
+                        style="margin-left:auto;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:#94a3b8;display:flex;align-items:center;transition:background 0.15s,color 0.15s;"
+                        onmouseover="this.style.background='rgba(239,68,68,0.12)';this.style.color='#fca5a5'"
+                        onmouseout="this.style.background='none';this.style.color='#94a3b8'"
+                    >
+                        <i class="ph ph-sign-out" style="font-size:16px;"></i>
+                    </button>
                 </div>
             </footer>
         </aside>

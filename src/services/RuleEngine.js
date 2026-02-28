@@ -19,6 +19,8 @@ import SignalFusionEngine, { getConfidenceTier } from './SignalFusionEngine.js';
 class RuleEngine {
     constructor() {
         this.STORAGE_KEY    = 'roboledger_categorization_rules';
+        this.RULES_VERSION_KEY = 'roboledger_rules_version';
+        this.CURRENT_RULES_VERSION = 2; // Bump this when adding new default rules
         this.rules          = this.loadRules();
         this.userCorrections = new UserCorrections();
         this.vendorMatcher  = new window.VendorMatcher();
@@ -35,6 +37,10 @@ class RuleEngine {
         if (this.rules.length === 0) {
             console.log('[RULE_ENGINE] No rules found, importing defaults...');
             this.importDefaultRules();
+            this._saveRulesVersion();
+        } else {
+            // [FIX] Migrate rules for existing users: merge new defaults that don't exist yet
+            this._migrateRulesIfNeeded();
         }
     }
 
@@ -323,9 +329,62 @@ class RuleEngine {
         return transactions.filter(tx => this.matchesConditions(tx, rule.conditions, rule.logic));
     }
 
+    // ─── Rule Migration ──────────────────────────────────────────────────────
+
+    _getRulesVersion() {
+        try {
+            return parseInt(localStorage.getItem(this.RULES_VERSION_KEY) || '0', 10);
+        } catch { return 0; }
+    }
+
+    _saveRulesVersion() {
+        try {
+            localStorage.setItem(this.RULES_VERSION_KEY, String(this.CURRENT_RULES_VERSION));
+        } catch (e) {
+            console.warn('[RULE_ENGINE] Could not save rules version:', e);
+        }
+    }
+
+    _migrateRulesIfNeeded() {
+        const storedVersion = this._getRulesVersion();
+        if (storedVersion >= this.CURRENT_RULES_VERSION) return;
+
+        console.log(`[RULE_ENGINE] Migrating rules: v${storedVersion} → v${this.CURRENT_RULES_VERSION}`);
+
+        // Build a set of existing rule names for dedup
+        const existingNames = new Set(this.rules.map(r => r.name));
+
+        // Get the full default rule set and add any missing ones
+        const defaultRules = this._getDefaultRules();
+        let added = 0;
+        for (const r of defaultRules) {
+            if (!existingNames.has(r.name)) {
+                this.createRule(r.name, r.conditions, r.action, r.logic, r.priority);
+                added++;
+            }
+        }
+
+        this._saveRulesVersion();
+        if (added > 0) {
+            console.log(`[RULE_ENGINE] Migration complete: ${added} new rules added`);
+        } else {
+            console.log('[RULE_ENGINE] Migration complete: no new rules needed');
+        }
+    }
+
     // ─── Default Rules ────────────────────────────────────────────────────────
 
+    _getDefaultRules() {
+        return this._defaultRulesArray();
+    }
+
     importDefaultRules() {
+        const defaultRules = this._getDefaultRules();
+        defaultRules.forEach(r => this.createRule(r.name, r.conditions, r.action, r.logic, r.priority));
+        console.log(`[RULE_ENGINE] Imported ${defaultRules.length} default rules`);
+    }
+
+    _defaultRulesArray() {
         const defaultRules = [
             // TELCO — COA 9100 Telephone & Internet (corrected from 6400 which is wrong)
             { name: 'TELUS → Telephone & Internet (9100)',
@@ -370,13 +429,99 @@ class RuleEngine {
 
             // REVENUE — E-Transfer Credits = Rental Revenue on CHQ/SAV accounts only
             // IMPORTANT: This must NOT fire on CC accounts — CC credits are charges, not income
+            // [FIX] TD EasyWeb uses "E-TFR" (not "E-TRF") — added both variants + SEND E-TFR
             { name: 'E-Transfer Credit → Rental Revenue (4900)',
               conditions: [
-                  { field: 'description',  operator: 'regex',     value: 'E-TRANSFER|INTERAC|E-TRF|AUTODEPOSIT' },
+                  { field: 'description',  operator: 'regex',     value: 'E-TRANSFER|INTERAC|E-TFR|E-TRF|SEND E-TFR|AUTODEPOSIT' },
                   { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
                   { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
               ],
               action: { coa_code: '4900' }, logic: 'AND', priority: 9 },
+
+            // REVENUE — Received cheques (View Cheque CHQ#xxxxx) on CHQ/SAV only = Rental Revenue
+            { name: 'Received Cheque → Rental Revenue (4900)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'View Cheque|CHQ#\\d+' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
+              ],
+              action: { coa_code: '4900' }, logic: 'AND', priority: 10 },
+
+            // REVENUE — Condominium corporation fee deposits (management fee income)
+            // Condominium Cor, Bellerose CCN, Bonavista Estat, Lockwood CCN = strata/condo management billings
+            { name: 'Condo Corp Deposit → Management Fees (4004)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'Condominium Cor|Bellerose CCN|Bonavista Estat|Lockwood CCN' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
+              ],
+              action: { coa_code: '4004' }, logic: 'AND', priority: 10 },
+
+            // REVENUE — EVE LOUNGE recurring sales credits on CHQ account
+            { name: 'EVE LOUNGE → Sales (4001)',
+              conditions: [
+                  { field: 'description',  operator: 'contains',  value: 'EVE LOUNGE' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
+              ],
+              action: { coa_code: '4001' }, logic: 'AND', priority: 10 },
+
+            // REVENUE — Square POS terminal credits (SQ *VENDOR) on CHQ account = sales
+            { name: 'Square POS Credit → Sales (4001)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: '^SQ \\*|^\\d{4} SQ \\*' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
+              ],
+              action: { coa_code: '4001' }, logic: 'AND', priority: 10 },
+
+            // REVENUE — Government / grant deposits (GC xxxxx-DEPOSIT)
+            { name: 'GC Government Deposit → Other Gains (4970)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'GC \\d+-DEPOSIT|GC\\d+-DEPOSIT' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+              ],
+              action: { coa_code: '4970' }, logic: 'AND', priority: 9 },
+
+            // EXPENSE CREDITS / REFUNDS — Building supply vendors returning funds to CHQ
+            { name: 'Building Supply Refund → Supplies (5336)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'KASA SUPPLY|AL MASA HOME|SHOP MAKERS' },
+              ],
+              action: { coa_code: '5336' }, logic: 'AND', priority: 8 },
+
+            // EXPENSE CREDITS / REFUNDS — Contractors / maintenance vendors returning funds
+            { name: 'Maintenance Vendor Refund → Repairs (7300)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'SHOEMAKER DRYWA|DIAMOND HARD|CUTTING EDGE CU|CALGARY LOCK' },
+              ],
+              action: { coa_code: '7300' }, logic: 'AND', priority: 8 },
+
+            // GOVERNMENT FEES — Provincial registry / land title / corporate registry fees
+            // Typically filed as professional fees since they accompany legal transactions
+            { name: 'Provincial Registry → Professional Fees (8700)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'PROVINCIAL REGI|REGISTRY|ALBERTA ?REGISTRY' },
+              ],
+              action: { coa_code: '8700' }, logic: 'AND', priority: 8 },
+
+            // INTER-ACCOUNT / FLAG — Scotia Visa credit on CHQ = credit card overpayment refund
+            { name: 'Scotia VISA Credit on CHQ → CC Payment (9971)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'SCOTIA VISA' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+                  { field: 'account_type', operator: 'notEquals', value: 'creditcard' },
+              ],
+              action: { coa_code: '9971' }, logic: 'AND', priority: 10 },
+
+            // FLAG — ATM withdrawals appearing as credits (wrong polarity — parser artifact)
+            // Mark as Unusual Item so accountant can delete or reverse
+            { name: 'ATM W/D Credit (wrong polarity) → Unusual Item (9970)',
+              conditions: [
+                  { field: 'description',  operator: 'regex',     value: 'ATM W/D|ATM\\s*WITHDRAWAL' },
+                  { field: 'polarity',     operator: 'equals',    value: 'CREDIT' },
+              ],
+              action: { coa_code: '9970' }, logic: 'AND', priority: 10 },
 
             // REPAIRS
             { name: 'HOME DEPOT → Repairs & Maintenance (7300)',
@@ -418,9 +563,8 @@ class RuleEngine {
             { name: 'REAL ESTATE COUNCIL → Professional Dev (6900)',
               conditions: [{ field: 'description', operator: 'contains', value: 'REAL ESTATE COUNCIL' }],
               action: { coa_code: '6900' }, logic: 'AND', priority: 9 },
-            { name: 'REGISTRIES → Licenses (6900)',
-              conditions: [{ field: 'description', operator: 'regex', value: 'REGISTRY|ALBERTA ?REGISTRY' }],
-              action: { coa_code: '6900' }, logic: 'AND', priority: 8 },
+            // NOTE: REGISTRIES rule moved to 'Provincial Registry → Professional Fees (8700)' above
+            // 6900 (Employee Benefits) was incorrect for registry fees; 8700 (Professional Fees) is correct
 
             // MEALS — COA 6415 Meals & Entertainment (corrected from 8100 which is wrong in this COA)
             { name: 'FAST FOOD → Meals & Entertainment (6415)',
@@ -520,8 +664,7 @@ class RuleEngine {
               action: { coa_code: '6800' }, logic: 'AND', priority: 9 },
         ];
 
-        defaultRules.forEach(r => this.createRule(r.name, r.conditions, r.action, r.logic, r.priority));
-        console.log(`[RULE_ENGINE] Imported ${defaultRules.length} default rules`);
+        return defaultRules;
     }
 }
 

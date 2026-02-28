@@ -49,8 +49,9 @@ SCOTIABANK VISA FORMAT:
         const yearMatch = statementText.match(/20\d{2}/);
         const currentYear = yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
 
-        // Date regex for Scotiabank format: "Nov 21 Nov 23" (trans date, post date)
-        const dateRegex = /^[HN]\s+(\d{3})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})/i;
+        // Date regex for Scotiabank Visa format: "001 Dec 3 Dec 5 DESCRIPTION 47.08"
+        // FIX: was ^[HN]\s+(\d{3})... which never matched real lines (no H/N prefix in actual PDFs)
+        const dateRegex = /^(\d{3})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})/i;
         const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
         let pendingDescription = '';
