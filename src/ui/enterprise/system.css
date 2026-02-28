@@ -45,20 +45,20 @@ body {
     background-color: var(--bg-secondary);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
-    min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
 }
 
 /* --- MASTER LAYOUT --- */
 .app-layout {
     display: flex;
-    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 /* Sidebar — Modern Minimal (Linear/Notion feel) */
 .sidebar {
     width: var(--sidebar-width);
-    height: 100vh;
+    height: 100dvh;
     position: fixed;
     left: 0;
     top: 0;
@@ -610,7 +610,7 @@ body.route-home .stage {
 
 /* Grid Container reset (Card Style) */
 .grid-container-wall {
-    max-height: calc(100vh - 280px);
+    max-height: calc(100dvh - 280px);
     width: calc(100% - 80px);
     margin: 0 40px 1px 40px;
     padding: 24px;
@@ -941,7 +941,7 @@ body.route-home .stage {
 .grid-container-wall {
     border-radius: 0 0 8px 8px;
     padding: 0;
-    height: calc(100vh - 420px);
+    height: calc(100dvh - 420px);
     min-height: 500px;
     display: flex;
     flex-direction: column;
@@ -2220,7 +2220,7 @@ body.route-home .stage {
     /* top/height set dynamically by toggleSettings() to match grid top boundary */
     top: 0;
     width: 420px;
-    height: 100vh;
+    height: 100dvh;
     background: white;
     box-shadow: -20px 0 60px rgba(0, 0, 0, 0.15);
     z-index: 100000;
@@ -2680,7 +2680,7 @@ body.route-home .stage {
 /* --- SIDEBAR DRAWERS & CURTAINS (V5.2.21) --- */
 .sidebar {
     width: 260px;
-    height: 100vh;
+    height: 100dvh;
     background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
     display: flex;
     flex-direction: column;
@@ -2698,7 +2698,7 @@ body.route-home .stage {
     right: -100%;
     width: 650px;
     max-width: 90vw;
-    height: 100vh;
+    height: 100dvh;
     background: white;
     z-index: 2000;
     transition: right 0.4s cubic-bezier(0.19, 1, 0.22, 1);
@@ -2837,7 +2837,7 @@ body.route-home .stage {
     }
 
     .grid-container-wall {
-        height: calc(100vh - 260px);
+        height: calc(100dvh - 260px);
     }
 
     .v5-main-header {
@@ -2880,16 +2880,71 @@ body.route-home .stage {
     }
 }
 
+/* Tablet: 769px - 1024px — force collapsed sidebar */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .sidebar {
+        width: 64px;
+    }
+
+    .sidebar .brand-logo-text {
+        display: none;
+    }
+
+    .sidebar .nav-group-header {
+        opacity: 0;
+        height: 0;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .sidebar .nav-item {
+        padding: 10px 0;
+        justify-content: center;
+        gap: 0;
+        font-size: 0;
+    }
+
+    .sidebar .nav-icon {
+        font-size: 1.2rem !important;
+        margin: 0 !important;
+    }
+
+    .sidebar .sidebar-footer {
+        padding: 10px;
+    }
+
+    .main-wrapper {
+        margin-left: 64px !important;
+        max-width: calc(100vw - 64px) !important;
+    }
+
+    #top-context-bar {
+        left: 64px !important;
+    }
+}
+
 /* Mobile: < 768px */
 @media (max-width: 768px) {
+
+    /* Top bar spans full width on mobile */
+    #top-context-bar {
+        left: 0 !important;
+    }
+
+    /* Show in-bar hamburger; hide the old floating button */
+    #top-sidebar-toggle {
+        display: flex !important;
+    }
+
+    /* Hide old floating external hamburger */
+    .mobile-menu-toggle {
+        display: none !important;
+    }
 
     /* Hide desktop sidebar toggle on mobile */
     .sidebar-toggle {
         display: none !important;
-    }
-
-    .mobile-menu-toggle {
-        display: flex !important;
     }
 
     .sidebar {
@@ -2897,7 +2952,7 @@ body.route-home .stage {
         left: -260px;
         transition: left 0.3s ease;
         z-index: 1000;
-        height: 100vh;
+        height: 100dvh;
     }
 
     .sidebar.mobile-open {
@@ -2986,11 +3041,12 @@ body.route-home .stage {
     .cloudy-btn {
         font-size: 11px !important;
         padding: 0 10px !important;
-        height: 28px !important;
+        height: 44px !important;
+        min-height: 44px !important;
     }
 
     .grid-container-wall {
-        height: calc(100vh - 340px);
+        height: calc(100dvh - 340px);
     }
 
     /* Mobile grid: Hide all but essential columns */
@@ -3035,7 +3091,7 @@ body.route-home .stage {
     }
 
     .grid-container-wall {
-        height: calc(100vh - 360px);
+        height: calc(100dvh - 360px);
     }
 
     /* Ultra-compact grid */
@@ -3057,7 +3113,7 @@ body.route-home .stage {
 /* Large screens: > 1400px */
 @media (min-width: 1400px) {
     .grid-container-wall {
-        height: calc(100vh - 270px);
+        height: calc(100dvh - 270px);
     }
 
     .v5-recon-hub {
@@ -4173,7 +4229,7 @@ body.sidebar-collapsed .v5-switcher-bar {
     top: 0;
     right: 0;
     width: 220px;
-    height: 100vh;
+    height: 100dvh;
     background: #f8fafc;
     border-left: 1px solid #e2e8f0;
     padding: 20px;
@@ -4438,13 +4494,13 @@ body.sidebar-collapsed #top-context-bar {
 /* Sidebar goes full height — top bar sits beside it, not above */
 .sidebar {
     top: 0 !important;
-    height: 100vh !important;
+    height: 100dvh !important;
     z-index: 250; /* Above the top bar */
 }
 /* Keep utility bar aligned too */
 .utility-bar {
     top: 44px !important;
-    height: calc(100vh - 44px) !important;
+    height: calc(100dvh - 44px) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -4469,7 +4525,7 @@ body.sidebar-collapsed #top-context-bar {
     right: -720px;
     width: 680px;
     max-width: 95vw;
-    height: calc(100vh - 44px);
+    height: calc(100dvh - 44px);
     background: #fff;
     box-shadow: -8px 0 40px rgba(0,0,0,0.15);
     z-index: 5001;
