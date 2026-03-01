@@ -26,7 +26,8 @@ class ScotiaCreditCardParser extends BaseBankParser {
             _tag: 'CreditCard',
             cardNetwork: 'CreditCard',
             accountType: 'CreditCard',
-            bankName: 'Scotiabank'
+            bankName: 'Scotiabank',
+            bankIcon: 'SCOTIA'
         };
 
         let currentYear = new Date().getFullYear();

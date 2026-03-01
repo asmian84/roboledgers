@@ -31,7 +31,8 @@ SCOTIABANK AMEX FORMAT:
             _tag: 'Amex',
             cardNetwork: 'Amex',
             accountType: 'CreditCard',
-            bankName: 'Scotiabank'
+            bankName: 'Scotiabank',
+            bankIcon: 'SCOTIA'
         };
 
         const yearMatch = statementText.match(/20\d{2}/);

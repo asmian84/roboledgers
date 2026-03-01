@@ -52,6 +52,61 @@ window.RoboLedger = (function () {
         return TransactionKind.STANDARD;
     }
 
+    // Matches transfer pairs across accounts: CHQ DEBIT ↔ CC CREDIT of same amount within ±3 days.
+    // Upgrades kind from 'standard' to 'cc_payment' or 'transfer' on both legs.
+    // Returns count of pairs found.
+    function _matchTransferPairs() {
+        const txns = Object.values(state.transactions);
+        const accounts = state.accounts;
+
+        function isCC(accountId) {
+            const acc = accounts.find(a => a.id === accountId || a.ref === accountId);
+            return acc && (acc.accountType === 'CreditCard' || acc.brand || acc.cardNetwork);
+        }
+
+        // Index debits by amount (in cents) for fast lookup
+        const debitsByAmount = {};
+        txns.forEach(tx => {
+            if (tx.polarity !== 'DEBIT') return;
+            if (tx.kind && tx.kind !== 'standard') return; // already classified
+            const key = tx.amount_cents;
+            if (!debitsByAmount[key]) debitsByAmount[key] = [];
+            debitsByAmount[key].push(tx);
+        });
+
+        let matched = 0;
+        txns.forEach(creditTx => {
+            if (creditTx.polarity !== 'CREDIT') return;
+            if (creditTx.kind && creditTx.kind !== 'standard') return;
+
+            const candidates = debitsByAmount[creditTx.amount_cents] || [];
+            for (const debitTx of candidates) {
+                if (debitTx.account_id === creditTx.account_id) continue; // same account = not a transfer
+                if (debitTx._transferMatchId) continue; // already matched
+
+                // Check date proximity (±3 days)
+                const daysDiff = Math.abs(new Date(debitTx.date) - new Date(creditTx.date)) / 86400000;
+                if (daysDiff > 3) continue;
+
+                // Determine the right kind
+                const creditIsCC = isCC(creditTx.account_id);
+                const debitIsCC = isCC(debitTx.account_id);
+                const newKind = (creditIsCC || debitIsCC) ? 'cc_payment' : 'transfer';
+
+                // Mark both legs
+                debitTx.kind = newKind;
+                debitTx._transferMatchId = creditTx.tx_id;
+                creditTx.kind = newKind;
+                creditTx._transferMatchId = debitTx.tx_id;
+                debitTx._transferMatchId = creditTx.tx_id; // prevent re-matching
+                matched++;
+                break;
+            }
+        });
+
+        return matched;
+    }
+
     const STORAGE_KEY = 'roboledger_v5_data';
 
     // --- STATE ---
@@ -499,6 +554,12 @@ window.RoboLedger = (function () {
                     console.log(`[LEDGER] Backfilled kind on ${_kindMigrated} transactions`);
                     save();
                 }
+            }
+
+            const _pairsMatched = _matchTransferPairs();
+            if (_pairsMatched > 0) {
+                console.log(`[LEDGER] Matched ${_pairsMatched} transfer pairs`);
+                save();
             }
 
             // Re-seed COA defaults (backfills any missing entries after client switch)
@@ -1248,6 +1309,11 @@ window.RoboLedger = (function () {
             state.transactions[tx.tx_id] = tx;
             state.sigIndex[tx.txsig] = tx.tx_id;
             save();
+            // Re-run transfer pair matching for new standard transactions
+            if (tx.kind === 'standard') {
+                const _p = _matchTransferPairs();
+                if (_p > 0) { save(); }
+            }
             return true;
         },
 
@@ -3596,6 +3662,7 @@ window.RoboLedger = (function () {
         Polarity,
         TransactionKind,
         detectKind: _detectKind,
+        matchTransferPairs: _matchTransferPairs,
         parseTransactionDescription,
         autoCategorizTransaction
     };

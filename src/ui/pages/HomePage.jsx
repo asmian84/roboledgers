@@ -1,726 +1,828 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const fmtCAD = (n, alwaysCents = false) => {
+  if (alwaysCents || Math.abs(n) < 1000) {
+    return new Intl.NumberFormat('en-CA', {
+      style: 'currency',
+      currency: 'CAD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  }
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: 'CAD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(n);
+};
+
+const EXCLUDED_KINDS = new Set(['transfer', 'cc_payment', 'opening_balance']);
+
+const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const BAR_COLORS = ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#f97316','#ec4899'];
+
+function getLast6Months() {
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth(), label: MONTH_LABELS[d.getMonth()] });
+  }
+  return months;
+}
+
+// ─── Data computation ─────────────────────────────────────────────────────────
+
+function computeDashboard() {
+  const allTxns   = window.RoboLedger?.Ledger?.getAll?.()    || [];
+  const accounts  = window.RoboLedger?.Accounts?.getAll?.()  || [];
+  const coaList   = window.RoboLedger?.COA?.getAll?.()       || [];
+
+  // Build COA lookup: code → name
+  const coaMap = {};
+  coaList.forEach(c => { coaMap[String(c.code)] = c.name; });
+
+  // ── P&L-eligible transactions (exclude transfer/cc_payment/opening_balance)
+  const plTxns = allTxns.filter(t => !EXCLUDED_KINDS.has(t.kind));
+
+  // ── Revenue & Expenses
+  let revenue = 0;
+  let expenses = 0;
+  const expenseByCat = {};
+
+  plTxns.forEach(t => {
+    const code = parseInt(t.category, 10) || 0;
+    const amt  = Math.abs((t.amount_cents || 0) / 100);
+    if (code >= 4000 && code < 5000) {
+      revenue += amt;
+    } else if (code >= 5000 && code < 9970) {
+      expenses += amt;
+      const catKey  = String(t.category || 'Uncategorized');
+      const catName = t.category_name || coaMap[catKey] || `Code ${catKey}`;
+      if (!expenseByCat[catKey]) expenseByCat[catKey] = { name: catName, total: 0 };
+      expenseByCat[catKey].total += amt;
+    }
+  });
+
+  // ── Top 6 expense categories
+  const topExpenses = Object.entries(expenseByCat)
+    .map(([code, v]) => ({ code, name: v.name, total: v.total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6);
+
+  // ── Gross flow (all kinds)
+  let totalIn = 0;
+  let totalOut = 0;
+  allTxns.forEach(t => {
+    const amt = Math.abs((t.amount_cents || 0) / 100);
+    if (t.polarity === 'CREDIT') totalIn  += amt;
+    else                          totalOut += amt;
+  });
+
+  // ── Cash position: last balance_cents per non-CC account
+  const accountMap = {};
+  accounts.forEach(a => { accountMap[a.id] = a; });
+
+  // Last balance_cents per account_id from ledger
+  const lastBalance = {};
+  const lastDate    = {};
+  const txCount     = {};
+  allTxns.forEach(t => {
+    if (t.balance_cents !== undefined && t.balance_cents !== null) {
+      lastBalance[t.account_id] = t.balance_cents;
+    }
+    if (!lastDate[t.account_id] || t.date > lastDate[t.account_id]) {
+      lastDate[t.account_id] = t.date;
+    }
+    txCount[t.account_id] = (txCount[t.account_id] || 0) + 1;
+  });
+
+  let cashPosition = 0;
+  const accountSummaries = accounts.map(acc => {
+    const isCC  = (acc.accountType || '').toUpperCase() === 'CREDITCARD';
+    const bal   = (lastBalance[acc.id] !== undefined ? lastBalance[acc.id] : 0) / 100;
+    if (!isCC) cashPosition += bal;
+    return {
+      id:       acc.id,
+      name:     acc.name || acc.ref || 'Account',
+      bankIcon: acc.bankIcon || null,
+      bankName: acc.bankName || null,
+      isCC,
+      balance:  bal,
+      lastDate: lastDate[acc.id] || null,
+      count:    txCount[acc.id]  || 0,
+      accountType: acc.accountType || 'Chequing',
+    };
+  });
+
+  // ── GST
+  let gstCollected = 0;
+  let gstITC       = 0;
+  let gstCount     = 0;
+  allTxns.forEach(t => {
+    if (!t.gst_enabled) return;
+    const code = parseInt(t.category, 10) || 0;
+    const tax  = Math.abs((t.tax_cents || 0) / 100);
+    if (tax === 0) return;
+    gstCount++;
+    // Revenue categories → collected; Expense categories → ITC
+    if (code >= 4000 && code < 5000) {
+      gstCollected += tax;
+    } else if (code >= 5000 && code < 9970) {
+      gstITC += tax;
+    } else {
+      // Fallback: use polarity
+      if (t.polarity === 'CREDIT') gstCollected += tax;
+      else                          gstITC       += tax;
+    }
+  });
+
+  // ── Action items
+  const uncategorized  = allTxns.filter(t => !t.category || String(t.category) === '9970').length;
+  const needsReview    = allTxns.filter(t => t.status === 'needs_review').length;
+  const transfersCount = allTxns.filter(t => t.kind === 'transfer' || t.kind === 'cc_payment').length;
+
+  // ── Monthly chart (last 6 months, P&L-only)
+  const months6 = getLast6Months();
+  const monthlyData = months6.map(m => {
+    let rev = 0;
+    let exp = 0;
+    plTxns.forEach(t => {
+      if (!t.date) return;
+      const d    = new Date(t.date);
+      const code = parseInt(t.category, 10) || 0;
+      if (d.getFullYear() !== m.year || d.getMonth() !== m.month) return;
+      const amt = Math.abs((t.amount_cents || 0) / 100);
+      if (code >= 4000 && code < 5000) rev += amt;
+      else if (code >= 5000 && code < 9970) exp += amt;
+    });
+    return { label: m.label, revenue: rev, expenses: exp };
+  });
+
+  // ── Recent 12 transactions (newest first)
+  const recentTxns = [...allTxns]
+    .sort((a, b) => {
+      if (b.date > a.date) return 1;
+      if (b.date < a.date) return -1;
+      return 0;
+    })
+    .slice(0, 12)
+    .map(t => ({
+      tx_id:       t.tx_id,
+      date:        t.date,
+      payee:       t.payee || t.description || '—',
+      description: t.description || '',
+      accountName: accountMap[t.account_id]?.name || t.account_id || '—',
+      category:    String(t.category || ''),
+      categoryName:t.category_name || coaMap[String(t.category || '')] || (t.category ? `Code ${t.category}` : 'Uncategorized'),
+      amount:      Math.abs((t.amount_cents || 0) / 100),
+      polarity:    t.polarity,
+      kind:        t.kind || 'standard',
+    }));
+
+  return {
+    hasTxns: allTxns.length > 0,
+    revenue,
+    expenses,
+    netIncome:     revenue - expenses,
+    cashPosition,
+    totalIn,
+    totalOut,
+    gstCollected,
+    gstITC,
+    gstNet:        gstCollected - gstITC,
+    gstCount,
+    topExpenses,
+    accountSummaries,
+    uncategorized,
+    needsReview,
+    transfersCount,
+    monthlyData,
+    recentTxns,
+    clientName:    window.UI_STATE?.activeClientName || 'Client',
+  };
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function KpiCard({ title, value, icon, color, onClick, sub }) {
+  return (
+    <div
+      className={`bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-2 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      onClick={onClick}
+      style={{ flex: 1, minWidth: 0 }}
+    >
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+          {title}
+        </span>
+        <span className={`ph ${icon}`} style={{ fontSize: 22, color }} />
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 700, color, lineHeight: 1.15, marginTop: 2 }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>{sub}</div>
+      )}
+    </div>
+  );
+}
+
+function GstTrackerCard({ collected, itc, net, count }) {
+  const owing = net >= 0;
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: '0 0 auto', minWidth: 0 }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
+        <span className="ph ph-receipt" style={{ fontSize: 18, color: '#2563eb' }} />
+        <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>GST / HST Tracker</span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: '#64748b' }}>Collected (output)</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#16a34a' }}>{fmtCAD(collected)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: '#64748b' }}>ITC / Paid (input)</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#dc2626' }}>−{fmtCAD(itc)}</span>
+        </div>
+        <div style={{ height: 1, background: '#f1f5f9', margin: '2px 0' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+            {owing ? 'GST Owing' : 'GST Refund'}
+          </span>
+          <span style={{
+            fontSize: 15, fontWeight: 800,
+            color: owing ? '#dc2626' : '#16a34a',
+            background: owing ? '#fef2f2' : '#f0fdf4',
+            borderRadius: 6, padding: '2px 10px',
+          }}>
+            {fmtCAD(Math.abs(net))}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span className="ph ph-clock" style={{ fontSize: 13 }} />
+        {count} GST-enabled txns &nbsp;·&nbsp; Remit quarterly to CRA
+      </div>
+    </div>
+  );
+}
+
+function RevenueTrendChart({ monthlyData }) {
+  const maxVal = Math.max(1, ...monthlyData.map(m => Math.max(m.revenue, m.expenses)));
+  const CHART_H = 120;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="ph ph-chart-bar" style={{ fontSize: 18, color: '#2563eb' }} />
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Revenue vs Expenses — Last 6 Months</span>
+        </div>
+        <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#64748b' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#16a34a', display: 'inline-block' }} />
+            Revenue
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#dc2626', display: 'inline-block' }} />
+            Expenses
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: CHART_H + 24, paddingTop: 4 }}>
+        {monthlyData.map((m, i) => {
+          const revH = maxVal > 0 ? Math.round((m.revenue / maxVal) * CHART_H) : 0;
+          const expH = maxVal > 0 ? Math.round((m.expenses / maxVal) * CHART_H) : 0;
+          return (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: CHART_H, width: '100%', justifyContent: 'center' }}>
+                <div
+                  title={`Revenue: ${fmtCAD(m.revenue)}`}
+                  style={{
+                    width: '42%', height: revH || 2,
+                    background: '#16a34a', borderRadius: '3px 3px 0 0',
+                    opacity: m.revenue === 0 ? 0.2 : 1,
+                    transition: 'height 0.4s ease',
+                    cursor: 'default',
+                  }}
+                />
+                <div
+                  title={`Expenses: ${fmtCAD(m.expenses)}`}
+                  style={{
+                    width: '42%', height: expH || 2,
+                    background: '#dc2626', borderRadius: '3px 3px 0 0',
+                    opacity: m.expenses === 0 ? 0.2 : 1,
+                    transition: 'height 0.4s ease',
+                    cursor: 'default',
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 5, textAlign: 'center' }}>{m.label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ActionItemsCard({ uncategorized, needsReview, transfersCount }) {
+  const allGood = uncategorized === 0 && needsReview === 0;
+
+  const navImport = () => window.navigateTo?.('import');
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
+        <span className="ph ph-bell-ringing" style={{ fontSize: 18, color: '#f59e0b' }} />
+        <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Action Items</span>
+      </div>
+
+      {allGood ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '12px 0', gap: 8 }}>
+          <span className="ph ph-check-circle" style={{ fontSize: 32, color: '#16a34a' }} />
+          <span style={{ fontSize: 13, color: '#64748b', textAlign: 'center' }}>All caught up — books are clean</span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {uncategorized > 0 && (
+            <div
+              onClick={navImport}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '9px 12px', borderRadius: 8,
+                background: '#fef2f2', border: '1px solid #fecaca',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="ph ph-warning-circle" style={{ fontSize: 16, color: '#dc2626' }} />
+                <span style={{ fontSize: 13, color: '#1e293b', fontWeight: 500 }}>Uncategorized transactions</span>
+              </div>
+              <span style={{
+                background: '#dc2626', color: 'white',
+                borderRadius: 999, fontSize: 11, fontWeight: 700,
+                padding: '1px 8px', minWidth: 22, textAlign: 'center',
+              }}>{uncategorized}</span>
+            </div>
+          )}
+
+          {needsReview > 0 && (
+            <div
+              onClick={navImport}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '9px 12px', borderRadius: 8,
+                background: '#fffbeb', border: '1px solid #fde68a',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="ph ph-eye" style={{ fontSize: 16, color: '#d97706' }} />
+                <span style={{ fontSize: 13, color: '#1e293b', fontWeight: 500 }}>Needs review</span>
+              </div>
+              <span style={{
+                background: '#f59e0b', color: 'white',
+                borderRadius: 999, fontSize: 11, fontWeight: 700,
+                padding: '1px 8px', minWidth: 22, textAlign: 'center',
+              }}>{needsReview}</span>
+            </div>
+          )}
+
+          {transfersCount > 0 && (
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '9px 12px', borderRadius: 8,
+                background: '#f0f9ff', border: '1px solid #bae6fd',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="ph ph-arrows-left-right" style={{ fontSize: 16, color: '#0284c7' }} />
+                <span style={{ fontSize: 13, color: '#1e293b', fontWeight: 500 }}>Transfers / CC payments</span>
+              </div>
+              <span style={{
+                background: '#0ea5e9', color: 'white',
+                borderRadius: 999, fontSize: 11, fontWeight: 700,
+                padding: '1px 8px', minWidth: 22, textAlign: 'center',
+              }}>{transfersCount}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopExpensesCard({ topExpenses, totalExpenses }) {
+  if (topExpenses.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
+        <div className="flex items-center gap-2">
+          <span className="ph ph-chart-pie-slice" style={{ fontSize: 18, color: '#dc2626' }} />
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Top Expenses</span>
+        </div>
+        <div style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>No expense data yet</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
+        <span className="ph ph-chart-pie-slice" style={{ fontSize: 18, color: '#dc2626' }} />
+        <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Top Expenses</span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {topExpenses.map((cat, i) => {
+          const pct = totalExpenses > 0 ? (cat.total / totalExpenses) * 100 : 0;
+          const color = BAR_COLORS[i % BAR_COLORS.length];
+          return (
+            <div key={cat.code} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: '#1e293b', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
+                  {cat.name}
+                </span>
+                <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  {fmtCAD(cat.total)} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({pct.toFixed(1)}%)</span>
+                </span>
+              </div>
+              <div style={{ height: 5, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: color, borderRadius: 99, transition: 'width 0.5s ease' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AccountBalancesCard({ accounts }) {
+  if (accounts.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
+        <div className="flex items-center gap-2">
+          <span className="ph ph-bank" style={{ fontSize: 18, color: '#2563eb' }} />
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Account Balances</span>
+        </div>
+        <div style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>No accounts yet</div>
+      </div>
+    );
+  }
+
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    try {
+      const dt = new Date(d);
+      return dt.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    } catch { return d; }
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
+        <span className="ph ph-bank" style={{ fontSize: 18, color: '#2563eb' }} />
+        <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Account Balances</span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {accounts.map(acc => {
+          const balColor = acc.isCC
+            ? (acc.balance < 0 ? '#dc2626' : '#16a34a')
+            : (acc.balance >= 0 ? '#16a34a' : '#dc2626');
+          const icon = acc.isCC ? 'ph-credit-card' : 'ph-bank';
+
+          return (
+            <div key={acc.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 10px', borderRadius: 8,
+              background: '#f8fafc', border: '1px solid #f1f5f9',
+            }}>
+              <span className={`ph ${icon}`} style={{ fontSize: 20, color: '#64748b', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {acc.name}
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
+                  {acc.count} txns &nbsp;·&nbsp; Last: {fmtDate(acc.lastDate)}
+                </div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: balColor, whiteSpace: 'nowrap' }}>
+                {fmtCAD(acc.balance)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function KindBadge({ kind }) {
+  if (!kind || kind === 'standard') return null;
+  const styles = {
+    transfer:        { bg: '#eff6ff', color: '#2563eb', label: 'Transfer' },
+    cc_payment:      { bg: '#fff7ed', color: '#ea580c', label: 'CC Payment' },
+    loan_payment:    { bg: '#f9fafb', color: '#6b7280', label: 'Loan' },
+    opening_balance: { bg: '#f5f3ff', color: '#7c3aed', label: 'Opening' },
+  };
+  const s = styles[kind] || { bg: '#f1f5f9', color: '#64748b', label: kind };
+  return (
+    <span style={{
+      background: s.bg, color: s.color,
+      borderRadius: 4, fontSize: 10, fontWeight: 700,
+      padding: '1px 6px', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.04em',
+    }}>
+      {s.label}
+    </span>
+  );
+}
+
+function RecentTransactionsCard({ txns }) {
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: '2-digit' }); }
+    catch { return d; }
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5" style={{ width: '100%' }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: 14 }}>
+        <span className="ph ph-list-bullets" style={{ fontSize: 18, color: '#2563eb' }} />
+        <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Recent Transactions</span>
+        <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 4 }}>Last {txns.length}</span>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+              {['Date','Payee / Description','Account','Category','Amount',''].map((h, i) => (
+                <th key={i} style={{
+                  textAlign: i === 4 ? 'right' : 'left',
+                  padding: '0 10px 8px',
+                  fontWeight: 600, fontSize: 11,
+                  color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em',
+                  whiteSpace: 'nowrap',
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {txns.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: 13 }}>
+                  No transactions yet
+                </td>
+              </tr>
+            ) : txns.map((t, i) => (
+              <tr key={t.tx_id || i} style={{
+                borderBottom: '1px solid #f8fafc',
+                background: i % 2 === 0 ? 'transparent' : '#fafafa',
+              }}>
+                <td style={{ padding: '7px 10px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(t.date)}</td>
+                <td style={{ padding: '7px 10px', maxWidth: 220 }}>
+                  <div style={{ fontWeight: 500, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t.payee}
+                  </div>
+                  {t.description && t.description !== t.payee && (
+                    <div style={{ fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t.description}
+                    </div>
+                  )}
+                </td>
+                <td style={{ padding: '7px 10px', color: '#64748b', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.accountName}</td>
+                <td style={{ padding: '7px 10px', color: '#64748b', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.categoryName}</td>
+                <td style={{
+                  padding: '7px 10px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap',
+                  color: t.polarity === 'CREDIT' ? '#16a34a' : '#dc2626',
+                }}>
+                  {t.polarity === 'CREDIT' ? '+' : '−'}{fmtCAD(t.amount)}
+                </td>
+                <td style={{ padding: '7px 10px', textAlign: 'center' }}>
+                  <KindBadge kind={t.kind} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function QuickActionsBar() {
+  const actions = [
+    { label: 'Import Statement',    icon: 'ph-upload-simple',  route: 'import',   color: '#2563eb' },
+    { label: 'View Reports',        icon: 'ph-chart-line',     route: 'reports',  color: '#16a34a' },
+    { label: 'Open COA',            icon: 'ph-tree-structure', route: 'coa',      color: '#7c3aed' },
+    { label: 'Add Journal Entry',   icon: 'ph-pencil-simple',  route: 'journal',  color: '#ea580c' },
+  ];
+
+  return (
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      {actions.map(a => (
+        <button
+          key={a.route}
+          onClick={() => window.navigateTo?.(a.route)}
+          style={{
+            flex: '1 1 160px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '11px 18px',
+            background: 'white', border: `1.5px solid ${a.color}20`,
+            borderRadius: 10, cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, color: a.color,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            transition: 'box-shadow 0.15s, background 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = `${a.color}08`; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.09)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
+        >
+          <span className={`ph ${a.icon}`} style={{ fontSize: 17 }} />
+          {a.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      minHeight: 380, gap: 16, padding: 40, textAlign: 'center',
+    }}>
+      <span className="ph ph-cloud-slash" style={{ fontSize: 56, color: '#cbd5e1' }} />
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
+          No transactions imported yet
+        </div>
+        <div style={{ fontSize: 14, color: '#64748b', maxWidth: 340, margin: '0 auto' }}>
+          Import a bank or credit card statement to see your financial dashboard come to life.
+        </div>
+      </div>
+      <button
+        onClick={() => window.navigateTo?.('import')}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '11px 24px',
+          background: '#2563eb', color: 'white',
+          border: 'none', borderRadius: 9, cursor: 'pointer',
+          fontSize: 14, fontWeight: 600,
+          boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
+        }}
+      >
+        <span className="ph ph-upload-simple" style={{ fontSize: 18 }} />
+        Import Statement
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 const HomePage = () => {
-    const [stats, setStats] = useState({
-        txns: 0, accounts: 0, uncategorized: 0, categorized: 0,
-        totalDebits: 0, totalCredits: 0,
-        revenue: 0, expenses: 0,
-        topExpenses: [], accountSummaries: [], recentTxns: [],
-        monthlyData: [],
-        fiscalYear: null,
-    });
-    const [selectedQuarter, setSelectedQuarter] = useState(null);
+  const [data, setData] = useState(null);
+  const intervalRef = useRef(null);
 
-    useEffect(() => {
-        const compute = () => {
-            const ledger = window.RoboLedger?.Ledger;
-            const allTxns = ledger?.getAll?.() || [];
-            const accounts = window.RoboLedger?.Accounts?.getActive?.() || window.RoboLedger?.Accounts?.getAll?.() || [];
-            const coa = window.RoboLedger?.COA || {};
-
-            const uncategorized = allTxns.filter(t => !t.category || String(t.category) === '9970' || t.category_name === 'UNCATEGORIZED').length;
-            const categorized = allTxns.length - uncategorized;
-            // Transaction schema uses amount_cents + polarity (DEBIT/CREDIT), NOT separate debit/credit fields
-            const totalDebits  = allTxns.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
-            const totalCredits = allTxns.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
-
-            // Revenue & Expenses from COA codes
-            let revenue = 0, expenses = 0;
-            const expenseByCategory = {};
-            allTxns.forEach(t => {
-                const code = parseInt(t.category) || 0;
-                const amt = Math.abs((t.amount_cents || 0) / 100);
-                if (code >= 4000 && code < 5000) revenue += amt;
-                if (code >= 5000 && code < 9970) {
-                    expenses += amt;
-                    const catName = t.category_name || coa[code]?.name || `Code ${code}`;
-                    expenseByCategory[catName] = (expenseByCategory[catName] || 0) + amt;
-                }
-            });
-
-            // Top 5 expense categories
-            const topExpenses = Object.entries(expenseByCategory)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 5)
-                .map(([name, amount]) => ({ name, amount }));
-
-            // Per-account summaries
-            const accountSummaries = accounts.map(acc => {
-                const accTxns = allTxns.filter(t => t.account_id === acc.id);
-                const totalDebit  = accTxns.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
-                const totalCredit = accTxns.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
-                const balance = totalCredit - totalDebit;
-                // Find last import date
-                const dates = accTxns.map(t => t.date).filter(Boolean).sort();
-                const lastDate = dates.length > 0 ? dates[dates.length - 1] : null;
-                // Resolve icon based on account type (use inline styles — Tailwind purges dynamic classes)
-                const brand = (acc.brand || acc.cardNetwork || '').toUpperCase();
-                let accIcon = 'ph-bank', accIconBg = '#e0e7ff', accIconColor = '#4f46e5'; // indigo
-                if (brand.includes('VISA') || brand.includes('MC') || brand.includes('MASTERCARD') || brand.includes('AMEX') || acc.accountType === 'CreditCard') {
-                    accIcon = 'ph-credit-card'; accIconBg = '#f3e8ff'; accIconColor = '#9333ea'; // purple
-                } else if (acc.accountType === 'SAVINGS') {
-                    accIcon = 'ph-piggy-bank'; accIconBg = '#d1fae5'; accIconColor = '#059669'; // emerald
-                }
-                return {
-                    id: acc.id,
-                    name: acc.name || acc.id,
-                    bankName: acc.bankName || '',
-                    txCount: accTxns.length,
-                    balance,
-                    lastDate,
-                    accIcon, accIconBg, accIconColor,
-                };
-            });
-
-            // Recent 8 transactions
-            const recentTxns = [...allTxns]
-                .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-                .slice(0, 8);
-
-            // Monthly inflow/outflow (last 6 months)
-            const monthMap = {};
-            allTxns.forEach(t => {
-                if (!t.date) return;
-                const monthKey = t.date.substring(0, 7); // "2024-01"
-                if (!monthMap[monthKey]) monthMap[monthKey] = { inflow: 0, outflow: 0 };
-                const amt = Math.abs((t.amount_cents || 0) / 100);
-                if (t.polarity === 'CREDIT') monthMap[monthKey].inflow += amt;
-                else monthMap[monthKey].outflow += amt;
-            });
-            const monthlyData = Object.entries(monthMap)
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .slice(-6)
-                .map(([month, data]) => ({ month, ...data }));
-
-            // ── Fiscal Year Timeline ──────────────────────────────────
-            let fiscalYear = null;
-            const clients = (window.StorageService ? window.StorageService.get('roboledger_clients') : null)
-                || JSON.parse(localStorage.getItem('roboledger_clients') || '[]');
-            const activeClient = clients.find(c => c.id === window.UI_STATE?.activeClientId);
-            const fyEnd = activeClient?.fiscalYearEnd || 12; // 1-12, default December
-            const now = new Date();
-            const fyEndMonth = fyEnd; // month number 1-12
-
-            // Derive FY from the TRANSACTION DATA, not today's date
-            // Use the latest transaction date to determine which FY the data belongs to
-            const txDates = allTxns.map(t => t.date).filter(Boolean).sort();
-            // Guard: skip dates that JavaScript's Date can't parse (prevents Invalid time value crash)
-            const validTxDates = txDates.filter(d => !isNaN(new Date(d).getTime()));
-            const refDate = validTxDates.length > 0 ? new Date(validTxDates[validTxDates.length - 1]) : now;
-            const refMonth = refDate.getMonth() + 1; // 1-12
-            const refYear = refDate.getFullYear();
-
-            let fyStartYear, fyEndYear;
-            if (refMonth > fyEndMonth) {
-                // Past FY end month → FY started this year, ends next year
-                fyStartYear = refYear;
-                fyEndYear = refYear + 1;
-            } else {
-                // Before or at FY end month → FY started last year, ends this year
-                fyStartYear = refYear - 1;
-                fyEndYear = refYear;
-            }
-            // FY start = month after FY end of previous year
-            const fyStartMonth = (fyEndMonth % 12) + 1; // e.g. if FY end = Dec(12), start = Jan(1)
-            const fyStart = new Date(fyStartYear, fyStartMonth - 1, 1);
-            const fyEndDate = new Date(fyEndYear, fyEndMonth, 0); // last day of FY end month
-            const daysRemaining = Math.max(0, Math.ceil((fyEndDate - now) / (1000*60*60*24)));
-
-            // Build quarters (4 quarters of 3 months each, starting from fyStartMonth)
-            const quarters = [0,1,2,3].map(qi => {
-                const qStartMonth = ((fyStartMonth - 1 + qi * 3) % 12); // 0-indexed
-                const qStartYear = fyStartYear + Math.floor((fyStartMonth - 1 + qi * 3) / 12);
-                const qEndMonth = ((fyStartMonth - 1 + qi * 3 + 2) % 12);
-                const qEndYear = fyStartYear + Math.floor((fyStartMonth - 1 + qi * 3 + 2) / 12);
-                const qStart = new Date(qStartYear, qStartMonth, 1);
-                const qEnd = new Date(qEndYear, qEndMonth + 1, 0); // last day
-                const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                const label = `Q${qi+1}`;
-                const range = `${MNAMES[qStartMonth]} – ${MNAMES[qEndMonth]}`;
-
-                // Count txns + categorization in this quarter
-                const qTxns = allTxns.filter(t => {
-                    if (!t.date) return false;
-                    const d = new Date(t.date);
-                    return d >= qStart && d <= qEnd;
-                });
-                const qCategorized = qTxns.filter(t => t.category && String(t.category) !== '9970').length;
-                const qUncategorized = qTxns.length - qCategorized;
-                const qPct = qTxns.length > 0 ? Math.round((qCategorized / qTxns.length) * 100) : 0;
-
-                // Quarter financials for drill-down
-                const qDebits = qTxns.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
-                const qCredits = qTxns.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
-                let qRevenue = 0, qExpenses = 0;
-                const qExpByCat = {};
-                qTxns.forEach(t => {
-                    const code = parseInt(t.category) || 0;
-                    const amt = Math.abs((t.amount_cents || 0) / 100);
-                    if (code >= 4000 && code < 5000) qRevenue += amt;
-                    if (code >= 5000 && code < 9970) {
-                        qExpenses += amt;
-                        const catName = t.category_name || coa[code]?.name || `Code ${code}`;
-                        qExpByCat[catName] = (qExpByCat[catName] || 0) + amt;
-                    }
-                });
-                const qTopExpenses = Object.entries(qExpByCat)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5)
-                    .map(([name, amount]) => ({ name, amount }));
-
-                // Per-month breakdown within the quarter
-                const qMonthly = [0,1,2].map(mi => {
-                    const m = (qStartMonth + mi) % 12;
-                    const y = qStartYear + Math.floor((qStartMonth + mi) / 12);
-                    const mKey = `${y}-${String(m + 1).padStart(2, '0')}`;
-                    const mTxns = qTxns.filter(t => t.date && t.date.startsWith(mKey));
-                    const mDebits = mTxns.filter(t => t.polarity === 'DEBIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
-                    const mCredits = mTxns.filter(t => t.polarity === 'CREDIT').reduce((s, t) => s + Math.abs((t.amount_cents || 0) / 100), 0);
-                    const mCat = mTxns.filter(t => t.category && String(t.category) !== '9970').length;
-                    return { month: MNAMES[m], txCount: mTxns.length, debits: mDebits, credits: mCredits, catPct: mTxns.length > 0 ? Math.round((mCat / mTxns.length) * 100) : 0 };
-                });
-
-                // Period locked?
-                const lockedPeriods = window.RoboLedger?.Ledger?.getLockedPeriods?.() || [];
-                const qMonthKeys = [0,1,2].map(i => {
-                    const m = (qStartMonth + i) % 12;
-                    const y = qStartYear + Math.floor((qStartMonth + i) / 12);
-                    return `${y}-${String(m + 1).padStart(2, '0')}`;
-                });
-                const allLocked = qMonthKeys.every(mk => lockedPeriods.some(lp => lp.period === mk));
-                const someLocked = qMonthKeys.some(mk => lockedPeriods.some(lp => lp.period === mk));
-                const status = allLocked ? 'locked' : someLocked ? 'partial' : 'open';
-
-                return {
-                    label, range, txCount: qTxns.length, catPct: qPct, status,
-                    isCurrent: refDate >= qStart && refDate <= qEnd,
-                    // Drill-down data
-                    debits: qDebits, credits: qCredits, revenue: qRevenue, expenses: qExpenses,
-                    netIncome: qRevenue - qExpenses, uncategorized: qUncategorized,
-                    topExpenses: qTopExpenses, monthly: qMonthly,
-                    startDate: qStart.toISOString().split('T')[0],
-                    endDate: qEnd.toISOString().split('T')[0],
-                };
-            });
-
-            const MNAMES_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-            fiscalYear = {
-                fyEnd,
-                startLabel: `${MNAMES_FULL[fyStartMonth - 1]} 1, ${fyStartYear}`,
-                endLabel: `${MNAMES_FULL[fyEndMonth - 1]} ${fyEndDate.getDate()}, ${fyEndYear}`,
-                daysRemaining,
-                quarters,
-            };
-
-            setStats({
-                txns: allTxns.length, accounts: accounts.length, uncategorized, categorized,
-                totalDebits, totalCredits, revenue, expenses,
-                topExpenses, accountSummaries, recentTxns, monthlyData,
-                fiscalYear,
-            });
-        };
-        compute();
-        const id = setInterval(compute, 2000);
-        return () => clearInterval(id);
-    }, []);
-
-    const goto = (route) => {
-        const el = document.querySelector(`[data-route="${route}"]`);
-        if (el) el.click();
+  useEffect(() => {
+    const compute = () => {
+      try {
+        setData(computeDashboard());
+      } catch (err) {
+        console.error('[HomePage] compute error:', err);
+      }
     };
 
-    const hasData = stats.txns > 0;
-    const catPct  = stats.txns > 0 ? Math.round((stats.categorized / stats.txns) * 100) : 0;
-    const fmt = (n) => n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
-    const fmtFull = (n) => n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2 });
-    const netIncome = stats.revenue - stats.expenses;
-    const clientName = window.UI_STATE?.activeClientName || 'Client';
+    compute();
+    intervalRef.current = setInterval(compute, 3000);
+    return () => clearInterval(intervalRef.current);
+  }, []);
 
-    // Month label helper
-    const monthLabel = (m) => {
-        const [y, mo] = m.split('-');
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return `${months[parseInt(mo) - 1]} ${y.slice(2)}`;
-    };
-
+  if (!data) {
     return (
-        <div className="min-h-screen bg-[#f4f6f8]">
+      <div style={{ background: '#f4f6f8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span className="ph ph-spinner" style={{ fontSize: 32, color: '#94a3b8', animation: 'spin 1s linear infinite' }} />
+      </div>
+    );
+  }
 
-            {/* ── Compact Header ────────────────────────────────────────── */}
-            <div className="bg-[#1e293b] text-white px-4 py-4 md:px-8 md:py-5">
-                <div className="flex items-center justify-between gap-6">
-                    <div>
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
-                                <i className="ph ph-buildings text-white text-lg"></i>
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold tracking-tight">{clientName}</h1>
-                                <p className="text-slate-400 text-[11px]">
-                                    {stats.accounts} accounts · {stats.txns.toLocaleString()} transactions
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => goto('reports')}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-semibold text-[12px] rounded-lg transition-colors">
-                            <i className="ph ph-chart-pie-slice text-sm"></i> Reports
-                        </button>
-                        <button onClick={() => goto('import')}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold text-[12px] rounded-lg transition-colors">
-                            <i className="ph ph-upload-simple text-sm"></i> Import
-                        </button>
-                    </div>
-                </div>
-            </div>
+  const {
+    hasTxns, revenue, expenses, netIncome, cashPosition, totalIn, totalOut,
+    gstCollected, gstITC, gstNet, gstCount,
+    topExpenses, accountSummaries, uncategorized, needsReview, transfersCount,
+    monthlyData, recentTxns, clientName,
+  } = data;
 
-            <div className="max-w-6xl mx-auto px-4 py-4 md:px-8 md:py-6 space-y-5">
+  const netColor      = netIncome >= 0 ? '#16a34a' : '#dc2626';
+  const netIcon       = netIncome >= 0 ? 'ph-trend-up' : 'ph-trend-down';
+  const cashColor     = cashPosition >= 0 ? '#2563eb' : '#dc2626';
 
-                {/* ── Financial KPI Cards ────────────────────────────────── */}
-                {hasData && (
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <KpiCard icon="ph-trend-up" label="Revenue" value={fmt(stats.revenue)}
-                            color="green" sub="4000-series" />
-                        <KpiCard icon="ph-trend-down" label="Expenses" value={fmt(stats.expenses)}
-                            color="red" sub="5000-9000 series" />
-                        <KpiCard icon="ph-scales" label="Net Income"
-                            value={fmt(netIncome)}
-                            color={netIncome >= 0 ? 'blue' : 'red'}
-                            sub={netIncome >= 0 ? 'Profit' : 'Loss'} />
-                        <KpiCard icon="ph-receipt" label="Transactions" value={stats.txns.toLocaleString()}
-                            color="indigo" sub={`${stats.accounts} accounts`} />
-                        <KpiCard icon="ph-check-circle" label="Categorized" value={`${catPct}%`}
-                            color={catPct >= 90 ? 'green' : catPct >= 60 ? 'amber' : 'red'}
-                            sub={stats.uncategorized > 0 ? `${stats.uncategorized} remaining` : 'All done ✓'} />
-                    </div>
-                )}
+  return (
+    <div style={{ background: '#f4f6f8', minHeight: '100vh', padding: '24px 28px 40px', boxSizing: 'border-box' }}>
 
-                {/* ── Fiscal Year Timeline ──────────────────────────────── */}
-                {hasData && stats.fiscalYear && (
-                    <div className="bg-white border border-slate-200 rounded-xl px-5 py-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                                <i className="ph ph-calendar-blank text-slate-500 text-sm"></i>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fiscal Year</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <span className="text-[11px] text-slate-500">
-                                    {stats.fiscalYear.startLabel} — {stats.fiscalYear.endLabel}
-                                </span>
-                                {selectedQuarter !== null && (
-                                    <button onClick={() => setSelectedQuarter(null)}
-                                        className="text-[10px] font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-1">
-                                        <i className="ph ph-x text-[9px]"></i> Close
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                            {stats.fiscalYear.quarters.map((q, i) => {
-                                const statusColors = {
-                                    locked:  { bg: 'bg-green-50', border: 'border-green-200', badge: 'bg-green-100 text-green-700', icon: 'ph-lock-simple' },
-                                    partial: { bg: 'bg-amber-50', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-700', icon: 'ph-lock-simple-open' },
-                                    open:    { bg: 'bg-slate-50', border: 'border-slate-200', badge: 'bg-blue-50 text-blue-600', icon: 'ph-lock-open' },
-                                };
-                                const sc = statusColors[q.status] || statusColors.open;
-                                const isSelected = selectedQuarter === i;
-                                return (
-                                    <div key={i}
-                                        onClick={() => setSelectedQuarter(isSelected ? null : i)}
-                                        className={`${sc.bg} border ${sc.border} rounded-lg p-3 relative cursor-pointer transition-all duration-200 hover:shadow-md ${
-                                            q.isCurrent && !isSelected ? 'ring-2 ring-blue-400 ring-offset-1' : ''
-                                        } ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 shadow-md' : ''}`}>
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-[12px] font-bold text-slate-800">{q.label}</span>
-                                            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${sc.badge}`}>
-                                                <i className={`ph ${sc.icon} text-[8px] mr-0.5`}></i>
-                                                {q.status === 'locked' ? 'Locked' : q.status === 'partial' ? 'Partial' : 'Open'}
-                                            </span>
-                                        </div>
-                                        <div className="text-[10px] text-slate-500 mb-2">{q.range}</div>
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-[10px] text-slate-400">{q.txCount} txns</span>
-                                            <span className="text-[10px] font-semibold text-slate-600">{q.catPct}%</span>
-                                        </div>
-                                        <div className="h-1.5 bg-white/60 rounded-full overflow-hidden">
-                                            <div className={`h-full rounded-full transition-all duration-500 ${
-                                                q.catPct >= 90 ? 'bg-green-400' : q.catPct >= 50 ? 'bg-blue-400' : 'bg-amber-400'
-                                            }`} style={{ width: `${q.catPct}%` }}></div>
-                                        </div>
-                                        {q.isCurrent && (
-                                            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
-                                                CURRENT
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* ── Quarter Drill-Down Panel ─────────────────────── */}
-                        {selectedQuarter !== null && stats.fiscalYear.quarters[selectedQuarter] && (() => {
-                            const q = stats.fiscalYear.quarters[selectedQuarter];
-                            const qNet = q.revenue - q.expenses;
-                            const maxExp = q.topExpenses[0]?.amount || 1;
-                            return (
-                                <div className="mt-3 pt-3 border-t border-slate-200 animate-in">
-                                    {/* Quarter Header */}
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[12px] font-bold text-indigo-700">{q.label} Breakdown</span>
-                                            <span className="text-[10px] text-slate-400">{q.range} · {q.startDate} to {q.endDate}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* KPI Row */}
-                                    <div className="grid grid-cols-5 gap-2 mb-3">
-                                        <div className="bg-green-50 rounded-lg px-3 py-2">
-                                            <div className="text-[9px] font-semibold text-green-600 uppercase">Revenue</div>
-                                            <div className="text-[13px] font-bold text-green-700 tabular-nums">{fmt(q.revenue)}</div>
-                                        </div>
-                                        <div className="bg-red-50 rounded-lg px-3 py-2">
-                                            <div className="text-[9px] font-semibold text-red-500 uppercase">Expenses</div>
-                                            <div className="text-[13px] font-bold text-red-600 tabular-nums">{fmt(q.expenses)}</div>
-                                        </div>
-                                        <div className={`${qNet >= 0 ? 'bg-blue-50' : 'bg-red-50'} rounded-lg px-3 py-2`}>
-                                            <div className={`text-[9px] font-semibold ${qNet >= 0 ? 'text-blue-600' : 'text-red-500'} uppercase`}>Net Income</div>
-                                            <div className={`text-[13px] font-bold ${qNet >= 0 ? 'text-blue-700' : 'text-red-600'} tabular-nums`}>{fmt(qNet)}</div>
-                                        </div>
-                                        <div className="bg-slate-50 rounded-lg px-3 py-2">
-                                            <div className="text-[9px] font-semibold text-slate-500 uppercase">Debits</div>
-                                            <div className="text-[13px] font-bold text-red-500 tabular-nums">{fmt(q.debits)}</div>
-                                        </div>
-                                        <div className="bg-slate-50 rounded-lg px-3 py-2">
-                                            <div className="text-[9px] font-semibold text-slate-500 uppercase">Credits</div>
-                                            <div className="text-[13px] font-bold text-green-600 tabular-nums">{fmt(q.credits)}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Two columns: Monthly breakdown + Top Expenses */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {/* Monthly Breakdown */}
-                                        <div className="bg-slate-50 rounded-lg p-3">
-                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Monthly Breakdown</div>
-                                            <div className="space-y-2">
-                                                {q.monthly.map((m, mi) => (
-                                                    <div key={mi} className="flex items-center gap-2">
-                                                        <span className="text-[10px] font-semibold text-slate-600 w-8">{m.month}</span>
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center justify-between mb-0.5">
-                                                                <span className="text-[9px] text-slate-400">{m.txCount} txns</span>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-[9px] font-mono text-red-500">-{fmt(m.debits)}</span>
-                                                                    <span className="text-[9px] font-mono text-green-600">+{fmt(m.credits)}</span>
-                                                                </div>
-                                                            </div>
-                                                            <div className="h-1 bg-white rounded-full overflow-hidden">
-                                                                <div className={`h-full rounded-full ${
-                                                                    m.catPct >= 90 ? 'bg-green-400' : m.catPct >= 50 ? 'bg-blue-400' : 'bg-amber-400'
-                                                                }`} style={{ width: `${m.catPct}%` }}></div>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-[9px] font-semibold text-slate-500 w-7 text-right">{m.catPct}%</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Top Expenses */}
-                                        <div className="bg-slate-50 rounded-lg p-3">
-                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Top Expenses</div>
-                                            {q.topExpenses.length > 0 ? (
-                                                <div className="space-y-1.5">
-                                                    {q.topExpenses.map((cat, ci) => {
-                                                        const pct = Math.round((cat.amount / maxExp) * 100);
-                                                        const barColors = ['bg-blue-500','bg-indigo-500','bg-purple-500','bg-pink-500','bg-slate-400'];
-                                                        return (
-                                                            <div key={cat.name}>
-                                                                <div className="flex items-center justify-between mb-0.5">
-                                                                    <span className="text-[9px] text-slate-600 truncate max-w-[55%]">{cat.name}</span>
-                                                                    <span className="text-[9px] font-mono font-semibold text-slate-600">{fmt(cat.amount)}</span>
-                                                                </div>
-                                                                <div className="h-1 bg-white rounded-full overflow-hidden">
-                                                                    <div className={`h-full ${barColors[ci] || barColors[4]} rounded-full`} style={{ width: `${pct}%` }}></div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <div className="text-[10px] text-slate-400 py-3 text-center">No categorized expenses</div>
-                                            )}
-                                            {q.uncategorized > 0 && (
-                                                <div className="mt-2 pt-2 border-t border-slate-200 flex items-center justify-between">
-                                                    <span className="text-[9px] text-amber-600 font-semibold">Uncategorized</span>
-                                                    <span className="text-[9px] font-semibold text-amber-600">{q.uncategorized} txns</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-                    </div>
-                )}
-
-                {/* ── Categorization Progress + Debit/Credit ─────────────── */}
-                {hasData && (
-                    <div className="bg-white border border-slate-200 rounded-xl px-5 py-3.5">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                                <i className="ph ph-chart-bar text-slate-500 text-sm"></i>
-                                <span className="text-[11px] font-semibold text-slate-700">Categorization Progress</span>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <span className="text-[11px] text-slate-400">
-                                    Debits: <strong className="text-red-500">{fmt(stats.totalDebits)}</strong>
-                                </span>
-                                <span className="text-[11px] text-slate-400">
-                                    Credits: <strong className="text-green-600">{fmt(stats.totalCredits)}</strong>
-                                </span>
-                                {stats.uncategorized > 0 && (
-                                    <button onClick={() => goto('import')}
-                                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                                        Review <i className="ph ph-arrow-right text-xs"></i>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-700"
-                                style={{ width: `${catPct}%` }}></div>
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Two Column Layout ──────────────────────────────────── */}
-                {hasData && (
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
-
-                        {/* Left Column: 3/5 */}
-                        <div className="col-span-1 md:col-span-3 space-y-5">
-
-                            {/* Monthly Cash Flow */}
-                            {stats.monthlyData.length > 1 && (
-                                <div className="bg-white border border-slate-200 rounded-xl p-5">
-                                    <SectionLabel>Monthly Cash Flow</SectionLabel>
-                                    <div className="flex items-end gap-2" style={{ height: 140 }}>
-                                        {stats.monthlyData.map(m => {
-                                            const maxVal = Math.max(...stats.monthlyData.map(d => Math.max(d.inflow, d.outflow)), 1);
-                                            const inflowH = Math.round((m.inflow / maxVal) * 120);
-                                            const outflowH = Math.round((m.outflow / maxVal) * 120);
-                                            return (
-                                                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
-                                                    <div className="flex items-end gap-0.5 w-full justify-center" style={{ height: 120 }}>
-                                                        <div className="bg-green-400 rounded-t-sm" style={{ width: '40%', height: Math.max(inflowH, 2) }}
-                                                            title={`In: ${fmt(m.inflow)}`}></div>
-                                                        <div className="bg-red-400 rounded-t-sm" style={{ width: '40%', height: Math.max(outflowH, 2) }}
-                                                            title={`Out: ${fmt(m.outflow)}`}></div>
-                                                    </div>
-                                                    <span className="text-[9px] text-slate-400 font-medium">{monthLabel(m.month)}</span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="flex items-center gap-5 mt-3 pt-2 border-t border-slate-100">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-sm bg-green-400"></span>
-                                            <span className="text-[10px] text-slate-500">Inflow (Credits)</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-sm bg-red-400"></span>
-                                            <span className="text-[10px] text-slate-500">Outflow (Debits)</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Recent Transactions */}
-                            <div className="bg-white border border-slate-200 rounded-xl p-5">
-                                <div className="flex items-center justify-between mb-3">
-                                    <SectionLabel>Recent Transactions</SectionLabel>
-                                    <button onClick={() => goto('import')}
-                                        className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                                        View All <i className="ph ph-arrow-right text-[9px]"></i>
-                                    </button>
-                                </div>
-                                <div className="divide-y divide-slate-100">
-                                    {stats.recentTxns.map((tx, i) => {
-                                        const isDebit = tx.polarity === 'DEBIT';
-                                        const amount = Math.abs((tx.amount_cents || 0) / 100);
-                                        const isCategorized = tx.category && String(tx.category) !== '9970';
-                                        return (
-                                            <div key={tx.tx_id || i} className="flex items-center gap-3 py-2.5">
-                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isCategorized ? 'bg-green-400' : 'bg-amber-400'}`}></div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[12px] font-semibold text-slate-800 truncate">
-                                                        {tx.payee || tx.description || 'No Description'}
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-400">{tx.date || '—'}</div>
-                                                </div>
-                                                <div className={`text-[12px] font-mono font-semibold tabular-nums ${isDebit ? 'text-red-600' : 'text-green-600'}`}>
-                                                    {isDebit ? '-' : '+'}{fmtFull(amount)}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {stats.recentTxns.length === 0 && (
-                                        <div className="py-6 text-center text-[11px] text-slate-400">No transactions yet</div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Quick Actions */}
-                            <div className="bg-white border border-slate-200 rounded-xl p-5">
-                                <SectionLabel>Quick Actions</SectionLabel>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <ActionCard icon="ph-upload-simple" label="Import" color="blue" onClick={() => goto('import')} />
-                                    <ActionCard icon="ph-rows" label="Transactions" color="indigo" onClick={() => goto('import')} />
-                                    <ActionCard icon="ph-chart-pie-slice" label="Reports" color="green" onClick={() => goto('reports')} />
-                                    <ActionCard icon="ph-gear-six" label="Settings" color="slate" onClick={() => goto('settings')} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Column: 2/5 */}
-                        <div className="col-span-1 md:col-span-2 space-y-5">
-
-                            {/* Top Expense Categories */}
-                            {stats.topExpenses.length > 0 && (
-                                <div className="bg-white border border-slate-200 rounded-xl p-5">
-                                    <SectionLabel>Top Expense Categories</SectionLabel>
-                                    <div className="space-y-3">
-                                        {stats.topExpenses.map((cat, i) => {
-                                            const maxAmt = stats.topExpenses[0]?.amount || 1;
-                                            const pct = Math.round((cat.amount / maxAmt) * 100);
-                                            const colors = ['bg-blue-500','bg-indigo-500','bg-purple-500','bg-pink-500','bg-slate-400'];
-                                            return (
-                                                <div key={cat.name}>
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className="text-[11px] font-medium text-slate-700 truncate max-w-[60%]">{cat.name}</span>
-                                                        <span className="text-[11px] font-mono font-semibold text-slate-600">{fmt(cat.amount)}</span>
-                                                    </div>
-                                                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                        <div className={`h-full ${colors[i] || colors[4]} rounded-full`} style={{ width: `${pct}%` }}></div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Account Summaries */}
-                            {stats.accountSummaries.length > 0 && (
-                                <div className="bg-white border border-slate-200 rounded-xl p-5">
-                                    <SectionLabel>Account Balances</SectionLabel>
-                                    <div className="space-y-2.5">
-                                        {stats.accountSummaries.map(acc => (
-                                            <div key={acc.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                                                    style={{ backgroundColor: acc.accIconBg || '#e0e7ff' }}>
-                                                    <i className={`ph ${acc.accIcon || 'ph-bank'}`}
-                                                        style={{ color: acc.accIconColor || '#4f46e5', fontSize: '16px' }}></i>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[11px] font-semibold text-slate-800 truncate">{acc.name}</div>
-                                                    <div className="text-[9px] text-slate-400">
-                                                        {acc.txCount} txns{acc.lastDate ? ` · Last: ${acc.lastDate}` : ''}
-                                                    </div>
-                                                </div>
-                                                <div className={`text-[12px] font-mono font-bold tabular-nums ${acc.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                    {fmtFull(Math.abs(acc.balance))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Empty State (no data yet) ─────────────────────────── */}
-                {!hasData && (
-                    <div className="space-y-6">
-                        <div className="text-center py-12">
-                            <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4">
-                                <i className="ph ph-upload-simple text-blue-500 text-3xl"></i>
-                            </div>
-                            <h2 className="text-lg font-bold text-slate-800 mb-2">Import Your First Statement</h2>
-                            <p className="text-[13px] text-slate-500 max-w-md mx-auto mb-5">
-                                Drag in a CSV or PDF bank statement to get started. RoboLedger auto-detects 20+ Canadian bank formats.
-                            </p>
-                            <button onClick={() => goto('import')}
-                                className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold text-[13px] rounded-lg transition-colors inline-flex items-center gap-2">
-                                <i className="ph ph-upload-simple text-base"></i> Import Statements
-                            </button>
-                        </div>
-
-                        {/* Quick Actions for empty state */}
-                        <div className="grid grid-cols-4 gap-3">
-                            <ActionCard icon="ph-upload-simple" label="Import" color="blue" onClick={() => goto('import')} desc="CSV, PDF, OFX" />
-                            <ActionCard icon="ph-chart-pie-slice" label="Reports" color="green" onClick={() => goto('reports')} desc="TB, P&L, BS" />
-                            <ActionCard icon="ph-tree-structure" label="Chart of Accounts" color="indigo" onClick={() => goto('coa')} desc="GIFI-coded COA" />
-                            <ActionCard icon="ph-gear-six" label="Settings" color="slate" onClick={() => goto('settings')} desc="Province, tax" />
-                        </div>
-                    </div>
-                )}
-
-            </div>
+      {/* Page Header */}
+      <div style={{ marginBottom: 22 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: 0, letterSpacing: '-0.01em' }}>
+          {clientName} — Dashboard
+        </h1>
+        <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 3 }}>
+          Fiscal overview &nbsp;·&nbsp; Auto-refreshes every 3 seconds
         </div>
-    );
-};
+      </div>
 
-// ── Sub-components ──────────────────────────────────────────────────────────
-
-const SectionLabel = ({ children }) => (
-    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{children}</p>
-);
-
-const KPI_COLORS = {
-    green:  { bg: 'bg-green-50',  icon: 'text-green-500',  val: 'text-green-700'  },
-    red:    { bg: 'bg-red-50',    icon: 'text-red-500',    val: 'text-red-600'    },
-    blue:   { bg: 'bg-blue-50',   icon: 'text-blue-500',   val: 'text-blue-700'   },
-    indigo: { bg: 'bg-indigo-50', icon: 'text-indigo-500', val: 'text-indigo-700' },
-    amber:  { bg: 'bg-amber-50',  icon: 'text-amber-500',  val: 'text-amber-700'  },
-};
-
-const KpiCard = ({ icon, label, value, color, sub }) => {
-    const c = KPI_COLORS[color] || KPI_COLORS.blue;
-    return (
-        <div className={`${c.bg} border border-slate-200 rounded-xl px-4 py-3.5`}>
-            <div className="flex items-center gap-1.5 mb-1">
-                <i className={`${icon} ${c.icon} text-base`}></i>
-                <span className="text-[10px] text-slate-500 font-medium uppercase">{label}</span>
-            </div>
-            <div className={`text-xl font-bold ${c.val} tabular-nums`}>{value}</div>
-            {sub && <div className="text-[9px] text-slate-400 mt-0.5">{sub}</div>}
+      {!hasTxns ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <EmptyState />
         </div>
-    );
-};
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-const ACTION_COLORS = {
-    blue:   { bg: 'bg-blue-50',   border: 'border-blue-200',   icon: 'text-blue-600',   hover: 'hover:border-blue-400 hover:bg-blue-100/60' },
-    indigo: { bg: 'bg-indigo-50', border: 'border-indigo-200', icon: 'text-indigo-600', hover: 'hover:border-indigo-400 hover:bg-indigo-100/60' },
-    green:  { bg: 'bg-green-50',  border: 'border-green-200',  icon: 'text-green-600',  hover: 'hover:border-green-400 hover:bg-green-100/60' },
-    slate:  { bg: 'bg-slate-50',  border: 'border-slate-200',  icon: 'text-slate-500',  hover: 'hover:border-slate-400 hover:bg-slate-100/60' },
-};
+          {/* Row 1: KPI Cards */}
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'nowrap' }}>
+            <KpiCard
+              title="Net Income"
+              value={fmtCAD(Math.abs(netIncome))}
+              icon={netIcon}
+              color={netColor}
+              sub={netIncome >= 0 ? 'Profit YTD' : 'Loss YTD'}
+            />
+            <KpiCard
+              title="Revenue"
+              value={fmtCAD(revenue)}
+              icon="ph-arrow-down-left"
+              color="#16a34a"
+              sub={`${totalIn > 0 ? fmtCAD(totalIn) : '—'} gross in`}
+              onClick={() => window.navigateTo?.('reports')}
+            />
+            <KpiCard
+              title="Expenses"
+              value={fmtCAD(expenses)}
+              icon="ph-arrow-up-right"
+              color="#dc2626"
+              sub={`${totalOut > 0 ? fmtCAD(totalOut) : '—'} gross out`}
+            />
+            <KpiCard
+              title="Cash Position"
+              value={fmtCAD(cashPosition)}
+              icon="ph-bank"
+              color={cashColor}
+              sub={`${accountSummaries.filter(a => !a.isCC).length} bank account${accountSummaries.filter(a => !a.isCC).length !== 1 ? 's' : ''}`}
+            />
+          </div>
 
-const ActionCard = ({ icon, label, desc, color, onClick }) => {
-    const c = ACTION_COLORS[color] || ACTION_COLORS.slate;
-    return (
-        <button onClick={onClick}
-            className={`flex flex-col items-center text-center gap-1.5 px-3 py-3 rounded-xl border ${c.bg} ${c.border} ${c.hover} transition-all duration-150 group w-full`}>
-            <div className={`w-8 h-8 rounded-lg bg-white shadow-sm border ${c.border} flex items-center justify-center`}>
-                <i className={`${icon} ${c.icon} text-base`}></i>
+          {/* Row 2: GST + Revenue Trend */}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+            <div style={{ flex: '0 0 280px', minWidth: 260 }}>
+              <GstTrackerCard
+                collected={gstCollected}
+                itc={gstITC}
+                net={gstNet}
+                count={gstCount}
+              />
             </div>
-            <div className="text-[11px] font-semibold text-slate-700">{label}</div>
-            {desc && <div className="text-[9px] text-slate-400">{desc}</div>}
-        </button>
-    );
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <RevenueTrendChart monthlyData={monthlyData} />
+            </div>
+          </div>
+
+          {/* Row 3: Action Items + Top Expenses + Account Balances */}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <ActionItemsCard
+                uncategorized={uncategorized}
+                needsReview={needsReview}
+                transfersCount={transfersCount}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TopExpensesCard topExpenses={topExpenses} totalExpenses={expenses} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <AccountBalancesCard accounts={accountSummaries} />
+            </div>
+          </div>
+
+          {/* Row 4: Recent Transactions */}
+          <RecentTransactionsCard txns={recentTxns} />
+
+          {/* Quick Actions */}
+          <QuickActionsBar />
+
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default HomePage;
