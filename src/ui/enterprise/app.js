@@ -2461,7 +2461,7 @@
         { field:'credit_col',  label:'Credit',      icon:'ph-arrow-down-left', visible: savedPrefs.credit_col  !== false },
         { field:'balance',     label:'Balance',     icon:'ph-scales',          visible: savedPrefs.balance     !== false },
         { field:'coa_code',    label:'Account',     icon:'ph-tag',             visible: savedPrefs.coa_code    !== false },
-        { field:'tax_cents',   label:'GST/HST',     icon:'ph-percent',         visible: savedPrefs.tax_cents   === true  },
+        { field:'tax_cents',   label:'GST/HST',     icon:'ph-percent',         visible: savedPrefs.tax_cents   !== false },
       ];
 
       return `
@@ -4962,6 +4962,30 @@
       height: "auto",
       layout: "fitColumns",
       placeholder: "No Accounts Found",
+      rowClick: function(e, row) {
+        const data = row.getData();
+        const code = String(data.code);
+        // Filter the main transaction grid to show only txns with this category
+        if (window.setTxGridFilter) {
+          window.setTxGridFilter(tx => String(tx.category) === code);
+          // Update utility bar breadcrumb
+          if (window._ubDrill !== undefined) {
+            window._ubDrill = {
+              level: 1,
+              type1: 'category',
+              label1: `COA ${code}: ${data.name}`,
+              label1Escaped: `COA ${code}: ${data.name}`.replace(/'/g, "\\'"),
+              codeKey: code,
+              filterFn: tx => String(tx.category) === code
+            };
+          }
+          // Navigate to the transactions page
+          const txRoute = document.querySelector('[data-route="import"]') || document.querySelector('nav [href="#import"]');
+          if (txRoute) txRoute.click();
+          // Show toast notification
+          window._showToast?.(`Filtered to: ${data.name} (${code})`, 'info');
+        }
+      },
       columns: [
         { title: "Account #", field: "code", width: 100, sorter: "number", headerSortStartingDir: "asc",
           formatter: (cell) => `<span style="font-family:monospace;font-weight:600;color:#1e293b;">${cell.getValue()}</span>` },
@@ -4987,7 +5011,7 @@
             const val = cell.getValue() || 0;
             const formatted = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(Math.abs(val));
             const color = val > 0 ? '#059669' : val < 0 ? '#dc2626' : '#94a3b8';
-            return `<span style="font-family:monospace;font-weight:600;color:${color};">${val < 0 ? '(' + formatted + ')' : formatted}</span>`;
+            return `<span style="font-family:monospace;font-weight:600;color:${color};cursor:pointer;" title="Click to view transactions">${val < 0 ? '(' + formatted + ')' : formatted} &#x1F50D;</span>`;
           }
         }
       ]

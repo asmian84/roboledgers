@@ -721,8 +721,13 @@ class ReportGenerator {
         const incomeStatement = this.generateIncomeStatement(startDate, endDate);
         const netIncome = incomeStatement.totals.netIncome;
 
+        // Transfers and CC payments move money between accounts — exclude from cash flow
+        // to avoid double-counting (the bank account balance already reflects the movement)
+        const _CF_EXCL = new Set(['transfer', 'cc_payment', 'opening_balance']);
+
         transactions.forEach(tx => {
             if (!tx.category) return;
+            if (tx.kind && _CF_EXCL.has(tx.kind)) return;
             const code = parseInt(tx.category) || 0;
             const account = this.coa.get(tx.category);
             if (!account) return;

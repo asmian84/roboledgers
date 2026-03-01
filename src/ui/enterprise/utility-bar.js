@@ -148,8 +148,10 @@ function ubRenderCategoryChart(txns, drillState) {
     const chartContainer = document.getElementById('util-category-chart');
     if (!chartContainer) return;
 
+    const _UB_CAT_EXCL = new Set(['transfer', 'cc_payment', 'opening_balance']);
     const categoryTotals = {};
     txns.forEach(t => {
+        if (t.kind && _UB_CAT_EXCL.has(t.kind)) return; // skip transfers/CC payments
         const code = String(t.category || '9970');
         categoryTotals[code] = (categoryTotals[code] || 0) + Math.abs((t.amount_cents || 0) / 100);
     });
@@ -418,8 +420,12 @@ window.updateUtilityBar = function () {
     } else { console.warn('[UB] ⚠ #util-needs-review not found in DOM'); }
 
     // ── Net Position ──────────────────────────────────────────────────────────
+    // Exclude transfers and CC payments — they move money between accounts but
+    // are not real income or outflow for the business
+    const _UB_EXCL = new Set(['transfer', 'cc_payment', 'opening_balance']);
     let totalIn = 0, totalOut = 0;
     allTxns.forEach(t => {
+        if (t.kind && _UB_EXCL.has(t.kind)) return;
         const amt = Math.abs((t.amount_cents || 0) / 100);
         if (t.polarity === 'CREDIT') totalIn += amt;
         else totalOut += amt;
@@ -450,6 +456,7 @@ window.updateUtilityBar = function () {
     // ── Quick P&L (COA root-based, accurate) ─────────────────────────────────
     let revenue = 0, expenses = 0;
     allTxns.forEach(t => {
+        if (t.kind && _UB_EXCL.has(t.kind)) return; // skip transfers/CC payments
         const root = resolveRootFromCode(t.category);
         const amt = Math.abs((t.amount_cents || 0) / 100);
         if (root === 'REVENUE') revenue += amt;
