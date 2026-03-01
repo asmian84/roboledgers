@@ -21,6 +21,37 @@ window.RoboLedger = (function () {
         CREDIT: 'CREDIT'
     };
 
+    // Transaction kind taxonomy (borrowed conceptually from Maybe Finance / sure project)
+    // Determines whether a transaction is included in the income statement.
+    // Balance-sheet side always includes all transactions (transfers still move money).
+    const TransactionKind = {
+        STANDARD:        'standard',        // Normal business transaction — included everywhere
+        TRANSFER:        'transfer',         // Inter-account funds movement — excluded from income stmt
+        CC_PAYMENT:      'cc_payment',       // Chequing paying CC balance — excluded from income stmt
+        LOAN_PAYMENT:    'loan_payment',     // Loan/mortgage payment — included (real cash outflow)
+        OPENING_BALANCE: 'opening_balance',  // Opening balance adjustment — excluded from income stmt
+    };
+
+    // Pure classifier: infers transaction kind from description patterns.
+    // Called at import time and retroactively on load for existing transactions.
+    function _detectKind(tx) {
+        const desc = (tx.raw_description || tx.description || '').toUpperCase();
+        const ref  = (tx.ref || '').toUpperCase();
+        // CC payment from chequing (paying off the card balance)
+        if (/\b(VISA PAYMENT|MASTERCARD PAYMENT|AMEX PAYMENT|AMERICAN EXPRESS PAYMENT|CREDIT CARD PAYMENT|CREDITCARD PMT)\b/.test(desc))
+            return TransactionKind.CC_PAYMENT;
+        // Inter-account fund transfer
+        if (/\b(E-TRANSFER|INTERAC TRANSFER|INTERAC E-TRANSFER|ONLINE TRANSFER|BANK TRANSFER|WIRE TRANSFER|FUNDS TRANSFER|INTERNAL TRANSFER)\b/.test(desc))
+            return TransactionKind.TRANSFER;
+        // Loan / mortgage / LOC payment
+        if (/\b(LOAN PAYMENT|MORTGAGE PAYMENT|LOC PAYMENT|LINE OF CREDIT PAYMENT|TERM LOAN)\b/.test(desc))
+            return TransactionKind.LOAN_PAYMENT;
+        // Manual journal opening-balance entry
+        if (ref.startsWith('AJE-') && /OPENING/.test(desc))
+            return TransactionKind.OPENING_BALANCE;
+        return TransactionKind.STANDARD;
+    }
+
     const STORAGE_KEY = 'roboledger_v5_data';
 
     // --- STATE ---
@@ -450,6 +481,22 @@ window.RoboLedger = (function () {
                 }
                 if (_migrated > 0) {
                     console.log(`[LEDGER] Migrated ${_migrated} txns → client_id=${_clientIdFromKey}`);
+                    save();
+                }
+            }
+
+            // MIGRATION: Backfill transaction kind (idempotent — skips txns that already have kind)
+            {
+                let _kindMigrated = 0;
+                for (const _txId in state.transactions) {
+                    const _tx = state.transactions[_txId];
+                    if (!_tx.kind) {
+                        _tx.kind = _detectKind(_tx);
+                        _kindMigrated++;
+                    }
+                }
+                if (_kindMigrated > 0) {
+                    console.log(`[LEDGER] Backfilled kind on ${_kindMigrated} transactions`);
                     save();
                 }
             }
@@ -1196,6 +1243,8 @@ window.RoboLedger = (function () {
                 console.warn(`[LEDGER] DUPLICATE DETECTED: ${tx.txsig}`);
                 return false;
             }
+            // Auto-stamp kind if not already set
+            if (!tx.kind) tx.kind = _detectKind(tx);
             state.transactions[tx.tx_id] = tx;
             state.sigIndex[tx.txsig] = tx.tx_id;
             save();
@@ -3545,6 +3594,8 @@ window.RoboLedger = (function () {
         Brain,
         TransactionStatus,
         Polarity,
+        TransactionKind,
+        detectKind: _detectKind,
         parseTransactionDescription,
         autoCategorizTransaction
     };

@@ -4769,67 +4769,102 @@
     // === STEP 2: Build reverse lookup AFTER assignment so new codes are captured ===
     const allCOAAccounts = ledger.COA?.getAll() || [];
     const balances = new Map();
-    allCOAAccounts.forEach(a => balances.set(a.code, 0));
+    allCOAAccounts.forEach(a => balances.set(String(a.code), 0));
 
+    // accountToCoaCode: maps account identifiers → COA code string.
+    // We register BOTH acc.id (UUID) and acc.ref (short code like "CHQ1") as keys so
+    // we match regardless of which format was stored in tx.account_id at import time.
     const accountToCoaCode = new Map();
-    // From COA entries with sourceAccountId (set by _assignCOACode)
+    // Primary path: COA entries that have sourceAccountId set by _assignCOACode
     allCOAAccounts.forEach(a => {
-      if (a.sourceAccountId) accountToCoaCode.set(a.sourceAccountId, a.code);
-    });
-    // From bank account objects with coaCode (belt-and-suspenders)
-    allBankAccounts.forEach(acc => {
-      if (acc.coaCode && !accountToCoaCode.has(acc.id)) {
-        accountToCoaCode.set(acc.id, acc.coaCode);
-        if (!balances.has(acc.coaCode)) balances.set(acc.coaCode, 0);
+      if (a.sourceAccountId) {
+        accountToCoaCode.set(String(a.sourceAccountId), String(a.code));
       }
     });
+    // Belt-and-suspenders: bank account objects with coaCode (registers id AND ref)
+    allBankAccounts.forEach(acc => {
+      if (!acc.coaCode) return;
+      const coaCode = String(acc.coaCode);
+      if (acc.id  && !accountToCoaCode.has(String(acc.id)))  accountToCoaCode.set(String(acc.id),  coaCode);
+      if (acc.ref && !accountToCoaCode.has(String(acc.ref))) accountToCoaCode.set(String(acc.ref), coaCode);
+      if (!balances.has(coaCode)) balances.set(coaCode, 0);
+    });
 
-    console.log(`[COA] accountToCoaCode map: ${accountToCoaCode.size} entries`, [...accountToCoaCode.entries()]);
+    // === STEP 3: Fetch transactions (getAll() pre-computes balance_cents per account) ===
+    const txns = ledger.Ledger?.getAll() || [];
+
+    // ── Balance Sheet side: use Ledger.getAll()'s running balance ──
+    // getAll() sorts by date and accumulates (openingBalance + debits/credits) per
+    // account_id into tx.balance_cents.  The LAST tx for each account_id IS the
+    // current balance — including opening balance, correct sort order, same logic
+    // used everywhere else in the app.  This avoids re-inventing the wheel here
+    // and is immune to account-ID format mismatches.
+    const finalBalCents = {}; // account_id → final balance_cents
+    for (const tx of txns) {
+      if (tx.balance_cents !== undefined) {
+        finalBalCents[tx.account_id] = tx.balance_cents;
+      }
+    }
+    for (const [accountId, balCents] of Object.entries(finalBalCents)) {
+      const coaCode = accountToCoaCode.get(String(accountId));
+      if (coaCode) {
+        balances.set(coaCode, balCents / 100);
+      }
+    }
+
+    // Diagnostic: show which tx account_ids matched a COA code and which didn't
+    const txAccountIds = [...new Set(txns.map(t => t.account_id))];
+    const matchReport = txAccountIds.map(id =>
+      accountToCoaCode.has(String(id))
+        ? `✓ ${id} → ${accountToCoaCode.get(String(id))}`
+        : `✗ ${id} (no COA match — check account setup)`
+    );
+    console.log(`[COA] Balance sheet match report:`, matchReport);
 
     // Helper: detect credit-normal source (CC = liability account)
+    // Uses acc.id first, falls back to matching acc.ref for legacy tx.account_id values
     function isSourceCreditNormal(accountId) {
-      const acc = ledger.Accounts?.get(accountId);
+      const acc = ledger.Accounts?.get(accountId)
+               || allBankAccounts.find(a => String(a.ref) === String(accountId));
       if (!acc) return false;
       if ((acc.accountType || '').toLowerCase() === 'creditcard') return true;
       if (acc.cardNetwork || acc.brand) return true;
       return false;
     }
 
-    // === STEP 3: Iterate all transactions ===
-    const txns = ledger.Ledger?.getAll() || [];
+    // Kinds excluded from the income statement.
+    // Transfers and CC payments are balance-sheet events (they move money between
+    // accounts) but are NOT revenue or expense — including them would double-count.
+    // Loan payments are real cash outflows, so they stay in the income statement.
+    const INCOME_STMT_EXCLUDED_KINDS = new Set([
+      'transfer', 'cc_payment', 'opening_balance'
+    ]);
+
+    // ── Income Statement side: accumulate by tx.category ──
     for (const tx of txns) {
+      // Skip kinds that don't belong on the income statement
+      if (tx.kind && INCOME_STMT_EXCLUDED_KINDS.has(tx.kind)) continue;
+
       const isCCSource = isSourceCreditNormal(tx.account_id);
       const absAmount = (tx.amount_cents || 0) / 100;
       if (!absAmount) continue;
 
-      // ── Balance Sheet side: accumulate into the SOURCE BANK/CC account's COA code ──
-      // This gives the running balance of each bank/CC account on the COA page.
-      const sourceCoaCode = accountToCoaCode.get(tx.account_id);
-      if (sourceCoaCode) {
-        let delta;
-        if (isCCSource) {
-          // CC (liability): CREDIT = new charge → liability increases (+)
-          //                 DEBIT  = payment   → liability decreases (-)
-          delta = tx.polarity === 'CREDIT' ? absAmount : -absAmount;
-        } else {
-          // CHQ/SAV (asset): DEBIT  = deposit    → balance increases (+)
-          //                  CREDIT = withdrawal → balance decreases (-)
-          delta = tx.polarity === 'DEBIT' ? absAmount : -absAmount;
-        }
-        balances.set(sourceCoaCode, (balances.get(sourceCoaCode) || 0) + delta);
-      }
-
-      // ── Income Statement side: accumulate by tx.category ──
-      const catCode = tx.category;
+      const catCode = tx.category != null ? String(tx.category) : '';
       if (!catCode || catCode === 'uncategorized' || catCode === '9970') continue;
-      if (catCode === sourceCoaCode) continue; // avoid double-counting
 
-      // Use COA sign field to determine credit-normal vs debit-normal
-      // Revenue (credit-normal): CREDIT increases balance (+), DEBIT decreases (-)
-      // Expense (debit-normal):  DEBIT increases balance (+), CREDIT decreases (-)
-      const coaEntry = allCOAAccounts.find(a => a.code === catCode);
+      // Don't double-count: skip if the category IS the bank account's own COA code
+      const sourceCoaCode = accountToCoaCode.get(String(tx.account_id));
+      if (catCode === sourceCoaCode) continue;
+
+      // Use effective polarity (flip CC: CC CREDIT=charge=expense, CC DEBIT=payment)
+      // Revenue (credit-normal): eff-CREDIT increases (+), eff-DEBIT decreases (-)
+      // Expense (debit-normal):  eff-DEBIT increases (+), eff-CREDIT decreases (-)
+      const coaEntry = allCOAAccounts.find(a => String(a.code) === catCode);
       const isCatCreditNormal = coaEntry?.sign === 'Credit';
-      const signedAmount = tx.polarity === 'DEBIT'
+      const effPolarity = isCCSource
+        ? (tx.polarity === 'CREDIT' ? 'DEBIT' : 'CREDIT')
+        : tx.polarity;
+      const signedAmount = effPolarity === 'DEBIT'
         ? (isCatCreditNormal ? -absAmount : absAmount)
         : (isCatCreditNormal ? absAmount : -absAmount);
       balances.set(catCode, (balances.get(catCode) || 0) + signedAmount);
@@ -4994,6 +5029,9 @@
 
       // Compute live balances from transactions
       const liveBalances = computeCOABalances();
+      const _nonZero = [...liveBalances.entries()].filter(([,v]) => v !== 0);
+      const _txnCount = window.RoboLedger?.Ledger?.getAll?.()?.length ?? 'n/a';
+      console.log(`[COA DEBUG] liveBalances: ${liveBalances.size} entries, ${_nonZero.length} non-zero. Txns: ${_txnCount}. Top 5:`, _nonZero.slice(0, 5));
 
       // Update grid data with live balances
       const allAccounts = window.RoboLedger.COA.getAll();
@@ -5001,7 +5039,7 @@
         .filter(a => a.root.toLowerCase() === catId)
         .map(a => ({
           ...a,
-          balance: liveBalances.get(a.code) || 0
+          balance: liveBalances.get(String(a.code)) || 0
         }))
         .sort((a, b) => parseInt(a.code) - parseInt(b.code));
 
