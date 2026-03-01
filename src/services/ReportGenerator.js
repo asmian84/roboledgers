@@ -322,8 +322,13 @@ class ReportGenerator {
         const cogs = [];
         const expenses = [];
 
+        // Kinds excluded from the income statement
+        const _EXCL_KINDS_IS = new Set(['transfer', 'cc_payment', 'opening_balance']);
+
         transactions.forEach(tx => {
             if (!tx.category) return;
+            // Skip inter-account transfers and CC payments — not revenue or expense
+            if (tx.kind && _EXCL_KINDS_IS.has(tx.kind)) return;
 
             const account = this.coa.get(tx.category);
             if (!account) return;
@@ -441,8 +446,13 @@ class ReportGenerator {
 
         const summary = {};
 
+        // Kinds excluded from income statement / COA summary (balance-sheet-only events)
+        const _EXCL_KINDS = new Set(['transfer', 'cc_payment', 'opening_balance']);
+
         transactions.forEach(tx => {
             if (!tx.category) return;
+            // Skip inter-account transfers and CC payments — they are not revenue/expense
+            if (tx.kind && _EXCL_KINDS.has(tx.kind)) return;
 
             if (!summary[tx.category]) {
                 const account = this.coa.get(String(tx.category)) || this.coa.get(parseInt(tx.category));
