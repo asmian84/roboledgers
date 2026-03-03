@@ -2456,6 +2456,21 @@
         </div>
 
         <div style="margin-bottom:22px;">
+          <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">UI Font</div>
+          <select id="settings-ui-font"
+            onchange="window.previewUIFont(this.value);"
+            style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:12px;font-weight:500;color:#1e293b;cursor:pointer;appearance:auto;outline:none;">
+            ${[
+              { name: 'Inter',          label: 'Inter — Clean & modern'          },
+              { name: 'IBM Plex Sans',  label: 'IBM Plex Sans — Technical & crisp' },
+              { name: 'Lato',           label: 'Lato — Friendly & rounded'        },
+              { name: 'Merriweather',   label: 'Merriweather — Serif / Reading'   },
+              { name: 'JetBrains Mono', label: 'JetBrains Mono — Monospace / Dev' },
+            ].map(f => `<option value="${f.name}" ${(UI_STATE.uiFont||'Inter')===f.name?'selected':''}>${f.label}</option>`).join('')}
+          </select>
+        </div>
+
+        <div style="margin-bottom:22px;">
           <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">Row Density</div>
           <div id="density-group" style="display:flex;gap:6px;">
             ${['compact','comfortable','spacious'].map(d => `
@@ -2475,27 +2490,6 @@
             style="width:100%;accent-color:#3b82f6;"
             oninput="window.previewGridFontSize(this.value)">
           <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:2px;"><span>9px</span><span>16px</span></div>
-        </div>
-
-        <div style="margin-top:22px;">
-          <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">UI Font</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            ${[
-              { name: 'Inter',          stack: 'Inter, sans-serif',               sample: 'Aa 123', desc: 'Clean & modern'    },
-              { name: 'IBM Plex Sans',  stack: '"IBM Plex Sans", sans-serif',     sample: 'Aa 123', desc: 'Technical & crisp' },
-              { name: 'Lato',           stack: 'Lato, sans-serif',                sample: 'Aa 123', desc: 'Friendly & rounded' },
-              { name: 'Merriweather',   stack: 'Merriweather, serif',             sample: 'Aa 123', desc: 'Serif — great for reading' },
-              { name: 'JetBrains Mono', stack: '"JetBrains Mono", monospace',     sample: 'Aa 123', desc: 'Monospace / Dev'   },
-            ].map(f => {
-              const isActive = (UI_STATE.uiFont || 'Inter') === f.name;
-              return `<button onclick="window.previewUIFont('${f.name}')"
-                style="padding:10px 8px;border:2px solid ${isActive ? '#3b82f6' : '#e2e8f0'};border-radius:10px;background:${isActive ? '#eff6ff' : 'white'};cursor:pointer;text-align:left;transition:all 0.15s;">
-                <div style="font-family:${f.stack};font-size:15px;font-weight:600;color:${isActive ? '#1e40af' : '#1e293b'};margin-bottom:3px;">${f.sample}</div>
-                <div style="font-size:10px;font-weight:700;color:${isActive ? '#3b82f6' : '#64748b'};letter-spacing:0.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.name}</div>
-                <div style="font-size:9px;color:#94a3b8;margin-top:1px;">${f.desc}</div>
-              </button>`;
-            }).join('')}
-          </div>
         </div>
       `;
     }
