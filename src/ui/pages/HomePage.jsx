@@ -500,7 +500,19 @@ function AccountBalancesCard({ accounts }) {
           const balColor = acc.isCC
             ? (acc.balance < 0 ? '#dc2626' : '#16a34a')
             : (acc.balance >= 0 ? '#16a34a' : '#dc2626');
-          const icon = acc.isCC ? 'ph-credit-card' : 'ph-bank';
+
+          // Resolve logo from bankIcon (set by parsers) or bankName (fallback for older accounts)
+          const _b = (acc.bankIcon || acc.bankName || acc.name || '').toLowerCase();
+          const _brand = (acc.brand || acc.cardNetwork || '').toLowerCase();
+          const logoSrc = _b.includes('scotia')                          ? '/logos/scotia.png'
+                        : (_b.includes('rbc') || _b.includes('royal'))  ? '/logos/rbc.png'
+                        : (_b.includes('td') || _b.includes('dominion'))? '/logos/td.png'
+                        : (_b.includes('bmo') || _b.includes('montreal'))? '/logos/bmo.png'
+                        : _b.includes('cibc')                            ? '/logos/cibc.png'
+                        : _brand.includes('visa')                        ? '/logos/visa.png'
+                        : (_brand.includes('mc') || _brand.includes('mastercard')) ? '/logos/mastercard.png'
+                        : (_brand.includes('amex') || _brand.includes('american')) ? '/logos/amex.png'
+                        : null;
 
           return (
             <div key={acc.id} style={{
@@ -508,7 +520,10 @@ function AccountBalancesCard({ accounts }) {
               padding: '8px 10px', borderRadius: 8,
               background: '#f8fafc', border: '1px solid #f1f5f9',
             }}>
-              <span className={`ph ${icon}`} style={{ fontSize: 20, color: '#64748b', flexShrink: 0 }} />
+              {logoSrc
+                ? <img src={logoSrc} alt="" style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0, borderRadius: 3 }} />
+                : <span className={`ph ${acc.isCC ? 'ph-credit-card' : 'ph-bank'}`} style={{ fontSize: 20, color: '#64748b', flexShrink: 0 }} />
+              }
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {acc.name}
