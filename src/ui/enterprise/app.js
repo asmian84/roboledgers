@@ -66,6 +66,7 @@
     // Grid Appearance Settings (NEW in V5.1)
     gridTheme: 'post-it-note',
     gridFontSize: 13.5,
+    uiFont: 'Inter',
 
     // Transaction Import State
     uploadInProgress: false,
@@ -1477,7 +1478,8 @@
       dateFormat: UI_STATE.dateFormat,
       // Grid appearance settings
       gridTheme: UI_STATE.gridTheme,
-      gridFontSize: UI_STATE.gridFontSize
+      gridFontSize: UI_STATE.gridFontSize,
+      uiFont: UI_STATE.uiFont || 'Inter',
     };
     const _SS = window.StorageService;
     if (_SS) { _SS.set('roboledger_v5_settings', globalSettings); }
@@ -1528,9 +1530,30 @@
     window.applyGridSettings();
   };
 
+  // Live preview: UI font — applies immediately to body + refreshes picker highlight
+  window.previewUIFont = function (fontName) {
+    UI_STATE.uiFont = fontName;
+    document.body.style.fontFamily = _UI_FONT_STACKS[fontName] || fontName;
+    renderSettingsDrawer(); // Refresh the drawer so active-state highlight updates
+  };
+
   // Apply grid settings to trigger re-render
+  // Central font-stack lookup — used by applyGridSettings and previewUIFont
+  const _UI_FONT_STACKS = {
+    'Inter':           'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    'IBM Plex Sans':   '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    'Lato':            'Lato, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    'Merriweather':    'Merriweather, Georgia, "Times New Roman", serif',
+    'JetBrains Mono':  '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
+  };
+
   window.applyGridSettings = function () {
-    console.log('[GRID] Applying theme:', UI_STATE.gridTheme, 'Font size:', UI_STATE.gridFontSize);
+    console.log('[GRID] Applying theme:', UI_STATE.gridTheme, 'Font size:', UI_STATE.gridFontSize, 'UI font:', UI_STATE.uiFont);
+
+    // Apply UI font to body (affects sidebar, toolbar, all non-grid UI)
+    if (UI_STATE.uiFont) {
+      document.body.style.fontFamily = _UI_FONT_STACKS[UI_STATE.uiFont] || UI_STATE.uiFont;
+    }
 
     // Force grid to re-render with new GRID_TOKENS
     if (window.renderTransactionsGrid) {
@@ -1772,6 +1795,12 @@
       UI_STATE.activeTheme = savedTheme;
       // Theme will be applied to grid container after render, not to body
       console.log(`[INIT] Theme restored: ${savedTheme}`);
+    }
+
+    // Apply saved UI font immediately (before render so body font is correct from the start)
+    if (UI_STATE.uiFont && _UI_FONT_STACKS[UI_STATE.uiFont]) {
+      document.body.style.fontFamily = _UI_FONT_STACKS[UI_STATE.uiFont];
+      console.log(`[INIT] UI font restored: ${UI_STATE.uiFont}`);
     }
 
     render();
@@ -2447,6 +2476,27 @@
             oninput="window.previewGridFontSize(this.value)">
           <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:2px;"><span>9px</span><span>16px</span></div>
         </div>
+
+        <div style="margin-top:22px;">
+          <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">UI Font</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            ${[
+              { name: 'Inter',          stack: 'Inter, sans-serif',               sample: 'Aa 123', desc: 'Clean & modern'    },
+              { name: 'IBM Plex Sans',  stack: '"IBM Plex Sans", sans-serif',     sample: 'Aa 123', desc: 'Technical & crisp' },
+              { name: 'Lato',           stack: 'Lato, sans-serif',                sample: 'Aa 123', desc: 'Friendly & rounded' },
+              { name: 'Merriweather',   stack: 'Merriweather, serif',             sample: 'Aa 123', desc: 'Serif — great for reading' },
+              { name: 'JetBrains Mono', stack: '"JetBrains Mono", monospace',     sample: 'Aa 123', desc: 'Monospace / Dev'   },
+            ].map(f => {
+              const isActive = (UI_STATE.uiFont || 'Inter') === f.name;
+              return `<button onclick="window.previewUIFont('${f.name}')"
+                style="padding:10px 8px;border:2px solid ${isActive ? '#3b82f6' : '#e2e8f0'};border-radius:10px;background:${isActive ? '#eff6ff' : 'white'};cursor:pointer;text-align:left;transition:all 0.15s;">
+                <div style="font-family:${f.stack};font-size:15px;font-weight:600;color:${isActive ? '#1e40af' : '#1e293b'};margin-bottom:3px;">${f.sample}</div>
+                <div style="font-size:10px;font-weight:700;color:${isActive ? '#3b82f6' : '#64748b'};letter-spacing:0.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.name}</div>
+                <div style="font-size:9px;color:#94a3b8;margin-top:1px;">${f.desc}</div>
+              </button>`;
+            }).join('')}
+          </div>
+        </div>
       `;
     }
 
@@ -2570,6 +2620,8 @@
     UI_STATE.gridTheme = 'post-it-note';
     UI_STATE.gridFontSize = 13.5;
     UI_STATE.density = 'comfortable';
+    UI_STATE.uiFont = 'Inter';
+    document.body.style.fontFamily = _UI_FONT_STACKS['Inter'];
 
     _ssRemove('roboledger_v5_settings');
     renderSettingsDrawer();
