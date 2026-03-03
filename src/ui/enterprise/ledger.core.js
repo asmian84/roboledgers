@@ -562,6 +562,30 @@ window.RoboLedger = (function () {
                 save();
             }
 
+            // MIGRATION: Backfill bankIcon on existing accounts that predate the parser fix
+            // Derives bankIcon from bankName so the icon rendering works without re-import
+            {
+                let _iconsMigrated = 0;
+                for (const _acc of state.accounts) {
+                    if (_acc.bankIcon) continue; // already set
+                    const _bn = (_acc.bankName || _acc.name || '').toUpperCase();
+                    if      (_bn.includes('SCOTIA'))   { _acc.bankIcon = 'SCOTIA';     _iconsMigrated++; }
+                    else if (_bn.includes('RBC') || _bn.includes('ROYAL'))  { _acc.bankIcon = 'RBC'; _iconsMigrated++; }
+                    else if (_bn.includes('TD') || _bn.includes('TORONTO DOMINION')) { _acc.bankIcon = 'TD'; _iconsMigrated++; }
+                    else if (_bn.includes('BMO') || _bn.includes('MONTREAL')) { _acc.bankIcon = 'BMO'; _iconsMigrated++; }
+                    else if (_bn.includes('CIBC'))     { _acc.bankIcon = 'CIBC';       _iconsMigrated++; }
+                    else if (_bn.includes('TANGERINE')){ _acc.bankIcon = 'TANGERINE';  _iconsMigrated++; }
+                    else if (_bn.includes('SIMPLII') || _bn.includes('PC FINANCIAL')) { _acc.bankIcon = 'SIMPLII'; _iconsMigrated++; }
+                    else if (_bn.includes('NATIONAL') || _bn.includes('BNC')) { _acc.bankIcon = 'BNC'; _iconsMigrated++; }
+                    else if (_bn.includes('DESJARDINS')) { _acc.bankIcon = 'DESJARDINS'; _iconsMigrated++; }
+                    else if (_bn.includes('HSBC'))     { _acc.bankIcon = 'HSBC';       _iconsMigrated++; }
+                }
+                if (_iconsMigrated > 0) {
+                    console.log(`[LEDGER] Backfilled bankIcon on ${_iconsMigrated} accounts`);
+                    save();
+                }
+            }
+
             // Re-seed COA defaults (backfills any missing entries after client switch)
             COA.init();
 
