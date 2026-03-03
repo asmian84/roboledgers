@@ -495,6 +495,11 @@ window.RoboLedger = (function () {
         } else {
             localStorage.setItem(key, JSON.stringify(data));
         }
+
+        // Debounced cloud sync — coalesces rapid saves into one Supabase write per 10s
+        if (clientId && window.SupabaseSync) {
+            window.SupabaseSync.scheduleLedgerSave(clientId, data);
+        }
     }
 
     // Client-aware load by arbitrary key (called by app.js switchClient / init restore)

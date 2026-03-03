@@ -12,6 +12,8 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { BankReconciliationReport } from './reports/BankReconciliationReport.jsx';
 // Import TransactionExporter so it bundles with xlsx and registers window.TransactionExporter
 import './services/TransactionExporter.js';
+// Import SupabaseSync — registers window.SupabaseSync for use by vanilla JS shell
+import './services/SupabaseSync.js';
 
 
 /**

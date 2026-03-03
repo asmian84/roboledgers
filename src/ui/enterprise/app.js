@@ -1734,12 +1734,52 @@
         UI_STATE.activeClientId   = savedActiveClient;
         UI_STATE.activeClientName = savedClient.name;
         console.log(`[CLIENT] Restored active client: ${savedClient.name} (${savedActiveClient})`);
-        // Update sidebar after DOM is ready
         setTimeout(() => window.updateClientSwitcherUI(savedClient), 0);
+
+        // If local ledger was empty, try cloud fallback (handles browser-cleared scenario)
+        const _localEmpty = Object.keys(window.RoboLedger.Ledger.getRawState().transactions).length === 0
+                         && window.RoboLedger.Accounts.getAll().length === 0;
+        if (_localEmpty && window.SupabaseSync) {
+          window.SupabaseSync.loadLedger(savedActiveClient).then(cloudData => {
+            if (cloudData) {
+              const _SS2 = window.StorageService;
+              if (_SS2) _SS2.set('roboledger_v5_data_' + savedActiveClient, cloudData);
+              window.RoboLedger.Ledger.loadFromKey('roboledger_v5_data_' + savedActiveClient);
+              if (window.updateWorkspace) window.updateWorkspace();
+              const txCount = Object.keys(cloudData.transactions || {}).length;
+              if (window.showToast) window.showToast(`Restored ${txCount.toLocaleString()} transactions from cloud`, 'success');
+            }
+          });
+        }
       } else {
-        // Client no longer exists — clear stale reference
+        // Stale reference — client may have been cleared; check cloud for full list
         _ssRemove('roboledger_active_client');
-        console.warn('[CLIENT] Stale active_client reference cleared');
+        console.warn('[CLIENT] Stale active_client reference — checking cloud for client list');
+        if (window.SupabaseSync) {
+          window.SupabaseSync.loadClients().then(remoteClients => {
+            if (!remoteClients?.length) return;
+            const localClients = _ssGet('roboledger_clients') || [];
+            if (localClients.length === 0) {
+              _ssSet('roboledger_clients', remoteClients);
+              if (window.renderPortal) window.renderPortal();
+              else if (window.render) window.render();
+              if (window.showToast) window.showToast(`Restored ${remoteClients.length} client${remoteClients.length !== 1 ? 's' : ''} from cloud`, 'success');
+            }
+          });
+        }
+      }
+    } else if (!savedActiveClient) {
+      // No active client — check if cloud has clients the user hasn't seen locally yet
+      const localClients = _ssGet('roboledger_clients') || [];
+      if (localClients.length === 0 && window.SupabaseSync) {
+        window.SupabaseSync.loadClients().then(remoteClients => {
+          if (remoteClients?.length) {
+            _ssSet('roboledger_clients', remoteClients);
+            if (window.renderPortal) window.renderPortal();
+            else if (window.render) window.render();
+            if (window.showToast) window.showToast(`Restored ${remoteClients.length} client${remoteClients.length !== 1 ? 's' : ''} from cloud`, 'success');
+          }
+        });
       }
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -3400,6 +3440,7 @@
       clients[idx].gstNumber     = getField('client-form-gst', '').trim();
       clients[idx].color         = getField('client-color-input', '#3b82f6');
       _ssSet('roboledger_clients', clients);
+      window.SupabaseSync?.saveClient(clients[idx]); // ← cloud sync
       if (UI_STATE.activeClientId === existingId) {
         UI_STATE.activeClientName = name;
         window.updateClientSwitcherUI(clients[idx]);
@@ -3427,6 +3468,7 @@
       };
       clients.push(newClient);
       _ssSet('roboledger_clients', clients);
+      window.SupabaseSync?.saveClient(newClient); // ← cloud sync
     }
     const overlay = document.getElementById('client-modal-overlay');
     if (overlay) overlay.remove();
@@ -3594,8 +3636,27 @@
       console.log(`[CLIENT] Saved ledger for ${UI_STATE.activeClientId}`);
     }
 
-    // 2. Load new client's ledger data
+    // 2. Load new client's ledger data (from local cache)
     window.RoboLedger.Ledger.loadFromKey('roboledger_v5_data_' + clientId);
+
+    // 2b. If local was empty, try restoring from cloud (handles browser-cleared scenario)
+    const _localEmpty = Object.keys(window.RoboLedger.Ledger.getRawState().transactions).length === 0
+                     && window.RoboLedger.Accounts.getAll().length === 0;
+    if (_localEmpty && window.SupabaseSync) {
+      if (window.showToast) window.showToast('No local data — checking cloud…', 'info');
+      window.SupabaseSync.loadLedger(clientId).then(cloudData => {
+        if (cloudData) {
+          const _SS2 = window.StorageService;
+          if (_SS2) _SS2.set('roboledger_v5_data_' + clientId, cloudData);
+          window.RoboLedger.Ledger.loadFromKey('roboledger_v5_data_' + clientId);
+          if (window.updateWorkspace) window.updateWorkspace();
+          const txCount = Object.keys(cloudData.transactions || {}).length;
+          if (window.showToast) window.showToast(`Restored ${txCount.toLocaleString()} transaction${txCount !== 1 ? 's' : ''} from cloud`, 'success');
+        } else {
+          if (window.showToast) window.showToast('No cloud data found for this client', 'info');
+        }
+      });
+    }
 
     // 3. Update global state
     UI_STATE.activeClientId   = clientId;
@@ -3684,6 +3745,7 @@
     _ssRemove('roboledger_files_' + clientId);
     const updated = clients.filter(c => c.id !== clientId);
     _ssSet('roboledger_clients', updated);
+    window.SupabaseSync?.deleteClient(clientId); // ← cloud delete
     console.log(`[CLIENT] Deleted: ${client.name} (${clientId}) — data, settings & files purged`);
     _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
     setTimeout(() => window.openContextDrawer(), 50);
