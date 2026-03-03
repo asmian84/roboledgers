@@ -276,10 +276,10 @@ function GstTrackerCard({ collected, itc, net, count }) {
 
 function RevenueTrendChart({ monthlyData }) {
   const maxVal = Math.max(1, ...monthlyData.map(m => Math.max(m.revenue, m.expenses)));
-  const CHART_H = 120;
+  const CHART_H = 140; // Taller bars now that the chart is full-width
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="ph ph-chart-bar" style={{ fontSize: 18, color: '#2563eb' }} />
@@ -489,13 +489,14 @@ function AccountBalancesCard({ accounts }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3" style={{ flex: 1, minWidth: 0 }}>
-      <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col" style={{ flex: 1, minWidth: 0, gap: 0 }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: 12, flexShrink: 0 }}>
         <span className="ph ph-bank" style={{ fontSize: 18, color: '#2563eb' }} />
         <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>Account Balances</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{accounts.length} accounts</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: 2 }}>
         {accounts.map(acc => {
           const balColor = acc.isCC
             ? (acc.balance < 0 ? '#dc2626' : '#16a34a')
@@ -796,9 +797,21 @@ const HomePage = () => {
             />
           </div>
 
-          {/* Row 2: GST + Revenue Trend */}
-          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-            <div style={{ flex: '0 0 280px', minWidth: 260 }}>
+          {/* Row 2: Revenue Chart — full width now that GST moved into the grid below */}
+          <RevenueTrendChart monthlyData={monthlyData} />
+
+          {/* Row 3: CSS Grid — left col stacks 3 naturally-sized cards (no stretch/void),
+               right col = Account Balances spanning all 3 rows, fills height and scrolls.
+               minHeight:0 on the Account Balances wrapper tells the grid NOT to inflate
+               row heights to accommodate it — rows size to left-col content only. */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 14,
+          }}>
+
+            {/* Left col · row 1 — GST Tracker (moved here from standalone row) */}
+            <div style={{ alignSelf: 'start' }}>
               <GstTrackerCard
                 collected={gstCollected}
                 itc={gstITC}
@@ -806,26 +819,31 @@ const HomePage = () => {
                 count={gstCount}
               />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <RevenueTrendChart monthlyData={monthlyData} />
-            </div>
-          </div>
 
-          {/* Row 3: Action Items + Top Expenses + Account Balances */}
-          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Right col · rows 1–3 — Account Balances fills the combined left-stack height */}
+            <div style={{
+              gridRow: 'span 3',
+              minHeight: 0,           // Prevents this item from inflating grid row heights
+              display: 'flex',
+              flexDirection: 'column',
+            }}>
+              <AccountBalancesCard accounts={accountSummaries} />
+            </div>
+
+            {/* Left col · row 2 — Action Items */}
+            <div style={{ alignSelf: 'start' }}>
               <ActionItemsCard
                 uncategorized={uncategorized}
                 needsReview={needsReview}
                 transfersCount={transfersCount}
               />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+
+            {/* Left col · row 3 — Top Expenses */}
+            <div style={{ alignSelf: 'start' }}>
               <TopExpensesCard topExpenses={topExpenses} totalExpenses={expenses} />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <AccountBalancesCard accounts={accountSummaries} />
-            </div>
+
           </div>
 
           {/* Row 4: Recent Transactions */}

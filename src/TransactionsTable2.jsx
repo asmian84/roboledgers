@@ -1614,6 +1614,7 @@ export function TransactionsTable({
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: activePanel ? 'row' : 'column',
+                minWidth: 0,  // Prevent outer container from expanding beyond its flex allocation
                 outline: 'none',
             }}
         >
@@ -1622,11 +1623,13 @@ export function TransactionsTable({
                 ref={parentRef}
                 style={{
                     flex: 1,
+                    minWidth: 0,  // Critical: allows flex child to shrink below content width,
+                                  // so sticky right-0 balance column is relative to this container's
+                                  // actual right edge (= panel left edge), not an oversized content width
                     height: '100%',
                     overflowY: 'auto',
                     overflowX: 'hidden',
                     position: 'relative',
-                    maxWidth: activePanel ? 'calc(100vw - 370px)' : '100%'  // Prevent bleeding into panel
                 }}
             >
                 {/* ── Bulk Action Bar ─────────────────────────────────────────── */}
