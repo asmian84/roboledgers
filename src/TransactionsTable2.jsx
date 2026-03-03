@@ -634,7 +634,6 @@ const columns = [
         header: 'REF #',
         size: 90,
         minSize: 80,
-        maxSize: 110,
         cell: info => {
             const row = info.row.original;
             const account = window.RoboLedger?.Accounts?.get(row.account_id);
@@ -664,7 +663,6 @@ const columns = [
         header: 'DATE',
         size: 95,
         minSize: 90,
-        maxSize: 105,
         enableColumnFilter: true,
         filterFn: 'includesString',
         cell: info => (
@@ -698,7 +696,6 @@ const columns = [
         header: 'DEBIT',
         size: 85,
         minSize: 75,
-        maxSize: 100,
         enableColumnFilter: true,
         filterFn: 'auto',
         cell: info => {
@@ -734,7 +731,6 @@ const columns = [
         header: 'CREDIT',
         size: 85,
         minSize: 75,
-        maxSize: 100,
         enableColumnFilter: true,
         filterFn: 'auto',
         cell: info => {
@@ -827,7 +823,6 @@ const columns = [
         header: 'BALANCE',
         size: 85,  // Wide enough for full balance numbers
         minSize: 80,
-        maxSize: 100,
         cell: info => {
             // Get the sorted rows to calculate running balance
             const sortedRows = info.table.getRowModel().rows;
@@ -877,7 +872,6 @@ const columns = [
         header: 'GST/HST',
         size: 110,      // Increased to fit toggle + amount
         minSize: 100,
-        maxSize: 130,
         cell: info => {
             const val = info.getValue();
             const row = info.row.original;
