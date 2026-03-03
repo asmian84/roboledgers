@@ -1422,20 +1422,19 @@ export function TransactionsTable({
      */
     const handleBulkSetCOA = (code) => {
         if (!code) return;
-        const selectedTxIds = Object.keys(rowSelection);
-        if (selectedTxIds.length === 0) return;
+        // Use getSelectedRowModel() so we always get row.original.tx_id regardless
+        // of what getRowId resolved to (avoids ref-vs-tx_id key mismatch).
+        // Use batchUpdateCategories so the entire batch does ONE localStorage save
+        // instead of N saves (critical for 500+ row selections).
+        const selectedRows = table.getSelectedRowModel().rows;
+        if (selectedRows.length === 0) return;
 
-        let updated = 0;
-        selectedTxIds.forEach(txId => {
-            try {
-                window.RoboLedger?.Ledger?.updateCategory?.(txId, code);
-                updated++;
-            } catch (e) {
-                console.warn('[BULK_COA] Failed for', txId, e);
-            }
-        });
+        const tx_ids = selectedRows
+            .map(r => r.original.tx_id)
+            .filter(Boolean);
 
-        console.log(`[BULK_COA] Set ${code} on ${updated}/${selectedTxIds.length} transactions`);
+        const updated = window.RoboLedger?.Ledger?.batchUpdateCategories?.(tx_ids, code) ?? 0;
+
         if (window.showToast) window.showToast(`Categorized ${updated} transaction${updated !== 1 ? 's' : ''} → ${code}`, 'success');
 
         // Close picker, clear selection, refresh
@@ -1451,11 +1450,13 @@ export function TransactionsTable({
     const handleBulkRename = () => {
         const newName = bulkRenameValue.trim();
         if (!newName) return;
-        const selectedTxIds = Object.keys(rowSelection);
-        if (selectedTxIds.length === 0) return;
+        const selectedRows = table.getSelectedRowModel().rows;
+        if (selectedRows.length === 0) return;
 
         let renamed = 0;
-        selectedTxIds.forEach(txId => {
+        selectedRows.forEach(row => {
+            const txId = row.original.tx_id;
+            if (!txId) return;
             try {
                 // updateDescription writes to edit_history[] for audit trail
                 const ok = window.RoboLedger?.Ledger?.updateDescription?.(txId, newName);
@@ -1465,7 +1466,7 @@ export function TransactionsTable({
             }
         });
 
-        console.log(`[BULK_RENAME] Renamed ${renamed}/${selectedTxIds.length} to "${newName}"`);
+        console.log(`[BULK_RENAME] Renamed ${renamed}/${selectedRows.length} to "${newName}"`);
         if (window.showToast) window.showToast(`Renamed ${renamed} transaction${renamed !== 1 ? 's' : ''}`, 'success');
 
         // Close rename, clear, refresh
@@ -1480,18 +1481,19 @@ export function TransactionsTable({
      * BULK DELETE: Remove selected transactions from ledger
      */
     const handleBulkDelete = () => {
-        const selectedTxIds = Object.keys(rowSelection);
-        if (selectedTxIds.length === 0) return;
+        const selectedRows = table.getSelectedRowModel().rows;
+        if (selectedRows.length === 0) return;
 
-        // Delete each transaction
+        // Delete each transaction using the actual tx_id from original data
         let deleted = 0;
-        selectedTxIds.forEach(txId => {
-            if (window.RoboLedger?.Ledger?.deleteTransaction?.(txId)) {
+        selectedRows.forEach(row => {
+            const txId = row.original.tx_id;
+            if (txId && window.RoboLedger?.Ledger?.deleteTransaction?.(txId)) {
                 deleted++;
             }
         });
 
-        console.log(`[BULK_DELETE] Deleted ${deleted}/${selectedTxIds.length} transactions`);
+        console.log(`[BULK_DELETE] Deleted ${deleted}/${selectedRows.length} transactions`);
         if (window.showToast) window.showToast(`Deleted ${deleted} transaction${deleted !== 1 ? 's' : ''}`, 'success');
 
         // Clear selection
@@ -1581,7 +1583,7 @@ export function TransactionsTable({
         columnResizeMode: 'onChange',
         enableRowSelection: true,
         enableMultiRowSelection: true,
-        getRowId: (row) => row.id || String(row.ref),
+        getRowId: (row) => row.tx_id || row.id || String(row.ref), // tx_id first — it's the ledger store key
         meta: {
             setData, // Enable GST toggle to update data
         },

@@ -1535,6 +1535,49 @@ window.RoboLedger = (function () {
             return false;
         },
 
+        /**
+         * BATCH CATEGORIZE — update many transactions in one pass, single save().
+         * Calling updateCategory() N times = N localStorage serialisations.
+         * This does all mutations first, then one save(), and one learning capture per tx.
+         * @param {string[]} tx_ids  Array of tx_id UUIDs
+         * @param {string}   category_code  COA code to apply
+         * @returns {number} count of successfully updated transactions
+         */
+        batchUpdateCategories: function (tx_ids, category_code) {
+            if (!tx_ids || tx_ids.length === 0 || !category_code) return 0;
+            const account  = COA.get(category_code);
+            const cat_name = account ? account.name : null;
+            let updated    = 0;
+            let locked     = 0;
+
+            for (const tx_id of tx_ids) {
+                const tx = state.transactions[tx_id];
+                if (!tx) { console.warn('[BATCH_COA] tx not found:', tx_id); continue; }
+                if (_isInLockedPeriod(tx)) { locked++; continue; }
+
+                tx.category          = category_code;
+                tx.category_code     = category_code;
+                if (cat_name) tx.category_name = cat_name;
+                tx.status            = 'user_categorized';
+                tx.confidence        = 1.0;
+                tx.category_confidence = 1.0;
+                tx.category_source   = 'user';
+
+                // Continuous learning — one entry per distinct description
+                if (window.RoboLedger?.RuleEngine?.userCorrections) {
+                    window.RoboLedger.RuleEngine.userCorrections.addCorrection(
+                        tx.description || tx.raw_description || '', category_code
+                    );
+                }
+                updated++;
+            }
+
+            if (updated > 0) save(); // ONE save for the entire batch
+            if (locked > 0) console.warn(`[BATCH_COA] ${locked} tx(s) skipped — period locked`);
+            console.log(`[BATCH_COA] ${updated}/${tx_ids.length} → ${category_code}`);
+            return updated;
+        },
+
         updateTransaction: function (tx_id, updates) {
             const tx = state.transactions[tx_id];
             if (tx) {
