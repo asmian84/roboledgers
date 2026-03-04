@@ -1,7 +1,26 @@
 /**
- * SupabaseSync — persists client metadata, ledger data, and import logs to Supabase.
+ * SupabaseSync — persists firms, client metadata, ledger data, and import logs to Supabase.
  *
- * Requires three tables in your Supabase project (run the SQL migration below):
+ * Requires FOUR tables in your Supabase project (run the SQL migration below):
+ *
+ *   -- 0. Firms / Accountant practices (one row per firm)
+ *   CREATE TABLE IF NOT EXISTS firms (
+ *     id              TEXT        NOT NULL,
+ *     user_id         UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+ *     name            TEXT        NOT NULL,
+ *     owner_name      TEXT,
+ *     email           TEXT,
+ *     phone           TEXT,
+ *     province        TEXT,
+ *     license_number  TEXT,
+ *     color           TEXT        DEFAULT '#8b5cf6',
+ *     created_at      TIMESTAMPTZ DEFAULT NOW(),
+ *     updated_at      TIMESTAMPTZ DEFAULT NOW(),
+ *     PRIMARY KEY (id, user_id)
+ *   );
+ *   ALTER TABLE firms ENABLE ROW LEVEL SECURITY;
+ *   CREATE POLICY "Users manage own firms" ON firms
+ *     FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
  *
  *   -- 3. Import / parser logs (one row per file upload attempt)
  *   CREATE TABLE IF NOT EXISTS import_logs (
@@ -87,6 +106,74 @@ const SupabaseSync = {
             const { data: { user } } = await supabase.auth.getUser();
             return user || null;
         } catch { return null; }
+    },
+
+    // ════════════════════════════════════════════════════════════════════════
+    // FIRMS (ACCOUNTANT PRACTICES)
+    // ════════════════════════════════════════════════════════════════════════
+
+    /** Upsert a firm row. Called after every create/edit. */
+    async saveAccountant(accountant) {
+        const user = await this._getUser();
+        if (!user || !accountant?.id) return;
+
+        const { error } = await supabase.from('firms').upsert({
+            id:             accountant.id,
+            user_id:        user.id,
+            name:           accountant.name,
+            owner_name:     accountant.ownerName     || null,
+            email:          accountant.email         || null,
+            phone:          accountant.phone         || null,
+            province:       accountant.province      || null,
+            license_number: accountant.licenseNumber || null,
+            color:          accountant.color         || '#8b5cf6',
+            updated_at:     new Date().toISOString(),
+        }, { onConflict: 'id,user_id' });
+
+        if (error) console.error('[SUPABASE_SYNC] saveAccountant error:', error.message);
+        else       console.log('[SUPABASE_SYNC] Firm saved to cloud:', accountant.id, accountant.name);
+    },
+
+    /** Fetch all firms for the current user from Supabase. */
+    async loadAccountants() {
+        const user = await this._getUser();
+        if (!user) return null;
+
+        const { data, error } = await supabase
+            .from('firms')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('[SUPABASE_SYNC] loadAccountants error:', error.message);
+            return null;
+        }
+
+        return (data || []).map(row => ({
+            id:            row.id,
+            name:          row.name,
+            ownerName:     row.owner_name     || '',
+            email:         row.email          || '',
+            phone:         row.phone          || '',
+            province:      row.province       || '',
+            licenseNumber: row.license_number || '',
+            color:         row.color          || '#8b5cf6',
+            created:       row.created_at,
+            lastActive:    row.updated_at,
+        }));
+    },
+
+    /** Delete a firm from Supabase. Clients must be reassigned before deletion. */
+    async deleteAccountant(accountantId) {
+        const user = await this._getUser();
+        if (!user || !accountantId) return;
+
+        const { error } = await supabase.from('firms')
+            .delete().eq('id', accountantId).eq('user_id', user.id);
+
+        if (error) console.error('[SUPABASE_SYNC] deleteAccountant error:', error.message);
+        else       console.log('[SUPABASE_SYNC] Firm deleted from cloud:', accountantId);
     },
 
     // ════════════════════════════════════════════════════════════════════════

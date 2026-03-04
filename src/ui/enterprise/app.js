@@ -4123,6 +4123,8 @@
         UI_STATE.activeAccountantName = name;
         window.updateAccountantSwitcherUI(accountants[idx]);
       }
+      _ssSet('roboledger_accountants', accountants);
+      window.SupabaseSync?.saveAccountant(accountants[idx]); // ← cloud sync
     } else {
       const nextNum = accountants.length + 1;
       const newAcc  = {
@@ -4138,12 +4140,13 @@
         lastActive:    now,
       };
       accountants.push(newAcc);
+      _ssSet('roboledger_accountants', accountants);
+      window.SupabaseSync?.saveAccountant(newAcc); // ← cloud sync
       console.log(`[ACCOUNTANT] Created: ${newAcc.name} (${newAcc.id})`);
     }
 
-    _ssSet('roboledger_accountants', accountants);
     document.getElementById('create-accountant-modal-overlay')?.remove();
-    _drawerState.selectedFirmId = null;
+    _drawerState.selectedFirmId = existingId || accountants[accountants.length - 1]?.id || null;
     setTimeout(() => window.openContextDrawer(), 50);
   };
 
@@ -4206,18 +4209,20 @@
 
     if (!confirm(msg)) return;
 
-    // Cascade: delete all owned clients' ledger data
+    // Cascade: delete all owned clients' ledger data (local + cloud)
     ownedClients.forEach(c => {
       _ssRemove('roboledger_v5_data_' + c.id);
+      window.SupabaseSync?.deleteClient(c.id); // ← cloud cascade
     });
 
     // Remove clients from registry
     const remainingClients = clients.filter(c => c.accountantId !== accountantId);
     _ssSet('roboledger_clients', remainingClients);
 
-    // Remove accountant
+    // Remove accountant (local + cloud)
     const remaining = accountants.filter(a => a.id !== accountantId);
     _ssSet('roboledger_accountants', remaining);
+    window.SupabaseSync?.deleteAccountant(accountantId); // ← cloud sync
 
     // Clear active state if this was the active accountant
     if (UI_STATE.activeAccountantId === accountantId) {
