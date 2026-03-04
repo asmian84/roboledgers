@@ -21,6 +21,10 @@ RBC VISA FORMAT:
         const lines = statementText.split('\n');
         const transactions = [];
 
+        // Diagnostic: log first 20 non-empty lines so we can see the raw PDF text layout
+        const sampleLines = lines.filter(l => l.trim()).slice(0, 20);
+        console.log('[PARSER] RBC Visa — first 20 lines:', sampleLines);
+
         // EXTRACT METADATA - Full masked card number (IIN standard: 16 digits for Visa)
         // RBC format: Can vary, try to extract full 16-digit masked format
         let accountNumber = 'XXXX XXXX XXXX XXXX'; // Default fallback
@@ -66,62 +70,96 @@ RBC VISA FORMAT:
         const dateRegex = /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{1,2})/i;
         const monthMap = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
+        // Two parsing modes supported:
+        // MODE A (single-line): "JAN 05 PAYMENT - THANK YOU   1,000.00   5,000.00" — date + desc + amount on one line
+        // MODE B (column-separated): PDF.js extracts tabular PDFs one column at a time, so the same
+        //   transaction becomes: "JAN 05" / "PAYMENT - THANK YOU" / "1,000.00" on three separate lines.
+        // We detect which mode we're in after the first few lines and apply accordingly.
+        // Both modes are handled simultaneously via pendingDate + pendingDescription state.
+
+        let pendingDate        = null;  // ISO date from a date-only line (MODE B)
         let pendingDescription = '';
-        let pendingRawLines = [];
-        let pendingAuditLines = [];
+        let pendingRawLines    = [];
+        let pendingAuditLines  = [];
+
+        // Skip patterns — lines that are never transactions
+        const SKIP_RE = /Opening\s+Balance|Previous\s+Balance|Credit\s+Limit|Minimum\s+Payment|Payment\s+Due\s+Date|Statement\s+Date|Account\s+Number|Page\s+\d|^\d+\s*$|Interest\s+Charged|Annual\s+Fee\s+Summary/i;
+
+        const _flush = () => {
+            pendingDate        = null;
+            pendingDescription = '';
+            pendingRawLines    = [];
+            pendingAuditLines  = [];
+        };
 
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
+            const line    = lines[i];
             const trimmed = line.trim();
-            if (!trimmed || trimmed.match(/Opening Balance|Previous Balance|Page \d/i)) continue;
+            if (!trimmed || SKIP_RE.test(trimmed)) continue;
 
-            // Check if line contains a date AND an amount (complete transaction line)
             const dateMatch = trimmed.match(dateRegex);
             const hasAmount = /[\d,]+\.\d{2}/.test(trimmed);
+            // A "pure amount" line has an amount but NO month-name date token
+            const isPureAmount = hasAmount && !dateMatch;
 
+            // ── CASE 1: Line has BOTH date AND amount  (MODE A — single-line format) ──
             if (dateMatch && hasAmount) {
-                // Extract date from the match
-                const isoDate = `${currentYear}-${monthMap[dateMatch[1].toLowerCase()]}-${dateMatch[2].padStart(2, '0')}`;
-
-                // Extract transaction from full line (date is part of description)
+                // Flush any lingering column-separated pending first
+                _flush();
+                const isoDate   = `${currentYear}-${monthMap[dateMatch[1].toLowerCase()]}-${dateMatch[2].padStart(2, '0')}`;
                 const extracted = this.extractTransaction(trimmed, isoDate, line);
                 if (extracted && extracted.amount) {
-                    if (pendingDescription) {
-                        extracted.description = pendingDescription + ' ' + extracted.description;
-                        extracted.rawText = [...pendingRawLines, extracted.rawText].join('\n');
-                        if (extracted.audit) {
-                            extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, extracted.audit]);
-                        }
-                    }
                     transactions.push(extracted);
-                    pendingDescription = '';
-                    pendingRawLines = [];
-                    pendingAuditLines = [];
                 } else {
-                    // Start of multi-line
+                    // Amount couldn't be extracted — treat as pending start
+                    pendingDate        = isoDate;
                     pendingDescription = trimmed;
-                    pendingRawLines = [line];
-                    pendingAuditLines = [this.getSpatialMetadata(line)];
+                    pendingRawLines    = [line];
+                    pendingAuditLines  = [this.getSpatialMetadata(line)];
                 }
-            } else if (pendingDescription && trimmed.length > 3) {
-                // Check if this line has an amount (sometimes lines wrap and amount is on next line)
-                const extracted = this.extractTransaction(trimmed, '', line);
-                if (extracted && extracted.amount) {
-                    extracted.date = transactions[transactions.length - 1]?.date || `${currentYear}-01-01`;
-                    extracted.description = pendingDescription + ' ' + extracted.description;
-                    extracted.rawText = [...pendingRawLines, line].join('\n');
-                    extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, this.getSpatialMetadata(line)]);
-                    transactions.push(extracted);
-                    pendingDescription = '';
-                    pendingRawLines = [];
-                    pendingAuditLines = [];
-                } else {
-                    pendingDescription += ' ' + trimmed;
+                continue;
+            }
+
+            // ── CASE 2: Line has date but NO amount  (MODE B — date-only column) ──
+            if (dateMatch && !hasAmount) {
+                // Close any prior pending (shouldn't happen often, but guard it)
+                _flush();
+                const isoDate      = `${currentYear}-${monthMap[dateMatch[1].toLowerCase()]}-${dateMatch[2].padStart(2, '0')}`;
+                const afterDate    = trimmed.replace(dateRegex, '').trim();
+                pendingDate        = isoDate;
+                pendingDescription = afterDate; // text on same line after the date (may be empty)
+                pendingRawLines    = [line];
+                pendingAuditLines  = [this.getSpatialMetadata(line)];
+                continue;
+            }
+
+            // ── CASE 3: No date, but we have a pending entry ──
+            if (pendingDate || pendingDescription) {
+                if (isPureAmount) {
+                    // Amount line → finalise the pending transaction
+                    const combinedText = (pendingDescription ? pendingDescription + ' ' : '') + trimmed;
+                    const isoDate      = pendingDate || (transactions[transactions.length - 1]?.date) || `${currentYear}-01-01`;
+                    const extracted    = this.extractTransaction(combinedText, isoDate, line);
+                    if (extracted && extracted.amount) {
+                        extracted.date    = isoDate;
+                        // extracted.description already contains cleaned combinedText; don't override
+                        extracted.rawText = [...pendingRawLines, line].join('\n');
+                        if (extracted.audit && pendingAuditLines.length) {
+                            extracted.audit = this.mergeAuditMetadata([...pendingAuditLines, this.getSpatialMetadata(line)]);
+                        }
+                        transactions.push(extracted);
+                    }
+                    _flush();
+                } else if (trimmed.length > 2) {
+                    // Description continuation line
+                    pendingDescription += (pendingDescription ? ' ' : '') + trimmed;
                     pendingRawLines.push(line);
                     pendingAuditLines.push(this.getSpatialMetadata(line));
                 }
             }
         }
+
+        console.log(`[PARSER] RBC Visa parsed ${transactions.length} transactions`);
         return { transactions, metadata: parsedMetadata, openingBalance, closingBalance, statementPeriod };
     }
 

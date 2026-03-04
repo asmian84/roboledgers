@@ -118,7 +118,8 @@
     if (validFiles.length > 0) {
       // Sort files by path so statements from the same account are grouped
       validFiles.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
-      window.handleFilesSelected(validFiles);
+      // Show subfolder selector if there are multiple subfolders to choose from
+      window._showFolderSelectionModal(validFiles);
     } else {
       console.warn('[Upload] No PDF or CSV files found in the selected folder.');
     }
@@ -4268,6 +4269,9 @@
       html += `
       <div class="drawer-firm-item ${unassignedSelected ? 'selected' : ''}"
            onclick="window._drawerSelectFirm(null)"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="window._drawerDrop(event, null)"
            style="${unassignedSelected ? 'border-left:3px solid #64748b;background:#f1f5f9;' : ''}">
         <div class="drawer-firm-avatar" style="background:#64748b;font-size:11px;">
           <i class="ph ph-folder-dashed"></i>
@@ -4285,6 +4289,9 @@
       html += `
         <div class="drawer-firm-item ${sel ? 'selected' : ''}"
              onclick="window._drawerSelectFirm('${acc.id}')"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="window._drawerDrop(event, '${acc.id}')"
              style="${sel ? `border-left:3px solid ${color};background:${color}18;` : ''}display:flex;align-items:center;gap:8px;">
           <div class="drawer-firm-avatar" style="background:${color};">${initials}</div>
           <span class="drawer-firm-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${sel ? `color:${color};` : ''}">${acc.name}</span>
@@ -4335,6 +4342,7 @@
       <div style="padding:14px 18px 10px;border-bottom:1px solid #f1f5f9;flex-shrink:0;">
         <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;margin-bottom:2px;">CLIENTS</div>
         <div style="font-size:0.88rem;font-weight:700;color:#0f172a;">${firmName}</div>
+        <div class="drawer-drag-hint"><i class="ph ph-arrow-left" style="font-size:9px;"></i> drag a client to a firm on the left to reassign</div>
       </div>`;
 
     let body = '';
@@ -4357,6 +4365,9 @@
         })();
         return `
           <div class="drawer-client-item ${isActive ? 'active-client' : ''}"
+               draggable="true"
+               ondragstart="window._drawerDragStart(event,'${client.id}')"
+               ondragend="window._drawerDragEnd(event)"
                onclick="window._drawerPickClient('${accountantId || ''}','${client.id}')">
             <div class="drawer-client-avatar" style="background:${color};">${initials}</div>
             <div style="flex:1;min-width:0;">
@@ -4397,6 +4408,62 @@
     _drawerState.selectedFirmId = accountantId;
     window._renderDrawerLeft();
     window._renderDrawerRight(accountantId);
+  };
+
+  // ── Drag-and-drop: move client between firms ──────────────────────────────
+  let _drawerDragClientId = null;
+
+  window._drawerDragStart = function(event, clientId) {
+    _drawerDragClientId = clientId;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', clientId);
+    // Dim the card being dragged
+    requestAnimationFrame(() => { event.currentTarget.classList.add('dragging'); });
+  };
+
+  window._drawerDragEnd = function(event) {
+    if (event.currentTarget) event.currentTarget.classList.remove('dragging');
+    // Clean up any lingering drag-over highlights
+    document.querySelectorAll('.drawer-firm-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    _drawerDragClientId = null;
+  };
+
+  window._drawerDrop = function(event, targetFirmId) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.classList.remove('drag-over');
+
+    const clientId = _drawerDragClientId || event.dataTransfer.getData('text/plain');
+    if (!clientId) return;
+
+    const clients = _ssGet('roboledger_clients') || [];
+    const idx = clients.findIndex(c => c.id === clientId);
+    if (idx === -1) return;
+
+    const client = clients[idx];
+    const prevFirmId = client.accountantId || null;
+    const newFirmId  = targetFirmId || null;
+    if (prevFirmId === newFirmId) return; // already in this firm
+
+    // Reassign
+    client.accountantId = newFirmId;
+    client.lastActive   = new Date().toISOString().split('T')[0];
+    clients[idx] = client;
+    _ssSet('roboledger_clients', clients);
+
+    // Sync to cloud
+    window.SupabaseSync?.saveClient(client);
+
+    // Visual flash on target firm row
+    event.currentTarget.style.transition = 'background 0.3s';
+    event.currentTarget.style.background = '#d1fae5';
+    setTimeout(() => { event.currentTarget.style.background = ''; }, 600);
+
+    // Re-render both panels — keep current right-panel showing the source firm
+    window._renderDrawerLeft();
+    window._renderDrawerRight(_drawerState.selectedFirmId);
+
+    console.log(`[DRAWER] Client ${clientId} moved from ${prevFirmId || 'unassigned'} → ${newFirmId || 'unassigned'}`);
   };
 
   window._drawerPickClient = function(accountantId, clientId) {
@@ -7230,27 +7297,174 @@ window.handleMainUpload = function (input) {
     console.log(`[Upload] Processing ${filteredCount} ${fileTypeName}${filteredCount > 1 ? 's' : ''}`);
   }
 
-  // Show subfolder summary for folder mode
+  // In folder mode: show subfolder selector instead of processing immediately
   if (isFolderMode && filteredFiles.length > 0 && filteredFiles[0].webkitRelativePath) {
-    const folders = new Set();
-    filteredFiles.forEach(f => {
-      const pathParts = f.webkitRelativePath.split('/');
-      if (pathParts.length > 1) {
-        folders.add(pathParts[pathParts.length - 2] || pathParts[0]);
-      }
-    });
-
-    if (folders.size > 0) {
-      const folderList = Array.from(folders).slice(0, 5).join(', ');
-      const moreText = folders.size > 5 ? (' and ' + (folders.size - 5) + ' more') : '';
-      const typeName = fileType === 'pdf' ? 'PDF' : fileType === 'csv' ? 'CSV/XLSX' : '';
-      // Removed modal alert - info logged to console instead
-      // alert('Found ' + filteredFiles.length + ' ' + typeName + ' files across ' + folders.size + ' subfolders:\n\n' + folderList + moreText + '\n\nReady to process.');
-    }
+    filteredFiles.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+    window._showFolderSelectionModal(filteredFiles);
+    input.value = '';
+    return;
   }
 
   window.handleFilesSelected(filteredFiles);
   input.value = '';
+};
+
+// ── Folder Selection Modal ─────────────────────────────────────────────────
+// Shows when a folder is picked via the folder input or drag-drop.
+// Groups files by their immediate parent subfolder and lets the user
+// check/uncheck which subfolders to include before processing.
+window._showFolderSelectionModal = function(validFiles) {
+  // Group files by their immediate subfolder (level below root)
+  const groups = {};  // key → { label, files }
+  const rootName = validFiles[0]?.webkitRelativePath?.split('/')[0] || 'Selected Folder';
+
+  validFiles.forEach(f => {
+    const parts = (f.webkitRelativePath || f.name).split('/');
+    let key, label;
+    if (parts.length >= 3) {
+      // root/subfolder/…/file  → group by first subfolder
+      key   = parts[1];
+      label = parts[1];
+    } else {
+      // root/file  → root group
+      key   = '__root__';
+      label = rootName + ' (root)';
+    }
+    if (!groups[key]) groups[key] = { label, files: [] };
+    groups[key].files.push(f);
+  });
+
+  const keys = Object.keys(groups).sort((a, b) => {
+    if (a === '__root__') return -1;
+    if (b === '__root__') return 1;
+    return a.localeCompare(b);
+  });
+
+  // If only one group — skip the modal and process directly
+  if (keys.length <= 1) {
+    window.handleFilesSelected(validFiles);
+    return;
+  }
+
+  // Total file count helper (updates as checkboxes change)
+  function _countSelected() {
+    let n = 0;
+    document.querySelectorAll('#folder-select-modal input[type="checkbox"]').forEach(cb => {
+      if (cb.checked) n += parseInt(cb.dataset.fileCount || 0, 10);
+    });
+    return n;
+  }
+  function _updateBtn() {
+    const n   = _countSelected();
+    const btn = document.getElementById('fsm-process-btn');
+    if (btn) {
+      btn.textContent = n > 0
+        ? `Process ${n} file${n !== 1 ? 's' : ''}`
+        : 'Select at least one folder';
+      btn.disabled = n === 0;
+      btn.style.opacity = n === 0 ? '0.45' : '1';
+    }
+  }
+
+  const rowsHtml = keys.map(key => {
+    const g        = groups[key];
+    const pdfCnt   = g.files.filter(f => /\.pdf$/i.test(f.name)).length;
+    const csvCnt   = g.files.filter(f => /\.(csv|xlsx?)$/i.test(f.name)).length;
+    const typeTxt  = [pdfCnt && `${pdfCnt} PDF`, csvCnt && `${csvCnt} CSV/XLSX`].filter(Boolean).join(', ');
+    const icon     = key === '__root__' ? 'ph-folder' : 'ph-folder-simple';
+    const label    = key === '__root__' ? g.label : `<i class="ph ${icon}" style="color:#3b82f6;margin-right:5px;"></i>${g.label}`;
+    return `
+      <div class="fsm-folder-row selected" onclick="
+          const cb=this.querySelector('input[type=checkbox]');
+          cb.checked=!cb.checked;
+          this.classList.toggle('selected',cb.checked);
+          window._fsmUpdateBtn();">
+        <input type="checkbox" checked data-folder-key="${key}" data-file-count="${g.files.length}"
+               onclick="event.stopPropagation();this.closest('.fsm-folder-row').classList.toggle('selected',this.checked);window._fsmUpdateBtn();">
+        <div style="flex:1;min-width:0;">
+          <div class="fsm-folder-name">${label}</div>
+          <div class="fsm-folder-meta">${typeTxt} · ${g.files.length} file${g.files.length !== 1 ? 's' : ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const totalFiles = validFiles.length;
+  const overlay = document.createElement('div');
+  overlay.id = 'folder-select-overlay';
+  overlay.innerHTML = `
+    <div id="folder-select-modal">
+      <div class="fsm-header">
+        <div class="fsm-title">
+          <i class="ph ph-folders" style="color:#3b82f6;font-size:1.1rem;"></i>
+          Select Folders to Import
+        </div>
+        <div class="fsm-subtitle">
+          <strong>${rootName}</strong> · ${totalFiles} total file${totalFiles !== 1 ? 's' : ''} in ${keys.length} folder${keys.length !== 1 ? 's' : ''}
+        </div>
+      </div>
+      <div class="fsm-body">
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;">
+          <button onclick="document.querySelectorAll('#folder-select-modal input[type=checkbox]').forEach(cb=>{cb.checked=true;cb.closest('.fsm-folder-row').classList.add('selected');});window._fsmUpdateBtn();"
+                  style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid #e2e8f0;background:transparent;cursor:pointer;color:#64748b;font-weight:600;">Select All</button>
+          <button onclick="document.querySelectorAll('#folder-select-modal input[type=checkbox]').forEach(cb=>{cb.checked=false;cb.closest('.fsm-folder-row').classList.remove('selected');});window._fsmUpdateBtn();"
+                  style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid #e2e8f0;background:transparent;cursor:pointer;color:#64748b;font-weight:600;">Deselect All</button>
+        </div>
+        ${rowsHtml}
+      </div>
+      <div class="fsm-footer">
+        <button onclick="document.getElementById('folder-select-overlay')?.remove();"
+                style="padding:9px 20px;border-radius:8px;border:1px solid #e2e8f0;background:transparent;cursor:pointer;font-size:0.875rem;font-weight:600;color:#64748b;">
+          Cancel
+        </button>
+        <button id="fsm-process-btn"
+                onclick="window._confirmFolderSelection();"
+                style="padding:9px 22px;border-radius:8px;border:none;background:#3b82f6;color:#fff;cursor:pointer;font-size:0.875rem;font-weight:700;">
+          Process ${totalFiles} files
+        </button>
+      </div>
+    </div>`;
+
+  // Close on backdrop click
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  // Store file groups for the confirm handler
+  window._fsmGroups   = groups;
+  window._fsmAllFiles = validFiles;
+
+  // Expose update helper globally (called from inline onclick)
+  window._fsmUpdateBtn = _updateBtn;
+};
+
+window._confirmFolderSelection = function() {
+  const selectedKeys = new Set();
+  document.querySelectorAll('#folder-select-modal input[type="checkbox"]:checked').forEach(cb => {
+    selectedKeys.add(cb.dataset.folderKey);
+  });
+
+  if (selectedKeys.size === 0) return;
+
+  const groups    = window._fsmGroups   || {};
+  const allFiles  = window._fsmAllFiles || [];
+
+  // Collect files from checked groups
+  const selectedFiles = allFiles.filter(f => {
+    const parts = (f.webkitRelativePath || f.name).split('/');
+    const key   = parts.length >= 3 ? parts[1] : '__root__';
+    return selectedKeys.has(key);
+  });
+
+  document.getElementById('folder-select-overlay')?.remove();
+
+  console.log(`[FOLDER] Processing ${selectedFiles.length} files from ${selectedKeys.size} selected folder${selectedKeys.size !== 1 ? 's' : ''}`);
+
+  if (selectedFiles.length > 0) {
+    window.handleFilesSelected(selectedFiles);
+  }
+
+  // Cleanup
+  delete window._fsmGroups;
+  delete window._fsmAllFiles;
 };
 
 // Debug: Show account statistics
