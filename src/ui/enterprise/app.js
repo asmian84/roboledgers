@@ -4275,6 +4275,12 @@
       });
     }
 
+    // Default to first firm if no context set (no "unassigned" resting state)
+    if (!_drawerState.selectedFirmId) {
+      const firstFirm = (_ssGet('roboledger_accountants') || [])[0];
+      if (firstFirm) _drawerState.selectedFirmId = firstFirm.id;
+    }
+
     // Render panels then open
     window._renderDrawerLeft();
     window._renderDrawerRight(_drawerState.selectedFirmId);
@@ -4297,27 +4303,21 @@
     const accountants = _ssGet('roboledger_accountants') || [];
     const clients     = _ssGet('roboledger_clients') || [];
 
-    const unassignedSelected = !_drawerState.selectedFirmId;
-    const unassignedCount    = clients.filter(c => !c.accountantId).length;
+    const unassignedCount = clients.filter(c => !c.accountantId).length;
 
     let html = `
       <div style="padding:10px 14px 6px;font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;">FIRMS</div>`;
 
-    if (unassignedCount > 0 || unassignedSelected) {
+    // Warning banner for legacy unassigned clients — not a selectable bucket, just a nudge
+    if (unassignedCount > 0) {
       html += `
-      <div class="drawer-firm-item ${unassignedSelected ? 'selected' : ''}"
-           onclick="window._drawerSelectFirm(null)"
-           ondragover="event.preventDefault();this.classList.add('drag-over')"
-           ondragleave="this.classList.remove('drag-over')"
-           ondrop="window._drawerDrop(event, null)"
-           style="${unassignedSelected ? 'border-left:3px solid #64748b;background:#f1f5f9;' : ''}">
-        <div class="drawer-firm-avatar" style="background:#64748b;font-size:11px;">
-          <i class="ph ph-folder-dashed"></i>
-        </div>
-        <span class="drawer-firm-name" style="${unassignedSelected ? 'color:#475569;' : ''}">Unassigned</span>
-        <span class="drawer-firm-count">${unassignedCount}</span>
+      <div style="margin:6px 10px 4px;padding:8px 12px;border-radius:8px;background:#fef3c7;border:1px solid #f59e0b;display:flex;align-items:center;gap:8px;cursor:pointer;"
+           onclick="window._drawerSelectFirm('__unassigned__')"
+           title="Click to see unassigned clients and assign them to a firm">
+        <i class="ph ph-warning" style="color:#d97706;font-size:15px;flex-shrink:0;"></i>
+        <span style="font-size:12px;font-weight:600;color:#92400e;flex:1;">${unassignedCount} client${unassignedCount !== 1 ? 's' : ''} need a firm</span>
+        <span style="font-size:11px;color:#d97706;font-weight:600;">Fix →</span>
       </div>`;
-    }
 
     accountants.forEach(acc => {
       const count    = clients.filter(c => c.accountantId === acc.id).length;
@@ -4367,20 +4367,25 @@
     if (!container) return;
     const allClients  = _ssGet('roboledger_clients') || [];
     const accountants = _ssGet('roboledger_accountants') || [];
-    const acc         = accountantId ? accountants.find(a => a.id === accountantId) : null;
 
-    const filtered = accountantId
-      ? allClients.filter(c => c.accountantId === accountantId)
-      : allClients.filter(c => !c.accountantId);
+    // '__unassigned__' is the sentinel for the "needs a firm" warning panel
+    const isUnassignedView = accountantId === '__unassigned__';
+    const acc = (!isUnassignedView && accountantId) ? accountants.find(a => a.id === accountantId) : null;
 
-    const firmName = acc ? acc.name : 'Unassigned';
-    const firmColor = acc?.color || '#6d28d9';
+    const filtered = isUnassignedView
+      ? allClients.filter(c => !c.accountantId)
+      : accountantId
+        ? allClients.filter(c => c.accountantId === accountantId)
+        : [];
+
+    const firmName  = isUnassignedView ? 'Needs Assignment' : (acc ? acc.name : '');
+    const firmColor = isUnassignedView ? '#f59e0b' : (acc?.color || '#6d28d9');
 
     let header = `
       <div style="padding:14px 18px 10px;border-bottom:1px solid #f1f5f9;flex-shrink:0;">
-        <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;margin-bottom:2px;">CLIENTS</div>
-        <div style="font-size:0.88rem;font-weight:700;color:#0f172a;">${firmName}</div>
-        <div class="drawer-drag-hint"><i class="ph ph-arrow-left" style="font-size:9px;"></i> drag a client to a firm on the left to reassign</div>
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:0.8px;margin-bottom:2px;">${isUnassignedView ? '⚠ UNASSIGNED' : 'CLIENTS'}</div>
+        <div style="font-size:0.88rem;font-weight:700;color:${isUnassignedView ? '#92400e' : '#0f172a'};">${firmName}</div>
+        ${!isUnassignedView ? `<div class="drawer-drag-hint"><i class="ph ph-arrow-left" style="font-size:9px;"></i> drag a client to a firm on the left to reassign</div>` : ''}
       </div>`;
 
     let body = '';
@@ -4394,6 +4399,11 @@
           <div style="font-size:0.78rem;color:#94a3b8;margin-bottom:18px;">Add a client to get started</div>
         </div>`;
     } else {
+      // Firm options for the inline assign dropdown (unassigned view only)
+      const firmOptions = accountants.map(a =>
+        `<option value="${a.id}">${a.name}</option>`
+      ).join('');
+
       body = filtered.map(client => {
         const color    = client.color || '#3b82f6';
         const initials = (client.name || '?').split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
@@ -4401,37 +4411,48 @@
         const txCount  = (() => {
           try { const d = _ssGet('roboledger_v5_data_' + client.id) || {}; return Object.keys(d.transactions || {}).length; } catch { return 0; }
         })();
+
+        // Unassigned view: show inline assign-to-firm dropdown instead of open/edit buttons
+        const actions = isUnassignedView ? `
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;" onclick="event.stopPropagation();">
+            <select onchange="window._drawerQuickAssign('${client.id}',this.value)"
+                    style="font-size:11px;padding:3px 6px;border:1px solid #f59e0b;border-radius:6px;background:#fffbeb;color:#92400e;cursor:pointer;max-width:130px;">
+              <option value="">Assign to…</option>
+              ${firmOptions}
+            </select>
+          </div>` : `
+          <div style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation();">
+            <button onclick="window.closeContextDrawer();setTimeout(()=>window.openEditClientModal('${client.id}'),50);"
+                    title="Edit client"
+                    style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                    onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">
+              <i class="ph ph-pencil"></i>
+            </button>
+            <button onclick="window.closeContextDrawer();setTimeout(()=>window.deleteClient('${client.id}'),50);"
+                    title="Delete client"
+                    style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
+                    onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
+              <i class="ph ph-trash"></i>
+            </button>
+          </div>`;
+
         return `
-          <div class="drawer-client-item ${isActive ? 'active-client' : ''}"
-               draggable="true"
-               ondragstart="window._drawerDragStart(event,'${client.id}')"
-               ondragend="window._drawerDragEnd(event)"
-               onclick="window._drawerPickClient('${accountantId || ''}','${client.id}')">
+          <div class="drawer-client-item ${isActive ? 'active-client' : ''} ${isUnassignedView ? '' : ''}"
+               ${isUnassignedView ? '' : `draggable="true" ondragstart="window._drawerDragStart(event,'${client.id}')" ondragend="window._drawerDragEnd(event)"`}
+               onclick="${isUnassignedView ? '' : `window._drawerPickClient('${accountantId || ''}','${client.id}')`}"
+               style="${isUnassignedView ? 'border-left:3px solid #f59e0b;cursor:default;' : ''}">
             <div class="drawer-client-avatar" style="background:${color};">${initials}</div>
             <div style="flex:1;min-width:0;">
               <div class="drawer-client-name">${client.name}</div>
               <div class="drawer-client-meta">${client.industry || ''} ${txCount ? '· ' + txCount.toLocaleString() + ' txns' : ''}</div>
             </div>
-            <div style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation();">
-              <button onclick="window.closeContextDrawer();setTimeout(()=>window.openEditClientModal('${client.id}'),50);"
-                      title="Edit client"
-                      style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
-                      onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#94a3b8'">
-                <i class="ph ph-pencil"></i>
-              </button>
-              <button onclick="window.closeContextDrawer();setTimeout(()=>window.deleteClient('${client.id}'),50);"
-                      title="Delete client"
-                      style="background:none;border:none;cursor:pointer;padding:3px;font-size:13px;color:#94a3b8;border-radius:4px;"
-                      onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
-                <i class="ph ph-trash"></i>
-              </button>
-            </div>
+            ${actions}
             ${isActive ? '<span class="drawer-client-active-badge">Active</span>' : ''}
           </div>`;
       }).join('');
     }
 
-    const footer = `
+    const footer = isUnassignedView ? '' : `
       <div style="padding:12px 16px;border-top:1px solid #f1f5f9;flex-shrink:0;margin-top:auto;">
         <button onclick="window.closeContextDrawer();setTimeout(()=>window.openCreateClientModal(),50);"
                 style="width:100%;padding:8px;border-radius:8px;border:1px dashed #cbd5e1;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:#64748b;display:flex;align-items:center;justify-content:center;gap:5px;">
@@ -4440,6 +4461,24 @@
       </div>`;
 
     container.innerHTML = header + `<div style="flex:1;overflow-y:auto;">` + body + `</div>` + footer;
+  };
+
+  // Quick-assign a client to a firm directly from the unassigned warning panel
+  window._drawerQuickAssign = function(clientId, firmId) {
+    if (!firmId) return;
+    const clients = _ssGet('roboledger_clients') || [];
+    const idx = clients.findIndex(c => c.id === clientId);
+    if (idx === -1) return;
+    clients[idx].accountantId = firmId;
+    clients[idx].lastActive   = new Date().toISOString().split('T')[0];
+    _ssSet('roboledger_clients', clients);
+    window.SupabaseSync?.saveClient(clients[idx]);
+    // If no more unassigned clients, jump to the assigned firm; else stay on unassigned view
+    const remaining = clients.filter(c => !c.accountantId).length;
+    _drawerState.selectedFirmId = remaining > 0 ? '__unassigned__' : firmId;
+    window._renderDrawerLeft();
+    window._renderDrawerRight(_drawerState.selectedFirmId);
+    console.log(`[DRAWER] Quick-assigned client ${clientId} → ${firmId}`);
   };
 
   window._drawerSelectFirm = function(accountantId) {
@@ -4471,6 +4510,9 @@
     event.stopPropagation();
     event.currentTarget.classList.remove('drag-over');
 
+    // Clients must always be assigned to a firm — block drops onto null
+    if (!targetFirmId) return;
+
     const clientId = _drawerDragClientId || event.dataTransfer.getData('text/plain');
     if (!clientId) return;
 
@@ -4480,11 +4522,10 @@
 
     const client = clients[idx];
     const prevFirmId = client.accountantId || null;
-    const newFirmId  = targetFirmId || null;
-    if (prevFirmId === newFirmId) return; // already in this firm
+    if (prevFirmId === targetFirmId) return; // already in this firm
 
     // Reassign
-    client.accountantId = newFirmId;
+    client.accountantId = targetFirmId;
     client.lastActive   = new Date().toISOString().split('T')[0];
     clients[idx] = client;
     _ssSet('roboledger_clients', clients);
@@ -4497,11 +4538,12 @@
     event.currentTarget.style.background = '#d1fae5';
     setTimeout(() => { event.currentTarget.style.background = ''; }, 600);
 
-    // Re-render both panels — keep current right-panel showing the source firm
+    // Re-render — jump right panel to the destination firm so user sees the move land
+    _drawerState.selectedFirmId = targetFirmId;
     window._renderDrawerLeft();
-    window._renderDrawerRight(_drawerState.selectedFirmId);
+    window._renderDrawerRight(targetFirmId);
 
-    console.log(`[DRAWER] Client ${clientId} moved from ${prevFirmId || 'unassigned'} → ${newFirmId || 'unassigned'}`);
+    console.log(`[DRAWER] Client ${clientId} moved from ${prevFirmId || 'unassigned'} → ${targetFirmId}`);
   };
 
   window._drawerPickClient = function(accountantId, clientId) {
