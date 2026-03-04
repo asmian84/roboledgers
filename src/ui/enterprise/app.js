@@ -4323,6 +4323,7 @@
         <span style="font-size:12px;font-weight:600;color:#92400e;flex:1;">${unassignedCount} client${unassignedCount !== 1 ? 's' : ''} need a firm</span>
         <span style="font-size:11px;color:#d97706;font-weight:600;">Fix →</span>
       </div>`;
+    }
 
     accountants.forEach(acc => {
       const count    = clients.filter(c => c.accountantId === acc.id).length;
