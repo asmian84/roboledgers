@@ -145,12 +145,18 @@ const ImportLogger = {
         this._sessions.push(s);
         this._current = null;
 
-        // Rotate: keep only the last MAX_SESSIONS
+        // Rotate: keep only the last MAX_SESSIONS in local storage
         if (this._sessions.length > MAX_SESSIONS) {
             this._sessions = this._sessions.slice(-MAX_SESSIONS);
         }
 
+        // Persist locally (IndexedDB)
         this._saveToStorage();
+
+        // Fire-and-forget cloud sync — every session (success or failure) goes to Supabase
+        // so logs are available across browsers and devices, independent of local cache.
+        window.SupabaseSync?.saveImportLog(s);
+
         return s;
     },
 

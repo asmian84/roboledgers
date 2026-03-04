@@ -1,7 +1,32 @@
 /**
- * SupabaseSync — persists client metadata and ledger data to Supabase.
+ * SupabaseSync — persists client metadata, ledger data, and import logs to Supabase.
  *
- * Requires two tables in your Supabase project (run the SQL migration below):
+ * Requires three tables in your Supabase project (run the SQL migration below):
+ *
+ *   -- 3. Import / parser logs (one row per file upload attempt)
+ *   CREATE TABLE IF NOT EXISTS import_logs (
+ *     id          UUID        PRIMARY KEY,
+ *     user_id     UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+ *     client_id   TEXT,
+ *     filename    TEXT        NOT NULL,
+ *     file_size   BIGINT,
+ *     file_type   TEXT,
+ *     timestamp   BIGINT,
+ *     end_time    BIGINT,
+ *     status      TEXT,
+ *     tx_count    INTEGER     DEFAULT 0,
+ *     bank        TEXT,
+ *     parser      TEXT,
+ *     logs        JSONB       DEFAULT '[]'::jsonb,
+ *     errors      JSONB       DEFAULT '[]'::jsonb,
+ *     warnings    JSONB       DEFAULT '[]'::jsonb,
+ *     created_at  TIMESTAMPTZ DEFAULT NOW()
+ *   );
+ *   ALTER TABLE import_logs ENABLE ROW LEVEL SECURITY;
+ *   CREATE POLICY "Users manage own import logs" ON import_logs
+ *     FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+ *   CREATE INDEX IF NOT EXISTS import_logs_user_status ON import_logs (user_id, status);
+ *   CREATE INDEX IF NOT EXISTS import_logs_user_created ON import_logs (user_id, created_at DESC);
  *
  *   -- 1. Client metadata
  *   CREATE TABLE IF NOT EXISTS client_profiles (
@@ -211,6 +236,93 @@ const SupabaseSync = {
         }
 
         return data?.data || null;
+    },
+
+    // ════════════════════════════════════════════════════════════════════════
+    // IMPORT / PARSER LOGS
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Persist one import session to Supabase (fire-and-forget).
+     * Called by ImportLogger.endSession() on every upload (success or failure).
+     *
+     * Logs array is capped at 500 entries before storing to keep row sizes sane;
+     * the full log is always available in the browser's IndexedDB copy.
+     */
+    async saveImportLog(session) {
+        const user = await this._getUser();
+        if (!user || !session?.id) return;
+
+        // Cap log lines to 500 per session (oldest dropped first) to keep JSONB rows sane.
+        // Full uncapped log is always in IndexedDB for local access.
+        const cappedLogs = session.logs.length > 500
+            ? session.logs.slice(-500)
+            : session.logs;
+
+        const { error } = await supabase.from('import_logs').upsert({
+            id:         session.id,
+            user_id:    user.id,
+            client_id:  window.UI_STATE?.activeClientId || null,
+            filename:   session.filename,
+            file_size:  session.fileSize   || 0,
+            file_type:  session.fileType   || 'other',
+            timestamp:  session.timestamp,
+            end_time:   session.endTime,
+            status:     session.status,
+            tx_count:   session.txCount    || 0,
+            bank:       session.bank       || null,
+            parser:     session.parser     || null,
+            logs:       cappedLogs,
+            errors:     session.errors,
+            warnings:   session.warnings,
+        }, { onConflict: 'id' });
+
+        if (error) console.warn('[SUPABASE_SYNC] saveImportLog failed:', error.message);
+        else       console.log('[SUPABASE_SYNC] Import log saved:', session.filename, session.status);
+    },
+
+    /**
+     * Fetch recent import logs for the current user from Supabase.
+     * @param {object} opts  — { limit: 50, status: 'error'|'warning'|null }
+     * Returns array of session objects (newest first), or null on error.
+     */
+    async loadImportLogs({ limit = 50, status = null } = {}) {
+        const user = await this._getUser();
+        if (!user) return null;
+
+        let query = supabase
+            .from('import_logs')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (status) query = query.eq('status', status);
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('[SUPABASE_SYNC] loadImportLogs error:', error.message);
+            return null;
+        }
+
+        // Map back to ImportLogger session shape
+        return (data || []).map(row => ({
+            id:        row.id,
+            filename:  row.filename,
+            fileSize:  row.file_size,
+            fileType:  row.file_type,
+            timestamp: row.timestamp,
+            endTime:   row.end_time,
+            status:    row.status,
+            txCount:   row.tx_count,
+            bank:      row.bank       || '',
+            parser:    row.parser     || '',
+            clientId:  row.client_id  || null,
+            logs:      row.logs       || [],
+            errors:    row.errors     || [],
+            warnings:  row.warnings   || [],
+        }));
     },
 };
 
