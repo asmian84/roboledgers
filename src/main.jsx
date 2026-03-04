@@ -14,6 +14,8 @@ import { BankReconciliationReport } from './reports/BankReconciliationReport.jsx
 import './services/TransactionExporter.js';
 // Import SupabaseSync — registers window.SupabaseSync for use by vanilla JS shell
 import './services/SupabaseSync.js';
+// Import ImportLogger — installs console intercept + registers window.ImportLogger
+import './services/ImportLogger.js';
 
 
 /**

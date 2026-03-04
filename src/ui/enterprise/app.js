@@ -85,6 +85,9 @@
     // Multi-Accountant State (Admin Layer)
     activeAccountantId: null,    // null = Admin view (all accountants)
     activeAccountantName: '',
+
+    // Import Logs Page State
+    _logsExpandedId: null,       // Which session log is expanded (null = none)
   };
 
   const UI_STATE = window.UI_STATE; // Local reference for speed
@@ -400,6 +403,10 @@
       const statementNum = idx + 1;
       const totalStatements = files.length;
 
+      // ── ImportLogger: start capturing console output for this file ──────────
+      const _logSessionId = window.ImportLogger?.startSession(file.name, file.size);
+      // ────────────────────────────────────────────────────────────────────────
+
       try {
         // Parsing phase = 0–70% of total bar. Each file gets an equal slice of that 70%.
         const PARSE_BUDGET = 70; // percent reserved for file parsing
@@ -430,6 +437,10 @@
         const imported = await window.RoboLedger.Ingestion.processUpload(file, account_id);
         totalImported += imported;
 
+        // ── ImportLogger: finalize session (success) ────────────────────────
+        window.ImportLogger?.endSession(_logSessionId, { txCount: imported });
+        // ────────────────────────────────────────────────────────────────────
+
         // Stage 3: File done (90% of file slice, max 68% overall)
         await window.updateProgressBar(
           Math.min(68, Math.round(baseProgress + (fileProgressStep * 0.9))),
@@ -446,6 +457,7 @@
           const helpText = err.message.replace('PDF_TIMEOUT: ', '');
           console.warn(`[UPLOAD] ⚠️ PDF timeout: ${file.name}`);
           console.warn(`[UPLOAD] 💡 ${helpText}`);
+          window.ImportLogger?.endSession(_logSessionId, { txCount: 0, error: err });
           await window.updateProgressBar(
             Math.round(((idx + 1) / files.length) * 100),
             100,
@@ -461,6 +473,7 @@
         if (err.message && err.message.startsWith('SKIP:')) {
           const skippedFile = err.message.replace('SKIP:', '');
           console.warn(`[UPLOAD] ⚠️ Skipped: ${skippedFile} (timeout)`);
+          window.ImportLogger?.endSession(_logSessionId, { txCount: 0, error: err });
           await window.updateProgressBar(
             Math.round(((idx + 1) / files.length) * 100),
             100,
@@ -474,6 +487,7 @@
 
         // Regular error handling for other failures
         console.error('[UPLOAD] Parse error:', file.name, err);
+        window.ImportLogger?.endSession(_logSessionId, { txCount: 0, error: err });
         await window.updateProgressBar(
           Math.round(((idx + 1) / files.length) * 100),
           100,
@@ -3046,6 +3060,7 @@
       case 'reports': return renderReportsPage();
       case 'reconciliation': return renderBankRecPage();
       case 'roadmap': return renderRoadmapPage();
+      case 'logs': return renderLogsPage();
       case 'accountants': setTimeout(() => window.openContextDrawer(), 0); return '';
       case 'clients':     setTimeout(() => window.openContextDrawer(), 0); return '';
       case 'home': renderHome(); return ''; // renderHome() manages stage directly
@@ -4410,6 +4425,202 @@
 
   // ─── ROADMAP PAGE ────────────────────────────────────────────────────────────
   // Merged from: Mega Game Plan (Feb 2026) + Antigravity SDLC review
+  // ─── IMPORT LOGS PAGE ────────────────────────────────────────────────────────
+
+  window.logsToggleExpand = function (sessionId) {
+    UI_STATE._logsExpandedId = UI_STATE._logsExpandedId === sessionId ? null : sessionId;
+    render();
+  };
+
+  window.logsCopyForAI = function (sessionId) {
+    const text = window.ImportLogger?.formatForAI(sessionId);
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById(`logs-copy-btn-${sessionId}`);
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="ph ph-check"></i> Copied!';
+        btn.style.background = '#10b981';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
+      }
+    }).catch(() => {
+      // Clipboard not available — show in a prompt
+      window.prompt('Copy this log and paste it into Claude:', text);
+    });
+  };
+
+  window.logsClearAll = function () {
+    if (!confirm('Delete all import logs? This cannot be undone.')) return;
+    window.ImportLogger?.clear();
+    render();
+  };
+
+  function renderLogsPage() {
+    const logger   = window.ImportLogger;
+    const sessions = logger ? logger.getSessions() : [];
+    const expanded = UI_STATE._logsExpandedId;
+
+    // ── Status helpers ─────────────────────────────────────────────────────────
+    function _statusIcon(s) {
+      if (s === 'success') return '<span style="color:#10b981;font-size:18px;line-height:1;">●</span>';
+      if (s === 'warning') return '<span style="color:#f59e0b;font-size:18px;line-height:1;">●</span>';
+      if (s === 'error')   return '<span style="color:#ef4444;font-size:18px;line-height:1;">●</span>';
+      return '<span style="color:#3b82f6;font-size:18px;line-height:1;animation:spin 1s linear infinite;">◌</span>';
+    }
+    function _statusLabel(s) {
+      if (s === 'success') return '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:0.05em;">SUCCESS</span>';
+      if (s === 'warning') return '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:0.05em;">WARNING</span>';
+      if (s === 'error')   return '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:0.05em;">ERROR</span>';
+      return '<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:0.05em;">RUNNING</span>';
+    }
+    function _fmtTime(ts) {
+      return new Date(ts).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+    function _fmtDur(s) {
+      if (!s.endTime) return '...';
+      const ms = s.endTime - s.timestamp;
+      return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+    }
+    function _levelBadge(level) {
+      if (level === 'error') return '<span style="background:#fee2e2;color:#991b1b;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:0.04em;flex-shrink:0;">ERR</span>';
+      if (level === 'warn')  return '<span style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:0.04em;flex-shrink:0;">WARN</span>';
+      return '<span style="background:#f1f5f9;color:#64748b;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:0.04em;flex-shrink:0;">LOG</span>';
+    }
+
+    // ── Empty state ────────────────────────────────────────────────────────────
+    if (sessions.length === 0) {
+      return `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;text-align:center;padding:40px;">
+          <i class="ph ph-clipboard-text" style="font-size:56px;color:#cbd5e1;margin-bottom:16px;"></i>
+          <h2 style="font-size:20px;font-weight:700;color:#1e293b;margin:0 0 8px;">No import logs yet</h2>
+          <p style="font-size:14px;color:#64748b;max-width:360px;line-height:1.5;margin:0 0 24px;">
+            Every time you upload a bank statement, RoboLedger captures the full parser output here — so you can copy it directly to Claude for debugging.
+          </p>
+          <button onclick="window.navigateTo('import')"
+            style="background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;">
+            <i class="ph ph-upload-simple"></i> Import a Statement
+          </button>
+        </div>`;
+    }
+
+    // ── Session list ───────────────────────────────────────────────────────────
+    const sessionCards = sessions.map(s => {
+      const isExpanded = s.id === expanded;
+      const fileIcon   = s.fileType === 'pdf' ? 'ph-file-pdf' : 'ph-file-csv';
+
+      // Expanded log lines
+      let logHtml = '';
+      if (isExpanded) {
+        const lines = s.logs.map((e, i) => {
+          const ts  = new Date(e.t).toISOString().slice(11, 23);
+          const msg = e.msg
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\[([A-Z_]+)\]/g, '<span style="color:#3b82f6;font-weight:700;">[$1]</span>');
+          return `
+            <div style="display:flex;gap:8px;align-items:flex-start;padding:3px 6px;${i%2===0?'background:#f8fafc':''};">
+              ${_levelBadge(e.level)}
+              <span style="color:#94a3b8;font-family:monospace;font-size:10px;flex-shrink:0;margin-top:1px;">${ts}</span>
+              <span style="font-family:monospace;font-size:11px;color:#1e293b;word-break:break-word;line-height:1.4;">${msg}</span>
+            </div>`;
+        }).join('');
+
+        const errorSummary = s.errors.length > 0 ? `
+          <div style="margin-top:10px;padding:10px 12px;background:#fff5f5;border:1px solid #fca5a5;border-radius:6px;">
+            <div style="font-size:11px;font-weight:700;color:#ef4444;margin-bottom:6px;">
+              <i class="ph ph-warning-circle"></i> ${s.errors.length} Error${s.errors.length>1?'s':''}
+            </div>
+            ${s.errors.map(e => `<div style="font-size:11px;font-family:monospace;color:#7f1d1d;margin-top:2px;">${e.replace(/</g,'&lt;')}</div>`).join('')}
+          </div>` : '';
+
+        logHtml = `
+          <div style="margin-top:0;border-top:1px solid #e2e8f0;padding:12px 14px;background:#fafafa;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:0.05em;">
+                ${s.logs.length} LOG LINES
+              </span>
+              <div style="display:flex;gap:6px;">
+                <button id="logs-copy-btn-${s.id}"
+                  onclick="window.logsCopyForAI('${s.id}')"
+                  style="background:#3b82f6;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;">
+                  <i class="ph ph-copy"></i> Copy for AI
+                </button>
+              </div>
+            </div>
+            <div style="border:1px solid #e2e8f0;border-radius:6px;overflow:auto;max-height:400px;background:#fff;">
+              ${lines || '<div style="padding:16px;text-align:center;color:#94a3b8;font-size:12px;">No tagged log lines captured</div>'}
+            </div>
+            ${errorSummary}
+          </div>`;
+      }
+
+      return `
+        <div style="background:#fff;border:1px solid ${s.status==='error'?'#fca5a5':s.status==='warning'?'#fde68a':'#e2e8f0'};border-radius:10px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <div onclick="window.logsToggleExpand('${s.id}')"
+            style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;user-select:none;background:${isExpanded?'#f8fafc':'#fff'};">
+            <i class="ph ${fileIcon}" style="font-size:22px;color:#94a3b8;flex-shrink:0;"></i>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:13px;font-weight:700;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;" title="${s.filename}">${s.filename}</span>
+                ${_statusLabel(s.status)}
+              </div>
+              <div style="margin-top:3px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                ${s.bank   ? `<span style="font-size:11px;color:#3b82f6;font-weight:600;"><i class="ph ph-bank"></i> ${s.bank}</span>` : ''}
+                ${s.parser ? `<span style="font-size:11px;color:#8b5cf6;font-weight:600;"><i class="ph ph-robot"></i> ${s.parser}</span>` : ''}
+                <span style="font-size:11px;color:#64748b;"><i class="ph ph-clock"></i> ${_fmtTime(s.timestamp)}</span>
+                <span style="font-size:11px;color:#64748b;"><i class="ph ph-timer"></i> ${_fmtDur(s)}</span>
+                ${s.txCount>0 ? `<span style="font-size:11px;color:#10b981;font-weight:600;"><i class="ph ph-rows"></i> ${s.txCount} txns</span>` : ''}
+                ${s.errors.length>0 ? `<span style="font-size:11px;color:#ef4444;font-weight:600;"><i class="ph ph-warning"></i> ${s.errors.length} error${s.errors.length>1?'s':''}</span>` : ''}
+                ${s.warnings.length>0 ? `<span style="font-size:11px;color:#f59e0b;font-weight:600;"><i class="ph ph-warning-circle"></i> ${s.warnings.length} warn</span>` : ''}
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+              ${_statusIcon(s.status)}
+              <i class="ph ${isExpanded?'ph-caret-up':'ph-caret-down'}" style="font-size:14px;color:#94a3b8;"></i>
+            </div>
+          </div>
+          ${logHtml}
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="max-width:900px;margin:0 auto;padding:24px 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <div>
+            <h1 style="font-size:20px;font-weight:800;color:#1e293b;margin:0 0 4px;display:flex;align-items:center;gap:8px;">
+              <i class="ph ph-clipboard-text" style="color:#3b82f6;"></i>
+              Parser Logs
+            </h1>
+            <p style="font-size:13px;color:#64748b;margin:0;">
+              Every upload is captured. Click a row to expand the full console log, then copy it to Claude for instant debugging.
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="window.navigateTo('import')"
+              style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+              <i class="ph ph-upload-simple"></i> Upload
+            </button>
+            <button onclick="window.logsClearAll()"
+              style="background:#fff;color:#ef4444;border:1px solid #fca5a5;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+              <i class="ph ph-trash"></i> Clear All
+            </button>
+          </div>
+        </div>
+
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px;">
+          <i class="ph ph-info" style="color:#0284c7;font-size:18px;flex-shrink:0;margin-top:1px;"></i>
+          <div style="font-size:12px;color:#0c4a6e;line-height:1.5;">
+            <strong>How to debug a parser issue:</strong> Upload the statement → come here → expand the session → click <strong>Copy for AI</strong> → paste into Claude. The log includes the detected bank, which parser was routed, every transaction extraction step, and any errors.
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:#94a3b8;margin-bottom:12px;font-weight:600;letter-spacing:0.04em;">
+          ${sessions.length} SESSION${sessions.length!==1?'S':''} — NEWEST FIRST
+        </div>
+
+        ${sessionCards}
+      </div>`;
+  }
+
   function renderRoadmapPage() {
     if (!window._roadmapState) window._roadmapState = { filter: 'all' };
     const S = window._roadmapState;
