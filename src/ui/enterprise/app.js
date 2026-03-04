@@ -3272,10 +3272,15 @@
     const existing = document.getElementById('client-modal-overlay');
     if (existing) existing.remove();
 
-    const clients = _ssGet('roboledger_clients') || [];
-    const editClient = existingId ? clients.find(c => c.id === existingId) : null;
-    const isEdit = !!editClient;
+    const clients     = _ssGet('roboledger_clients') || [];
+    const accountants = _ssGet('roboledger_accountants') || [];
+    const editClient  = existingId ? clients.find(c => c.id === existingId) : null;
+    const isEdit      = !!editClient;
     const v = (field, fallback) => editClient ? (editClient[field] !== undefined ? editClient[field] : fallback) : fallback;
+    // Pre-select firm: editing → client's current firm; creating → active accountant context (or first firm)
+    const preselectedFirmId = isEdit
+      ? (editClient.accountantId || '')
+      : (UI_STATE.activeAccountantId || (accountants.length === 1 ? accountants[0].id : ''));
 
     const INDUSTRIES = [
       { value: 'PROFESSIONAL_SERVICES', label: 'Professional Services', icon: 'ph-briefcase', desc: 'Consulting, legal, CPA' },
@@ -3391,10 +3396,33 @@
                 style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
           </div>
           <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+              Firm <span style="color:#dc2626;">*</span>
+            </label>
+            ${accountants.length === 0 ? `
+              <div style="padding:10px 12px;border-radius:8px;border:1.5px solid #fecaca;background:#fff5f5;font-size:13px;color:#dc2626;display:flex;align-items:center;gap:8px;">
+                <i class="ph ph-warning" style="font-size:16px;flex-shrink:0;"></i>
+                No firms exist yet.
+                <button onclick="document.getElementById('client-modal-overlay').remove();setTimeout(()=>window.openCreateAccountantModal(),50);"
+                        style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid #dc2626;background:transparent;color:#dc2626;font-size:12px;font-weight:600;cursor:pointer;">
+                  + Create Firm First
+                </button>
+              </div>
+              <input type="hidden" id="client-form-accountant-id" value="" />
+            ` : `
+              <select id="client-form-accountant-id"
+                  style="width:100%;padding:9px 12px;border:1.5px solid ${preselectedFirmId ? '#e2e8f0' : '#f97316'};border-radius:8px;font-size:13px;background:white;cursor:pointer;"
+                  onfocus="this.style.border='1.5px solid #3b82f6'" onblur="this.style.border='1.5px solid #e2e8f0'"
+                  onchange="this.style.border='1.5px solid #e2e8f0'">
+                <option value="" ${!preselectedFirmId ? 'selected' : ''} disabled>— Select a firm —</option>
+                ${accountants.map(acc => `<option value="${acc.id}" ${preselectedFirmId === acc.id ? 'selected' : ''}>${acc.name}</option>`).join('')}
+              </select>
+            `}
+          </div>
+          <div>
             <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Accent Colour</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${colorSwatches}</div>
             <input type="hidden" id="client-color-input" value="${selectedColor}" />
-          ${UI_STATE.activeAccountantId ? `<input type="hidden" id="client-form-accountant-id" value="${UI_STATE.activeAccountantId}" />` : ''}
           </div>
         </div>
 
@@ -3434,6 +3462,15 @@
       if (inp) { inp.style.border = '1.5px solid #dc2626'; inp.focus(); }
       return;
     }
+
+    // Firm is required — block save if none selected
+    const firmId = (document.getElementById('client-form-accountant-id')?.value || '').trim();
+    if (!firmId) {
+      const sel = document.getElementById('client-form-accountant-id');
+      if (sel) { sel.style.border = '1.5px solid #dc2626'; sel.focus(); }
+      return;
+    }
+
     const clients = _ssGet('roboledger_clients') || [];
     const today = new Date().toISOString().split('T')[0];
     const getField = (id, fallback) => {
@@ -3452,6 +3489,7 @@
       clients[idx].currency      = getField('client-form-currency', 'CAD');
       clients[idx].gstNumber     = getField('client-form-gst', '').trim();
       clients[idx].color         = getField('client-color-input', '#3b82f6');
+      clients[idx].accountantId  = firmId; // ← always update firm on edit
       _ssSet('roboledger_clients', clients);
       window.SupabaseSync?.saveClient(clients[idx]); // ← cloud sync
       if (UI_STATE.activeClientId === existingId) {
@@ -3473,7 +3511,7 @@
         currency:      getField('client-form-currency', 'CAD'),
         gstNumber:     getField('client-form-gst', '').trim(),
         color:         getField('client-color-input', '#3b82f6'),
-        accountantId:  getField('client-form-accountant-id', '') || null,
+        accountantId:  firmId,
         created:       today,
         lastActive:    today,
         txCount:       0,
@@ -3485,8 +3523,8 @@
     }
     const overlay = document.getElementById('client-modal-overlay');
     if (overlay) overlay.remove();
-    // Re-open drawer so user sees the new client in the list
-    _drawerState.selectedFirmId = UI_STATE.activeAccountantId || null;
+    // Re-open drawer showing the firm this client was just assigned to
+    _drawerState.selectedFirmId = firmId || UI_STATE.activeAccountantId || null;
     setTimeout(() => window.openContextDrawer(), 50);
   };
 
