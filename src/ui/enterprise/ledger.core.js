@@ -2474,6 +2474,17 @@ window.RoboLedger = (function () {
             else if (upper.includes('RBC') || upper.includes('ROYAL BANK')) {
                 console.log('[PARSER] Detected RBC statement');
 
+                // BIN detection: extract the primary card/account number and use its first digit
+                // to determine card network — this is more reliable than keyword matching because
+                // RBC Visa statements often contain the word "MASTERCARD" in cross-sell text/footers.
+                //   Visa BINs start with 4  (e.g. 4646 XXXX XXXX 2214)
+                //   Mastercard BINs: 5[1-5] (e.g. 5428 XXXX XXXX 7891)
+                const _rbcBinMatch = text.match(/\b([45]\d{3})[\s\-]?(?:[X*\d]{4}[\s\-]?){2}[X*\d]{4}\b/);
+                const _rbcBin = _rbcBinMatch ? _rbcBinMatch[1] : null;
+                const _isVisaBin       = _rbcBin && _rbcBin.startsWith('4');
+                const _isMastercardBin = _rbcBin && /^5[1-5]/.test(_rbcBin);
+                if (_rbcBin) console.log(`[PARSER] RBC card BIN detected: ${_rbcBin} → ${_isVisaBin ? 'VISA' : _isMastercardBin ? 'MASTERCARD' : 'unknown'}`);
+
                 if (upper.includes('SAVINGS') &&
                     !upper.includes('MASTERCARD') && !upper.includes('MASTER CARD') &&
                     !upper.includes('VISA') && !upper.includes('AMEX') && !upper.includes('AMERICAN EXPRESS')) {
@@ -2490,17 +2501,19 @@ window.RoboLedger = (function () {
                         result = await window.rbcChequingParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] RBC Chequing returned:', result);
                     }
-                } else if (upper.includes('MASTERCARD') || upper.includes('MASTER CARD') || upper.includes('BUSINESS CASH BACK') || upper.includes('CASHBACK MASTERCARD') || (upper.includes('MC') && !upper.includes('VISA') && /5[1-5]\d{2}[\s\-\*]/.test(text))) {
-                    console.log('[PARSER] Routing to RBC Mastercard Parser');
-                    if (window.rbcMastercardParser) {
-                        result = await window.rbcMastercardParser.parse(text, null, lineCoordinates);
-                        if (result) console.log('[PARSER] RBC Mastercard returned:', result);
-                    }
-                } else if (upper.includes('VISA')) {
+                } else if (_isVisaBin || (!_isMastercardBin && upper.includes('VISA'))) {
+                    // Visa: BIN starts with 4, OR text says VISA and card is not a Mastercard BIN.
+                    // Checked BEFORE Mastercard so cross-sell "MASTERCARD" text in Visa PDFs doesn't hijack routing.
                     console.log('[PARSER] Routing to RBC Visa Parser');
                     if (window.rbcVisaParser) {
                         result = await window.rbcVisaParser.parse(text, null, lineCoordinates);
                         if (result) console.log('[PARSER] RBC Visa returned:', result);
+                    }
+                } else if (_isMastercardBin || upper.includes('MASTERCARD') || upper.includes('MASTER CARD') || upper.includes('BUSINESS CASH BACK') || upper.includes('CASHBACK MASTERCARD') || (upper.includes('MC') && /5[1-5]\d{2}[\s\-\*]/.test(text))) {
+                    console.log('[PARSER] Routing to RBC Mastercard Parser');
+                    if (window.rbcMastercardParser) {
+                        result = await window.rbcMastercardParser.parse(text, null, lineCoordinates);
+                        if (result) console.log('[PARSER] RBC Mastercard returned:', result);
                     }
                 }
             }
