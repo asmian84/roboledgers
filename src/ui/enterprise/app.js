@@ -3319,10 +3319,10 @@
     overlay.id = 'client-modal-overlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.65);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;';
     overlay.innerHTML = `
-      <div style="background:white;border-radius:16px;padding:32px;width:520px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);">
+      <div style="background:white;border-radius:16px;padding:24px 28px;width:520px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);">
         <!-- Modal Header -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-          <div style="width:44px;height:44px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <div style="width:38px;height:38px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">
             <i class="ph ph-buildings"></i>
           </div>
           <div>
@@ -3335,65 +3335,65 @@
         </div>
 
         <!-- Form -->
-        <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="display:flex;flex-direction:column;gap:10px;">
           <div>
-            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">
               Client / Business Name <span style="color:#dc2626;">*</span>
             </label>
             <input id="client-form-name" type="text" value="${v('name','')}"
                 placeholder="e.g. Smith Consulting Inc."
-                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;transition:border 0.15s;"
+                style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;transition:border 0.15s;"
                 onfocus="this.style.border='1.5px solid #3b82f6'"
                 onblur="this.style.border='1.5px solid #e2e8f0'" />
           </div>
           <div>
-            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">
               Legal Name <span style="font-weight:400;color:#94a3b8;">(optional)</span>
             </label>
             <input id="client-form-legal" type="text" value="${v('legalName','')}"
                 placeholder="Registered legal entity name"
-                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+                style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div>
-              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Industry</label>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Industry</label>
               <select id="client-form-industry"
-                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                  style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
                 ${INDUSTRIES.map(ind => `<option value="${ind.value}" ${v('industry','PROFESSIONAL_SERVICES') === ind.value ? 'selected' : ''}>${ind.label}</option>`).join('')}
               </select>
             </div>
             <div>
-              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Province</label>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Province</label>
               <select id="client-form-province"
-                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                  style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
                 ${PROVINCES.map(p => `<option value="${p}" ${v('province','ON') === p ? 'selected' : ''}>${p}</option>`).join('')}
               </select>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div>
-              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Fiscal Year End</label>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Fiscal Year End</label>
               <select id="client-form-fy"
-                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                  style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
                 ${MONTHS.map((m, i) => `<option value="${i+1}" ${v('fiscalYearEnd',12) == i+1 ? 'selected' : ''}>${m}</option>`).join('')}
               </select>
             </div>
             <div>
-              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">Currency</label>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">Currency</label>
               <select id="client-form-currency"
-                  style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
+                  style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;cursor:pointer;">
                 <option value="CAD" ${v('currency','CAD') === 'CAD' ? 'selected' : ''}>CAD — Canadian Dollar</option>
                 <option value="USD" ${v('currency','CAD') === 'USD' ? 'selected' : ''}>USD — US Dollar</option>
               </select>
             </div>
           </div>
           <div>
-            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;">
               GST/HST Number <span style="font-weight:400;color:#94a3b8;">(optional)</span>
             </label>
             <input id="client-form-gst" type="text" value="${v('gstNumber','')}"
                 placeholder="123456789RT0001"
-                style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
+                style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;" />
           </div>
           <div>
             <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px;">
@@ -3420,14 +3420,14 @@
             `}
           </div>
           <div>
-            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Accent Colour</label>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${colorSwatches}</div>
+            <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Accent Colour</label>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">${colorSwatches}</div>
             <input type="hidden" id="client-color-input" value="${selectedColor}" />
           </div>
         </div>
 
         <!-- Actions -->
-        <div style="display:flex;gap:10px;align-items:center;margin-top:24px;padding-top:20px;border-top:1px solid #e2e8f0;">
+        <div style="display:flex;gap:10px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">
           ${isEdit ? `
           <button onclick="document.getElementById('client-modal-overlay').remove();window.clearClientLedger('${existingId}')"
               title="Delete all transactions and accounts — keeps client profile"
