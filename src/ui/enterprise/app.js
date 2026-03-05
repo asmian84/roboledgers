@@ -2644,7 +2644,7 @@
         <div style="margin-bottom:16px;">
           <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:0.07em;margin-bottom:10px;text-transform:uppercase;">System</div>
           <div style="padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11px;color:#64748b;line-height:1.9;">
-            <div>Version: <strong style="color:#1e293b;">${UI_STATE.version||'5.1'}</strong></div>
+            <div>Version: <strong style="color:#1e293b;">${UI_STATE.version||'5.2'}</strong></div>
             <div>Mode: <strong style="color:#1e293b;">${window.location.protocol==='file:'?'Native':'Web'}</strong></div>
             <div>Storage: <strong style="color:#1e293b;">IndexedDB</strong></div>
           </div>
