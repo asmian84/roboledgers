@@ -138,6 +138,26 @@ body {
     padding: 10px;
 }
 
+/* Hide text labels in footer when sidebar is collapsed — show icons only */
+.sidebar.collapsed #manage-users-btn {
+    width: 40px;
+    padding: 7px;
+    justify-content: center;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 0;          /* hides the text node without touching the icon */
+}
+.sidebar.collapsed #manage-users-btn i {
+    font-size: 16px;       /* restore icon size */
+}
+.sidebar.collapsed .user-info {
+    display: none;
+}
+.sidebar.collapsed .user-card {
+    justify-content: center;
+    gap: 0;
+}
+
 .sidebar.collapsed .sidebar-toggle {
     width: 24px;
     height: 24px;
