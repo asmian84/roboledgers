@@ -672,35 +672,143 @@ function QuickActionsBar() {
   );
 }
 
-function EmptyState() {
+function WelcomeScreen({ clientName }) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const steps = [
+    {
+      icon: 'ph-bank',
+      color: '#2563eb',
+      bg: '#eff6ff',
+      title: 'Add a Bank Account',
+      desc: 'Set up your chart of accounts to map transactions to the right categories.',
+      route: 'coa',
+      cta: 'Open Chart of Accounts',
+    },
+    {
+      icon: 'ph-upload-simple',
+      color: '#7c3aed',
+      bg: '#f5f3ff',
+      title: 'Import a Statement',
+      desc: 'Upload a CSV or OFX bank or credit card statement from the Transactions page.',
+      route: 'transactions',
+      cta: 'Go to Transactions',
+    },
+    {
+      icon: 'ph-magic-wand',
+      color: '#16a34a',
+      bg: '#f0fdf4',
+      title: 'Auto-Categorize',
+      desc: 'RoboLedger AI will categorize your transactions and flag anything that needs review.',
+      route: null,
+      cta: null,
+    },
+    {
+      icon: 'ph-chart-line',
+      color: '#ea580c',
+      bg: '#fff7ed',
+      title: 'View Reports',
+      desc: 'See income, expenses, GST/HST summaries, and more — updated in real time.',
+      route: 'reports',
+      cta: 'Open Reports',
+    },
+  ];
+
+  const tips = [
+    { icon: 'ph-lightning', text: 'Bulk-categorize multiple transactions at once by selecting rows and using the category toolbar.' },
+    { icon: 'ph-funnel', text: 'Use filters on the Transactions page to drill into a specific date range, account, or category.' },
+    { icon: 'ph-receipt', text: 'Attach receipts directly to transactions for a complete audit trail.' },
+    { icon: 'ph-currency-dollar', text: 'GST/HST is tracked automatically — check the Dashboard panel for your refund estimate.' },
+    { icon: 'ph-buildings', text: 'Switch between clients using the breadcrumb at the top — each client is fully isolated.' },
+  ];
+
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      minHeight: 380, gap: 16, padding: 40, textAlign: 'center',
-    }}>
-      <span className="ph ph-cloud-slash" style={{ fontSize: 56, color: '#cbd5e1' }} />
-      <div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-          No transactions imported yet
-        </div>
-        <div style={{ fontSize: 14, color: '#64748b', maxWidth: 340, margin: '0 auto' }}>
-          Import a bank or credit card statement to see your financial dashboard come to life.
+    <div style={{ padding: '32px 28px 48px', maxWidth: 860, margin: '0 auto' }}>
+
+      {/* Greeting */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 12,
+            background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span className="ph ph-chart-bar" style={{ fontSize: 22, color: 'white' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', letterSpacing: '-0.01em' }}>
+              {greeting}, welcome to {clientName}
+            </div>
+            <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>
+              No transactions imported yet — here's how to get started
+            </div>
+          </div>
         </div>
       </div>
-      <button
-        onClick={() => window.navigateTo?.('import')}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '11px 24px',
-          background: '#2563eb', color: 'white',
-          border: 'none', borderRadius: 9, cursor: 'pointer',
-          fontSize: 14, fontWeight: 600,
-          boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
-        }}
-      >
-        <span className="ph ph-upload-simple" style={{ fontSize: 18 }} />
-        Import Statement
-      </button>
+
+      {/* Getting Started Steps */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
+          Getting Started
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 12 }}>
+          {steps.map((s, i) => (
+            <div
+              key={i}
+              onClick={() => s.route && window.navigateTo?.(s.route)}
+              style={{
+                background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 12,
+                padding: '16px 16px 14px', cursor: s.route ? 'pointer' : 'default',
+                transition: 'box-shadow 0.15s, border-color 0.15s',
+                position: 'relative',
+              }}
+              onMouseEnter={e => { if (s.route) { e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.08)'; e.currentTarget.style.borderColor = s.color + '60'; } }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+            >
+              <div style={{
+                width: 36, height: 36, borderRadius: 9, background: s.bg,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+              }}>
+                <span className={`ph ${s.icon}`} style={{ fontSize: 18, color: s.color }} />
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 5 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 18, height: 18, borderRadius: '50%', background: s.color,
+                  color: 'white', fontSize: 10, fontWeight: 800, marginRight: 6,
+                }}>{i + 1}</span>
+                {s.title}
+              </div>
+              <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>{s.desc}</div>
+              {s.cta && (
+                <div style={{ marginTop: 10, fontSize: 11, fontWeight: 700, color: s.color, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {s.cta} <span className="ph ph-arrow-right" style={{ fontSize: 11 }} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tips */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
+          Tips & Tricks
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {tips.map((t, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+              background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 10,
+              padding: '11px 14px',
+            }}>
+              <span className={`ph ${t.icon}`} style={{ fontSize: 15, color: '#7c3aed', marginTop: 1, flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: '#475569', lineHeight: 1.5 }}>{t.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -747,7 +855,11 @@ const HomePage = () => {
   return (
     <div style={{ background: '#f4f6f8', minHeight: '100vh', padding: '24px 28px 40px', boxSizing: 'border-box' }}>
 
-      {/* Page Header */}
+      {!hasTxns ? (
+        <WelcomeScreen clientName={clientName} />
+      ) : (
+      <>
+      {/* Page Header — only shown when there are transactions */}
       <div style={{ marginBottom: 22 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', margin: 0, letterSpacing: '-0.01em' }}>
           {clientName} — Dashboard
@@ -756,12 +868,6 @@ const HomePage = () => {
           Fiscal overview &nbsp;·&nbsp; Auto-refreshes every 3 seconds
         </div>
       </div>
-
-      {!hasTxns ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <EmptyState />
-        </div>
-      ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
           {/* Row 1: KPI Cards */}
@@ -853,6 +959,7 @@ const HomePage = () => {
           <QuickActionsBar />
 
         </div>
+      </>
       )}
     </div>
   );
