@@ -2433,6 +2433,57 @@ window.RoboLedger = (function () {
         },
 
         /**
+         * OCR Fallback — Tesseract.js in-browser OCR for scanned/image PDFs
+         * Uses PDF.js to render each page to a canvas, then runs Tesseract on it.
+         * Returns { text, lineCoordinates } in the same format as extractTextFromPDF.
+         */
+        extractTextWithOCR: async function (arrayBuffer) {
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, verbosity: 0 }).promise;
+            const worker = await Tesseract.createWorker('eng', 1, { logger: () => {} });
+
+            let fullLines = [];
+            const lineCoordinates = [];
+
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for accuracy
+
+                // Render page to an offscreen canvas
+                const canvas = document.createElement('canvas');
+                canvas.width  = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport }).promise;
+
+                // Run Tesseract on the canvas
+                const { data } = await worker.recognize(canvas);
+
+                // data.lines gives per-line text + bounding boxes
+                for (const line of data.lines) {
+                    const lineText = line.text.trim();
+                    if (!lineText) continue;
+
+                    fullLines.push(lineText);
+
+                    // Convert pixel bbox to PDF-style coords (bottom-left origin)
+                    const yPdf = viewport.height - line.bbox.y1;
+                    lineCoordinates.push({
+                        page:   pageNum,
+                        text:   lineText,
+                        y:      Math.round(yPdf * 10) / 10,
+                        x:      line.bbox.x0,
+                        width:  line.bbox.x1 - line.bbox.x0,
+                        height: line.bbox.y1 - line.bbox.y0,
+                        conf:   line.confidence / 100,
+                    });
+                }
+            }
+
+            await worker.terminate();
+            return { text: fullLines.join('\n'), lineCoordinates };
+        },
+
+        /**
          * Smart Parser Dispatcher (Routes to bank-specific parsers)
          * NOW ACCEPTS lineCoordinates for balance highlighting
          */
@@ -2949,6 +3000,27 @@ window.RoboLedger = (function () {
                     console.log('[INGEST] 📝 Extracted text length:', text.length, 'characters');
                     console.log('[INGEST] 📍 Line coordinates captured:', lineCoordinates.length, 'lines');
                     console.log('[INGEST] 📝 First 500 chars:', text.substring(0, 500));
+
+                    // ── OCR FALLBACK: scanned/image PDFs ─────────────────────────────
+                    // If PDF.js pulled fewer than 100 meaningful chars the PDF is likely
+                    // a scanned image. Run Tesseract.js OCR on each rendered page canvas.
+                    const meaningfulChars = text.replace(/\s/g, '').length;
+                    if (meaningfulChars < 100 && typeof Tesseract !== 'undefined') {
+                        console.log('[OCR] ⚡ PDF.js returned sparse text — switching to Tesseract OCR...');
+                        try {
+                            const ocrResult = await this.extractTextWithOCR(buffer);
+                            if (ocrResult.text && ocrResult.text.replace(/\s/g, '').length > meaningfulChars) {
+                                text = ocrResult.text;
+                                lineCoordinates = ocrResult.lineCoordinates;
+                                console.log(`[OCR] ✅ OCR complete: ${text.length} chars, ${lineCoordinates.length} lines`);
+                            } else {
+                                console.warn('[OCR] OCR returned no improvement — proceeding with PDF.js output');
+                            }
+                        } catch (ocrErr) {
+                            console.warn('[OCR] OCR failed, proceeding with PDF.js output:', ocrErr.message);
+                        }
+                    }
+                    // ─────────────────────────────────────────────────────────────────
 
                     // Try specialized parser first, fallback to detection
                     console.log('[INGEST] 🔍 Calling parsePDFText...');
