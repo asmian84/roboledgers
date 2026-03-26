@@ -6946,6 +6946,39 @@
           </button>
         </div>
         
+        <!-- OCR Status Badge -->
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;color:#64748b;margin-bottom:8px;">
+          <span id="ocr-status-dot" style="width:7px;height:7px;border-radius:50%;background:#d1d5db;display:inline-block;flex-shrink:0;"></span>
+          <span id="ocr-status-text">Checking OCR engine…</span>
+        </div>
+        <script>
+          (function() {
+            var dot  = document.getElementById('ocr-status-dot');
+            var text = document.getElementById('ocr-status-text');
+            if (typeof Tesseract !== 'undefined') {
+              dot.style.background  = '#22c55e';
+              text.textContent = 'OCR engine ready (Tesseract.js v' + (Tesseract.version || '5') + ') — scanned PDFs supported';
+            } else {
+              dot.style.background  = '#f59e0b';
+              text.textContent = 'OCR engine loading… scanned PDFs will be supported once ready';
+              // Re-check once Tesseract loads
+              var tries = 0;
+              var poll = setInterval(function() {
+                tries++;
+                if (typeof Tesseract !== 'undefined') {
+                  dot.style.background  = '#22c55e';
+                  text.textContent = 'OCR engine ready (Tesseract.js v' + (Tesseract.version || '5') + ') — scanned PDFs supported';
+                  clearInterval(poll);
+                } else if (tries > 20) {
+                  dot.style.background  = '#ef4444';
+                  text.textContent = 'OCR engine unavailable — text-based PDFs only';
+                  clearInterval(poll);
+                }
+              }, 500);
+            }
+          })();
+        </script>
+
         <!-- Hidden file input -->
         <input 
           type="file" 
