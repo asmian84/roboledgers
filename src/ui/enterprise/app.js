@@ -6951,33 +6951,6 @@
           <span id="ocr-status-dot" style="width:7px;height:7px;border-radius:50%;background:#d1d5db;display:inline-block;flex-shrink:0;"></span>
           <span id="ocr-status-text">Checking OCR engine…</span>
         </div>
-        <script>
-          (function() {
-            var dot  = document.getElementById('ocr-status-dot');
-            var text = document.getElementById('ocr-status-text');
-            if (typeof Tesseract !== 'undefined') {
-              dot.style.background  = '#22c55e';
-              text.textContent = 'OCR engine ready (Tesseract.js v' + (Tesseract.version || '5') + ') — scanned PDFs supported';
-            } else {
-              dot.style.background  = '#f59e0b';
-              text.textContent = 'OCR engine loading… scanned PDFs will be supported once ready';
-              // Re-check once Tesseract loads
-              var tries = 0;
-              var poll = setInterval(function() {
-                tries++;
-                if (typeof Tesseract !== 'undefined') {
-                  dot.style.background  = '#22c55e';
-                  text.textContent = 'OCR engine ready (Tesseract.js v' + (Tesseract.version || '5') + ') — scanned PDFs supported';
-                  clearInterval(poll);
-                } else if (tries > 20) {
-                  dot.style.background  = '#ef4444';
-                  text.textContent = 'OCR engine unavailable — text-based PDFs only';
-                  clearInterval(poll);
-                }
-              }, 500);
-            }
-          })();
-        </script>
 
         <!-- Hidden file input -->
         <input 
@@ -7022,6 +6995,7 @@
         ${getTxnEmptyStateHTML()}
       </div>
       `;
+      setTimeout(window._initOcrBadge, 50);
     } else {
       // Edge-to-edge grid
       mainContent = `
@@ -7346,6 +7320,33 @@ window.updateFileType = function () {
 
 };
 
+// OCR badge init — called after empty state HTML is in the DOM
+window._initOcrBadge = function () {
+  const dot  = document.getElementById('ocr-status-dot');
+  const text = document.getElementById('ocr-status-text');
+  if (!dot || !text) return;
+  if (typeof Tesseract !== 'undefined') {
+    dot.style.background = '#22c55e';
+    text.textContent = 'OCR engine ready (Tesseract.js v' + (Tesseract.version || '5') + ') — scanned PDFs supported';
+    return;
+  }
+  dot.style.background = '#f59e0b';
+  text.textContent = 'OCR engine loading… scanned PDFs will be supported once ready';
+  var tries = 0;
+  var poll = setInterval(function () {
+    tries++;
+    if (typeof Tesseract !== 'undefined') {
+      dot.style.background = '#22c55e';
+      text.textContent = 'OCR engine ready (Tesseract.js v' + (Tesseract.version || '5') + ') — scanned PDFs supported';
+      clearInterval(poll);
+    } else if (tries > 40) {
+      dot.style.background = '#ef4444';
+      text.textContent = 'OCR engine unavailable — text-based PDFs only';
+      clearInterval(poll);
+    }
+  }, 500);
+};
+
 window.updateBrowseMode = function () {
   const checkbox = document.getElementById('browseFoldersCheckbox');
   const input = document.getElementById('mainFileInput');
@@ -7429,85 +7430,89 @@ window.handleMainUpload = function (input) {
 };
 
 // ── Folder Selection Modal ─────────────────────────────────────────────────
-// Shows when a folder is picked via the folder input or drag-drop.
-// Groups files by their immediate parent subfolder and lets the user
-// check/uncheck which subfolders to include before processing.
+// Shows when a folder is picked. Builds a full folder tree so the user can
+// expand/collapse folders and check/uncheck any level before processing.
 window._showFolderSelectionModal = function(validFiles) {
-  // Group files by their immediate subfolder (level below root)
-  const groups = {};  // key → { label, files }
   const rootName = validFiles[0]?.webkitRelativePath?.split('/')[0] || 'Selected Folder';
+
+  // ── Build tree ──────────────────────────────────────────────────────────
+  // Each node: { name, path, files[], children{} }
+  function makeNode(name, path) { return { name, path, files: [], children: {} }; }
+  const root = makeNode(rootName, rootName);
 
   validFiles.forEach(f => {
     const parts = (f.webkitRelativePath || f.name).split('/');
-    let key, label;
-    if (parts.length >= 3) {
-      // root/subfolder/…/file  → group by first subfolder
-      key   = parts[1];
-      label = parts[1];
-    } else {
-      // root/file  → root group
-      key   = '__root__';
-      label = rootName + ' (root)';
+    // parts[0] = rootName, parts[last] = filename, middle = folders
+    let node = root;
+    for (let i = 1; i < parts.length - 1; i++) {
+      const seg = parts[i];
+      const childPath = parts.slice(0, i + 1).join('/');
+      if (!node.children[seg]) node.children[seg] = makeNode(seg, childPath);
+      node = node.children[seg];
     }
-    if (!groups[key]) groups[key] = { label, files: [] };
-    groups[key].files.push(f);
+    node.files.push(f);
   });
 
-  const keys = Object.keys(groups).sort((a, b) => {
-    if (a === '__root__') return -1;
-    if (b === '__root__') return 1;
-    return a.localeCompare(b);
-  });
-
-  // If only one group — skip the modal and process directly
-  if (keys.length <= 1) {
+  // If no subfolders — process directly
+  if (Object.keys(root.children).length === 0) {
     window.handleFilesSelected(validFiles);
     return;
   }
 
-  // Total file count helper (updates as checkboxes change)
-  function _countSelected() {
-    let n = 0;
-    document.querySelectorAll('#folder-select-modal input[type="checkbox"]').forEach(cb => {
-      if (cb.checked) n += parseInt(cb.dataset.fileCount || 0, 10);
-    });
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function countFilesInNode(node) {
+    let n = node.files.length;
+    Object.values(node.children).forEach(c => { n += countFilesInNode(c); });
     return n;
   }
-  function _updateBtn() {
-    const n   = _countSelected();
-    const btn = document.getElementById('fsm-process-btn');
-    if (btn) {
-      btn.textContent = n > 0
-        ? `Process ${n} file${n !== 1 ? 's' : ''}`
-        : 'Select at least one folder';
-      btn.disabled = n === 0;
-      btn.style.opacity = n === 0 ? '0.45' : '1';
-    }
+  function allFilesInNode(node) {
+    let arr = [...node.files];
+    Object.values(node.children).forEach(c => { arr = arr.concat(allFilesInNode(c)); });
+    return arr;
+  }
+  function fileBadge(files) {
+    const pdfs = files.filter(f => /\.pdf$/i.test(f.name)).length;
+    const csvs = files.filter(f => /\.(csv|xlsx?)$/i.test(f.name)).length;
+    return [pdfs && `${pdfs} PDF`, csvs && `${csvs} CSV`].filter(Boolean).join(' · ') || `${files.length} file${files.length !== 1 ? 's' : ''}`;
   }
 
-  const rowsHtml = keys.map(key => {
-    const g        = groups[key];
-    const pdfCnt   = g.files.filter(f => /\.pdf$/i.test(f.name)).length;
-    const csvCnt   = g.files.filter(f => /\.(csv|xlsx?)$/i.test(f.name)).length;
-    const typeTxt  = [pdfCnt && `${pdfCnt} PDF`, csvCnt && `${csvCnt} CSV/XLSX`].filter(Boolean).join(', ');
-    const icon     = key === '__root__' ? 'ph-folder' : 'ph-folder-simple';
-    const label    = key === '__root__' ? g.label : `<i class="ph ${icon}" style="color:#3b82f6;margin-right:5px;"></i>${g.label}`;
-    return `
-      <div class="fsm-folder-row selected" onclick="
-          const cb=this.querySelector('input[type=checkbox]');
-          cb.checked=!cb.checked;
-          this.classList.toggle('selected',cb.checked);
-          window._fsmUpdateBtn();">
-        <input type="checkbox" checked data-folder-key="${key}" data-file-count="${g.files.length}"
-               onclick="event.stopPropagation();this.closest('.fsm-folder-row').classList.toggle('selected',this.checked);window._fsmUpdateBtn();">
-        <div style="flex:1;min-width:0;">
-          <div class="fsm-folder-name">${label}</div>
-          <div class="fsm-folder-meta">${typeTxt} · ${g.files.length} file${g.files.length !== 1 ? 's' : ''}</div>
+  // ── Render tree rows (recursive) ────────────────────────────────────────
+  function renderNode(node, depth) {
+    const childKeys = Object.keys(node.children).sort((a, b) => a.localeCompare(b));
+    const hasChildren = childKeys.length > 0;
+    const totalFiles = countFilesInNode(node);
+    const allFiles   = allFilesInNode(node);
+    const pathKey    = node.path;
+    const indent     = depth * 18;
+    const isRoot     = depth === 0;
+    const nodeId     = 'fsm-node-' + pathKey.replace(/[^a-z0-9]/gi, '_');
+
+    let html = `
+      <div class="fsm-folder-row selected" data-path="${pathKey}" style="padding-left:${indent + 8}px;"
+           onclick="event.stopPropagation();window._fsmToggleRow(this);">
+        <span class="fsm-expand-btn" style="width:16px;flex-shrink:0;cursor:pointer;color:#94a3b8;font-size:11px;${hasChildren ? '' : 'visibility:hidden;'}"
+              onclick="event.stopPropagation();window._fsmToggleExpand('${nodeId}', this);">▼</span>
+        <input type="checkbox" checked data-path-key="${pathKey}" data-file-count="${totalFiles}"
+               style="flex-shrink:0;"
+               onclick="event.stopPropagation();window._fsmSetChecked(this,'${pathKey}',this.checked);window._fsmUpdateBtn();">
+        <i class="ph ${isRoot ? 'ph-folder-open' : 'ph-folder-simple'}" style="color:${isRoot ? '#f59e0b' : '#3b82f6'};font-size:14px;flex-shrink:0;"></i>
+        <div style="flex:1;min-width:0;overflow:hidden;">
+          <div class="fsm-folder-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${node.name}</div>
+          <div class="fsm-folder-meta">${fileBadge(allFiles)} total</div>
         </div>
       </div>`;
-  }).join('');
 
+    if (hasChildren) {
+      html += `<div id="${nodeId}" style="display:block;">`;
+      childKeys.forEach(k => { html += renderNode(node.children[k], depth + 1); });
+      html += `</div>`;
+    }
+    return html;
+  }
+
+  const treeHtml = renderNode(root, 0);
   const totalFiles = validFiles.length;
+
   const overlay = document.createElement('div');
   overlay.id = 'folder-select-overlay';
   overlay.innerHTML = `
@@ -7518,7 +7523,7 @@ window._showFolderSelectionModal = function(validFiles) {
           Select Folders to Import
         </div>
         <div class="fsm-subtitle">
-          <strong>${rootName}</strong> · ${totalFiles} total file${totalFiles !== 1 ? 's' : ''} in ${keys.length} folder${keys.length !== 1 ? 's' : ''}
+          <strong>${rootName}</strong> · ${totalFiles} file${totalFiles !== 1 ? 's' : ''} found
         </div>
       </div>
       <div class="fsm-body">
@@ -7528,7 +7533,7 @@ window._showFolderSelectionModal = function(validFiles) {
           <button onclick="document.querySelectorAll('#folder-select-modal input[type=checkbox]').forEach(cb=>{cb.checked=false;cb.closest('.fsm-folder-row').classList.remove('selected');});window._fsmUpdateBtn();"
                   style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid #e2e8f0;background:transparent;cursor:pointer;color:#64748b;font-weight:600;">Deselect All</button>
         </div>
-        ${rowsHtml}
+        ${treeHtml}
       </div>
       <div class="fsm-footer">
         <button onclick="document.getElementById('folder-select-overlay')?.remove();"
@@ -7543,47 +7548,85 @@ window._showFolderSelectionModal = function(validFiles) {
       </div>
     </div>`;
 
-  // Close on backdrop click
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
 
-  // Store file groups for the confirm handler
-  window._fsmGroups   = groups;
   window._fsmAllFiles = validFiles;
+  window._fsmRoot     = root;
 
-  // Expose update helper globally (called from inline onclick)
-  window._fsmUpdateBtn = _updateBtn;
+  // ── Tree interaction helpers ─────────────────────────────────────────────
+  window._fsmToggleRow = function(row) {
+    const cb = row.querySelector('input[type=checkbox]');
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    window._fsmSetChecked(cb, cb.dataset.pathKey, cb.checked);
+    window._fsmUpdateBtn();
+  };
+
+  window._fsmToggleExpand = function(nodeId, btn) {
+    const el = document.getElementById(nodeId);
+    if (!el) return;
+    const collapsed = el.style.display === 'none';
+    el.style.display = collapsed ? 'block' : 'none';
+    btn.textContent = collapsed ? '▼' : '▶';
+  };
+
+  // Cascade check/uncheck to all descendants
+  window._fsmSetChecked = function(cb, pathKey, checked) {
+    const row = cb.closest('.fsm-folder-row');
+    if (row) row.classList.toggle('selected', checked);
+    // Find children container immediately after the row
+    const container = row ? row.nextElementSibling : null;
+    if (container && container.id && container.id.startsWith('fsm-node-')) {
+      container.querySelectorAll('input[type=checkbox]').forEach(childCb => {
+        childCb.checked = checked;
+        const childRow = childCb.closest('.fsm-folder-row');
+        if (childRow) childRow.classList.toggle('selected', checked);
+      });
+    }
+  };
+
+  window._fsmUpdateBtn = function() {
+    let n = 0;
+    document.querySelectorAll('#folder-select-modal input[type=checkbox]:checked').forEach(cb => {
+      n += parseInt(cb.dataset.fileCount || 0, 10);
+    });
+    const btn = document.getElementById('fsm-process-btn');
+    if (btn) {
+      btn.textContent = n > 0 ? `Process ${n} file${n !== 1 ? 's' : ''}` : 'Select at least one folder';
+      btn.disabled = n === 0;
+      btn.style.opacity = n === 0 ? '0.45' : '1';
+    }
+  };
 };
 
 window._confirmFolderSelection = function() {
-  const selectedKeys = new Set();
-  document.querySelectorAll('#folder-select-modal input[type="checkbox"]:checked').forEach(cb => {
-    selectedKeys.add(cb.dataset.folderKey);
+  // Collect all paths that are checked (leaf checkboxes only — avoid double counting)
+  const checkedPaths = new Set();
+  document.querySelectorAll('#folder-select-modal input[type=checkbox]:checked').forEach(cb => {
+    checkedPaths.add(cb.dataset.pathKey);
   });
 
-  if (selectedKeys.size === 0) return;
+  if (checkedPaths.size === 0) return;
 
-  const groups    = window._fsmGroups   || {};
-  const allFiles  = window._fsmAllFiles || [];
+  const allFiles = window._fsmAllFiles || [];
 
-  // Collect files from checked groups
+  // Include a file if ANY of its ancestor paths are checked
   const selectedFiles = allFiles.filter(f => {
     const parts = (f.webkitRelativePath || f.name).split('/');
-    const key   = parts.length >= 3 ? parts[1] : '__root__';
-    return selectedKeys.has(key);
+    // Build all ancestor paths for this file and check if any are selected
+    for (let i = 1; i < parts.length; i++) {
+      if (checkedPaths.has(parts.slice(0, i).join('/'))) return true;
+    }
+    return false;
   });
 
   document.getElementById('folder-select-overlay')?.remove();
+  console.log(`[FOLDER] Processing ${selectedFiles.length} files from selected folders`);
+  if (selectedFiles.length > 0) window.handleFilesSelected(selectedFiles);
 
-  console.log(`[FOLDER] Processing ${selectedFiles.length} files from ${selectedKeys.size} selected folder${selectedKeys.size !== 1 ? 's' : ''}`);
-
-  if (selectedFiles.length > 0) {
-    window.handleFilesSelected(selectedFiles);
-  }
-
-  // Cleanup
-  delete window._fsmGroups;
   delete window._fsmAllFiles;
+  delete window._fsmRoot;
 };
 
 // Debug: Show account statistics
